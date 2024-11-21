@@ -40,6 +40,9 @@ config :tracker,
   ecto_repos: [Tracker.Repo],
   generators: [timestamp_type: :utc_datetime]
 
+config :tracker,
+  ash_domains: [Tracker.Forge]
+
 # Configures the endpoint
 config :tracker, TrackerWeb.Endpoint,
   url: [host: "localhost"],

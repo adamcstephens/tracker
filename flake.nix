@@ -30,6 +30,7 @@
                 elixir
                 elixir-ls
                 pkgs.next-ls
+                pkgs.sqlite
               ] ++ (lib.optionals pkgs.stdenv.isLinux [ pkgs.inotify-tools ]);
 
               shellHook = ''
