@@ -21,7 +21,7 @@
 
             let
               beamPackages = pkgs.beam_minimal.packages.erlang_27;
-              elixir = beamPackages.elixir_1_17;
+              elixir = beamPackages.elixir_1_18;
               elixir-ls = (beamPackages.elixir-ls.override { inherit elixir; });
             in
             pkgs.mkShell {
@@ -31,6 +31,8 @@
                 elixir-ls
                 pkgs.next-ls
                 pkgs.sqlite
+
+                pkgs.just
               ] ++ (lib.optionals pkgs.stdenv.isLinux [ pkgs.inotify-tools ]);
 
               shellHook = ''
