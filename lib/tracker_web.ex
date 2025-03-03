@@ -43,7 +43,7 @@ defmodule TrackerWeb do
         layouts: [html: TrackerWeb.Layouts]
 
       import Plug.Conn
-      import TrackerWeb.Gettext
+      use Gettext, backend: TrackerWeb.Gettext
 
       unquote(verified_routes())
     end
@@ -85,7 +85,7 @@ defmodule TrackerWeb do
       import Phoenix.HTML
       # Core UI components and translation
       import TrackerWeb.CoreComponents
-      import TrackerWeb.Gettext
+      use Gettext, backend: TrackerWeb.Gettext
 
       # Shortcut for generating JS commands
       alias Phoenix.LiveView.JS
