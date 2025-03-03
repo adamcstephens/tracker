@@ -35,6 +35,8 @@ tracker-*.tar
 npm-debug.log
 /assets/node_modules/
 
-# sql db
+# sqlite db
 tracker_dev*
+tracker_test*
+
 .elixir_ls/
