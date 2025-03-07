@@ -23,6 +23,6 @@ defmodule Tracker.Secrets do
 
   defp get_github_config(key) do
     Application.get_env(:tracker, :github, [])
-    |> Keyword.fetch!(key)
+    |> Keyword.fetch(key)
   end
 end

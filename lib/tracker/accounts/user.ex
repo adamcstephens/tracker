@@ -42,14 +42,19 @@ defmodule Tracker.Accounts.User do
       argument :user_info, :map, allow_nil?: false
       argument :oauth_tokens, :map, allow_nil?: false
       upsert? true
-      upsert_identity :unique_email
+      upsert_identity :unique_github_id
 
       change AshAuthentication.GenerateTokenChange
 
       change fn changeset, _ ->
-        user_info = Ash.Changeset.get_argument(changeset, :user_info) |> dbg()
+        user_info = Ash.Changeset.get_argument(changeset, :user_info)
 
-        Ash.Changeset.change_attributes(changeset, Map.take(user_info, ["email"]))
+        mapped_info = %{
+          github_id: Map.fetch!(user_info, "sub"),
+          github_username: Map.fetch!(user_info, "preferred_username")
+        }
+
+        Ash.Changeset.change_attributes(changeset, mapped_info)
       end
     end
 
@@ -74,14 +79,17 @@ defmodule Tracker.Accounts.User do
   attributes do
     uuid_v7_primary_key :id
 
-    attribute :oidc_id, :string do
-      allow_nil? false
-    end
-
-    attribute :email, :string
-
     attribute :github_username, :string do
       allow_nil? false
     end
+
+    attribute :github_id, :integer do
+      allow_nil? false
+    end
+  end
+
+  identities do
+    identity :unique_github_id, [:github_id]
+    identity :unique_github_username, [:github_username]
   end
 end
