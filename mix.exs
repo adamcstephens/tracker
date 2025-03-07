@@ -33,18 +33,26 @@ defmodule Tracker.MixProject do
   # Type `mix help deps` for examples and options.
   defp deps do
     [
-      {:ash_sqlite, "~> 0.2"},
+      {:picosat_elixir, "~> 0.2"},
+      {:open_api_spex, "~> 3.0"},
+      {:oban, "~> 2.0"},
+      {:ash_oban, "~> 0.3"},
+      {:ash_admin, "~> 0.13"},
+      {:ash_authentication_phoenix, "~> 2.0"},
+      {:ash_authentication, "~> 4.0"},
+      {:ash_postgres, "~> 2.0"},
+      {:ash_json_api, "~> 1.0"},
       {:ash_phoenix, "~> 2.0"},
+      {:sourceror, "~> 1.7", only: [:dev, :test]},
       {:ash, "~> 3.0"},
-      {:igniter, "~> 0.4"},
-      {:phoenix, "~> 1.7.14"},
+      {:igniter, "~> 0.5", only: [:dev, :test]},
+      {:phoenix, "~> 1.7.20"},
       {:phoenix_ecto, "~> 4.5"},
       {:ecto_sql, "~> 3.10"},
       {:postgrex, ">= 0.0.0"},
       {:phoenix_html, "~> 4.1"},
       {:phoenix_live_reload, "~> 1.2", only: :dev},
-      # TODO bump on release to {:phoenix_live_view, "~> 1.0.0"},
-      {:phoenix_live_view, "~> 1.0.0-rc.1", override: true},
+      {:phoenix_live_view, "~> 1.0.0"},
       {:floki, ">= 0.30.0", only: :test},
       {:phoenix_live_dashboard, "~> 0.8.3"},
       {:esbuild, "~> 0.8", runtime: Mix.env() == :dev},
@@ -60,11 +68,10 @@ defmodule Tracker.MixProject do
       {:finch, "~> 0.13"},
       {:telemetry_metrics, "~> 1.0"},
       {:telemetry_poller, "~> 1.0"},
-      {:gettext, "~> 0.20"},
+      {:gettext, "~> 0.26"},
       {:jason, "~> 1.2"},
       {:dns_cluster, "~> 0.1.1"},
-      {:bandit, "~> 1.5"},
-      {:spark, "~> 2.2"}
+      {:bandit, "~> 1.5"}
     ]
   end
 
@@ -76,7 +83,7 @@ defmodule Tracker.MixProject do
   # See the documentation for `Mix` for more info on aliases.
   defp aliases do
     [
-      setup: ["deps.get", "ecto.setup", "assets.setup", "assets.build"],
+      setup: ["deps.get", "ash.setup", "assets.setup", "assets.build", "run priv/repo/seeds.exs"],
       "ecto.setup": ["ecto.create", "ecto.migrate", "run priv/repo/seeds.exs"],
       "ecto.reset": ["ecto.drop", "ecto.setup"],
       test: ["ash.setup --quiet", "test"],
@@ -87,7 +94,7 @@ defmodule Tracker.MixProject do
         "esbuild tracker --minify",
         "phx.digest"
       ],
-      "ash.setup": ["ash.setup", "run priv/repo/seeds.exs"]
+      "phx.routes": ["phx.routes", "ash_json_api.routes", "ash_authentication.phoenix.routes"]
     ]
   end
 end

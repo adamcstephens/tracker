@@ -42,8 +42,9 @@ defmodule TrackerWeb do
         formats: [:html, :json],
         layouts: [html: TrackerWeb.Layouts]
 
-      import Plug.Conn
       use Gettext, backend: TrackerWeb.Gettext
+
+      import Plug.Conn
 
       unquote(verified_routes())
     end
@@ -81,11 +82,13 @@ defmodule TrackerWeb do
 
   defp html_helpers do
     quote do
+      # Translation
+      use Gettext, backend: TrackerWeb.Gettext
+
       # HTML escaping functionality
       import Phoenix.HTML
-      # Core UI components and translation
+      # Core UI components
       import TrackerWeb.CoreComponents
-      use Gettext, backend: TrackerWeb.Gettext
 
       # Shortcut for generating JS commands
       alias Phoenix.LiveView.JS

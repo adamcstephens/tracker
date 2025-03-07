@@ -35,8 +35,7 @@ tracker-*.tar
 npm-debug.log
 /assets/node_modules/
 
-# sqlite db
-tracker_dev*
-tracker_test*
-
+.github-client-secret
 .elixir_ls/
+data/
+.secret.envrc

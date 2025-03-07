@@ -8,6 +8,11 @@ defmodule Tracker.Application do
   @impl true
   def start(_type, _args) do
     children = [
+      {Oban,
+       AshOban.config(
+         Application.fetch_env!(:tracker, :ash_domains),
+         Application.fetch_env!(:tracker, Oban)
+       )},
       TrackerWeb.Telemetry,
       Tracker.Repo,
       {DNSCluster, query: Application.get_env(:tracker, :dns_cluster_query) || :ignore},
@@ -17,7 +22,8 @@ defmodule Tracker.Application do
       # Start a worker by calling: Tracker.Worker.start_link(arg)
       # {Tracker.Worker, arg},
       # Start to serve requests, typically the last entry
-      TrackerWeb.Endpoint
+      TrackerWeb.Endpoint,
+      {AshAuthentication.Supervisor, [otp_app: :tracker]}
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html

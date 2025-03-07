@@ -7,8 +7,22 @@
 # General application configuration
 import Config
 
+config :tracker, Oban,
+  engine: Oban.Engines.Basic,
+  notifier: Oban.Notifiers.Postgres,
+  queues: [default: 10],
+  repo: Tracker.Repo
+
+config :mime,
+  extensions: %{"json" => "application/vnd.api+json"},
+  types: %{"application/vnd.api+json" => ["json"]}
+
+config :ash_json_api, show_public_calculations_when_loaded?: false
+
 config :ash,
+  allow_forbidden_field_for_relationships_by_default?: true,
   include_embedded_source_by_default?: false,
+  show_keysets_for_all_actions?: false,
   default_page_type: :keyset,
   policies: [no_filter_static_forbidden_reads?: false]
 
@@ -17,6 +31,11 @@ config :spark,
     remove_parens?: true,
     "Ash.Resource": [
       section_order: [
+        :admin,
+        :authentication,
+        :tokens,
+        :postgres,
+        :json_api,
         :resource,
         :code_interface,
         :actions,
@@ -33,15 +52,23 @@ config :spark,
         :identities
       ]
     ],
-    "Ash.Domain": [section_order: [:resources, :policies, :authorization, :domain, :execution]]
+    "Ash.Domain": [
+      section_order: [
+        :admin,
+        :json_api,
+        :resources,
+        :policies,
+        :authorization,
+        :domain,
+        :execution
+      ]
+    ]
   ]
 
 config :tracker,
   ecto_repos: [Tracker.Repo],
-  generators: [timestamp_type: :utc_datetime]
-
-config :tracker,
-  ash_domains: [Tracker.Forge]
+  generators: [timestamp_type: :utc_datetime],
+  ash_domains: [Tracker.Accounts]
 
 # Configures the endpoint
 config :tracker, TrackerWeb.Endpoint,
@@ -52,7 +79,7 @@ config :tracker, TrackerWeb.Endpoint,
     layout: false
   ],
   pubsub_server: Tracker.PubSub,
-  live_view: [signing_salt: "+GzFSQ3S"]
+  live_view: [signing_salt: "ojJfEsFf"]
 
 # Configures the mailer
 #

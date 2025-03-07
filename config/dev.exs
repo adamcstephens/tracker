@@ -8,8 +8,7 @@ config :tracker, Tracker.Repo,
   database: "tracker_dev",
   stacktrace: true,
   show_sensitive_data_on_connection_error: true,
-  pool_size: 10,
-  port: 5432
+  pool_size: 10
 
 # For development, we disable any cache and enable
 # debugging and code reloading.
@@ -17,18 +16,20 @@ config :tracker, Tracker.Repo,
 # The watchers configuration can be used to run external
 # watchers to your application. For example, we can use it
 # to bundle .js and .css sources.
+# Binding to loopback ipv4 address prevents access from other machines.
 config :tracker, TrackerWeb.Endpoint,
-  # Binding to loopback ipv4 address prevents access from other machines.
   # Change to `ip: {0, 0, 0, 0}` to allow access from other machines.
   http: [ip: {127, 0, 0, 1}, port: 4000],
   check_origin: false,
   code_reloader: true,
   debug_errors: true,
-  secret_key_base: "NCohJGBvgP/EXlWAJZ/mcJNG6nHWIqtOX1ErNqV5d361Zz5yKVormYHQDOmqaPAS",
+  secret_key_base: "gz7LI1OQPCzePKokDdsPH/zY2dMjBBTWHzNP5ce7LNTryI5NdRGE3Qw2J1BFvw4J",
   watchers: [
     esbuild: {Esbuild, :install_and_run, [:tracker, ~w(--sourcemap=inline --watch)]},
     tailwind: {Tailwind, :install_and_run, [:tracker, ~w(--watch)]}
   ]
+
+config :ash_authentication, debug_authentication_failures?: true
 
 # ## SSL Support
 #
@@ -64,7 +65,7 @@ config :tracker, TrackerWeb.Endpoint,
   ]
 
 # Enable dev routes for dashboard and mailbox
-config :tracker, dev_routes: true
+config :tracker, dev_routes: true, token_signing_secret: "iEtxXCDdKH8S1eph6t+eqXLbQvDpZmX7"
 
 # Do not include metadata nor timestamps in development logs
 config :logger, :console, format: "[$level] $message\n"

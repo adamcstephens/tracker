@@ -20,6 +20,14 @@ if System.get_env("PHX_SERVER") do
   config :tracker, TrackerWeb.Endpoint, server: true
 end
 
+config :tracker,
+  github: [
+    client_id: System.fetch_env!("TRACKER_GITHUB_CLIENT_ID"),
+    client_secret:
+      System.fetch_env!("TRACKER_GITHUB_CLIENT_SECRET_FILE") |> File.read!() |> String.trim(),
+    redirect_uri: System.fetch_env!("TRACKER_GITHUB_REDIRECT_URI")
+  ]
+
 if config_env() == :prod do
   database_url =
     System.get_env("DATABASE_URL") ||
@@ -64,6 +72,9 @@ if config_env() == :prod do
       port: port
     ],
     secret_key_base: secret_key_base
+
+  config :tracker,
+    token_signing_secret: System.fetch_env!("TOKEN_SIGNING_SECRET")
 
   # ## SSL Support
   #

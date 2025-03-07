@@ -7,7 +7,7 @@ defmodule TrackerWeb.Endpoint do
   @session_options [
     store: :cookie,
     key: "_tracker_key",
-    signing_salt: "RyulqEId",
+    signing_salt: "Pi4GBDAc",
     same_site: "Lax"
   ]
 
@@ -42,7 +42,7 @@ defmodule TrackerWeb.Endpoint do
   plug Plug.Telemetry, event_prefix: [:phoenix, :endpoint]
 
   plug Plug.Parsers,
-    parsers: [:urlencoded, :multipart, :json],
+    parsers: [:urlencoded, :multipart, :json, AshJsonApi.Plug.Parser],
     pass: ["*/*"],
     json_decoder: Phoenix.json_library()
 

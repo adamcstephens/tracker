@@ -1,4 +1,6 @@
 import Config
+config :tracker, Oban, testing: :manual
+config :tracker, token_signing_secret: "thIXDz5NECPXPg1mNAqRn8lxdK3Jre7j"
 config :ash, disable_async?: true
 
 # Configure your database
@@ -18,7 +20,7 @@ config :tracker, Tracker.Repo,
 # you can enable the server option below.
 config :tracker, TrackerWeb.Endpoint,
   http: [ip: {127, 0, 0, 1}, port: 4002],
-  secret_key_base: "tCtFNauz2KNvvoM7RNpG4ZD73H023xiCjEAYgNqozpbaY4t69MAO26WIguawby1l",
+  secret_key_base: "WqdxLnwcONLhSyGcqDcDTUU8CcoSD35IqOWwEuVbRCc1jR8Ph4S+fsMDXi0ExrsD",
   server: false
 
 # In test we don't send emails
