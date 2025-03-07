@@ -68,7 +68,7 @@ config :spark,
 config :tracker,
   ecto_repos: [Tracker.Repo],
   generators: [timestamp_type: :utc_datetime],
-  ash_domains: [Tracker.Accounts]
+  ash_domains: [Tracker.Nixpkgs, Tracker.Accounts]
 
 # Configures the endpoint
 config :tracker, TrackerWeb.Endpoint,
