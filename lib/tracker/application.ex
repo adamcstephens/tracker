@@ -8,13 +8,13 @@ defmodule Tracker.Application do
   @impl true
   def start(_type, _args) do
     children = [
+      Tracker.Repo,
       {Oban,
        AshOban.config(
          Application.fetch_env!(:tracker, :ash_domains),
          Application.fetch_env!(:tracker, Oban)
        )},
       TrackerWeb.Telemetry,
-      Tracker.Repo,
       {DNSCluster, query: Application.get_env(:tracker, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Tracker.PubSub},
       # Start the Finch HTTP client for sending emails
