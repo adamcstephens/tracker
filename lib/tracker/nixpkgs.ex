@@ -9,11 +9,11 @@ defmodule Tracker.Nixpkgs do
   def load_channel(channel \\ "nixos-unstable") do
     url = "https://channels.nixos.org/#{channel}/packages.json.br"
 
-    {:ok, resp} = Req.get(url)
+    {:ok, resp} = Req.get(url, raw: true)
 
     resp.body
     |> ExBrotli.decompress!()
-    |> Jason.decode!()
+    |> :json.decode()
     |> Map.get("packages")
     |> Enum.map(fn {package, _} ->
       %{attribute: package}

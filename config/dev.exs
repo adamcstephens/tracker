@@ -59,7 +59,8 @@ config :tracker, TrackerWeb.Endpoint,
     patterns: [
       ~r"priv/static/(?!uploads/).*(js|css|png|jpeg|jpg|gif|svg)$",
       ~r"priv/gettext/.*(po)$",
-      ~r"lib/tracker_web/(controllers|live|components)/.*(ex|heex)$"
+      ~r"lib/tracker_web/(controllers|live|components)/.*(ex|heex)$",
+      ~r"lib/tracker/.*(ex|heex)$"
     ]
   ]
 
