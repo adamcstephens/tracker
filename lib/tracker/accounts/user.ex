@@ -14,10 +14,16 @@ defmodule Tracker.Accounts.User do
     end
 
     strategies do
-      github do
+      oauth2 :github do
         client_id Tracker.Secrets
         redirect_uri Tracker.Secrets
         client_secret Tracker.Secrets
+        authorization_params scope: "read:user"
+        base_url "https://github.com"
+        authorize_url "https://github.com/login/oauth/authorize"
+        token_url "https://github.com/login/oauth/access_token"
+        user_url "https://api.github.com/user"
+        code_verifier true
       end
     end
 
@@ -50,8 +56,8 @@ defmodule Tracker.Accounts.User do
         user_info = Ash.Changeset.get_argument(changeset, :user_info)
 
         mapped_info = %{
-          github_id: Map.fetch!(user_info, "sub"),
-          github_username: Map.fetch!(user_info, "preferred_username")
+          github_id: Map.fetch!(user_info, "id"),
+          github_username: Map.fetch!(user_info, "login")
         }
 
         Ash.Changeset.change_attributes(changeset, mapped_info)
