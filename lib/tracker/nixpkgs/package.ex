@@ -12,6 +12,18 @@ defmodule Tracker.Nixpkgs.Package do
     create :create do
       accept [:attribute]
     end
+
+    create :load do
+      accept [:attribute]
+      upsert? true
+      upsert_identity :unique_attribute
+
+      argument :revision, :map do
+        allow_nil? false
+      end
+
+      change manage_relationship(:revision, :revisions, on_no_match: {:create, :load})
+    end
   end
 
   attributes do
@@ -23,6 +35,10 @@ defmodule Tracker.Nixpkgs.Package do
     end
 
     timestamps()
+  end
+
+  relationships do
+    has_many :revisions, Tracker.Nixpkgs.PackageRevision
   end
 
   identities do
