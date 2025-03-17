@@ -6,8 +6,26 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
     repo Tracker.Repo
   end
 
+  code_interface do
+    define :find, args: [:channel, :revision]
+  end
+
   actions do
     defaults [:read]
+
+    read :find do
+      get? true
+
+      argument :channel, :string do
+        allow_nil? false
+      end
+
+      argument :revision, :string do
+        allow_nil? false
+      end
+
+      filter expr(channel == ^arg(:channel) and revision == ^arg(:revision))
+    end
 
     create :create do
       primary? true

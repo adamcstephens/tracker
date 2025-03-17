@@ -15,17 +15,33 @@ defmodule Tracker.Nixpkgs do
   end
 
   def load_channel(channel \\ "nixos-unstable") do
-    fetch_channel(channel)
-    |> write_to_database()
+    {revision, base_url} = get_channel_revision(channel)
+
+    case Tracker.Nixpkgs.ChannelRevision.find(channel, revision) do
+      {:ok, %Tracker.Nixpkgs.ChannelRevision{result: :success}} ->
+        :ok
+
+      {:ok, %Tracker.Nixpkgs.ChannelRevision{}} ->
+        fetch_channel(channel, revision, base_url)
+        |> write_to_database()
+
+      {:error, %Ash.Error.Query.NotFound{}} ->
+        fetch_channel(channel, revision, base_url)
+        |> write_to_database()
+    end
   end
 
-  def fetch_channel(channel) do
+  def get_channel_revision(channel) do
     # get the redirected URL so we are consistent across queries
     [base_url] =
       Req.get!("https://channels.nixos.org/#{channel}", redirect: false).headers["location"]
 
     revision = Req.get!(base_url <> "/git-revision").body
 
+    {revision, base_url}
+  end
+
+  def fetch_channel(channel, revision, base_url) do
     Req.get!(base_url <> "/packages.json.br", raw: true).body
     |> ExBrotli.decompress!()
     |> :json.decode()
@@ -59,11 +75,12 @@ defmodule Tracker.Nixpkgs do
         }
       end)
       |> Ash.bulk_create(Tracker.Nixpkgs.Package, :load,
-        batch_size: 15000,
+        batch_size: 25,
         upsert?: true,
         upsert_identity: :unique_attribute,
         upsert_fields: :updated_at
       )
+      |> dbg()
 
     if bulk_status == :error do
       Logger.error("Failed to load channel #{channel} at #{revision}")
@@ -72,7 +89,5 @@ defmodule Tracker.Nixpkgs do
     channel_revision
     |> Ash.Changeset.for_update(:record_result, %{result: bulk_status})
     |> Ash.update!()
-
-    bulk_status
   end
 end
