@@ -36,6 +36,7 @@ defmodule Tracker.MixProject do
       {:picosat_elixir, "~> 0.2"},
       {:open_api_spex, "~> 3.0"},
       {:oban, "~> 2.0"},
+      {:oban_web, "~> 2.11"},
       {:ash_oban, "~> 0.3"},
       {:ash_admin, "~> 0.13"},
       {:ash_authentication_phoenix, "~> 2.0"},

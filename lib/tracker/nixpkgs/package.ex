@@ -6,6 +6,10 @@ defmodule Tracker.Nixpkgs.Package do
     repo Tracker.Repo
   end
 
+  code_interface do
+    define :load, args: [:attribute, :revision]
+  end
+
   actions do
     defaults [:read]
 
@@ -17,6 +21,7 @@ defmodule Tracker.Nixpkgs.Package do
       accept [:attribute]
       upsert? true
       upsert_identity :unique_attribute
+      upsert_fields :updated_at
 
       argument :revision, :map do
         allow_nil? false

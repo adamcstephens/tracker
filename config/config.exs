@@ -10,7 +10,7 @@ import Config
 config :tracker, Oban,
   engine: Oban.Engines.Basic,
   notifier: Oban.Notifiers.Postgres,
-  queues: [default: 10],
+  queues: [channels: 1],
   repo: Tracker.Repo
 
 config :mime,

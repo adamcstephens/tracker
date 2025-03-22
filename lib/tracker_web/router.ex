@@ -2,7 +2,6 @@ defmodule TrackerWeb.Router do
   use TrackerWeb, :router
 
   use AshAuthentication.Phoenix.Router
-
   import AshAuthentication.Plug.Helpers
 
   pipeline :browser do
@@ -69,6 +68,9 @@ defmodule TrackerWeb.Router do
     # Remove this if you do not want to use the reset password feature
     reset_route auth_routes_prefix: "/auth",
                 overrides: [TrackerWeb.AuthOverrides, AshAuthentication.Phoenix.Overrides.Default]
+
+    live "/packages", PackageLive.Index, :index
+    live "/packages/:id", PackageLive.Show, :show
   end
 
   # Other scopes may use custom stacks.
@@ -84,12 +86,14 @@ defmodule TrackerWeb.Router do
     # you can use Plug.BasicAuth to set up some basic authentication
     # as long as you are also using SSL (which you should anyway).
     import Phoenix.LiveDashboard.Router
+    import Oban.Web.Router
 
     scope "/dev" do
       pipe_through :browser
 
       live_dashboard "/dashboard", metrics: TrackerWeb.Telemetry
       forward "/mailbox", Plug.Swoosh.MailboxPreview
+      oban_dashboard "/oban"
     end
   end
 
