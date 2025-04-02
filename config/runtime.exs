@@ -20,13 +20,29 @@ if System.get_env("PHX_SERVER") do
   config :tracker, TrackerWeb.Endpoint, server: true
 end
 
+github_client_id = System.fetch_env!("TRACKER_GITHUB_CLIENT_ID")
+
+github_client_secret =
+  System.fetch_env!("TRACKER_GITHUB_CLIENT_SECRET_FILE") |> File.read!() |> String.trim()
+
+github_app_id = System.fetch_env!("TRACKER_GITHUB_APP_ID") |> Integer.parse()
+
+github_app_private_key =
+  System.fetch_env!("TRACKER_GITHUB_APP_PRIVATE_KEY_FILE") |> File.read!() |> String.trim()
+
 config :tracker,
   github: [
-    client_id: System.fetch_env!("TRACKER_GITHUB_CLIENT_ID"),
-    client_secret:
-      System.fetch_env!("TRACKER_GITHUB_CLIENT_SECRET_FILE") |> File.read!() |> String.trim(),
+    client_id: github_client_id,
+    client_secret: github_client_secret,
     redirect_uri: System.fetch_env!("TRACKER_GITHUB_REDIRECT_URI")
   ]
+
+config :oapi_github,
+  app_name: "Tracker",
+  apps: [
+    {:tracker, github_app_id, github_app_private_key}
+  ],
+  default_auth: {github_client_id, github_client_secret}
 
 if config_env() == :prod do
   database_url =

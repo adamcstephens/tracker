@@ -16,6 +16,7 @@ defmodule Tracker.Application do
          Application.fetch_env!(:tracker, :ash_domains),
          Application.fetch_env!(:tracker, Oban)
        )},
+      GitHub.Auth.Cache,
       TrackerWeb.Telemetry,
       {DNSCluster, query: Application.get_env(:tracker, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Tracker.PubSub},

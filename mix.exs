@@ -56,8 +56,12 @@ defmodule Tracker.MixProject do
        app: false,
        compile: false,
        depth: 1},
+      # for oapi_github
+      {:httpoison, "~> 2.2"},
       {:igniter, "~> 0.5", only: [:dev, :test]},
       {:jason, "~> 1.2"},
+      {:jose, "~> 1.11"},
+      {:oapi_github, "~> 0.3.3"},
       {:oban, "~> 2.0"},
       {:oban_web, "~> 2.11"},
       {:open_api_spex, "~> 3.0"},
