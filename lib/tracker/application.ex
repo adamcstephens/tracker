@@ -31,7 +31,11 @@ defmodule Tracker.Application do
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
     opts = [strategy: :one_for_one, name: Tracker.Supervisor]
-    Supervisor.start_link(children, opts)
+    supervisor = Supervisor.start_link(children, opts)
+
+    Tracker.Nixpkgs.ChannelWorker.start_all_channels()
+
+    supervisor
   end
 
   # Tell Phoenix to update the endpoint configuration
