@@ -1,6 +1,7 @@
 defmodule Tracker.Nixpkgs.ChannelWorker do
   use Oban.Worker, queue: :channels, max_attempts: 10
 
+  import Ecto.Query, only: [from: 2]
   require Logger
 
   @impl Oban.Worker
@@ -12,9 +13,12 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
     result
   end
 
-  def load_all_channels() do
+  def start_all_channels() do
     Application.get_env(:tracker, :channels, [])
-    |> Enum.each(&(%{"channel" => &1} |> Tracker.Nixpkgs.ChannelWorker.new() |> Oban.insert()))
+    |> Enum.filter(&(not channel_job_running?(&1)))
+    |> Enum.each(fn channel ->
+      %{"channel" => channel} |> Tracker.Nixpkgs.ChannelWorker.new() |> Oban.insert()
+    end)
   end
 
   def load_channel(channel \\ "nixos-unstable") do
@@ -30,6 +34,20 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
       _ ->
         fetch_channel(channel, revision, base_url)
         |> write_to_database()
+    end
+  end
+
+  def channel_job_running?(channel) do
+    query =
+      from j in Oban.Job,
+        where: j.state != "cancelled",
+        where: j.state != "discarded",
+        where: j.state != "completed",
+        where: j.args["channel"] == ^channel
+
+    case Tracker.Repo.one(query) do
+      nil -> false
+      _ -> true
     end
   end
 

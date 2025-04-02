@@ -12,4 +12,11 @@ config :swoosh, local: false
 config :logger, level: :info
 
 config :tracker,
-  channels: ["nixos-unstable", "nixos-24.11", "nixpkgs-unstable", "nixos-unstable-small"]
+  # loader_limit: 20,
+  channels: [
+    "nixos-24.11",
+    "nixos-24.11-small",
+    "nixos-unstable",
+    "nixos-unstable-small",
+    "nixpkgs-unstable"
+  ]

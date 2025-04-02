@@ -88,4 +88,10 @@ config :swoosh, :api_client, false
 
 config :tracker,
   # loader_limit: 20,
-  channels: ["nixos-unstable", "nixos-24.11", "nixos-unstable-small", "nixpkgs-unstable"]
+  channels: [
+    "nixos-24.11",
+    "nixos-24.11-small",
+    "nixos-unstable",
+    "nixos-unstable-small",
+    "nixpkgs-unstable"
+  ]
