@@ -37,6 +37,9 @@ npm-debug.log
 
 .github-client-secret*
 .elixir_ls/
+.services/postgres/data/
+.services/postgres/*.lock
+.services/process-compose/log
 data/
 .secret.envrc
 *key.pem
