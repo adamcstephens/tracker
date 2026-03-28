@@ -26,9 +26,11 @@
           ...
         }:
         let
-          beamPackages = pkgs.beam_minimal.packages.erlang_27;
-          elixir = beamPackages.elixir_1_18;
-          elixir-ls = (beamPackages.elixir-ls.override { inherit elixir; });
+          beamPackages = pkgs.beamMinimal28Packages.extend (
+            _: prev: {
+              elixir = prev.elixir_1_19;
+            }
+          );
         in
         {
           devShells.default = pkgs.mkShell {
@@ -36,16 +38,19 @@
 
             packages = [
               beamPackages.erlang
-              elixir
-              elixir-ls
+              beamPackages.elixir
+              beamPackages.expert
+              beamPackages.hex
+
+              pkgs.postgresql
               pkgs.process-compose
 
               pkgs.just
-            ] ++ (lib.optionals pkgs.stdenv.isLinux [ pkgs.inotify-tools ]);
+            ]
+            ++ (lib.optionals pkgs.stdenv.isLinux [ pkgs.inotify-tools ]);
 
             shellHook = ''
               export PC_CONFIG_FILES=${config.process-compose.devServices.outputs.settingsFile}
-              export ERL_AFLAGS="-kernel shell_history enabled -kernel shell_history_file_bytes 1024000"
             '';
           };
 

@@ -1,0 +1,29 @@
+{"level":"error","process":"postgres","replica":0,"message":"2026-03-28 18:25:41.767 UTC [18905] LOG:  starting PostgreSQL 17.9 on x86_64-pc-linux-gnu, compiled by clang version 21.1.8, 64-bit"}
+{"level":"error","process":"postgres","replica":0,"message":"2026-03-28 18:25:41.768 UTC [18905] LOG:  listening on Unix socket \"/home/adam/projects/tracker/.services/postgres/.s.PGSQL.5432\""}
+{"level":"error","process":"postgres","replica":0,"message":"2026-03-28 18:25:41.819 UTC [18936] LOG:  database system was shut down at 2026-03-28 18:24:01 UTC"}
+{"level":"error","process":"postgres","replica":0,"message":"2026-03-28 18:25:41.826 UTC [18905] LOG:  database system is ready to accept connections"}
+{"level":"error","process":"postgres","replica":0,"message":"2026-03-28 18:25:43.753 UTC [18944] FATAL:  role \"adam\" does not exist"}
+{"level":"error","process":"postgres","replica":0,"message":"2026-03-28 18:25:45.752 UTC [19071] FATAL:  role \"adam\" does not exist"}
+{"level":"error","process":"postgres","replica":0,"message":"2026-03-28 18:25:47.753 UTC [19073] FATAL:  role \"adam\" does not exist"}
+{"level":"error","process":"postgres","replica":0,"message":"2026-03-28 18:25:49.754 UTC [19075] FATAL:  role \"adam\" does not exist"}
+{"level":"error","process":"postgres","replica":0,"message":"2026-03-28 18:25:51.754 UTC [19077] FATAL:  role \"adam\" does not exist"}
+{"level":"error","process":"postgres","replica":0,"message":"2026-03-28 18:25:53.754 UTC [19079] FATAL:  role \"adam\" does not exist"}
+{"level":"error","process":"postgres","replica":0,"message":"2026-03-28 18:25:55.754 UTC [19081] FATAL:  role \"adam\" does not exist"}
+{"level":"error","process":"postgres","replica":0,"message":"2026-03-28 18:25:57.753 UTC [19083] FATAL:  role \"adam\" does not exist"}
+{"level":"error","process":"postgres","replica":0,"message":"2026-03-28 18:25:59.754 UTC [19085] FATAL:  role \"adam\" does not exist"}
+{"level":"error","process":"postgres","replica":0,"message":"2026-03-28 18:26:01.753 UTC [19087] FATAL:  role \"adam\" does not exist"}
+{"level":"error","process":"postgres","replica":0,"message":"2026-03-28 18:26:03.756 UTC [19090] FATAL:  role \"adam\" does not exist"}
+{"level":"error","process":"postgres","replica":0,"message":"2026-03-28 18:26:05.753 UTC [19348] FATAL:  role \"adam\" does not exist"}
+{"level":"error","process":"postgres","replica":0,"message":"2026-03-28 18:26:07.754 UTC [19407] FATAL:  role \"adam\" does not exist"}
+{"level":"error","process":"postgres","replica":0,"message":"2026-03-28 18:26:09.754 UTC [19502] FATAL:  role \"adam\" does not exist"}
+{"level":"error","process":"postgres","replica":0,"message":"2026-03-28 18:26:11.753 UTC [19576] FATAL:  role \"adam\" does not exist"}
+{"level":"error","process":"postgres","replica":0,"message":"2026-03-28 18:26:13.754 UTC [19607] FATAL:  role \"adam\" does not exist"}
+{"level":"error","process":"postgres","replica":0,"message":"2026-03-28 18:26:15.755 UTC [19609] FATAL:  role \"adam\" does not exist"}
+{"level":"error","process":"postgres","replica":0,"message":"2026-03-28 18:26:17.754 UTC [19611] FATAL:  role \"adam\" does not exist"}
+{"level":"error","process":"postgres","replica":0,"message":"2026-03-28 18:26:19.754 UTC [19613] FATAL:  role \"adam\" does not exist"}
+{"level":"error","process":"postgres","replica":0,"message":"2026-03-28 18:26:21.754 UTC [19615] FATAL:  role \"adam\" does not exist"}
+{"level":"error","process":"postgres","replica":0,"message":"2026-03-28 18:26:23.755 UTC [19618] FATAL:  role \"adam\" does not exist"}
+{"level":"error","process":"postgres","replica":0,"message":"2026-03-28 18:26:25.753 UTC [19620] FATAL:  role \"adam\" does not exist"}
+{"level":"error","process":"postgres","replica":0,"message":"2026-03-28 18:26:27.755 UTC [19622] FATAL:  role \"adam\" does not exist"}
+{"level":"error","process":"postgres","replica":0,"message":"2026-03-28 18:26:29.753 UTC [19624] FATAL:  role \"adam\" does not exist"}
+{"level":"error","process":"postgres","replica":0,"message":"2026-03-28 18:26:31.753 UTC [19626] FATAL:  role \"adam\" does not 
