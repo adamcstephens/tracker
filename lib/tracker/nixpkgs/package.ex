@@ -7,7 +7,7 @@ defmodule Tracker.Nixpkgs.Package do
   end
 
   code_interface do
-    define :load, args: [:attribute, :revision]
+    define :bulk_upsert, args: [:attribute]
   end
 
   actions do
@@ -17,17 +17,11 @@ defmodule Tracker.Nixpkgs.Package do
       accept [:attribute]
     end
 
-    create :load do
+    create :bulk_upsert do
       accept [:attribute]
       upsert? true
       upsert_identity :unique_attribute
       upsert_fields :updated_at
-
-      argument :revision, :map do
-        allow_nil? false
-      end
-
-      change manage_relationship(:revision, :revisions, on_no_match: {:create, :load})
     end
   end
 

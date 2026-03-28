@@ -26,6 +26,26 @@ defmodule Tracker.Nixpkgs.ChannelWorkerTest do
       assert :success = ChannelWorker.write_to_database(data)
     end
 
+    test "loads packages and revisions" do
+      data = %{
+        "packages" => %{
+          "hello" => %{"version" => "2.12.1"},
+          "curl" => %{"version" => "8.7.1"}
+        },
+        "version" => 2,
+        "revision" => "load123",
+        "channel" => "nixos-unstable"
+      }
+
+      assert :success = ChannelWorker.write_to_database(data)
+
+      assert %{rows: [[2]]} =
+               Ecto.Adapters.SQL.query!(Tracker.Repo, "SELECT count(*) FROM packages")
+
+      assert %{rows: [[2]]} =
+               Ecto.Adapters.SQL.query!(Tracker.Repo, "SELECT count(*) FROM package_revisions")
+    end
+
     test "rejects unsupported version" do
       data = %{
         "packages" => %{},
