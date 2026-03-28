@@ -10,9 +10,10 @@ defmodule Tracker.Nixpkgs.PackageRevision do
     defaults [:read, create: [:version]]
 
     create :load do
-      accept [:version, :channel_revision_id]
+      accept [:version, :channel_revision_id, :package_id]
       upsert? true
       upsert_identity :unique_package_revision
+      upsert_fields [:version, :updated_at]
     end
   end
 
