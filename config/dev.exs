@@ -3,8 +3,7 @@ import Config
 # Configure your database
 config :tracker, Tracker.Repo,
   username: "postgres",
-  password: "postgres",
-  hostname: "localhost",
+  socket_dir: Path.expand("../.services/postgres", __DIR__),
   database: "tracker_dev",
   stacktrace: true,
   show_sensitive_data_on_connection_error: true,

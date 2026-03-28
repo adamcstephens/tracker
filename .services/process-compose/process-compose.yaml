@@ -1,0 +1,14 @@
+version: "0.5"
+
+log_location: .services/process-compose/log
+
+processes:
+  postgres:
+    command: .services/postgres/start.sh
+    readiness_probe:
+      exec:
+        command: pg_isready -h $PWD/.services/postgres
+      initial_delay_seconds: 2
+      period_seconds: 2
+    shutdown:
+      command: pg_ctl stop -D .services/postgres/data -m fast

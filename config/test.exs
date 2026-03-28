@@ -10,8 +10,7 @@ config :ash, disable_async?: true
 # Run `mix help test` for more information.
 config :tracker, Tracker.Repo,
   username: "postgres",
-  password: "postgres",
-  hostname: "localhost",
+  socket_dir: Path.expand("../.services/postgres", __DIR__),
   database: "tracker_test#{System.get_env("MIX_TEST_PARTITION")}",
   pool: Ecto.Adapters.SQL.Sandbox,
   pool_size: System.schedulers_online() * 2
