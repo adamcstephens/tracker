@@ -75,10 +75,11 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
 
   def write_to_database(%{
         "packages" => packages,
-        "version" => 2,
+        "version" => version,
         "revision" => revision,
         "channel" => channel
-      }) do
+      })
+      when version in [2, "2"] do
     packages =
       case Application.get_env(:tracker, :loader_limit) do
         nil -> packages
@@ -109,5 +110,10 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
     |> Ash.update!()
 
     bulk_status
+  end
+
+  def write_to_database(%{"version" => version}) do
+    Logger.error("Unsupported packages.json version: #{inspect(version)}")
+    {:error, :unsupported_version}
   end
 end
