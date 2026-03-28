@@ -10,7 +10,8 @@ defmodule Tracker.MixProject do
       start_permanent: Mix.env() == :prod,
       consolidate_protocols: Mix.env() != :dev,
       aliases: aliases(),
-      deps: deps()
+      deps: deps(),
+      listeners: [Phoenix.CodeReloader]
     ]
   end
 
@@ -33,6 +34,7 @@ defmodule Tracker.MixProject do
   # Type `mix help deps` for examples and options.
   defp deps do
     [
+      {:tidewave, "~> 0.5", only: [:dev]},
       {:ash, "~> 3.0"},
       {:ash_admin, "~> 0.14"},
       {:ash_authentication, "~> 4.0"},
