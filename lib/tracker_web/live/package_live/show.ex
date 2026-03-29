@@ -36,7 +36,7 @@ defmodule TrackerWeb.PackageLive.Show do
       <ul>
         <li :for={t <- @package.teams}>
           <.link navigate={~p"/teams/#{t.short_name}"}><strong>{t.short_name}</strong></.link>
-          <span :if={t.scope}> —     {t.scope}</span>
+          <span :if={t.scope}> —        {t.scope}</span>
           <ul :if={t.members != []}>
             <li :for={m <- t.members}>
               <.maintainer_link maintainer={m} />
@@ -78,12 +78,21 @@ defmodule TrackerWeb.PackageLive.Show do
           </option>
         </select>
         <input
-          type="search"
+          type="text"
           name="version"
           value={@version_filter}
           placeholder="Filter by version..."
           phx-debounce="300"
         />
+        <label>
+          <input type="hidden" name="all_revisions" value="false" />
+          <input
+            type="checkbox"
+            name="all_revisions"
+            value="true"
+            checked={@all_revisions?}
+          /> All revisions
+        </label>
       </form>
     </div>
 
@@ -228,11 +237,19 @@ defmodule TrackerWeb.PackageLive.Show do
     sort_dir = parse_sort_dir(params["sort_dir"])
     channel_filter = params["channel"] || ""
     version_filter = params["version"] || ""
+    all_revisions? = params["all_revisions"] == "true"
     page = params |> Map.get("page", "1") |> String.to_integer() |> max(1)
     offset = (page - 1) * 15
 
     result = load_revisions(package.id, sort_by, sort_dir, channel_filter, version_filter, offset)
     channels = load_channels()
+
+    revisions =
+      if all_revisions? do
+        result.results
+      else
+        filter_to_version_changes(result.results, package.id)
+      end
 
     total_pages = ceil(result.count / 15)
     current_page = div(offset, 15) + 1
@@ -242,11 +259,12 @@ defmodule TrackerWeb.PackageLive.Show do
      |> assign(:page_title, package.attribute)
      |> assign(:package, package)
      |> assign(:family_siblings, family_siblings)
-     |> assign(:revisions, result.results)
+     |> assign(:revisions, revisions)
      |> assign(:sort_by, sort_by)
      |> assign(:sort_dir, sort_dir)
      |> assign(:channel_filter, channel_filter)
      |> assign(:version_filter, version_filter)
+     |> assign(:all_revisions?, all_revisions?)
      |> assign(:channels, channels)
      |> assign(:has_prev_page?, offset > 0)
      |> assign(:has_next_page?, result.more?)
@@ -274,6 +292,7 @@ defmodule TrackerWeb.PackageLive.Show do
            new_sort_dir,
            socket.assigns.channel_filter,
            socket.assigns.version_filter,
+           socket.assigns.all_revisions?,
            1
          )
      )}
@@ -283,6 +302,7 @@ defmodule TrackerWeb.PackageLive.Show do
   def handle_event("filter", params, socket) do
     channel = Map.get(params, "channel", "")
     version = Map.get(params, "version", "")
+    all_revisions? = Map.get(params, "all_revisions", "false") == "true"
 
     {:noreply,
      push_patch(socket,
@@ -293,6 +313,7 @@ defmodule TrackerWeb.PackageLive.Show do
            socket.assigns.sort_dir,
            channel,
            version,
+           all_revisions?,
            1
          )
      )}
@@ -309,6 +330,7 @@ defmodule TrackerWeb.PackageLive.Show do
            socket.assigns.sort_dir,
            socket.assigns.channel_filter,
            socket.assigns.version_filter,
+           socket.assigns.all_revisions?,
            socket.assigns.current_page + 1
          )
      )}
@@ -325,6 +347,7 @@ defmodule TrackerWeb.PackageLive.Show do
            socket.assigns.sort_dir,
            socket.assigns.channel_filter,
            socket.assigns.version_filter,
+           socket.assigns.all_revisions?,
            max(socket.assigns.current_page - 1, 1)
          )
      )}
@@ -383,7 +406,35 @@ defmodule TrackerWeb.PackageLive.Show do
   defp toggle_dir(:asc), do: :desc
   defp toggle_dir(:desc), do: :asc
 
-  defp revisions_path(package_name, sort_by, sort_dir, channel, version, page) do
+  defp filter_to_version_changes(revisions, package_id) do
+    # Load all revisions for this package ordered by release date
+    # to determine which ones represent actual version changes per channel
+    all_revisions =
+      Tracker.Nixpkgs.PackageRevision
+      |> Ash.Query.for_read(:version_changes_by_package, %{package_id: package_id})
+      |> Ash.read!()
+
+    # Group by channel and find IDs where version changed
+    change_ids =
+      all_revisions
+      |> Enum.group_by(& &1.channel_revision.channel)
+      |> Enum.flat_map(fn {_channel, channel_revs} ->
+        channel_revs
+        |> Enum.reduce({nil, []}, fn rev, {prev_version, acc} ->
+          if rev.version != prev_version do
+            {rev.version, [rev.id | acc]}
+          else
+            {prev_version, acc}
+          end
+        end)
+        |> elem(1)
+      end)
+      |> MapSet.new()
+
+    Enum.filter(revisions, &MapSet.member?(change_ids, &1.id))
+  end
+
+  defp revisions_path(package_name, sort_by, sort_dir, channel, version, all_revisions?, page) do
     params =
       %{}
       |> then(fn p ->
@@ -394,6 +445,7 @@ defmodule TrackerWeb.PackageLive.Show do
       end)
       |> then(fn p -> if channel != "", do: Map.put(p, :channel, channel), else: p end)
       |> then(fn p -> if version != "", do: Map.put(p, :version, version), else: p end)
+      |> then(fn p -> if all_revisions?, do: Map.put(p, :all_revisions, true), else: p end)
       |> then(fn p -> if page > 1, do: Map.put(p, :page, page), else: p end)
 
     case URI.encode_query(params) do
