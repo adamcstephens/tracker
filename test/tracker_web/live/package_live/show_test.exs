@@ -4,10 +4,18 @@ defmodule TrackerWeb.PackageLive.ShowTest do
   import Phoenix.LiveViewTest
 
   setup do
-    channel_revision =
+    cr1 =
       Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
         channel: "nixos-unstable",
-        revision: "abc123def456789"
+        revision: "abc123def456789",
+        released_at: ~U[2026-03-01 10:00:00Z]
+      })
+
+    cr2 =
+      Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
+        channel: "nixos-24.11",
+        revision: "def456abc789012",
+        released_at: ~U[2026-03-15 10:00:00Z]
       })
 
     package =
@@ -19,11 +27,19 @@ defmodule TrackerWeb.PackageLive.ShowTest do
     |> Ash.Changeset.for_create(:load, %{
       version: "2.12.1",
       package_id: package.id,
-      channel_revision_id: channel_revision.id
+      channel_revision_id: cr1.id
     })
     |> Ash.create!()
 
-    %{package: package, channel_revision: channel_revision}
+    Tracker.Nixpkgs.PackageRevision
+    |> Ash.Changeset.for_create(:load, %{
+      version: "2.13.0",
+      package_id: package.id,
+      channel_revision_id: cr2.id
+    })
+    |> Ash.create!()
+
+    %{package: package, cr1: cr1, cr2: cr2}
   end
 
   test "displays package attribute as heading", %{conn: conn, package: package} do
@@ -55,5 +71,61 @@ defmodule TrackerWeb.PackageLive.ShowTest do
     {:ok, _view, html} = live(conn, ~p"/packages/#{empty_package.id}")
 
     assert html =~ "No revisions found"
+  end
+
+  test "displays released_at column", %{conn: conn, package: package} do
+    {:ok, _view, html} = live(conn, ~p"/packages/#{package.id}")
+
+    assert html =~ "Released"
+    assert html =~ "2026-03-01 10:00"
+  end
+
+  test "default sort is released_at descending", %{conn: conn, package: package} do
+    {:ok, _view, html} = live(conn, ~p"/packages/#{package.id}")
+
+    # cr2 (2026-03-15) should appear before cr1 (2026-03-01)
+    assert version_order(html) == ["2.13.0", "2.12.1"]
+  end
+
+  test "sort by version ascending via URL param", %{conn: conn, package: package} do
+    {:ok, _view, html} = live(conn, ~p"/packages/#{package.id}?sort_by=version&sort_dir=asc")
+
+    assert version_order(html) == ["2.12.1", "2.13.0"]
+  end
+
+  test "clicking sort header updates URL", %{conn: conn, package: package} do
+    {:ok, view, _html} = live(conn, ~p"/packages/#{package.id}")
+
+    # Click version header to sort asc
+    html = view |> element("th[phx-value-field=version]") |> render_click()
+
+    assert_patched(view, ~p"/packages/#{package.id}?sort_by=version&sort_dir=asc")
+    assert version_order(html) == ["2.12.1", "2.13.0"]
+
+    # Click again to toggle to desc (sort_dir=desc is default so omitted from URL)
+    html = view |> element("th[phx-value-field=version]") |> render_click()
+
+    assert_patched(view, ~p"/packages/#{package.id}?sort_by=version")
+    assert version_order(html) == ["2.13.0", "2.12.1"]
+  end
+
+  test "filter by channel via URL param", %{conn: conn, package: package} do
+    {:ok, _view, html} = live(conn, ~p"/packages/#{package.id}?channel=nixos-unstable")
+
+    assert html =~ "2.12.1"
+    refute html =~ "2.13.0"
+  end
+
+  test "filter by version via URL param", %{conn: conn, package: package} do
+    {:ok, _view, html} = live(conn, ~p"/packages/#{package.id}?version=2.12")
+
+    assert html =~ "2.12.1"
+    refute html =~ "2.13.0"
+  end
+
+  defp version_order(html) do
+    ~r/<td[^>]*>\s*(\d+\.\d+\.\d+)\s*<\/td>/
+    |> Regex.scan(html)
+    |> Enum.map(fn [_, version] -> version end)
   end
 end
