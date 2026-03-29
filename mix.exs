@@ -54,13 +54,6 @@ defmodule Tracker.MixProject do
       {:floki, ">= 0.30.0", only: :test},
       {:lazy_html, ">= 0.1.0", only: :test},
       {:gettext, "~> 1.0"},
-      {:heroicons,
-       github: "tailwindlabs/heroicons",
-       tag: "v2.1.1",
-       sparse: "optimized",
-       app: false,
-       compile: false,
-       depth: 1},
       # for oapi_github
       {:httpoison, "~> 2.2"},
       {:igniter, "~> 0.5", only: [:dev, :test]},
@@ -81,7 +74,6 @@ defmodule Tracker.MixProject do
       {:req, "~> 0.5.8"},
       {:sourceror, "~> 1.7", only: [:dev, :test]},
       {:swoosh, "~> 1.5"},
-      {:tailwind, "~> 0.2", runtime: Mix.env() == :dev},
       {:telemetry_metrics, "~> 1.0"},
       {:telemetry_poller, "~> 1.0"}
     ]
@@ -99,10 +91,9 @@ defmodule Tracker.MixProject do
       "ecto.setup": ["ecto.create", "ecto.migrate", "run priv/repo/seeds.exs"],
       "ecto.reset": ["ecto.drop", "ecto.setup"],
       test: ["ash.setup --quiet", "test"],
-      "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
-      "assets.build": ["tailwind tracker", "esbuild tracker"],
+      "assets.setup": ["esbuild.install --if-missing"],
+      "assets.build": ["esbuild tracker"],
       "assets.deploy": [
-        "tailwind tracker --minify",
         "esbuild tracker --minify",
         "phx.digest"
       ],

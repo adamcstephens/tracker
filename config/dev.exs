@@ -23,8 +23,7 @@ config :tracker, TrackerWeb.Endpoint,
   debug_errors: true,
   secret_key_base: "gz7LI1OQPCzePKokDdsPH/zY2dMjBBTWHzNP5ce7LNTryI5NdRGE3Qw2J1BFvw4J",
   watchers: [
-    esbuild: {Esbuild, :install_and_run, [:tracker, ~w(--sourcemap=inline --watch)]},
-    tailwind: {Tailwind, :install_and_run, [:tracker, ~w(--watch)]}
+    esbuild: {Esbuild, :install_and_run, [:tracker, ~w(--sourcemap=inline --watch)]}
   ]
 
 config :ash_authentication, debug_authentication_failures?: true

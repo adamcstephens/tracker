@@ -13,6 +13,16 @@ defmodule Tracker.Nixpkgs.Package do
   actions do
     defaults [:read]
 
+    read :list do
+      pagination do
+        offset? true
+        countable true
+        default_limit 15
+      end
+
+      prepare build(sort: :attribute)
+    end
+
     create :create do
       accept [:attribute]
     end

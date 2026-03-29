@@ -1,0 +1,130 @@
+/* Custom overrides for Pico CSS */
+
+:root {
+  --pico-color-primary: #fd4f00;
+  --pico-color-primary-hover: #e04600;
+  --pico-color-primary-focus: rgba(253, 79, 0, 0.25);
+  --pico-color-primary-inverse: #fff;
+}
+
+/* Flash notifications */
+.flash {
+  position: fixed;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 50;
+  width: 24rem;
+  max-width: calc(100vw - 1rem);
+  cursor: pointer;
+}
+
+.flash[hidden] {
+  display: none;
+}
+
+.flash-info {
+  --pico-card-background-color: #ecfdf5;
+  --pico-card-border-color: #6ee7b7;
+  color: #065f46;
+}
+
+.flash-error {
+  --pico-card-background-color: #fff1f2;
+  --pico-card-border-color: #f43f5e;
+  color: #881337;
+}
+
+.flash .close-button {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.5rem;
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  opacity: 0.4;
+  cursor: pointer;
+  padding: 0.25rem;
+  margin: 0;
+  width: auto;
+}
+
+.flash .close-button:hover {
+  opacity: 0.7;
+}
+
+/* Loading states for LiveView */
+.phx-click-loading {
+  opacity: 0.75;
+}
+
+.phx-submit-loading {
+  opacity: 0.75;
+}
+
+/* Visually hidden utility */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* Spin animation for reconnect indicator */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+  display: inline-block;
+}
+
+/* Revision link styling */
+a.revision-link {
+  font-family: var(--pico-font-family-monospace);
+}
+
+/* Sign-in page styling */
+.sign-in-banner {
+  text-align: center;
+  margin-top: 3rem;
+}
+
+.sign-in-banner-text {
+  font-size: 1.75rem;
+  font-weight: bold;
+  margin-bottom: 1.5rem;
+}
+
+.sign-in-oauth {
+  text-align: center;
+}
+
+.sign-in-oauth a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: 0.375rem;
+  text-decoration: none;
+  color: var(--pico-color);
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.sign-in-oauth a:hover {
+  background-color: var(--pico-primary);
+  color: var(--pico-primary-inverse);
+  border-color: var(--pico-primary);
+}
+
+.sign-in-oauth svg {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+}
