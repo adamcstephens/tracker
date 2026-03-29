@@ -30,12 +30,12 @@ defmodule TrackerWeb.MaintainerLive.Show do
       <ul>
         <li :for={t <- @maintainer.teams}>
           <.link navigate={~p"/teams/#{t.short_name}"}>{t.short_name}</.link>
-          <span :if={t.scope}> —  {t.scope}</span>
+          <span :if={t.scope}> —   {t.scope}</span>
         </li>
       </ul>
     </div>
 
-    <h2>Packages</h2>
+    <h2>Packages ({@package_count})</h2>
 
     <form phx-change="search" phx-submit="search">
       <input
@@ -111,7 +111,8 @@ defmodule TrackerWeb.MaintainerLive.Show do
      |> assign(:has_prev_page?, offset > 0)
      |> assign(:has_next_page?, packages.more?)
      |> assign(:total_pages, total_pages)
-     |> assign(:current_page, div(offset, 15) + 1)}
+     |> assign(:current_page, div(offset, 15) + 1)
+     |> assign(:package_count, packages.count)}
   end
 
   @impl true
