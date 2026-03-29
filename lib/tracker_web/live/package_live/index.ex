@@ -21,13 +21,13 @@ defmodule TrackerWeb.PackageLive.Index do
     <.table
       id="packages"
       rows={@streams.packages}
-      row_click={fn {_id, package} -> JS.navigate(~p"/packages/#{package}") end}
+      row_click={fn {_id, package} -> JS.navigate(~p"/packages/#{package.attribute}") end}
     >
       <:col :let={{_id, package}} label="Attribute">{package.attribute}</:col>
 
       <:action :let={{_id, package}}>
         <div class="sr-only">
-          <.link navigate={~p"/packages/#{package}"}>Show</.link>
+          <.link navigate={~p"/packages/#{package.attribute}"}>Show</.link>
         </div>
       </:action>
     </.table>

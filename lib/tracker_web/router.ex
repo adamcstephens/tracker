@@ -27,7 +27,7 @@ defmodule TrackerWeb.Router do
       on_mount: {TrackerWeb.LiveUserAuth, :live_user_optional} do
       live "/", PackageLive.Index, :index
       live "/packages", PackageLive.Index, :index
-      live "/packages/:id", PackageLive.Show, :show
+      live "/packages/:name", PackageLive.Show, :show
       live "/channels", ChannelLive.Index, :index
       live "/channels/:channel", ChannelLive.Show, :show
     end

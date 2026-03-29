@@ -117,8 +117,8 @@ defmodule TrackerWeb.PackageLive.Show do
   end
 
   @impl true
-  def handle_params(%{"id" => id} = params, _url, socket) do
-    package = Ash.get!(Tracker.Nixpkgs.Package, id)
+  def handle_params(%{"name" => name} = params, _url, socket) do
+    package = Ash.get!(Tracker.Nixpkgs.Package, %{attribute: name})
 
     sort_by = parse_sort_by(params["sort_by"])
     sort_dir = parse_sort_dir(params["sort_dir"])
@@ -155,7 +155,7 @@ defmodule TrackerWeb.PackageLive.Show do
      push_patch(socket,
        to:
          revisions_path(
-           socket.assigns.package.id,
+           socket.assigns.package.attribute,
            new_sort_by,
            new_sort_dir,
            socket.assigns.channel_filter,
@@ -173,7 +173,7 @@ defmodule TrackerWeb.PackageLive.Show do
      push_patch(socket,
        to:
          revisions_path(
-           socket.assigns.package.id,
+           socket.assigns.package.attribute,
            socket.assigns.sort_by,
            socket.assigns.sort_dir,
            channel,
@@ -227,7 +227,7 @@ defmodule TrackerWeb.PackageLive.Show do
   defp toggle_dir(:asc), do: :desc
   defp toggle_dir(:desc), do: :asc
 
-  defp revisions_path(package_id, sort_by, sort_dir, channel, version) do
+  defp revisions_path(package_name, sort_by, sort_dir, channel, version) do
     params =
       %{}
       |> then(fn p ->
@@ -240,8 +240,8 @@ defmodule TrackerWeb.PackageLive.Show do
       |> then(fn p -> if version != "", do: Map.put(p, :version, version), else: p end)
 
     case URI.encode_query(params) do
-      "" -> "/packages/#{package_id}"
-      qs -> "/packages/#{package_id}?#{qs}"
+      "" -> "/packages/#{package_name}"
+      qs -> "/packages/#{package_name}?#{qs}"
     end
   end
 end
