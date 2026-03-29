@@ -12,6 +12,7 @@ dev:
 
 format:
     mix format
+    biome format --write priv/static/css/app.css
 
 test:
     mix test
