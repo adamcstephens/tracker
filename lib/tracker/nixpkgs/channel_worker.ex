@@ -267,6 +267,7 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
             entry
             |> maybe_put(:description, meta["description"])
             |> maybe_put(:homepage, meta["homepage"])
+            |> maybe_put(:position, meta["position"])
           else
             entry
           end
@@ -317,6 +318,7 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
         %{attribute: attribute}
         |> maybe_put(:description, entry[:description])
         |> maybe_put(:homepage, entry[:homepage])
+        |> maybe_put(:position, entry[:position])
       end)
       |> Stream.chunk_every(@chunk_size)
       |> Enum.reduce(:success, fn chunk, acc ->

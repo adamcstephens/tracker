@@ -12,7 +12,6 @@ defmodule TrackerWeb.PackageLive.Show do
     ~H"""
     <.header>
       {@package.attribute}
-      <:subtitle>Package details</:subtitle>
     </.header>
 
     <p :if={@package.description}>{@package.description}</p>
@@ -23,6 +22,9 @@ defmodule TrackerWeb.PackageLive.Show do
         <a href={@package.homepage} target="_blank" rel="noopener noreferrer">
           {@package.homepage}
         </a>
+      </:item>
+      <:item :if={@package.position} title="Position">
+        <.nixpkgs_position position={@package.position} />
       </:item>
     </.list>
 
@@ -123,6 +125,26 @@ defmodule TrackerWeb.PackageLive.Show do
   defp sort_indicator(sort_by, :asc, field) when sort_by == field, do: "↑"
   defp sort_indicator(sort_by, :desc, field) when sort_by == field, do: "↓"
   defp sort_indicator(_, _, _), do: ""
+
+  defp nixpkgs_position(assigns) do
+    [path, line] =
+      case String.split(assigns.position, ":") do
+        [path, line] -> [path, line]
+        [path] -> [path, nil]
+      end
+
+    assigns = assign(assigns, path: path, line: line)
+
+    ~H"""
+    <a
+      href={"https://github.com/NixOS/nixpkgs/blob/master/#{@path}" <> if(@line, do: "#L#{@line}", else: "")}
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      {@position}
+    </a>
+    """
+  end
 
   defp revision_link(assigns) do
     ~H"""
