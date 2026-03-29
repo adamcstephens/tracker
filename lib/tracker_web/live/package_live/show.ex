@@ -28,6 +28,30 @@ defmodule TrackerWeb.PackageLive.Show do
       </:item>
     </.list>
 
+    <div :if={@package.teams != []} style="margin-top: 1rem;">
+      <h2>Teams</h2>
+      <ul>
+        <li :for={t <- @package.teams}>
+          <strong>{t.short_name}</strong>
+          <span :if={t.scope}> —  {t.scope}</span>
+          <ul :if={t.members != []}>
+            <li :for={m <- t.members}>
+              <.maintainer_link maintainer={m} />
+            </li>
+          </ul>
+        </li>
+      </ul>
+    </div>
+
+    <div :if={@package.maintainers != []} style="margin-top: 1rem;">
+      <h2>Maintainers</h2>
+      <ul>
+        <li :for={m <- @package.maintainers}>
+          <.maintainer_link maintainer={m} />
+        </li>
+      </ul>
+    </div>
+
     <div class="revisions-header">
       <h2>Revisions</h2>
 
@@ -146,6 +170,20 @@ defmodule TrackerWeb.PackageLive.Show do
     """
   end
 
+  defp maintainer_link(assigns) do
+    ~H"""
+    <a
+      :if={@maintainer.github}
+      href={"https://github.com/#{@maintainer.github}"}
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      {@maintainer.name || @maintainer.github}
+    </a>
+    <span :if={!@maintainer.github}>{@maintainer.name || "Unknown"}</span>
+    """
+  end
+
   defp revision_link(assigns) do
     ~H"""
     <a
@@ -170,7 +208,9 @@ defmodule TrackerWeb.PackageLive.Show do
 
   @impl true
   def handle_params(%{"name" => name} = params, _url, socket) do
-    package = Ash.get!(Tracker.Nixpkgs.Package, %{attribute: name})
+    package =
+      Ash.get!(Tracker.Nixpkgs.Package, %{attribute: name})
+      |> Ash.load!([:maintainers, teams: [:members]])
 
     sort_by = parse_sort_by(params["sort_by"])
     sort_dir = parse_sort_dir(params["sort_dir"])

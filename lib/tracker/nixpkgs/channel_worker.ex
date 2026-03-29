@@ -255,28 +255,20 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
     # Slim down to only what we need, filtering out empty versions
     include_metadata? = channel == @metadata_channel
 
-    packages =
+    {packages, maintainer_data, team_data, package_joins} =
       packages
       |> Map.reject(fn {_attr, info} -> info["version"] == "" end)
-      |> Map.new(fn {attr, info} ->
-        entry = %{version: info["version"]}
-
-        entry =
-          if include_metadata? do
-            meta = info["meta"] || %{}
-
-            entry
-            |> maybe_put(:description, meta["description"])
-            |> maybe_put(:homepage, meta["homepage"])
-            |> maybe_put(:position, meta["position"])
-          else
-            entry
-          end
-
-        {attr, entry}
-      end)
+      |> extract_packages(include_metadata?)
 
     bulk_status = load_packages(packages, channel_revision)
+
+    if include_metadata? and bulk_status != :error do
+      %{rows: rows} =
+        Ecto.Adapters.SQL.query!(Tracker.Repo, "SELECT attribute, id FROM packages")
+
+      id_map = Map.new(rows, fn [attribute, id] -> {attribute, id} end)
+      load_maintainers_and_teams(id_map, maintainer_data, team_data, package_joins)
+    end
 
     if bulk_status != :success do
       Logger.error("Failed to load channel #{channel} at #{revision}")
@@ -364,6 +356,166 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
 
       worst_status(pkg_status, rev_status)
     end
+  end
+
+  defp extract_packages(packages, false) do
+    pkgs = Map.new(packages, fn {attr, info} -> {attr, %{version: info["version"]}} end)
+    {pkgs, %{}, %{}, %{}}
+  end
+
+  defp extract_packages(packages, true) do
+    Enum.reduce(packages, {%{}, %{}, %{}, %{}}, fn {attr, info},
+                                                   {pkgs, maint_acc, team_acc, joins} ->
+      meta = info["meta"] || %{}
+
+      entry =
+        %{version: info["version"]}
+        |> maybe_put(:description, meta["description"])
+        |> maybe_put(:homepage, meta["homepage"])
+        |> maybe_put(:position, meta["position"])
+
+      # Collect direct (non-team) maintainers
+      non_team = meta["nonTeamMaintainers"] || []
+
+      maint_acc =
+        Enum.reduce(non_team, maint_acc, fn m, acc ->
+          Map.put_new(acc, m["githubId"], extract_maintainer(m))
+        end)
+
+      # Collect teams and their members
+      teams = meta["teams"] || []
+
+      team_acc =
+        Enum.reduce(teams, team_acc, fn t, acc ->
+          Map.put_new(acc, t["shortName"], %{
+            short_name: t["shortName"],
+            scope: t["scope"],
+            github: t["github"],
+            github_id: t["githubId"],
+            member_github_ids: Enum.map(t["members"] || [], & &1["githubId"])
+          })
+        end)
+
+      # Team members also need to exist in the maintainers table
+      maint_acc =
+        teams
+        |> Enum.flat_map(fn t -> t["members"] || [] end)
+        |> Enum.reduce(maint_acc, fn m, acc ->
+          Map.put_new(acc, m["githubId"], extract_maintainer(m))
+        end)
+
+      # Track per-package join info
+      maintainer_ids = Enum.map(non_team, & &1["githubId"])
+      team_names = Enum.map(teams, & &1["shortName"])
+
+      joins =
+        if maintainer_ids != [] or team_names != [] do
+          Map.put(joins, attr, %{
+            maintainer_github_ids: maintainer_ids,
+            team_short_names: team_names
+          })
+        else
+          joins
+        end
+
+      {Map.put(pkgs, attr, entry), maint_acc, team_acc, joins}
+    end)
+  end
+
+  defp extract_maintainer(m) do
+    %{github_id: m["githubId"], name: m["name"]}
+    |> maybe_put(:email, m["email"])
+    |> maybe_put(:github, m["github"])
+    |> maybe_put(:matrix, m["matrix"])
+  end
+
+  defp load_maintainers_and_teams(id_map, maintainer_data, team_data, package_joins) do
+    # Step 1: Bulk upsert maintainers
+    maintainer_data
+    |> Map.values()
+    |> Stream.chunk_every(@chunk_size)
+    |> Enum.each(fn chunk ->
+      Ash.bulk_create(chunk, Tracker.Nixpkgs.Maintainer, :bulk_upsert,
+        batch_size: 5000,
+        return_errors?: true
+      )
+    end)
+
+    # Step 2: Bulk upsert teams
+    team_attrs = Enum.map(Map.values(team_data), &Map.delete(&1, :member_github_ids))
+
+    if team_attrs != [] do
+      Ash.bulk_create(team_attrs, Tracker.Nixpkgs.Team, :bulk_upsert,
+        batch_size: 5000,
+        return_errors?: true
+      )
+    end
+
+    # Step 3: Build lookup maps
+    %{rows: maint_rows} =
+      Ecto.Adapters.SQL.query!(Tracker.Repo, "SELECT github_id, id FROM maintainers")
+
+    maintainer_id_map = Map.new(maint_rows, fn [github_id, id] -> {github_id, id} end)
+
+    %{rows: team_rows} =
+      Ecto.Adapters.SQL.query!(Tracker.Repo, "SELECT short_name, id FROM teams")
+
+    team_id_map = Map.new(team_rows, fn [short_name, id] -> {short_name, id} end)
+
+    # Step 4: Bulk upsert team members
+    team_data
+    |> Enum.flat_map(fn {short_name, team} ->
+      team_id = Map.fetch!(team_id_map, short_name)
+
+      Enum.map(team.member_github_ids, fn github_id ->
+        %{team_id: team_id, maintainer_id: Map.fetch!(maintainer_id_map, github_id)}
+      end)
+    end)
+    |> Stream.chunk_every(@chunk_size)
+    |> Enum.each(fn chunk ->
+      Ash.bulk_create(chunk, Tracker.Nixpkgs.TeamMember, :load,
+        batch_size: 5000,
+        return_errors?: true
+      )
+    end)
+
+    # Step 5: Upsert package_maintainers (dedup to avoid PG cardinality violation)
+    package_joins
+    |> Enum.flat_map(fn {attr, joins} ->
+      package_id = Map.fetch!(id_map, attr)
+
+      joins.maintainer_github_ids
+      |> Enum.uniq()
+      |> Enum.map(fn github_id ->
+        %{package_id: package_id, maintainer_id: Map.fetch!(maintainer_id_map, github_id)}
+      end)
+    end)
+    |> Stream.chunk_every(@chunk_size)
+    |> Enum.each(fn chunk ->
+      Ash.bulk_create(chunk, Tracker.Nixpkgs.PackageMaintainer, :load,
+        batch_size: 5000,
+        return_errors?: true
+      )
+    end)
+
+    # Step 6: Upsert package_teams
+    package_joins
+    |> Enum.flat_map(fn {attr, joins} ->
+      package_id = Map.fetch!(id_map, attr)
+
+      Enum.map(joins.team_short_names, fn short_name ->
+        %{package_id: package_id, team_id: Map.fetch!(team_id_map, short_name)}
+      end)
+    end)
+    |> Stream.chunk_every(@chunk_size)
+    |> Enum.each(fn chunk ->
+      Ash.bulk_create(chunk, Tracker.Nixpkgs.PackageTeam, :load,
+        batch_size: 5000,
+        return_errors?: true
+      )
+    end)
+
+    :ok
   end
 
   defp worst_status(:error, _), do: :error
