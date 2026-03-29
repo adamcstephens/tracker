@@ -62,6 +62,7 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
 
       _ ->
         fetch_channel(channel, revision, base_url)
+        |> maybe_put("released_at", fetch_released_at(base_url))
         |> write_to_database()
     end
   end
@@ -164,6 +165,27 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
   defp channel_to_s3_prefix(channel), do: "#{channel}/"
 
   @releases_base_url "https://releases.nixos.org"
+
+  @doc """
+  Fetches the `LastModified` timestamp from S3 for a given release base URL.
+
+  Does a targeted S3 listing with `max_keys: 1` to get the timestamp without
+  downloading the full channel listing.
+  """
+  def fetch_released_at(base_url) do
+    key = String.replace_prefix(base_url, @releases_base_url <> "/", "")
+    req_s3 = req() |> ReqS3.attach()
+
+    resp = Req.get!(req_s3, url: "s3://nix-releases", params: [prefix: key, max_keys: 1])
+
+    resp.body["ListBucketResult"]["Contents"]
+    |> List.wrap()
+    |> List.first()
+    |> case do
+      %{"LastModified" => last_modified} -> last_modified
+      _ -> nil
+    end
+  end
 
   @doc """
   Parses S3 Contents entries into release maps, sorted by `LastModified` descending (newest first).

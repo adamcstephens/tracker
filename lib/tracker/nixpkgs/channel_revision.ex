@@ -55,7 +55,7 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
 
     attribute :result, :atom, constraints: [one_of: [:success, :partial_success, :error]]
 
-    attribute :released_at, :utc_datetime, public?: true
+    attribute :released_at, :utc_datetime, allow_nil?: false, public?: true
 
     timestamps()
   end

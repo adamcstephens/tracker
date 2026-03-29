@@ -4,12 +4,28 @@ defmodule Tracker.Nixpkgs.ChannelWorkerTest do
   alias Tracker.Nixpkgs.ChannelWorker
 
   describe "write_to_database/1" do
+    test "stores released_at on channel revision" do
+      data = %{
+        "packages" => %{},
+        "version" => 2,
+        "revision" => "rel123",
+        "channel" => "nixos-unstable",
+        "released_at" => "2026-03-15T10:00:00.000Z"
+      }
+
+      assert :success = ChannelWorker.write_to_database(data)
+
+      {:ok, cr} = Tracker.Nixpkgs.ChannelRevision.find("nixos-unstable", "rel123")
+      assert cr.released_at == ~U[2026-03-15 10:00:00Z]
+    end
+
     test "accepts version as integer" do
       data = %{
         "packages" => %{},
         "version" => 2,
         "revision" => "abc123",
-        "channel" => "nixos-unstable"
+        "channel" => "nixos-unstable",
+        "released_at" => "2026-03-01T10:00:00.000Z"
       }
 
       assert :success = ChannelWorker.write_to_database(data)
@@ -20,7 +36,8 @@ defmodule Tracker.Nixpkgs.ChannelWorkerTest do
         "packages" => %{},
         "version" => "2",
         "revision" => "def456",
-        "channel" => "nixos-unstable"
+        "channel" => "nixos-unstable",
+        "released_at" => "2026-03-01T10:00:00.000Z"
       }
 
       assert :success = ChannelWorker.write_to_database(data)
@@ -34,7 +51,8 @@ defmodule Tracker.Nixpkgs.ChannelWorkerTest do
         },
         "version" => 2,
         "revision" => "load123",
-        "channel" => "nixos-unstable"
+        "channel" => "nixos-unstable",
+        "released_at" => "2026-03-01T10:00:00.000Z"
       }
 
       assert :success = ChannelWorker.write_to_database(data)
@@ -122,7 +140,8 @@ defmodule Tracker.Nixpkgs.ChannelWorkerTest do
       Tracker.Nixpkgs.ChannelRevision
       |> Ash.Changeset.for_create(:create, %{
         channel: "nixos-25.11-small",
-        revision: "d355f89e0014e51c9511298089d7ab55fd6f7056"
+        revision: "d355f89e0014e51c9511298089d7ab55fd6f7056",
+        released_at: ~U[2025-12-05 19:58:15Z]
       })
       |> Ash.create!()
 
