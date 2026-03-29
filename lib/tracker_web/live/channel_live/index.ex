@@ -3,6 +3,10 @@ defmodule TrackerWeb.ChannelLive.Index do
 
   require Ash.Query
 
+  @valid_sort_fields ~w(name count latest_release)a
+  @default_sort_by :latest_release
+  @default_sort_dir :desc
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -10,23 +14,53 @@ defmodule TrackerWeb.ChannelLive.Index do
       Channels
     </.header>
 
-    <.table
-      id="channels"
-      rows={@streams.channels}
-      row_click={fn {_id, channel} -> JS.navigate(~p"/channels/#{channel.name}") end}
-    >
-      <:col :let={{_id, channel}} label="Channel">{channel.name}</:col>
-      <:col :let={{_id, channel}} label="Revisions">{channel.count}</:col>
-      <:col :let={{_id, channel}} label="Latest Release">{format_date(channel.latest_release)}</:col>
-
-      <:action :let={{_id, channel}}>
-        <div class="sr-only">
-          <.link navigate={~p"/channels/#{channel.name}"}>Show</.link>
-        </div>
-      </:action>
-    </.table>
+    <figure>
+      <table role="grid">
+        <thead>
+          <tr>
+            <.sort_header field={:name} label="Channel" sort_by={@sort_by} sort_dir={@sort_dir} />
+            <.sort_header
+              field={:count}
+              label="Revisions"
+              sort_by={@sort_by}
+              sort_dir={@sort_dir}
+            />
+            <.sort_header
+              field={:latest_release}
+              label="Latest Release"
+              sort_by={@sort_by}
+              sort_dir={@sort_dir}
+            />
+          </tr>
+        </thead>
+        <tbody id="channels" phx-update="stream">
+          <tr
+            :for={{dom_id, channel} <- @streams.channels}
+            id={dom_id}
+            phx-click={JS.navigate(~p"/channels/#{channel.name}")}
+            style="cursor: pointer"
+          >
+            <td>{channel.name}</td>
+            <td>{channel.count}</td>
+            <td>{format_date(channel.latest_release)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </figure>
     """
   end
+
+  defp sort_header(assigns) do
+    ~H"""
+    <th phx-click="sort" phx-value-field={@field} style="cursor: pointer">
+      {@label} {sort_indicator(@sort_by, @sort_dir, @field)}
+    </th>
+    """
+  end
+
+  defp sort_indicator(sort_by, :asc, field) when sort_by == field, do: "↑"
+  defp sort_indicator(sort_by, :desc, field) when sort_by == field, do: "↓"
+  defp sort_indicator(_, _, _), do: ""
 
   defp format_date(nil), do: "-"
   defp format_date(dt), do: Calendar.strftime(dt, "%Y-%m-%d %H:%M")
@@ -37,16 +71,35 @@ defmodule TrackerWeb.ChannelLive.Index do
   end
 
   @impl true
-  def handle_params(_params, _url, socket) do
-    channels = load_channels()
+  def handle_params(params, _url, socket) do
+    sort_by = parse_sort_by(params["sort_by"])
+    sort_dir = parse_sort_dir(params["sort_dir"])
+
+    channels = load_channels(sort_by, sort_dir)
 
     {:noreply,
      socket
      |> assign(:page_title, "Channels")
+     |> assign(:sort_by, sort_by)
+     |> assign(:sort_dir, sort_dir)
      |> stream(:channels, channels, reset: true)}
   end
 
-  defp load_channels do
+  @impl true
+  def handle_event("sort", %{"field" => field}, socket) do
+    new_sort_by = parse_sort_by(field)
+
+    new_sort_dir =
+      if socket.assigns.sort_by == new_sort_by do
+        toggle_dir(socket.assigns.sort_dir)
+      else
+        :asc
+      end
+
+    {:noreply, push_patch(socket, to: channels_path(new_sort_by, new_sort_dir))}
+  end
+
+  defp load_channels(sort_by, sort_dir) do
     Tracker.Nixpkgs.ChannelRevision
     |> Ash.read!()
     |> Enum.group_by(& &1.channel)
@@ -60,6 +113,46 @@ defmodule TrackerWeb.ChannelLive.Index do
         latest_release: latest && latest.released_at
       }
     end)
-    |> Enum.sort_by(& &1.name)
+    |> sort_channels(sort_by, sort_dir)
+  end
+
+  defp sort_channels(channels, :name, dir), do: sort_by_field(channels, & &1.name, dir)
+  defp sort_channels(channels, :count, dir), do: sort_by_field(channels, & &1.count, dir)
+
+  defp sort_channels(channels, :latest_release, dir),
+    do: sort_by_field(channels, & &1.latest_release, dir)
+
+  defp sort_by_field(channels, fun, :asc), do: Enum.sort_by(channels, fun, &<=/2)
+  defp sort_by_field(channels, fun, :desc), do: Enum.sort_by(channels, fun, &>=/2)
+
+  defp parse_sort_by(nil), do: @default_sort_by
+
+  defp parse_sort_by(field) do
+    atom = String.to_existing_atom(field)
+    if atom in @valid_sort_fields, do: atom, else: @default_sort_by
+  rescue
+    ArgumentError -> @default_sort_by
+  end
+
+  defp parse_sort_dir("asc"), do: :asc
+  defp parse_sort_dir(_), do: @default_sort_dir
+
+  defp toggle_dir(:asc), do: :desc
+  defp toggle_dir(:desc), do: :asc
+
+  defp channels_path(sort_by, sort_dir) do
+    params =
+      %{}
+      |> then(fn p ->
+        if sort_by != @default_sort_by, do: Map.put(p, :sort_by, sort_by), else: p
+      end)
+      |> then(fn p ->
+        if sort_dir != @default_sort_dir, do: Map.put(p, :sort_dir, sort_dir), else: p
+      end)
+
+    case URI.encode_query(params) do
+      "" -> "/channels"
+      qs -> "/channels?#{qs}"
+    end
   end
 end
