@@ -26,6 +26,9 @@ defmodule TrackerWeb.PackageLive.Show do
       <:item :if={@package.position} title="Position">
         <.nixpkgs_position position={@package.position} />
       </:item>
+      <:item :if={@package.licenses} title="License">
+        {Enum.join(@package.licenses, ", ")}
+      </:item>
     </.list>
 
     <div :if={@package.teams != []} style="margin-top: 1rem;">
@@ -33,7 +36,7 @@ defmodule TrackerWeb.PackageLive.Show do
       <ul>
         <li :for={t <- @package.teams}>
           <.link navigate={~p"/teams/#{t.short_name}"}><strong>{t.short_name}</strong></.link>
-          <span :if={t.scope}> —   {t.scope}</span>
+          <span :if={t.scope}> —    {t.scope}</span>
           <ul :if={t.members != []}>
             <li :for={m <- t.members}>
               <.maintainer_link maintainer={m} />

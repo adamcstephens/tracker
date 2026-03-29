@@ -175,4 +175,122 @@ defmodule Tracker.Nixpkgs.ChannelWorkerTest do
       assert pm_count == 18_000
     end
   end
+
+  describe "write_to_database with license metadata" do
+    test "stores single license spdxId as list" do
+      data = %{
+        "version" => 2,
+        "revision" => "lic001",
+        "channel" => "nixos-unstable-small",
+        "released_at" => "2026-03-29T10:00:00Z",
+        "packages" => %{
+          "firefox" => %{
+            "version" => "149.0",
+            "meta" => %{
+              "license" => %{
+                "spdxId" => "MPL-2.0",
+                "fullName" => "Mozilla Public License 2.0"
+              }
+            }
+          }
+        }
+      }
+
+      ChannelWorker.write_to_database(data)
+
+      package = Ash.get!(Tracker.Nixpkgs.Package, %{attribute: "firefox"})
+      assert package.licenses == ["MPL-2.0"]
+    end
+
+    test "stores list of licenses as list of spdxIds" do
+      data = %{
+        "version" => 2,
+        "revision" => "lic002",
+        "channel" => "nixos-unstable-small",
+        "released_at" => "2026-03-29T10:00:00Z",
+        "packages" => %{
+          "dual-pkg" => %{
+            "version" => "1.0",
+            "meta" => %{
+              "license" => [
+                %{"spdxId" => "Artistic-1.0"},
+                %{"spdxId" => "GPL-1.0-or-later"}
+              ]
+            }
+          }
+        }
+      }
+
+      ChannelWorker.write_to_database(data)
+
+      package = Ash.get!(Tracker.Nixpkgs.Package, %{attribute: "dual-pkg"})
+      assert package.licenses == ["Artistic-1.0", "GPL-1.0-or-later"]
+    end
+
+    test "stores string license as list" do
+      data = %{
+        "version" => 2,
+        "revision" => "lic003",
+        "channel" => "nixos-unstable-small",
+        "released_at" => "2026-03-29T10:00:00Z",
+        "packages" => %{
+          "unknown-pkg" => %{
+            "version" => "1.0",
+            "meta" => %{
+              "license" => "unknown"
+            }
+          }
+        }
+      }
+
+      ChannelWorker.write_to_database(data)
+
+      package = Ash.get!(Tracker.Nixpkgs.Package, %{attribute: "unknown-pkg"})
+      assert package.licenses == ["unknown"]
+    end
+
+    test "falls back to fullName when no spdxId" do
+      data = %{
+        "version" => 2,
+        "revision" => "lic005",
+        "channel" => "nixos-unstable-small",
+        "released_at" => "2026-03-29T10:00:00Z",
+        "packages" => %{
+          "fullname-pkg" => %{
+            "version" => "1.0",
+            "meta" => %{
+              "license" => %{
+                "fullName" => "GPLv3+ and other free licenses"
+              }
+            }
+          }
+        }
+      }
+
+      ChannelWorker.write_to_database(data)
+
+      package = Ash.get!(Tracker.Nixpkgs.Package, %{attribute: "fullname-pkg"})
+      assert package.licenses == ["GPLv3+ and other free licenses"]
+    end
+
+    test "stores nil when no license" do
+      data = %{
+        "version" => 2,
+        "revision" => "lic004",
+        "channel" => "nixos-unstable-small",
+        "released_at" => "2026-03-29T10:00:00Z",
+        "packages" => %{
+          "no-lic-pkg" => %{
+            "version" => "1.0",
+            "meta" => %{}
+          }
+        }
+      }
+
+      ChannelWorker.write_to_database(data)
+
+      package = Ash.get!(Tracker.Nixpkgs.Package, %{attribute: "no-lic-pkg"})
+      assert package.licenses == nil
+    end
+  end
 end

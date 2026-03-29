@@ -312,6 +312,7 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
         |> maybe_put(:description, entry[:description])
         |> maybe_put(:homepage, entry[:homepage])
         |> maybe_put(:position, entry[:position])
+        |> maybe_put(:licenses, entry[:licenses])
       end)
       |> Stream.chunk_every(@chunk_size)
       |> Enum.reduce(:success, fn chunk, acc ->
@@ -373,6 +374,7 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
         |> maybe_put(:description, meta["description"])
         |> maybe_put(:homepage, meta["homepage"])
         |> maybe_put(:position, meta["position"])
+        |> maybe_put(:licenses, extract_licenses(meta["license"], attr))
 
       # Collect direct (non-team) maintainers
       non_team = meta["nonTeamMaintainers"] || []
@@ -427,6 +429,35 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
     |> maybe_put(:email, m["email"])
     |> maybe_put(:github, m["github"])
     |> maybe_put(:matrix, m["matrix"])
+  end
+
+  defp extract_licenses(nil, _attr), do: nil
+  defp extract_licenses(license, _attr) when is_binary(license), do: [license]
+  defp extract_licenses(license, attr) when is_map(license), do: extract_licenses([license], attr)
+
+  defp extract_licenses(licenses, attr) when is_list(licenses) do
+    Enum.map(licenses, fn
+      %{"spdxId" => id} ->
+        id
+
+      %{"shortName" => name} ->
+        name
+
+      %{"fullName" => name} ->
+        name
+
+      other when is_binary(other) ->
+        other
+
+      other ->
+        Logger.error(
+          msg: "Unrecognized license format",
+          package: attr,
+          license: inspect(other)
+        )
+
+        "unknown"
+    end)
   end
 
   defp load_maintainers_and_teams(id_map, maintainer_data, team_data, package_joins) do
