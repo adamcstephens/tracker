@@ -9,6 +9,21 @@ defmodule Tracker.Nixpkgs.PackageRevision do
   actions do
     defaults [:read, create: [:version]]
 
+    read :list_by_package do
+      argument :package_id, :integer do
+        allow_nil? false
+      end
+
+      pagination do
+        offset? true
+        countable true
+        default_limit 15
+      end
+
+      prepare build(load: [:channel_revision])
+      filter expr(package_id == ^arg(:package_id))
+    end
+
     create :load do
       accept [:version, :channel_revision_id, :package_id]
       upsert? true

@@ -88,7 +88,8 @@ defmodule TrackerWeb.PackageLive.ShowTest do
   end
 
   test "sort by version ascending via URL param", %{conn: conn, package: package} do
-    {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}?sort_by=version&sort_dir=asc")
+    {:ok, _view, html} =
+      live(conn, ~p"/packages/#{package.attribute}?sort_by=version&sort_dir=asc")
 
     assert version_order(html) == ["2.12.1", "2.13.0"]
   end
