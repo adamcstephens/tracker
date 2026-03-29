@@ -29,7 +29,7 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
 
     create :create do
       primary? true
-      accept [:channel, :revision]
+      accept [:channel, :revision, :released_at]
       upsert? true
       upsert_identity :unique_channel_revision
     end
@@ -53,6 +53,8 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
     end
 
     attribute :result, :atom, constraints: [one_of: [:success, :partial_success, :error]]
+
+    attribute :released_at, :utc_datetime, public?: true
 
     timestamps()
   end
