@@ -4,6 +4,8 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
   import Ecto.Query, only: [from: 2]
   require Logger
 
+  @metadata_channel "nixos-unstable-small"
+
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"channel" => channel, "base_url" => base_url} = args}) do
     revision = Req.get!(req(), url: base_url <> "/git-revision").body
@@ -249,12 +251,28 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
       |> Ash.Changeset.for_create(:create, create_attrs)
       |> Ash.create!()
 
-    # Slim down to only what we need: %{attribute => version}
-    # Filter out packages with empty versions (wrappers, meta-packages, etc.)
+    # Slim down to only what we need, filtering out empty versions
+    include_metadata? = channel == @metadata_channel
+
     packages =
       packages
-      |> Map.new(fn {attr, info} -> {attr, info["version"]} end)
-      |> Map.reject(fn {_attr, version} -> version == "" end)
+      |> Map.reject(fn {_attr, info} -> info["version"] == "" end)
+      |> Map.new(fn {attr, info} ->
+        entry = %{version: info["version"]}
+
+        entry =
+          if include_metadata? do
+            meta = info["meta"] || %{}
+
+            entry
+            |> maybe_put(:description, meta["description"])
+            |> maybe_put(:homepage, meta["homepage"])
+          else
+            entry
+          end
+
+        {attr, entry}
+      end)
 
     bulk_status = load_packages(packages, channel_revision)
 
@@ -290,12 +308,16 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
 
   @chunk_size 10_000
 
-  # packages is %{attribute => version} (already slimmed)
+  # packages is %{attribute => %{version, description?, homepage?}} (already slimmed)
   defp load_packages(packages, channel_revision) do
-    # Step 1: Bulk upsert packages in chunks (no relationship management)
+    # Step 1: Bulk upsert packages in chunks (includes metadata when present)
     pkg_status =
       packages
-      |> Stream.map(fn {attribute, _version} -> %{attribute: attribute} end)
+      |> Stream.map(fn {attribute, entry} ->
+        %{attribute: attribute}
+        |> maybe_put(:description, entry[:description])
+        |> maybe_put(:homepage, entry[:homepage])
+      end)
       |> Stream.chunk_every(@chunk_size)
       |> Enum.reduce(:success, fn chunk, acc ->
         %{status: status} =
@@ -319,11 +341,11 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
       # Step 3: Bulk create package revisions in chunks
       rev_status =
         packages
-        |> Stream.map(fn {attribute, version} ->
+        |> Stream.map(fn {attribute, entry} ->
           %{
             package_id: Map.fetch!(id_map, attribute),
             channel_revision_id: channel_revision.id,
-            version: version
+            version: entry.version
           }
         end)
         |> Stream.chunk_every(@chunk_size)

@@ -15,10 +15,15 @@ defmodule TrackerWeb.PackageLive.Show do
       <:subtitle>Package details</:subtitle>
     </.header>
 
-    <.list>
-      <:item title="Id">{@package.id}</:item>
+    <p :if={@package.description}>{@package.description}</p>
 
+    <.list>
       <:item title="Attribute">{@package.attribute}</:item>
+      <:item :if={@package.homepage} title="Homepage">
+        <a href={@package.homepage} target="_blank" rel="noopener noreferrer">
+          {@package.homepage}
+        </a>
+      </:item>
     </.list>
 
     <div class="revisions-header">
