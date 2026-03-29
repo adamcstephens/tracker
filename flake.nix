@@ -36,6 +36,7 @@
               pkgs.postgresql
               pkgs.process-compose
 
+              pkgs.biome
               pkgs.just
             ]
             ++ (lib.optionals pkgs.stdenv.isLinux [ pkgs.inotify-tools ]);
