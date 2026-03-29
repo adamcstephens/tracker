@@ -2,17 +2,7 @@ defmodule TrackerWeb.CoreComponents do
   @moduledoc """
   Provides core UI components.
 
-  At first glance, this module may seem daunting, but its goal is to provide
-  core building blocks for your application, such as modals, tables, and
-  forms. The components consist mostly of markup and are well-documented
-  with doc strings and declarative assigns. You may customize and style
-  them in any way you want, based on your application growth and needs.
-
-  The default components use Tailwind CSS, a utility-first CSS framework.
-  See the [Tailwind CSS documentation](https://tailwindcss.com) to learn
-  how to customize them or feel free to swap in another framework altogether.
-
-  Icons are provided by [heroicons](https://heroicons.com). See `icon/1` for usage.
+  Components use semantic HTML styled by Pico CSS.
   """
   use Phoenix.Component
   use Gettext, backend: TrackerWeb.Gettext
@@ -43,49 +33,27 @@ defmodule TrackerWeb.CoreComponents do
 
   def modal(assigns) do
     ~H"""
-    <div
+    <dialog
       id={@id}
       phx-mounted={@show && show_modal(@id)}
       phx-remove={hide_modal(@id)}
       data-cancel={JS.exec(@on_cancel, "phx-remove")}
-      class="relative z-50 hidden"
     >
-      <div id={"#{@id}-bg"} class="bg-zinc-50/90 fixed inset-0 transition-opacity" aria-hidden="true" />
-      <div
-        class="fixed inset-0 overflow-y-auto"
-        aria-labelledby={"#{@id}-title"}
-        aria-describedby={"#{@id}-description"}
-        role="dialog"
-        aria-modal="true"
-        tabindex="0"
-      >
-        <div class="flex min-h-full items-center justify-center">
-          <div class="w-full max-w-3xl p-4 sm:p-6 lg:py-8">
-            <.focus_wrap
-              id={"#{@id}-container"}
-              phx-window-keydown={JS.exec("data-cancel", to: "##{@id}")}
-              phx-key="escape"
-              phx-click-away={JS.exec("data-cancel", to: "##{@id}")}
-              class="shadow-zinc-700/10 ring-zinc-700/10 relative hidden rounded-2xl bg-white p-14 shadow-lg ring-1 transition"
-            >
-              <div class="absolute top-6 right-5">
-                <button
-                  phx-click={JS.exec("data-cancel", to: "##{@id}")}
-                  type="button"
-                  class="-m-3 flex-none p-3 opacity-20 hover:opacity-40"
-                  aria-label={gettext("close")}
-                >
-                  <.icon name="hero-x-mark-solid" class="h-5 w-5" />
-                </button>
-              </div>
-              <div id={"#{@id}-content"}>
-                {render_slot(@inner_block)}
-              </div>
-            </.focus_wrap>
-          </div>
+      <article>
+        <header>
+          <button
+            phx-click={JS.exec("data-cancel", to: "##{@id}")}
+            type="button"
+            aria-label={gettext("close")}
+            rel="prev"
+          >
+          </button>
+        </header>
+        <div id={"#{@id}-content"}>
+          {render_slot(@inner_block)}
         </div>
-      </div>
-    </div>
+      </article>
+    </dialog>
     """
   end
 
@@ -109,28 +77,26 @@ defmodule TrackerWeb.CoreComponents do
     assigns = assign_new(assigns, :id, fn -> "flash-#{assigns.kind}" end)
 
     ~H"""
-    <div
+    <article
       :if={msg = render_slot(@inner_block) || Phoenix.Flash.get(@flash, @kind)}
       id={@id}
       phx-click={JS.push("lv:clear-flash", value: %{key: @kind}) |> hide("##{@id}")}
       role="alert"
-      class={[
-        "fixed top-2 right-2 mr-2 w-80 sm:w-96 z-50 rounded-lg p-3 ring-1",
-        @kind == :info && "bg-emerald-50 text-emerald-800 ring-emerald-500 fill-cyan-900",
-        @kind == :error && "bg-rose-50 text-rose-900 shadow-md ring-rose-500 fill-rose-900"
-      ]}
+      class={["flash", @kind == :info && "flash-info", @kind == :error && "flash-error"]}
       {@rest}
     >
-      <p :if={@title} class="flex items-center gap-1.5 text-sm font-semibold leading-6">
-        <.icon :if={@kind == :info} name="hero-information-circle-mini" class="h-4 w-4" />
-        <.icon :if={@kind == :error} name="hero-exclamation-circle-mini" class="h-4 w-4" />
-        {@title}
-      </p>
-      <p class="mt-2 text-sm leading-5">{msg}</p>
-      <button type="button" class="group absolute top-1 right-1 p-2" aria-label={gettext("close")}>
-        <.icon name="hero-x-mark-solid" class="h-5 w-5 opacity-40 group-hover:opacity-70" />
+      <header :if={@title}>
+        <strong>{@title}</strong>
+      </header>
+      <p>{msg}</p>
+      <button
+        type="button"
+        class="close-button"
+        aria-label={gettext("close")}
+      >
+        &times;
       </button>
-    </div>
+    </article>
     """
   end
 
@@ -158,7 +124,7 @@ defmodule TrackerWeb.CoreComponents do
         hidden
       >
         {gettext("Attempting to reconnect")}
-        <.icon name="hero-arrow-path" class="ml-1 h-3 w-3 animate-spin" />
+        <span class="animate-spin">&#8635;</span>
       </.flash>
 
       <.flash
@@ -170,7 +136,7 @@ defmodule TrackerWeb.CoreComponents do
         hidden
       >
         {gettext("Hang in there while we get back on track")}
-        <.icon name="hero-arrow-path" class="ml-1 h-3 w-3 animate-spin" />
+        <span class="animate-spin">&#8635;</span>
       </.flash>
     </div>
     """
@@ -202,12 +168,12 @@ defmodule TrackerWeb.CoreComponents do
   def simple_form(assigns) do
     ~H"""
     <.form :let={f} for={@for} as={@as} {@rest}>
-      <div class="mt-10 space-y-8 bg-white">
+      <fieldset>
         {render_slot(@inner_block, f)}
-        <div :for={action <- @actions} class="mt-2 flex items-center justify-between gap-6">
+        <div :for={action <- @actions}>
           {render_slot(action, f)}
         </div>
-      </div>
+      </fieldset>
     </.form>
     """
   end
@@ -228,15 +194,7 @@ defmodule TrackerWeb.CoreComponents do
 
   def button(assigns) do
     ~H"""
-    <button
-      type={@type}
-      class={[
-        "phx-submit-loading:opacity-75 rounded-lg bg-zinc-900 hover:bg-zinc-700 py-2 px-3",
-        "text-sm font-semibold leading-6 text-white active:text-white/80",
-        @class
-      ]}
-      {@rest}
-    >
+    <button type={@type} class={@class} {@rest}>
       {render_slot(@inner_block)}
     </button>
     """
@@ -309,96 +267,64 @@ defmodule TrackerWeb.CoreComponents do
       end)
 
     ~H"""
-    <div>
-      <label class="flex items-center gap-4 text-sm leading-6 text-zinc-600">
-        <input type="hidden" name={@name} value="false" disabled={@rest[:disabled]} />
-        <input
-          type="checkbox"
-          id={@id}
-          name={@name}
-          value="true"
-          checked={@checked}
-          class="rounded border-zinc-300 text-zinc-900 focus:ring-0"
-          {@rest}
-        />
-        {@label}
-      </label>
-      <.error :for={msg <- @errors}>{msg}</.error>
-    </div>
+    <label>
+      <input type="hidden" name={@name} value="false" disabled={@rest[:disabled]} />
+      <input
+        type="checkbox"
+        id={@id}
+        name={@name}
+        value="true"
+        checked={@checked}
+        {@rest}
+      />
+      {@label}
+    </label>
+    <.error :for={msg <- @errors}>{msg}</.error>
     """
   end
 
   def input(%{type: "select"} = assigns) do
     ~H"""
-    <div>
-      <.label for={@id}>{@label}</.label>
-      <select
-        id={@id}
-        name={@name}
-        class="mt-2 block w-full rounded-md border border-gray-300 bg-white shadow-sm focus:border-zinc-400 focus:ring-0 sm:text-sm"
-        multiple={@multiple}
-        {@rest}
-      >
-        <option :if={@prompt} value="">{@prompt}</option>
-        {Phoenix.HTML.Form.options_for_select(@options, @value)}
-      </select>
-      <.error :for={msg <- @errors}>{msg}</.error>
-    </div>
+    <label :if={@label} for={@id}>{@label}</label>
+    <select
+      id={@id}
+      name={@name}
+      multiple={@multiple}
+      aria-invalid={@errors != [] && "true"}
+      {@rest}
+    >
+      <option :if={@prompt} value="">{@prompt}</option>
+      {Phoenix.HTML.Form.options_for_select(@options, @value)}
+    </select>
+    <.error :for={msg <- @errors}>{msg}</.error>
     """
   end
 
   def input(%{type: "textarea"} = assigns) do
     ~H"""
-    <div>
-      <.label for={@id}>{@label}</.label>
-      <textarea
-        id={@id}
-        name={@name}
-        class={[
-          "mt-2 block w-full rounded-lg text-zinc-900 focus:ring-0 sm:text-sm sm:leading-6 min-h-[6rem]",
-          @errors == [] && "border-zinc-300 focus:border-zinc-400",
-          @errors != [] && "border-rose-400 focus:border-rose-400"
-        ]}
-        {@rest}
-      >{Phoenix.HTML.Form.normalize_value("textarea", @value)}</textarea>
-      <.error :for={msg <- @errors}>{msg}</.error>
-    </div>
+    <label :if={@label} for={@id}>{@label}</label>
+    <textarea
+      id={@id}
+      name={@name}
+      aria-invalid={@errors != [] && "true"}
+      {@rest}
+    >{Phoenix.HTML.Form.normalize_value("textarea", @value)}</textarea>
+    <.error :for={msg <- @errors}>{msg}</.error>
     """
   end
 
-  # All other inputs text, datetime-local, url, password, etc. are handled here...
   def input(assigns) do
     ~H"""
-    <div>
-      <.label for={@id}>{@label}</.label>
-      <input
-        type={@type}
-        name={@name}
-        id={@id}
-        value={Phoenix.HTML.Form.normalize_value(@type, @value)}
-        class={[
-          "mt-2 block w-full rounded-lg text-zinc-900 focus:ring-0 sm:text-sm sm:leading-6",
-          @errors == [] && "border-zinc-300 focus:border-zinc-400",
-          @errors != [] && "border-rose-400 focus:border-rose-400"
-        ]}
-        {@rest}
-      />
-      <.error :for={msg <- @errors}>{msg}</.error>
-    </div>
-    """
-  end
-
-  @doc """
-  Renders a label.
-  """
-  attr :for, :string, default: nil
-  slot :inner_block, required: true
-
-  def label(assigns) do
-    ~H"""
-    <label for={@for} class="block text-sm font-semibold leading-6 text-zinc-800">
-      {render_slot(@inner_block)}
-    </label>
+    <label :if={@label} for={@id}>{@label}</label>
+    <input
+      type={@type}
+      name={@name}
+      id={@id}
+      value={Phoenix.HTML.Form.normalize_value(@type, @value)}
+      aria-invalid={@errors != [] && "true"}
+      {@rest}
+    />
+    <.error :for={msg <- @errors}>{msg}</.error>
     """
   end
 
@@ -409,10 +335,9 @@ defmodule TrackerWeb.CoreComponents do
 
   def error(assigns) do
     ~H"""
-    <p class="mt-3 flex gap-3 text-sm leading-6 text-rose-600">
-      <.icon name="hero-exclamation-circle-mini" class="mt-0.5 h-5 w-5 flex-none" />
+    <small>
       {render_slot(@inner_block)}
-    </p>
+    </small>
     """
   end
 
@@ -427,17 +352,17 @@ defmodule TrackerWeb.CoreComponents do
 
   def header(assigns) do
     ~H"""
-    <header class={[@actions != [] && "flex items-center justify-between gap-6", @class]}>
-      <div>
-        <h1 class="text-lg font-semibold leading-8 text-zinc-800">
-          {render_slot(@inner_block)}
-        </h1>
-        <p :if={@subtitle != []} class="mt-2 text-sm leading-6 text-zinc-600">
-          {render_slot(@subtitle)}
-        </p>
+    <hgroup class={@class}>
+      <h1>
+        {render_slot(@inner_block)}
+      </h1>
+      <p :if={@subtitle != []}>
+        {render_slot(@subtitle)}
+      </p>
+      <div :if={@actions != []}>
+        {render_slot(@actions)}
       </div>
-      <div class="flex-none">{render_slot(@actions)}</div>
-    </header>
+    </hgroup>
     """
   end
 
@@ -473,12 +398,12 @@ defmodule TrackerWeb.CoreComponents do
       end
 
     ~H"""
-    <div class="overflow-y-auto px-4 sm:overflow-visible sm:px-0">
-      <table class="w-[40rem] mt-11 sm:w-full">
-        <thead class="text-sm text-left leading-6 text-zinc-500">
+    <figure>
+      <table role="grid">
+        <thead>
           <tr>
-            <th :for={col <- @col} class="p-0 pb-4 pr-6 font-normal">{col[:label]}</th>
-            <th :if={@action != []} class="relative p-0 pb-4">
+            <th :for={col <- @col}>{col[:label]}</th>
+            <th :if={@action != []}>
               <span class="sr-only">{gettext("Actions")}</span>
             </th>
           </tr>
@@ -486,36 +411,25 @@ defmodule TrackerWeb.CoreComponents do
         <tbody
           id={@id}
           phx-update={match?(%Phoenix.LiveView.LiveStream{}, @rows) && "stream"}
-          class="relative divide-y divide-zinc-100 border-t border-zinc-200 text-sm leading-6 text-zinc-700"
         >
-          <tr :for={row <- @rows} id={@row_id && @row_id.(row)} class="group hover:bg-zinc-50">
-            <td
-              :for={{col, i} <- Enum.with_index(@col)}
-              phx-click={@row_click && @row_click.(row)}
-              class={["relative p-0", @row_click && "hover:cursor-pointer"]}
-            >
-              <div class="block py-4 pr-6">
-                <span class="absolute -inset-y-px right-0 -left-4 group-hover:bg-zinc-50 sm:rounded-l-xl" />
-                <span class={["relative", i == 0 && "font-semibold text-zinc-900"]}>
-                  {render_slot(col, @row_item.(row))}
-                </span>
-              </div>
+          <tr
+            :for={row <- @rows}
+            id={@row_id && @row_id.(row)}
+            phx-click={@row_click && @row_click.(row)}
+            style={@row_click && "cursor: pointer"}
+          >
+            <td :for={col <- @col}>
+              {render_slot(col, @row_item.(row))}
             </td>
-            <td :if={@action != []} class="relative w-14 p-0">
-              <div class="relative whitespace-nowrap py-4 text-right text-sm font-medium">
-                <span class="absolute -inset-y-px -right-4 left-0 group-hover:bg-zinc-50 sm:rounded-r-xl" />
-                <span
-                  :for={action <- @action}
-                  class="relative ml-4 font-semibold leading-6 text-zinc-900 hover:text-zinc-700"
-                >
-                  {render_slot(action, @row_item.(row))}
-                </span>
-              </div>
+            <td :if={@action != []}>
+              <span :for={action <- @action}>
+                {render_slot(action, @row_item.(row))}
+              </span>
             </td>
           </tr>
         </tbody>
       </table>
-    </div>
+    </figure>
     """
   end
 
@@ -535,14 +449,12 @@ defmodule TrackerWeb.CoreComponents do
 
   def list(assigns) do
     ~H"""
-    <div class="mt-14">
-      <dl class="-my-4 divide-y divide-zinc-100">
-        <div :for={item <- @item} class="flex gap-4 py-4 text-sm leading-6 sm:gap-8">
-          <dt class="w-1/4 flex-none text-zinc-500">{item.title}</dt>
-          <dd class="text-zinc-700">{render_slot(item)}</dd>
-        </div>
-      </dl>
-    </div>
+    <dl>
+      <div :for={item <- @item}>
+        <dt><strong>{item.title}</strong></dt>
+        <dd>{render_slot(item)}</dd>
+      </div>
+    </dl>
     """
   end
 
@@ -558,91 +470,35 @@ defmodule TrackerWeb.CoreComponents do
 
   def back(assigns) do
     ~H"""
-    <div class="mt-16">
-      <.link
-        navigate={@navigate}
-        class="text-sm font-semibold leading-6 text-zinc-900 hover:text-zinc-700"
-      >
-        <.icon name="hero-arrow-left-solid" class="h-3 w-3" />
-        {render_slot(@inner_block)}
+    <p>
+      <.link navigate={@navigate}>
+        &larr; {render_slot(@inner_block)}
       </.link>
-    </div>
-    """
-  end
-
-  @doc """
-  Renders a [Heroicon](https://heroicons.com).
-
-  Heroicons come in three styles – outline, solid, and mini.
-  By default, the outline style is used, but solid and mini may
-  be applied by using the `-solid` and `-mini` suffix.
-
-  You can customize the size and colors of the icons by setting
-  width, height, and background color classes.
-
-  Icons are extracted from the `deps/heroicons` directory and bundled within
-  your compiled app.css by the plugin in your `assets/tailwind.config.js`.
-
-  ## Examples
-
-      <.icon name="hero-x-mark-solid" />
-      <.icon name="hero-arrow-path" class="ml-1 w-3 h-3 animate-spin" />
-  """
-  attr :name, :string, required: true
-  attr :class, :string, default: nil
-
-  def icon(%{name: "hero-" <> _} = assigns) do
-    ~H"""
-    <span class={[@name, @class]} />
+    </p>
     """
   end
 
   ## JS Commands
 
   def show(js \\ %JS{}, selector) do
-    JS.show(js,
-      to: selector,
-      time: 300,
-      transition:
-        {"transition-all transform ease-out duration-300",
-         "opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95",
-         "opacity-100 translate-y-0 sm:scale-100"}
-    )
+    JS.show(js, to: selector, time: 300)
   end
 
   def hide(js \\ %JS{}, selector) do
-    JS.hide(js,
-      to: selector,
-      time: 200,
-      transition:
-        {"transition-all transform ease-in duration-200",
-         "opacity-100 translate-y-0 sm:scale-100",
-         "opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"}
-    )
+    JS.hide(js, to: selector, time: 200)
   end
 
   def show_modal(js \\ %JS{}, id) when is_binary(id) do
     js
     |> JS.show(to: "##{id}")
-    |> JS.show(
-      to: "##{id}-bg",
-      time: 300,
-      transition: {"transition-all transform ease-out duration-300", "opacity-0", "opacity-100"}
-    )
-    |> show("##{id}-container")
-    |> JS.add_class("overflow-hidden", to: "body")
+    |> JS.set_attribute({"open", ""}, to: "##{id}")
     |> JS.focus_first(to: "##{id}-content")
   end
 
   def hide_modal(js \\ %JS{}, id) do
     js
-    |> JS.hide(
-      to: "##{id}-bg",
-      transition: {"transition-all transform ease-in duration-200", "opacity-100", "opacity-0"}
-    )
-    |> hide("##{id}-container")
-    |> JS.hide(to: "##{id}", transition: {"block", "block", "hidden"})
-    |> JS.remove_class("overflow-hidden", to: "body")
+    |> JS.remove_attribute("open", to: "##{id}")
+    |> JS.hide(to: "##{id}")
     |> JS.pop_focus()
   end
 
@@ -650,16 +506,6 @@ defmodule TrackerWeb.CoreComponents do
   Translates an error message using gettext.
   """
   def translate_error({msg, opts}) do
-    # When using gettext, we typically pass the strings we want
-    # to translate as a static argument:
-    #
-    #     # Translate the number of files with plural rules
-    #     dngettext("errors", "1 file", "%{count} files", count)
-    #
-    # However the error messages in our forms and APIs are generated
-    # dynamically, so we need to translate them by calling Gettext
-    # with our gettext backend as first argument. Translations are
-    # available in the errors.po file (as we use the "errors" domain).
     if count = opts[:count] do
       Gettext.dngettext(TrackerWeb.Gettext, "errors", msg, msg, count, opts)
     else

@@ -15,7 +15,7 @@ defmodule TrackerWeb.PackageLive.Show do
       <:item title="Attribute">{@package.attribute}</:item>
     </.list>
 
-    <h2 class="mt-11 text-lg font-semibold leading-8 text-zinc-800">Revisions</h2>
+    <h2>Revisions</h2>
 
     <.table :if={@package.revisions != []} id="revisions" rows={@package.revisions}>
       <:col :let={rev} label="Version">{rev.version}</:col>
@@ -25,7 +25,7 @@ defmodule TrackerWeb.PackageLive.Show do
       </:col>
     </.table>
 
-    <p :if={@package.revisions == []} class="mt-4 text-sm text-zinc-500">
+    <p :if={@package.revisions == []}>
       No revisions found.
     </p>
 
@@ -40,7 +40,7 @@ defmodule TrackerWeb.PackageLive.Show do
       target="_blank"
       rel="noopener noreferrer"
       title={@revision}
-      class="text-blue-600 hover:underline font-mono"
+      class="revision-link"
     >
       {String.slice(@revision, 0, 7)}
     </a>
