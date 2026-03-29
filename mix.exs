@@ -72,6 +72,7 @@ defmodule Tracker.MixProject do
       {:picosat_elixir, "~> 0.2"},
       {:postgrex, ">= 0.0.0"},
       {:req, "~> 0.5.8"},
+      {:req_s3, "~> 0.2.3"},
       {:sourceror, "~> 1.7", only: [:dev, :test]},
       {:swoosh, "~> 1.5"},
       {:telemetry_metrics, "~> 1.0"},

@@ -58,4 +58,85 @@ defmodule Tracker.Nixpkgs.ChannelWorkerTest do
       assert {:error, :unsupported_version} = ChannelWorker.write_to_database(data)
     end
   end
+
+  describe "parse_releases/1" do
+    test "parses prefixes into release maps in reverse order (newest first)" do
+      prefixes = [
+        %{"Prefix" => "nixos/25.11-small/nixos-25.11.1036.d355f89e0014/"},
+        %{"Prefix" => "nixos/25.11-small/nixos-25.11.1353.1acf2f172ef3/"},
+        %{"Prefix" => "nixos/25.11-small/nixos-25.11.1119.60a511057b11/"}
+      ]
+
+      result = ChannelWorker.parse_releases(prefixes)
+
+      assert [first, second, third] = result
+      assert first.short_hash == "60a511057b11"
+
+      assert first.base_url ==
+               "https://releases.nixos.org/nixos/25.11-small/nixos-25.11.1119.60a511057b11"
+
+      assert second.short_hash == "1acf2f172ef3"
+      assert third.short_hash == "d355f89e0014"
+    end
+
+    test "handles single prefix (map instead of list)" do
+      prefix = %{"Prefix" => "nixos/25.11-small/nixos-25.11.1036.d355f89e0014/"}
+
+      assert [release] = ChannelWorker.parse_releases(prefix)
+      assert release.short_hash == "d355f89e0014"
+    end
+
+    test "handles beta releases" do
+      prefixes = [
+        %{"Prefix" => "nixos/25.11-small/nixos-25.11beta5.a320ce8e6e2c/"}
+      ]
+
+      assert [release] = ChannelWorker.parse_releases(prefixes)
+      assert release.short_hash == "a320ce8e6e2c"
+
+      assert release.base_url ==
+               "https://releases.nixos.org/nixos/25.11-small/nixos-25.11beta5.a320ce8e6e2c"
+    end
+  end
+
+  describe "filter_existing_releases/2" do
+    test "filters out releases whose short hash matches an existing revision" do
+      # Create an existing channel revision
+      Tracker.Nixpkgs.ChannelRevision
+      |> Ash.Changeset.for_create(:create, %{
+        channel: "nixos-25.11-small",
+        revision: "d355f89e0014e51c9511298089d7ab55fd6f7056"
+      })
+      |> Ash.create!()
+
+      releases = [
+        %{
+          build_number: 1353,
+          short_hash: "1acf2f172ef3",
+          base_url: "https://releases.nixos.org/nixos/25.11-small/nixos-25.11.1353.1acf2f172ef3"
+        },
+        %{
+          build_number: 1036,
+          short_hash: "d355f89e0014",
+          base_url: "https://releases.nixos.org/nixos/25.11-small/nixos-25.11.1036.d355f89e0014"
+        }
+      ]
+
+      result = ChannelWorker.filter_existing_releases(releases, "nixos-25.11-small")
+
+      assert [remaining] = result
+      assert remaining.short_hash == "1acf2f172ef3"
+    end
+
+    test "keeps all releases when none exist in DB" do
+      releases = [
+        %{build_number: 1353, short_hash: "1acf2f172ef3", base_url: "url1"},
+        %{build_number: 1036, short_hash: "d355f89e0014", base_url: "url2"}
+      ]
+
+      result = ChannelWorker.filter_existing_releases(releases, "nixos-25.11-small")
+
+      assert length(result) == 2
+    end
+  end
 end
