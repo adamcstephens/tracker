@@ -93,6 +93,31 @@ a.revision-link {
 	font-family: var(--pico-font-family-monospace);
 }
 
+/* Package revision filters */
+.revisions-header {
+	margin-bottom: 1rem;
+}
+
+.revisions-header h2 {
+	margin-bottom: 0.5rem;
+}
+
+.revision-filters {
+	display: flex;
+	gap: 0.5rem;
+	align-items: center;
+	margin-bottom: 0;
+	max-width: 24rem;
+}
+
+.revision-filters select,
+.revision-filters input {
+	margin-bottom: 0;
+	padding: 0.25rem 0.5rem;
+	font-size: 0.875rem;
+	height: auto;
+}
+
 /* Sign-in page styling */
 .sign-in-banner {
 	text-align: center;

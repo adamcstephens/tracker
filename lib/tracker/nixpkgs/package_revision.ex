@@ -36,6 +36,12 @@ defmodule Tracker.Nixpkgs.PackageRevision do
       allow_nil?: false
   end
 
+  calculations do
+    calculate :channel, :string, expr(channel_revision.channel)
+    calculate :revision_hash, :string, expr(channel_revision.revision)
+    calculate :released_at, :utc_datetime, expr(channel_revision.released_at)
+  end
+
   identities do
     identity :unique_package_revision, [:channel_revision_id, :package_id]
   end
