@@ -13,8 +13,6 @@ defmodule TrackerWeb.PackageLive.Index do
       rows={@streams.packages}
       row_click={fn {_id, package} -> JS.navigate(~p"/packages/#{package}") end}
     >
-      <:col :let={{_id, package}} label="Id">{package.id}</:col>
-
       <:col :let={{_id, package}} label="Attribute">{package.attribute}</:col>
 
       <:action :let={{_id, package}}>
@@ -24,17 +22,27 @@ defmodule TrackerWeb.PackageLive.Index do
       </:action>
     </.table>
 
-    <div class="flex items-center justify-between mt-4">
-      <.button :if={@has_prev_page?} phx-click="prev-page">
-        Previous
+    <nav style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-top: 1rem;">
+      <.button
+        class="outline secondary"
+        style="padding: 0.25rem 0.75rem; font-size: 0.875rem;"
+        phx-click="prev-page"
+        disabled={!@has_prev_page?}
+      >
+        &larr;
       </.button>
-      <span :if={@total_pages > 0} class="text-sm text-zinc-600">
+      <small :if={@total_pages > 0}>
         Page {@current_page} of {@total_pages}
-      </span>
-      <.button :if={@has_next_page?} phx-click="next-page">
-        Next
+      </small>
+      <.button
+        class="outline secondary"
+        style="padding: 0.25rem 0.75rem; font-size: 0.875rem;"
+        phx-click="next-page"
+        disabled={!@has_next_page?}
+      >
+        &rarr;
       </.button>
-    </div>
+    </nav>
     """
   end
 
