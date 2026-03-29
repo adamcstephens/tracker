@@ -8,11 +8,12 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"channel" => channel, "base_url" => base_url} = args}) do
+    force? = args["force"] == true
     revision = Req.get!(req(), url: base_url <> "/git-revision").body
 
     case Tracker.Nixpkgs.ChannelRevision.find(channel, revision) do
       {:ok, %Tracker.Nixpkgs.ChannelRevision{result: result}}
-      when result in [:success, :partial_success] ->
+      when result in [:success, :partial_success] and not force? ->
         :ok
 
       _ ->
@@ -30,8 +31,9 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
     end
   end
 
-  def perform(%Oban.Job{args: %{"channel" => channel}}) do
-    result = load_channel(channel)
+  def perform(%Oban.Job{args: %{"channel" => channel} = args}) do
+    force? = args["force"] == true
+    result = load_channel(channel, force: force?)
 
     %{"channel" => channel} |> new(schedule_in: 4 * 60 * 60) |> Oban.insert!()
 
@@ -52,14 +54,13 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
     end)
   end
 
-  def load_channel(channel \\ "nixos-unstable") do
+  def load_channel(channel \\ "nixos-unstable", opts \\ []) do
+    force? = Keyword.get(opts, :force, false)
     {revision, base_url} = get_channel_revision(channel)
 
     case Tracker.Nixpkgs.ChannelRevision.find(channel, revision) do
-      {:ok, %Tracker.Nixpkgs.ChannelRevision{result: :success}} ->
-        :ok
-
-      {:ok, %Tracker.Nixpkgs.ChannelRevision{result: :partial_success}} ->
+      {:ok, %Tracker.Nixpkgs.ChannelRevision{result: result}}
+      when result in [:success, :partial_success] and not force? ->
         :ok
 
       _ ->
