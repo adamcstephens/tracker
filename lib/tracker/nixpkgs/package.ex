@@ -63,6 +63,9 @@ defmodule Tracker.Nixpkgs.Package do
   relationships do
     has_many :revisions, Tracker.Nixpkgs.PackageRevision
 
+    has_many :package_maintainers, Tracker.Nixpkgs.PackageMaintainer
+    has_many :package_teams, Tracker.Nixpkgs.PackageTeam
+
     many_to_many :maintainers, Tracker.Nixpkgs.Maintainer do
       through Tracker.Nixpkgs.PackageMaintainer
       source_attribute_on_join_resource :package_id

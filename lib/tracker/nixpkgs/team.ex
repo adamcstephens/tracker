@@ -9,6 +9,26 @@ defmodule Tracker.Nixpkgs.Team do
   actions do
     defaults [:read]
 
+    read :list do
+      argument :search, :ci_string
+
+      pagination do
+        offset? true
+        countable true
+        default_limit 15
+      end
+
+      prepare build(sort: :short_name)
+
+      filter expr(
+               if not is_nil(^arg(:search)) and ^arg(:search) != "" do
+                 contains(short_name, ^arg(:search)) or contains(scope, ^arg(:search))
+               else
+                 true
+               end
+             )
+    end
+
     create :bulk_upsert do
       accept [:short_name, :scope, :github, :github_id]
       upsert? true
@@ -37,6 +57,12 @@ defmodule Tracker.Nixpkgs.Team do
       through Tracker.Nixpkgs.TeamMember
       source_attribute_on_join_resource :team_id
       destination_attribute_on_join_resource :maintainer_id
+    end
+
+    many_to_many :packages, Tracker.Nixpkgs.Package do
+      through Tracker.Nixpkgs.PackageTeam
+      source_attribute_on_join_resource :team_id
+      destination_attribute_on_join_resource :package_id
     end
   end
 
