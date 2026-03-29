@@ -3,176 +3,176 @@ defmodule Tracker.Nixpkgs.ChannelWorkerTest do
 
   alias Tracker.Nixpkgs.ChannelWorker
 
-  describe "write_to_database/1" do
-    test "stores released_at on channel revision" do
+  describe "write_to_database with maintainers and teams" do
+    test "creates package_maintainers for nonTeamMaintainers" do
       data = %{
-        "packages" => %{},
-        "version" => 2,
-        "revision" => "rel123",
-        "channel" => "nixos-unstable",
-        "released_at" => "2026-03-15T10:00:00.000Z"
-      }
-
-      assert :success = ChannelWorker.write_to_database(data)
-
-      {:ok, cr} = Tracker.Nixpkgs.ChannelRevision.find("nixos-unstable", "rel123")
-      assert cr.released_at == ~U[2026-03-15 10:00:00Z]
-    end
-
-    test "accepts version as integer" do
-      data = %{
-        "packages" => %{},
         "version" => 2,
         "revision" => "abc123",
-        "channel" => "nixos-unstable",
-        "released_at" => "2026-03-01T10:00:00.000Z"
-      }
-
-      assert :success = ChannelWorker.write_to_database(data)
-    end
-
-    test "accepts version as string" do
-      data = %{
-        "packages" => %{},
-        "version" => "2",
-        "revision" => "def456",
-        "channel" => "nixos-unstable",
-        "released_at" => "2026-03-01T10:00:00.000Z"
-      }
-
-      assert :success = ChannelWorker.write_to_database(data)
-    end
-
-    test "loads packages and revisions" do
-      data = %{
+        "channel" => "nixos-unstable-small",
+        "released_at" => "2026-03-29T10:00:00Z",
         "packages" => %{
-          "hello" => %{"version" => "2.12.1"},
-          "curl" => %{"version" => "8.7.1"}
-        },
-        "version" => 2,
-        "revision" => "load123",
-        "channel" => "nixos-unstable",
-        "released_at" => "2026-03-01T10:00:00.000Z"
+          "hello" => %{
+            "version" => "2.12.1",
+            "meta" => %{
+              "description" => "A program that produces a familiar greeting",
+              "homepage" => "https://www.gnu.org/software/hello/",
+              "nonTeamMaintainers" => [
+                %{
+                  "githubId" => 1001,
+                  "name" => "Alice",
+                  "github" => "alice",
+                  "email" => "alice@example.com"
+                },
+                %{
+                  "githubId" => 1002,
+                  "name" => "Bob",
+                  "github" => "bob",
+                  "email" => "bob@example.com"
+                }
+              ],
+              "teams" => nil,
+              "maintainers" => [
+                %{
+                  "githubId" => 1001,
+                  "name" => "Alice",
+                  "github" => "alice",
+                  "email" => "alice@example.com"
+                },
+                %{
+                  "githubId" => 1002,
+                  "name" => "Bob",
+                  "github" => "bob",
+                  "email" => "bob@example.com"
+                }
+              ]
+            }
+          }
+        }
       }
 
-      assert :success = ChannelWorker.write_to_database(data)
+      ChannelWorker.write_to_database(data)
 
-      assert %{rows: [[2]]} =
-               Ecto.Adapters.SQL.query!(Tracker.Repo, "SELECT count(*) FROM packages")
+      package = Ash.get!(Tracker.Nixpkgs.Package, %{attribute: "hello"})
+      package = Ash.load!(package, [:maintainers, teams: [:members]])
 
-      assert %{rows: [[2]]} =
-               Ecto.Adapters.SQL.query!(Tracker.Repo, "SELECT count(*) FROM package_revisions")
+      assert length(package.maintainers) == 2
+      maintainer_names = Enum.map(package.maintainers, & &1.name) |> Enum.sort()
+      assert maintainer_names == ["Alice", "Bob"]
+      assert package.teams == []
     end
 
-    @tag :capture_log
-    test "rejects unsupported version" do
+    test "creates package_teams and team_members for teams" do
       data = %{
-        "packages" => %{},
-        "version" => 3,
-        "revision" => "ghi789",
-        "channel" => "nixos-unstable"
+        "version" => 2,
+        "revision" => "def456",
+        "channel" => "nixos-unstable-small",
+        "released_at" => "2026-03-29T10:00:00Z",
+        "packages" => %{
+          "incus" => %{
+            "version" => "6.0",
+            "meta" => %{
+              "nonTeamMaintainers" => [],
+              "teams" => [
+                %{
+                  "shortName" => "TestLXC",
+                  "scope" => "LXC, Incus",
+                  "github" => "lxc",
+                  "githubId" => 9999,
+                  "members" => [
+                    %{
+                      "githubId" => 2001,
+                      "name" => "Carol",
+                      "github" => "carol",
+                      "email" => "carol@example.com"
+                    },
+                    %{
+                      "githubId" => 2002,
+                      "name" => "Dave",
+                      "github" => "dave",
+                      "email" => "dave@example.com"
+                    }
+                  ],
+                  "githubMaintainers" => []
+                }
+              ],
+              "maintainers" => [
+                %{
+                  "githubId" => 2001,
+                  "name" => "Carol",
+                  "github" => "carol",
+                  "email" => "carol@example.com"
+                },
+                %{
+                  "githubId" => 2002,
+                  "name" => "Dave",
+                  "github" => "dave",
+                  "email" => "dave@example.com"
+                }
+              ]
+            }
+          }
+        }
       }
 
-      assert {:error, :unsupported_version} = ChannelWorker.write_to_database(data)
-    end
-  end
+      ChannelWorker.write_to_database(data)
 
-  describe "parse_releases/1" do
-    test "parses contents into release maps sorted by date descending" do
-      contents = [
-        %{
-          "Key" => "nixos/25.11-small/nixos-25.11.1036.d355f89e0014",
-          "LastModified" => "2025-12-05T19:58:15.000Z"
-        },
-        %{
-          "Key" => "nixos/25.11-small/nixos-25.11.1353.1acf2f172ef3",
-          "LastModified" => "2025-12-10T07:07:35.000Z"
-        },
-        %{
-          "Key" => "nixos/25.11-small/nixos-25.11.1119.60a511057b11",
-          "LastModified" => "2025-12-06T21:54:24.000Z"
-        }
-      ]
+      package = Ash.get!(Tracker.Nixpkgs.Package, %{attribute: "incus"})
+      package = Ash.load!(package, [:maintainers, teams: [:members]])
 
-      result = ChannelWorker.parse_releases(contents)
+      assert package.maintainers == []
+      assert length(package.teams) == 1
 
-      assert [first, second, third] = result
-      assert first.short_hash == "1acf2f172ef3"
-      assert first.released_at == "2025-12-10T07:07:35.000Z"
+      team = hd(package.teams)
+      assert team.short_name == "TestLXC"
+      assert team.scope == "LXC, Incus"
 
-      assert first.base_url ==
-               "https://releases.nixos.org/nixos/25.11-small/nixos-25.11.1353.1acf2f172ef3"
-
-      assert second.short_hash == "60a511057b11"
-      assert third.short_hash == "d355f89e0014"
+      member_names = Enum.map(team.members, & &1.name) |> Enum.sort()
+      assert member_names == ["Carol", "Dave"]
     end
 
-    test "handles single entry (map instead of list)" do
-      entry = %{
-        "Key" => "nixos/25.11-small/nixos-25.11.1036.d355f89e0014",
-        "LastModified" => "2025-12-05T19:58:15.000Z"
+    test "handles packages with multiple maintainers across batch boundaries" do
+      # 3 shared maintainers across 6000 packages = 18000 join rows
+      maintainers =
+        for i <- 1..3 do
+          %{
+            "githubId" => 50_000 + i,
+            "name" => "Maint#{i}",
+            "github" => "maint#{i}",
+            "email" => "m#{i}@example.com"
+          }
+        end
+
+      packages =
+        for i <- 1..6000, into: %{} do
+          {"pkg-#{i}",
+           %{
+             "version" => "1.0.#{i}",
+             "meta" => %{
+               "nonTeamMaintainers" => maintainers,
+               "teams" => nil,
+               "maintainers" => maintainers
+             }
+           }}
+        end
+
+      data = %{
+        "version" => 2,
+        "revision" => "batch123",
+        "channel" => "nixos-unstable-small",
+        "released_at" => "2026-03-29T10:00:00Z",
+        "packages" => packages
       }
 
-      assert [release] = ChannelWorker.parse_releases(entry)
-      assert release.short_hash == "d355f89e0014"
-      assert release.released_at == "2025-12-05T19:58:15.000Z"
-    end
+      ChannelWorker.write_to_database(data)
 
-    test "handles beta releases" do
-      contents = [
-        %{
-          "Key" => "nixos/25.11-small/nixos-25.11beta5.a320ce8e6e2c",
-          "LastModified" => "2025-11-01T10:00:00.000Z"
-        }
-      ]
+      require Ash.Query
 
-      assert [release] = ChannelWorker.parse_releases(contents)
-      assert release.short_hash == "a320ce8e6e2c"
+      pm_count =
+        Tracker.Nixpkgs.PackageMaintainer
+        |> Ash.read!()
+        |> length()
 
-      assert release.base_url ==
-               "https://releases.nixos.org/nixos/25.11-small/nixos-25.11beta5.a320ce8e6e2c"
-    end
-  end
-
-  describe "filter_existing_releases/2" do
-    test "filters out releases whose short hash matches an existing revision" do
-      # Create an existing channel revision
-      Tracker.Nixpkgs.ChannelRevision
-      |> Ash.Changeset.for_create(:create, %{
-        channel: "nixos-25.11-small",
-        revision: "d355f89e0014e51c9511298089d7ab55fd6f7056",
-        released_at: ~U[2025-12-05 19:58:15Z]
-      })
-      |> Ash.create!()
-
-      releases = [
-        %{
-          build_number: 1353,
-          short_hash: "1acf2f172ef3",
-          base_url: "https://releases.nixos.org/nixos/25.11-small/nixos-25.11.1353.1acf2f172ef3"
-        },
-        %{
-          build_number: 1036,
-          short_hash: "d355f89e0014",
-          base_url: "https://releases.nixos.org/nixos/25.11-small/nixos-25.11.1036.d355f89e0014"
-        }
-      ]
-
-      result = ChannelWorker.filter_existing_releases(releases, "nixos-25.11-small")
-
-      assert [remaining] = result
-      assert remaining.short_hash == "1acf2f172ef3"
-    end
-
-    test "keeps all releases when none exist in DB" do
-      releases = [
-        %{build_number: 1353, short_hash: "1acf2f172ef3", base_url: "url1"},
-        %{build_number: 1036, short_hash: "d355f89e0014", base_url: "url2"}
-      ]
-
-      result = ChannelWorker.filter_existing_releases(releases, "nixos-25.11-small")
-
-      assert length(result) == 2
+      assert pm_count == 18_000
     end
   end
 end

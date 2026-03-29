@@ -12,7 +12,7 @@
 
 ## Code conventions
 
-- Prefer red/green TDD. If unsure what style of testing, stop and ask.
+- Always use red/green TDD.
 - Always read code for project elixir dependencies from `deps`. Never query hexdocs or hex.
 - Remove dead code
 
@@ -56,7 +56,7 @@ mix usage_rules.docs Enum.zip/1
 
 ## Searching Documentation
 
-You should also consult the documentation of any tools you are using, early and often. The best 
+You should also consult the documentation of any tools you are using, early and often. The best
 way to accomplish this is to use the `usage_rules.search_docs` mix task. Once you have
 found what you are looking for, use the links in the search results to get more detail. For example:
 

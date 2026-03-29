@@ -8,5 +8,10 @@ defmodule Tracker.Nixpkgs do
     resource Tracker.Nixpkgs.Package
     resource Tracker.Nixpkgs.PackageRevision
     resource Tracker.Nixpkgs.ChannelRevision
+    resource Tracker.Nixpkgs.Maintainer
+    resource Tracker.Nixpkgs.Team
+    resource Tracker.Nixpkgs.PackageMaintainer
+    resource Tracker.Nixpkgs.PackageTeam
+    resource Tracker.Nixpkgs.TeamMember
   end
 end
