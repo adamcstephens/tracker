@@ -43,3 +43,4 @@ npm-debug.log
 data/
 .secret.envrc
 *key.pem
+.s.PGSQL*
