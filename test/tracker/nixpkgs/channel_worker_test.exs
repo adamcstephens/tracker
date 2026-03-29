@@ -46,6 +46,7 @@ defmodule Tracker.Nixpkgs.ChannelWorkerTest do
                Ecto.Adapters.SQL.query!(Tracker.Repo, "SELECT count(*) FROM package_revisions")
     end
 
+    @tag :capture_log
     test "rejects unsupported version" do
       data = %{
         "packages" => %{},
