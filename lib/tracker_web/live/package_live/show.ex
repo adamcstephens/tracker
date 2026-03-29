@@ -78,6 +78,31 @@ defmodule TrackerWeb.PackageLive.Show do
       No revisions found.
     </p>
 
+    <nav
+      :if={@total_pages > 1}
+      style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-top: 1rem;"
+    >
+      <.button
+        class="outline secondary"
+        style="padding: 0.25rem 0.75rem; font-size: 0.875rem;"
+        phx-click="prev-page"
+        disabled={!@has_prev_page?}
+      >
+        &larr;
+      </.button>
+      <small>
+        Page {@current_page} of {@total_pages}
+      </small>
+      <.button
+        class="outline secondary"
+        style="padding: 0.25rem 0.75rem; font-size: 0.875rem;"
+        phx-click="next-page"
+        disabled={!@has_next_page?}
+      >
+        &rarr;
+      </.button>
+    </nav>
+
     <.back navigate={~p"/packages"}>Back to packages</.back>
     """
   end
@@ -124,20 +149,29 @@ defmodule TrackerWeb.PackageLive.Show do
     sort_dir = parse_sort_dir(params["sort_dir"])
     channel_filter = params["channel"] || ""
     version_filter = params["version"] || ""
+    page = params |> Map.get("page", "1") |> String.to_integer() |> max(1)
+    offset = (page - 1) * 15
 
-    revisions = load_revisions(package.id, sort_by, sort_dir, channel_filter, version_filter)
+    result = load_revisions(package.id, sort_by, sort_dir, channel_filter, version_filter, offset)
     channels = load_channels()
+
+    total_pages = ceil(result.count / 15)
+    current_page = div(offset, 15) + 1
 
     {:noreply,
      socket
      |> assign(:page_title, package.attribute)
      |> assign(:package, package)
-     |> assign(:revisions, revisions)
+     |> assign(:revisions, result.results)
      |> assign(:sort_by, sort_by)
      |> assign(:sort_dir, sort_dir)
      |> assign(:channel_filter, channel_filter)
      |> assign(:version_filter, version_filter)
-     |> assign(:channels, channels)}
+     |> assign(:channels, channels)
+     |> assign(:has_prev_page?, offset > 0)
+     |> assign(:has_next_page?, result.more?)
+     |> assign(:total_pages, total_pages)
+     |> assign(:current_page, current_page)}
   end
 
   @impl true
@@ -159,7 +193,8 @@ defmodule TrackerWeb.PackageLive.Show do
            new_sort_by,
            new_sort_dir,
            socket.assigns.channel_filter,
-           socket.assigns.version_filter
+           socket.assigns.version_filter,
+           1
          )
      )}
   end
@@ -177,19 +212,51 @@ defmodule TrackerWeb.PackageLive.Show do
            socket.assigns.sort_by,
            socket.assigns.sort_dir,
            channel,
-           version
+           version,
+           1
          )
      )}
   end
 
-  defp load_revisions(package_id, sort_by, sort_dir, channel_filter, version_filter) do
+  @impl true
+  def handle_event("next-page", _params, socket) do
+    {:noreply,
+     push_patch(socket,
+       to:
+         revisions_path(
+           socket.assigns.package.attribute,
+           socket.assigns.sort_by,
+           socket.assigns.sort_dir,
+           socket.assigns.channel_filter,
+           socket.assigns.version_filter,
+           socket.assigns.current_page + 1
+         )
+     )}
+  end
+
+  @impl true
+  def handle_event("prev-page", _params, socket) do
+    {:noreply,
+     push_patch(socket,
+       to:
+         revisions_path(
+           socket.assigns.package.attribute,
+           socket.assigns.sort_by,
+           socket.assigns.sort_dir,
+           socket.assigns.channel_filter,
+           socket.assigns.version_filter,
+           max(socket.assigns.current_page - 1, 1)
+         )
+     )}
+  end
+
+  defp load_revisions(package_id, sort_by, sort_dir, channel_filter, version_filter, offset) do
     Tracker.Nixpkgs.PackageRevision
-    |> Ash.Query.filter(package_id == ^package_id)
-    |> Ash.Query.load(:channel_revision)
+    |> Ash.Query.for_read(:list_by_package, %{package_id: package_id})
     |> maybe_filter_channel(channel_filter)
     |> maybe_filter_version(version_filter)
     |> Ash.Query.sort([{sort_by, sort_dir}])
-    |> Ash.read!()
+    |> Ash.read!(page: [offset: offset, count: true])
   end
 
   defp maybe_filter_channel(query, ""), do: query
@@ -206,10 +273,10 @@ defmodule TrackerWeb.PackageLive.Show do
 
   defp load_channels do
     Tracker.Nixpkgs.ChannelRevision
+    |> Ash.Query.distinct(:channel)
     |> Ash.Query.sort(:channel)
     |> Ash.read!()
     |> Enum.map(& &1.channel)
-    |> Enum.uniq()
   end
 
   defp parse_sort_by(nil), do: @default_sort_by
@@ -227,7 +294,7 @@ defmodule TrackerWeb.PackageLive.Show do
   defp toggle_dir(:asc), do: :desc
   defp toggle_dir(:desc), do: :asc
 
-  defp revisions_path(package_name, sort_by, sort_dir, channel, version) do
+  defp revisions_path(package_name, sort_by, sort_dir, channel, version, page) do
     params =
       %{}
       |> then(fn p ->
@@ -238,6 +305,7 @@ defmodule TrackerWeb.PackageLive.Show do
       end)
       |> then(fn p -> if channel != "", do: Map.put(p, :channel, channel), else: p end)
       |> then(fn p -> if version != "", do: Map.put(p, :version, version), else: p end)
+      |> then(fn p -> if page > 1, do: Map.put(p, :page, page), else: p end)
 
     case URI.encode_query(params) do
       "" -> "/packages/#{package_name}"
