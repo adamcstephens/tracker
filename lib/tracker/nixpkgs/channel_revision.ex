@@ -35,6 +35,21 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
       upsert_fields [:released_at, :updated_at]
     end
 
+    read :list_by_channel do
+      argument :channel, :string do
+        allow_nil? false
+      end
+
+      pagination do
+        offset? true
+        countable true
+        default_limit 15
+      end
+
+      prepare build(sort: [{:released_at, :desc}])
+      filter expr(channel == ^arg(:channel))
+    end
+
     update :record_result do
       accept [:result]
     end

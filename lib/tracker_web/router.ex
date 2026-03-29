@@ -28,6 +28,8 @@ defmodule TrackerWeb.Router do
       live "/", PackageLive.Index, :index
       live "/packages", PackageLive.Index, :index
       live "/packages/:id", PackageLive.Show, :show
+      live "/channels", ChannelLive.Index, :index
+      live "/channels/:channel", ChannelLive.Show, :show
     end
   end
 
