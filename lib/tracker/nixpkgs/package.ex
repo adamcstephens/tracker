@@ -38,10 +38,10 @@ defmodule Tracker.Nixpkgs.Package do
     end
 
     create :bulk_upsert do
-      accept [:attribute, :description, :homepage, :position]
+      accept [:attribute, :description, :homepage, :position, :licenses]
       upsert? true
       upsert_identity :unique_attribute
-      upsert_fields [:description, :homepage, :position, :updated_at]
+      upsert_fields [:description, :homepage, :position, :licenses, :updated_at]
     end
   end
 
@@ -56,6 +56,7 @@ defmodule Tracker.Nixpkgs.Package do
     attribute :description, :string, public?: true
     attribute :homepage, :string, public?: true
     attribute :position, :string, public?: true
+    attribute :licenses, {:array, :string}, public?: true
 
     timestamps()
   end
