@@ -14,6 +14,8 @@ defmodule Tracker.Nixpkgs.Package do
     defaults [:read]
 
     read :list do
+      argument :search, :string
+
       pagination do
         offset? true
         countable true
@@ -21,6 +23,14 @@ defmodule Tracker.Nixpkgs.Package do
       end
 
       prepare build(sort: :attribute)
+
+      filter expr(
+               if not is_nil(^arg(:search)) and ^arg(:search) != "" do
+                 contains(attribute, ^arg(:search))
+               else
+                 true
+               end
+             )
     end
 
     create :create do

@@ -8,6 +8,16 @@ defmodule TrackerWeb.PackageLive.Index do
       Listing Packages
     </.header>
 
+    <form phx-change="search" phx-submit="search" id="package-search" phx-hook="UpdateURL">
+      <input
+        type="search"
+        name="search"
+        value={@search}
+        placeholder="Search packages..."
+        phx-debounce="300"
+      />
+    </form>
+
     <.table
       id="packages"
       rows={@streams.packages}
@@ -48,42 +58,73 @@ defmodule TrackerWeb.PackageLive.Index do
 
   @impl true
   def mount(_params, _session, socket) do
-    socket =
-      socket
-      |> assign_new(:current_user, fn -> nil end)
-      |> assign(:offset, 0)
-      |> load_packages()
-
-    {:ok, socket}
+    {:ok, assign_new(socket, :current_user, fn -> nil end)}
   end
 
   @impl true
   def handle_params(params, _url, socket) do
-    {:noreply, apply_action(socket, socket.assigns.live_action, params)}
+    search = Map.get(params, "search", "")
+    page = params |> Map.get("page", "1") |> String.to_integer() |> max(1)
+    offset = (page - 1) * 15
+
+    socket = assign(socket, :page_title, "Listing Packages")
+
+    socket =
+      if socket.assigns[:search] == search and socket.assigns[:offset] == offset do
+        socket
+      else
+        socket
+        |> assign(:search, search)
+        |> assign(:offset, offset)
+        |> load_packages()
+      end
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("search", %{"search" => search}, socket) do
+    socket =
+      socket
+      |> assign(:search, search)
+      |> assign(:offset, 0)
+      |> load_packages()
+      |> push_event("update-url", %{path: packages_path(search, 1)})
+
+    {:noreply, socket}
   end
 
   @impl true
   def handle_event("next-page", _params, socket) do
-    offset = socket.assigns.offset + 15
-    {:noreply, socket |> assign(:offset, offset) |> load_packages()}
+    {:noreply,
+     push_patch(socket, to: packages_path(socket.assigns.search, socket.assigns.current_page + 1))}
   end
 
   @impl true
   def handle_event("prev-page", _params, socket) do
-    offset = max(socket.assigns.offset - 15, 0)
-    {:noreply, socket |> assign(:offset, offset) |> load_packages()}
+    {:noreply,
+     push_patch(socket,
+       to: packages_path(socket.assigns.search, max(socket.assigns.current_page - 1, 1))
+     )}
   end
 
-  defp apply_action(socket, :index, _params) do
-    socket
-    |> assign(:page_title, "Listing Packages")
+  defp packages_path(search, page) do
+    params =
+      %{}
+      |> then(fn p -> if search != "", do: Map.put(p, :search, search), else: p end)
+      |> then(fn p -> if page > 1, do: Map.put(p, :page, page), else: p end)
+
+    case URI.encode_query(params) do
+      "" -> "/packages"
+      qs -> "/packages?#{qs}"
+    end
   end
 
   defp load_packages(socket) do
     page =
       Tracker.Nixpkgs.Package
+      |> Ash.Query.for_read(:list, %{search: socket.assigns.search})
       |> Ash.read!(
-        action: :list,
         actor: socket.assigns[:current_user],
         page: [offset: socket.assigns.offset, count: true]
       )
