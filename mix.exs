@@ -52,6 +52,7 @@ defmodule Tracker.MixProject do
       {:ex_brotli, "~> 0.6.0"},
       {:finch, "~> 0.13"},
       {:floki, ">= 0.30.0", only: :test},
+      {:lazy_html, ">= 0.1.0", only: :test},
       {:gettext, "~> 1.0"},
       {:heroicons,
        github: "tailwindlabs/heroicons",
