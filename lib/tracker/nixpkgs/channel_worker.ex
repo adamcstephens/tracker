@@ -304,15 +304,52 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
 
   # packages is %{attribute => %{version, description?, homepage?}} (already slimmed)
   defp load_packages(packages, channel_revision) do
-    # Step 1: Bulk upsert packages in chunks (includes metadata when present)
+    alias Tracker.Nixpkgs.PackageSetMapping
+
+    # Step 0: Parse attributes and upsert package families
+    parsed_attrs =
+      Map.new(packages, fn {attribute, _} -> {attribute, PackageSetMapping.parse(attribute)} end)
+
+    families =
+      parsed_attrs
+      |> Map.values()
+      |> Enum.filter(& &1.family_name)
+      |> Enum.uniq_by(&{&1.family_name, &1.ecosystem})
+      |> Enum.map(&%{name: &1.family_name, ecosystem: &1.ecosystem || ""})
+
+    families
+    |> Stream.chunk_every(@chunk_size)
+    |> Enum.each(fn chunk ->
+      Ash.bulk_create(chunk, Tracker.Nixpkgs.PackageFamily, :bulk_upsert,
+        batch_size: 5000,
+        return_errors?: true
+      )
+    end)
+
+    %{rows: family_rows} =
+      Ecto.Adapters.SQL.query!(Tracker.Repo, "SELECT name, ecosystem, id FROM package_families")
+
+    family_id_map = Map.new(family_rows, fn [name, eco, id] -> {{name, eco}, id} end)
+
+    # Step 1: Bulk upsert packages in chunks (includes metadata and family data)
     pkg_status =
       packages
       |> Stream.map(fn {attribute, entry} ->
+        parsed = Map.fetch!(parsed_attrs, attribute)
+
+        family_id =
+          if parsed.family_name,
+            do: Map.get(family_id_map, {parsed.family_name, parsed.ecosystem || ""}),
+            else: nil
+
         %{attribute: attribute}
         |> maybe_put(:description, entry[:description])
         |> maybe_put(:homepage, entry[:homepage])
         |> maybe_put(:position, entry[:position])
         |> maybe_put(:licenses, entry[:licenses])
+        |> maybe_put(:package_family_id, family_id)
+        |> maybe_put(:package_set, parsed.package_set)
+        |> maybe_put(:set_version, parsed.set_version)
       end)
       |> Stream.chunk_every(@chunk_size)
       |> Enum.reduce(:success, fn chunk, acc ->

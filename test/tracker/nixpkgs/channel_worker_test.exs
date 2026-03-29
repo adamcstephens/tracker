@@ -273,7 +273,7 @@ defmodule Tracker.Nixpkgs.ChannelWorkerTest do
       assert package.licenses == ["GPLv3+ and other free licenses"]
     end
 
-    test "stores nil when no license" do
+    test "stores nil when no license and no family for top-level" do
       data = %{
         "version" => 2,
         "revision" => "lic004",
@@ -291,6 +291,87 @@ defmodule Tracker.Nixpkgs.ChannelWorkerTest do
 
       package = Ash.get!(Tracker.Nixpkgs.Package, %{attribute: "no-lic-pkg"})
       assert package.licenses == nil
+    end
+  end
+
+  describe "write_to_database with package families" do
+    test "creates package families for dotted attributes" do
+      data = %{
+        "version" => 2,
+        "revision" => "fam001",
+        "channel" => "nixos-unstable",
+        "released_at" => "2026-03-29T10:00:00Z",
+        "packages" => %{
+          "python313Packages.numpy" => %{"version" => "2.3.4"},
+          "python312Packages.numpy" => %{"version" => "1.26.4"},
+          "python313Packages.requests" => %{"version" => "2.32.0"}
+        }
+      }
+
+      ChannelWorker.write_to_database(data)
+
+      numpy_313 = Ash.get!(Tracker.Nixpkgs.Package, %{attribute: "python313Packages.numpy"})
+      numpy_312 = Ash.get!(Tracker.Nixpkgs.Package, %{attribute: "python312Packages.numpy"})
+      requests = Ash.get!(Tracker.Nixpkgs.Package, %{attribute: "python313Packages.requests"})
+
+      # Both numpy packages share the same family
+      assert numpy_313.package_family_id != nil
+      assert numpy_313.package_family_id == numpy_312.package_family_id
+
+      # requests has a different family
+      assert requests.package_family_id != nil
+      assert requests.package_family_id != numpy_313.package_family_id
+
+      # Package set and version are populated
+      assert numpy_313.package_set == "python313Packages"
+      assert numpy_313.set_version == "3.13"
+      assert numpy_312.package_set == "python312Packages"
+      assert numpy_312.set_version == "3.12"
+    end
+
+    test "does not create family for undotted top-level packages" do
+      data = %{
+        "version" => 2,
+        "revision" => "fam002",
+        "channel" => "nixos-unstable",
+        "released_at" => "2026-03-29T10:00:00Z",
+        "packages" => %{
+          "vim" => %{"version" => "9.1"},
+          "git" => %{"version" => "2.44"}
+        }
+      }
+
+      ChannelWorker.write_to_database(data)
+
+      vim = Ash.get!(Tracker.Nixpkgs.Package, %{attribute: "vim"})
+      git = Ash.get!(Tracker.Nixpkgs.Package, %{attribute: "git"})
+
+      assert vim.package_family_id == nil
+      assert vim.package_set == nil
+      assert git.package_family_id == nil
+    end
+
+    test "creates family for top-level runtime packages" do
+      data = %{
+        "version" => 2,
+        "revision" => "fam003",
+        "channel" => "nixos-unstable",
+        "released_at" => "2026-03-29T10:00:00Z",
+        "packages" => %{
+          "python311" => %{"version" => "3.11.8"},
+          "python312" => %{"version" => "3.12.2"}
+        }
+      }
+
+      ChannelWorker.write_to_database(data)
+
+      py311 = Ash.get!(Tracker.Nixpkgs.Package, %{attribute: "python311"})
+      py312 = Ash.get!(Tracker.Nixpkgs.Package, %{attribute: "python312"})
+
+      assert py311.package_family_id != nil
+      assert py311.package_family_id == py312.package_family_id
+      assert py311.set_version == "3.11"
+      assert py312.set_version == "3.12"
     end
   end
 end

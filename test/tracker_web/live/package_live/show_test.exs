@@ -124,6 +124,46 @@ defmodule TrackerWeb.PackageLive.ShowTest do
     refute html =~ "2.13.0"
   end
 
+  test "shows family siblings when package has a family", %{conn: conn} do
+    family =
+      Tracker.Nixpkgs.PackageFamily
+      |> Ash.Changeset.for_create(:bulk_upsert, %{name: "numpy", ecosystem: "python"})
+      |> Ash.create!()
+
+    Tracker.Nixpkgs.Package
+    |> Ash.Changeset.for_create(:bulk_upsert, %{
+      attribute: "python313Packages.numpy",
+      package_family_id: family.id,
+      package_set: "python313Packages",
+      set_version: "3.13"
+    })
+    |> Ash.create!()
+
+    Tracker.Nixpkgs.Package
+    |> Ash.Changeset.for_create(:bulk_upsert, %{
+      attribute: "python312Packages.numpy",
+      package_family_id: family.id,
+      package_set: "python312Packages",
+      set_version: "3.12"
+    })
+    |> Ash.create!()
+
+    {:ok, _view, html} = live(conn, ~p"/packages/python313Packages.numpy")
+
+    assert html =~ "Also available in"
+    assert html =~ "python312Packages"
+    assert html =~ "(3.12)"
+  end
+
+  test "does not show siblings section for packages without a family", %{
+    conn: conn,
+    package: package
+  } do
+    {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}")
+
+    refute html =~ "Also available in"
+  end
+
   defp version_order(html) do
     ~r/<td[^>]*>\s*(\d+\.\d+\.\d+)\s*<\/td>/
     |> Regex.scan(html)
