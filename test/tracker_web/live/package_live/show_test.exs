@@ -164,6 +164,90 @@ defmodule TrackerWeb.PackageLive.ShowTest do
     refute html =~ "Also available in"
   end
 
+  describe "changes only toggle" do
+    setup %{package: package} do
+      # Add a third unstable revision with same version (noop bump)
+      cr3 =
+        Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
+          channel: "nixos-unstable",
+          revision: "aaa111bbb222333",
+          released_at: ~U[2026-03-10 10:00:00Z]
+        })
+
+      Tracker.Nixpkgs.PackageRevision
+      |> Ash.Changeset.for_create(:load, %{
+        version: "2.12.1",
+        package_id: package.id,
+        channel_revision_id: cr3.id
+      })
+      |> Ash.create!()
+
+      # Add a fourth unstable revision with a new version (real change)
+      cr4 =
+        Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
+          channel: "nixos-unstable",
+          revision: "ccc333ddd444555",
+          released_at: ~U[2026-03-20 10:00:00Z]
+        })
+
+      Tracker.Nixpkgs.PackageRevision
+      |> Ash.Changeset.for_create(:load, %{
+        version: "2.14.0",
+        package_id: package.id,
+        channel_revision_id: cr4.id
+      })
+      |> Ash.create!()
+
+      %{cr3: cr3, cr4: cr4}
+    end
+
+    test "by default, noop version bumps are hidden", %{conn: conn, package: package} do
+      {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}")
+
+      versions = version_order(html)
+
+      # Should show: cr1(2.12.1 first unstable), cr2(2.13.0 first 24.11), cr4(2.14.0 changed unstable)
+      # Should hide: cr3(2.12.1 same as cr1 in unstable)
+      assert length(versions) == 3
+      assert "2.12.1" in versions
+      assert "2.13.0" in versions
+      assert "2.14.0" in versions
+    end
+
+    test "with all_revisions toggle, all revisions are shown", %{conn: conn, package: package} do
+      {:ok, _view, html} =
+        live(conn, ~p"/packages/#{package.attribute}?all_revisions=true")
+
+      # 4 revisions total: cr1(2.12.1), cr3(2.12.1), cr2(2.13.0), cr4(2.14.0)
+      assert length(version_order(html)) == 4
+    end
+
+    test "toggle checkbox shows all revisions", %{conn: conn, package: package} do
+      {:ok, view, _html} = live(conn, ~p"/packages/#{package.attribute}")
+
+      html =
+        view
+        |> element("form.revision-filters")
+        |> render_change(%{"all_revisions" => "true"})
+
+      versions = version_order(html)
+      assert length(versions) == 4
+    end
+
+    test "all_revisions is preserved in URL after sort", %{conn: conn, package: package} do
+      {:ok, view, _html} =
+        live(conn, ~p"/packages/#{package.attribute}?all_revisions=true")
+
+      # Click sort to verify all_revisions survives navigation
+      view |> element("th[phx-value-field=version]") |> render_click()
+
+      url = assert_patch(view)
+      assert url =~ "all_revisions=true"
+      assert url =~ "sort_by=version"
+      assert url =~ "sort_dir=asc"
+    end
+  end
+
   defp version_order(html) do
     ~r/<td[^>]*>\s*(\d+\.\d+\.\d+)\s*<\/td>/
     |> Regex.scan(html)
