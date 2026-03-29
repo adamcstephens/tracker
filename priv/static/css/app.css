@@ -1,6 +1,8 @@
 /* Custom overrides for Pico CSS */
 
 :root {
+  --pico-font-size: 90.0%;
+  --pico-typography-spacing-vertical: 0.5rem;
   --pico-color-primary: #fd4f00;
   --pico-color-primary-hover: #e04600;
   --pico-color-primary-focus: rgba(253, 79, 0, 0.25);
