@@ -30,6 +30,10 @@ defmodule TrackerWeb.Router do
       live "/packages/:name", PackageLive.Show, :show
       live "/channels", ChannelLive.Index, :index
       live "/channels/:channel", ChannelLive.Show, :show
+      live "/maintainers", MaintainerLive.Index, :index
+      live "/maintainers/:github", MaintainerLive.Show, :show
+      live "/teams", TeamLive.Index, :index
+      live "/teams/:short_name", TeamLive.Show, :show
     end
   end
 

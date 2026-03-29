@@ -32,8 +32,8 @@ defmodule TrackerWeb.PackageLive.Show do
       <h2>Teams</h2>
       <ul>
         <li :for={t <- @package.teams}>
-          <strong>{t.short_name}</strong>
-          <span :if={t.scope}> —  {t.scope}</span>
+          <.link navigate={~p"/teams/#{t.short_name}"}><strong>{t.short_name}</strong></.link>
+          <span :if={t.scope}> —   {t.scope}</span>
           <ul :if={t.members != []}>
             <li :for={m <- t.members}>
               <.maintainer_link maintainer={m} />
@@ -172,14 +172,9 @@ defmodule TrackerWeb.PackageLive.Show do
 
   defp maintainer_link(assigns) do
     ~H"""
-    <a
-      :if={@maintainer.github}
-      href={"https://github.com/#{@maintainer.github}"}
-      target="_blank"
-      rel="noopener noreferrer"
-    >
+    <.link :if={@maintainer.github} navigate={~p"/maintainers/#{@maintainer.github}"}>
       {@maintainer.name || @maintainer.github}
-    </a>
+    </.link>
     <span :if={!@maintainer.github}>{@maintainer.name || "Unknown"}</span>
     """
   end
