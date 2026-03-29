@@ -5,6 +5,28 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
   require Logger
 
   @impl Oban.Worker
+  def perform(%Oban.Job{args: %{"channel" => channel, "base_url" => base_url}}) do
+    revision = Req.get!(req(), url: base_url <> "/git-revision").body
+
+    case Tracker.Nixpkgs.ChannelRevision.find(channel, revision) do
+      {:ok, %Tracker.Nixpkgs.ChannelRevision{result: result}}
+      when result in [:success, :partial_success] ->
+        :ok
+
+      _ ->
+        result =
+          fetch_channel(channel, revision, base_url)
+          |> write_to_database()
+
+        case result do
+          :success -> :ok
+          :partial_success -> :ok
+          :error -> {:error, :load_failed}
+          {:error, reason} -> {:error, reason}
+        end
+    end
+  end
+
   def perform(%Oban.Job{args: %{"channel" => channel}}) do
     result = load_channel(channel)
 
@@ -75,8 +97,109 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
     |> Map.put("channel", channel)
   end
 
-  def queue_packages(_) do
-    {:cancel, :unsupported_structure}
+  @doc """
+  Backfills historical channel data from releases.nixos.org.
+
+  Lists all releases for the given channel from S3, filters out already-loaded
+  revisions, and schedules Oban jobs for the rest (newest first).
+
+  ## Options
+
+    * `:limit` - maximum number of jobs to schedule (useful for testing)
+
+  ## Examples
+
+      ChannelWorker.backfill_channel("nixos-25.11-small", limit: 5)
+  """
+  def backfill_channel(channel, opts \\ []) do
+    limit = Keyword.get(opts, :limit)
+
+    releases =
+      list_releases(channel)
+      |> parse_releases()
+      |> filter_existing_releases(channel)
+
+    releases = if limit, do: Enum.take(releases, limit), else: releases
+
+    Enum.each(releases, fn release ->
+      %{"channel" => channel, "base_url" => release.base_url}
+      |> new()
+      |> Oban.insert!()
+    end)
+
+    {:ok, length(releases)}
+  end
+
+  defp list_releases(channel) do
+    req_s3 = req() |> ReqS3.attach()
+    list_releases(req_s3, channel, nil, [])
+  end
+
+  defp list_releases(req_s3, channel, marker, acc) do
+    params =
+      [delimiter: "/", prefix: "#{channel_to_s3_prefix(channel)}"]
+      |> then(fn p -> if marker, do: Keyword.put(p, :marker, marker), else: p end)
+
+    resp = Req.get!(req_s3, url: "s3://nix-releases", params: params)
+    body = resp.body["ListBucketResult"]
+    prefixes = body["CommonPrefixes"] |> List.wrap()
+
+    all_prefixes = acc ++ prefixes
+
+    if body["IsTruncated"] == "true" do
+      list_releases(req_s3, channel, body["NextMarker"], all_prefixes)
+    else
+      all_prefixes
+    end
+  end
+
+  # Channel names like "nixos-25.11-small" map to S3 prefix "nixos/25.11-small/"
+  defp channel_to_s3_prefix("nixos-" <> rest), do: "nixos/#{rest}/"
+  defp channel_to_s3_prefix("nixpkgs-" <> rest), do: "nixpkgs/#{rest}/"
+  defp channel_to_s3_prefix(channel), do: "#{channel}/"
+
+  @releases_base_url "https://releases.nixos.org"
+
+  @doc """
+  Parses S3 CommonPrefixes into release maps, returned in reverse order (newest first).
+
+  S3 returns prefixes in lexicographic order which corresponds to chronological order,
+  so we simply reverse to get newest first.
+  """
+  def parse_releases(prefixes) do
+    prefixes
+    |> List.wrap()
+    |> Enum.map(fn %{"Prefix" => prefix} ->
+      # Strip trailing slash, extract the release directory name
+      dir = String.trim_trailing(prefix, "/")
+      short_hash = dir |> String.split(".") |> List.last()
+
+      %{
+        short_hash: short_hash,
+        base_url: "#{@releases_base_url}/#{dir}"
+      }
+    end)
+    |> Enum.reverse()
+  end
+
+  @doc """
+  Filters out releases that already exist in the database for the given channel.
+
+  Matches short hashes from release directory names against existing full revision hashes.
+  """
+  def filter_existing_releases(releases, channel) do
+    %{rows: rows} =
+      Ecto.Adapters.SQL.query!(
+        Tracker.Repo,
+        "SELECT revision FROM channel_revisions WHERE channel = $1",
+        [channel]
+      )
+
+    existing_hashes = MapSet.new(rows, fn [revision] -> revision end)
+
+    Enum.reject(releases, fn release ->
+      Enum.any?(existing_hashes, &String.starts_with?(&1, release.short_hash))
+    end)
   end
 
   def write_to_database(%{
