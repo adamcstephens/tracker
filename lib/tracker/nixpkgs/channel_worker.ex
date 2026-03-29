@@ -56,16 +56,19 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
 
   def get_channel_revision(channel) do
     # get the redirected URL so we are consistent across queries
+    # cache: false because we always want the latest redirect
     [base_url] =
-      Req.get!("https://channels.nixos.org/#{channel}", redirect: false).headers["location"]
+      Req.get!(req(), url: "https://channels.nixos.org/#{channel}", redirect: false, cache: false).headers[
+        "location"
+      ]
 
-    revision = Req.get!(base_url <> "/git-revision").body
+    revision = Req.get!(req(), url: base_url <> "/git-revision").body
 
     {revision, base_url}
   end
 
   def fetch_channel(channel, revision, base_url) do
-    Req.get!(base_url <> "/packages.json.br", raw: true).body
+    Req.get!(req(), url: base_url <> "/packages.json.br", raw: true).body
     |> ExBrotli.decompress!()
     |> :json.decode()
     |> Map.put("revision", revision)
@@ -117,6 +120,17 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
   def write_to_database(%{"version" => version}) do
     Logger.error("Unsupported packages.json version: #{inspect(version)}")
     {:error, :unsupported_version}
+  end
+
+  defp req do
+    if Application.get_env(:tracker, :http_cache, false) do
+      Req.new(
+        cache: true,
+        cache_dir: Application.get_env(:tracker, :cache_dir, "_build/releases_cache")
+      )
+    else
+      Req.new()
+    end
   end
 
   @chunk_size 10_000

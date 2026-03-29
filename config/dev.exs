@@ -86,6 +86,7 @@ config :swoosh, :api_client, false
 
 config :tracker,
   # loader_limit: 20,
+  http_cache: true,
   channels: [
     "nixos-24.11",
     "nixos-24.11-small",
