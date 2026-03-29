@@ -60,38 +60,55 @@ defmodule Tracker.Nixpkgs.ChannelWorkerTest do
   end
 
   describe "parse_releases/1" do
-    test "parses prefixes into release maps in reverse order (newest first)" do
-      prefixes = [
-        %{"Prefix" => "nixos/25.11-small/nixos-25.11.1036.d355f89e0014/"},
-        %{"Prefix" => "nixos/25.11-small/nixos-25.11.1353.1acf2f172ef3/"},
-        %{"Prefix" => "nixos/25.11-small/nixos-25.11.1119.60a511057b11/"}
+    test "parses contents into release maps sorted by date descending" do
+      contents = [
+        %{
+          "Key" => "nixos/25.11-small/nixos-25.11.1036.d355f89e0014",
+          "LastModified" => "2025-12-05T19:58:15.000Z"
+        },
+        %{
+          "Key" => "nixos/25.11-small/nixos-25.11.1353.1acf2f172ef3",
+          "LastModified" => "2025-12-10T07:07:35.000Z"
+        },
+        %{
+          "Key" => "nixos/25.11-small/nixos-25.11.1119.60a511057b11",
+          "LastModified" => "2025-12-06T21:54:24.000Z"
+        }
       ]
 
-      result = ChannelWorker.parse_releases(prefixes)
+      result = ChannelWorker.parse_releases(contents)
 
       assert [first, second, third] = result
-      assert first.short_hash == "60a511057b11"
+      assert first.short_hash == "1acf2f172ef3"
+      assert first.released_at == "2025-12-10T07:07:35.000Z"
 
       assert first.base_url ==
-               "https://releases.nixos.org/nixos/25.11-small/nixos-25.11.1119.60a511057b11"
+               "https://releases.nixos.org/nixos/25.11-small/nixos-25.11.1353.1acf2f172ef3"
 
-      assert second.short_hash == "1acf2f172ef3"
+      assert second.short_hash == "60a511057b11"
       assert third.short_hash == "d355f89e0014"
     end
 
-    test "handles single prefix (map instead of list)" do
-      prefix = %{"Prefix" => "nixos/25.11-small/nixos-25.11.1036.d355f89e0014/"}
+    test "handles single entry (map instead of list)" do
+      entry = %{
+        "Key" => "nixos/25.11-small/nixos-25.11.1036.d355f89e0014",
+        "LastModified" => "2025-12-05T19:58:15.000Z"
+      }
 
-      assert [release] = ChannelWorker.parse_releases(prefix)
+      assert [release] = ChannelWorker.parse_releases(entry)
       assert release.short_hash == "d355f89e0014"
+      assert release.released_at == "2025-12-05T19:58:15.000Z"
     end
 
     test "handles beta releases" do
-      prefixes = [
-        %{"Prefix" => "nixos/25.11-small/nixos-25.11beta5.a320ce8e6e2c/"}
+      contents = [
+        %{
+          "Key" => "nixos/25.11-small/nixos-25.11beta5.a320ce8e6e2c",
+          "LastModified" => "2025-11-01T10:00:00.000Z"
+        }
       ]
 
-      assert [release] = ChannelWorker.parse_releases(prefixes)
+      assert [release] = ChannelWorker.parse_releases(contents)
       assert release.short_hash == "a320ce8e6e2c"
 
       assert release.base_url ==

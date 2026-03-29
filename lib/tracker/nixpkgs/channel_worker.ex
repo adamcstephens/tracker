@@ -5,7 +5,7 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
   require Logger
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: %{"channel" => channel, "base_url" => base_url}}) do
+  def perform(%Oban.Job{args: %{"channel" => channel, "base_url" => base_url} = args}) do
     revision = Req.get!(req(), url: base_url <> "/git-revision").body
 
     case Tracker.Nixpkgs.ChannelRevision.find(channel, revision) do
@@ -16,6 +16,7 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
       _ ->
         result =
           fetch_channel(channel, revision, base_url)
+          |> maybe_put("released_at", args["released_at"])
           |> write_to_database()
 
         case result do
@@ -122,7 +123,11 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
     releases = if limit, do: Enum.take(releases, limit), else: releases
 
     Enum.each(releases, fn release ->
-      %{"channel" => channel, "base_url" => release.base_url}
+      %{
+        "channel" => channel,
+        "base_url" => release.base_url,
+        "released_at" => release.released_at
+      }
       |> new()
       |> Oban.insert!()
     end)
@@ -142,14 +147,14 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
 
     resp = Req.get!(req_s3, url: "s3://nix-releases", params: params)
     body = resp.body["ListBucketResult"]
-    prefixes = body["CommonPrefixes"] |> List.wrap()
+    contents = body["Contents"] |> List.wrap()
 
-    all_prefixes = acc ++ prefixes
+    all_contents = acc ++ contents
 
     if body["IsTruncated"] == "true" do
-      list_releases(req_s3, channel, body["NextMarker"], all_prefixes)
+      list_releases(req_s3, channel, body["NextMarker"], all_contents)
     else
-      all_prefixes
+      all_contents
     end
   end
 
@@ -161,25 +166,21 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
   @releases_base_url "https://releases.nixos.org"
 
   @doc """
-  Parses S3 CommonPrefixes into release maps, returned in reverse order (newest first).
-
-  S3 returns prefixes in lexicographic order which corresponds to chronological order,
-  so we simply reverse to get newest first.
+  Parses S3 Contents entries into release maps, sorted by `LastModified` descending (newest first).
   """
-  def parse_releases(prefixes) do
-    prefixes
+  def parse_releases(contents) do
+    contents
     |> List.wrap()
-    |> Enum.map(fn %{"Prefix" => prefix} ->
-      # Strip trailing slash, extract the release directory name
-      dir = String.trim_trailing(prefix, "/")
-      short_hash = dir |> String.split(".") |> List.last()
+    |> Enum.map(fn %{"Key" => key, "LastModified" => last_modified} ->
+      short_hash = key |> String.split(".") |> List.last()
 
       %{
         short_hash: short_hash,
-        base_url: "#{@releases_base_url}/#{dir}"
+        base_url: "#{@releases_base_url}/#{key}",
+        released_at: last_modified
       }
     end)
-    |> Enum.reverse()
+    |> Enum.sort_by(& &1.released_at, :desc)
   end
 
   @doc """
@@ -202,12 +203,14 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
     end)
   end
 
-  def write_to_database(%{
-        "packages" => packages,
-        "version" => version,
-        "revision" => revision,
-        "channel" => channel
-      })
+  def write_to_database(
+        %{
+          "packages" => packages,
+          "version" => version,
+          "revision" => revision,
+          "channel" => channel
+        } = data
+      )
       when version in [2, "2"] do
     packages =
       case Application.get_env(:tracker, :loader_limit) do
@@ -215,9 +218,13 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
         limit -> Enum.take(packages, limit)
       end
 
+    create_attrs =
+      %{revision: revision, channel: channel}
+      |> maybe_put(:released_at, data["released_at"])
+
     channel_revision =
       Tracker.Nixpkgs.ChannelRevision
-      |> Ash.Changeset.for_create(:create, %{revision: revision, channel: channel})
+      |> Ash.Changeset.for_create(:create, create_attrs)
       |> Ash.create!()
 
     # Slim down to only what we need: %{attribute => version}
@@ -244,6 +251,9 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
     Logger.error("Unsupported packages.json version: #{inspect(version)}")
     {:error, :unsupported_version}
   end
+
+  defp maybe_put(map, _key, nil), do: map
+  defp maybe_put(map, key, value), do: Map.put(map, key, value)
 
   defp req do
     if Application.get_env(:tracker, :http_cache, false) do
