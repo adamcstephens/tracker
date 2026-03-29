@@ -14,7 +14,7 @@ defmodule Tracker.Nixpkgs.Package do
     defaults [:read]
 
     read :list do
-      argument :search, :string
+      argument :search, :ci_string
 
       pagination do
         offset? true
@@ -22,7 +22,7 @@ defmodule Tracker.Nixpkgs.Package do
         default_limit 15
       end
 
-      prepare build(sort: :attribute)
+      prepare Tracker.Nixpkgs.Preparations.SortByRelevance
 
       filter expr(
                if not is_nil(^arg(:search)) and ^arg(:search) != "" do
