@@ -51,10 +51,7 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
         where: j.state != "completed",
         where: j.args["channel"] == ^channel
 
-    case Tracker.Repo.one(query) do
-      nil -> false
-      _ -> true
-    end
+    Tracker.Repo.exists?(query)
   end
 
   def get_channel_revision(channel) do
