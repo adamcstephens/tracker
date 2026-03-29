@@ -1,0 +1,44 @@
+defmodule Tracker.Nixpkgs.PackageFamily do
+  use Ash.Resource, otp_app: :tracker, domain: Tracker.Nixpkgs, data_layer: AshPostgres.DataLayer
+
+  postgres do
+    table "package_families"
+    repo Tracker.Repo
+  end
+
+  actions do
+    defaults [:read]
+
+    create :bulk_upsert do
+      accept [:name, :ecosystem]
+      upsert? true
+      upsert_identity :unique_name_ecosystem
+      upsert_fields [:updated_at]
+    end
+  end
+
+  attributes do
+    integer_primary_key :id
+
+    attribute :name, :string do
+      allow_nil? false
+      public? true
+    end
+
+    attribute :ecosystem, :string do
+      allow_nil? false
+      default ""
+      public? true
+    end
+
+    timestamps()
+  end
+
+  relationships do
+    has_many :packages, Tracker.Nixpkgs.Package
+  end
+
+  identities do
+    identity :unique_name_ecosystem, [:name, :ecosystem]
+  end
+end

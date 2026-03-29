@@ -38,10 +38,30 @@ defmodule Tracker.Nixpkgs.Package do
     end
 
     create :bulk_upsert do
-      accept [:attribute, :description, :homepage, :position, :licenses]
+      accept [
+        :attribute,
+        :description,
+        :homepage,
+        :position,
+        :licenses,
+        :package_family_id,
+        :package_set,
+        :set_version
+      ]
+
       upsert? true
       upsert_identity :unique_attribute
-      upsert_fields [:description, :homepage, :position, :licenses, :updated_at]
+
+      upsert_fields [
+        :description,
+        :homepage,
+        :position,
+        :licenses,
+        :package_family_id,
+        :package_set,
+        :set_version,
+        :updated_at
+      ]
     end
   end
 
@@ -57,11 +77,18 @@ defmodule Tracker.Nixpkgs.Package do
     attribute :homepage, :string, public?: true
     attribute :position, :string, public?: true
     attribute :licenses, {:array, :string}, public?: true
+    attribute :package_set, :string, public?: true
+    attribute :set_version, :string, public?: true
 
     timestamps()
   end
 
   relationships do
+    belongs_to :package_family, Tracker.Nixpkgs.PackageFamily do
+      attribute_type :integer
+      allow_nil? true
+    end
+
     has_many :revisions, Tracker.Nixpkgs.PackageRevision
 
     has_many :package_maintainers, Tracker.Nixpkgs.PackageMaintainer

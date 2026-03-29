@@ -5,6 +5,7 @@ defmodule Tracker.Nixpkgs do
   require Logger
 
   resources do
+    resource Tracker.Nixpkgs.PackageFamily
     resource Tracker.Nixpkgs.Package
     resource Tracker.Nixpkgs.PackageRevision
     resource Tracker.Nixpkgs.ChannelRevision

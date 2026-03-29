@@ -36,7 +36,7 @@ defmodule TrackerWeb.PackageLive.Show do
       <ul>
         <li :for={t <- @package.teams}>
           <.link navigate={~p"/teams/#{t.short_name}"}><strong>{t.short_name}</strong></.link>
-          <span :if={t.scope}> —    {t.scope}</span>
+          <span :if={t.scope}> —     {t.scope}</span>
           <ul :if={t.members != []}>
             <li :for={m <- t.members}>
               <.maintainer_link maintainer={m} />
@@ -51,6 +51,18 @@ defmodule TrackerWeb.PackageLive.Show do
       <ul>
         <li :for={m <- @package.maintainers}>
           <.maintainer_link maintainer={m} />
+        </li>
+      </ul>
+    </div>
+
+    <div :if={@family_siblings != []} style="margin-top: 1rem;">
+      <h2>Also available in</h2>
+      <ul>
+        <li :for={sibling <- @family_siblings}>
+          <.link navigate={~p"/packages/#{sibling.attribute}"}>
+            {sibling.package_set || sibling.attribute}
+          </.link>
+          <span :if={sibling.set_version}> ({sibling.set_version})</span>
         </li>
       </ul>
     </div>
@@ -210,6 +222,8 @@ defmodule TrackerWeb.PackageLive.Show do
       Ash.get!(Tracker.Nixpkgs.Package, %{attribute: name})
       |> Ash.load!([:maintainers, teams: [:members]])
 
+    family_siblings = load_family_siblings(package)
+
     sort_by = parse_sort_by(params["sort_by"])
     sort_dir = parse_sort_dir(params["sort_dir"])
     channel_filter = params["channel"] || ""
@@ -227,6 +241,7 @@ defmodule TrackerWeb.PackageLive.Show do
      socket
      |> assign(:page_title, package.attribute)
      |> assign(:package, package)
+     |> assign(:family_siblings, family_siblings)
      |> assign(:revisions, result.results)
      |> assign(:sort_by, sort_by)
      |> assign(:sort_dir, sort_dir)
@@ -334,6 +349,15 @@ defmodule TrackerWeb.PackageLive.Show do
 
   defp maybe_filter_version(query, version) do
     Ash.Query.filter(query, contains(version, ^version))
+  end
+
+  defp load_family_siblings(%{package_family_id: nil}), do: []
+
+  defp load_family_siblings(package) do
+    Tracker.Nixpkgs.Package
+    |> Ash.Query.filter(package_family_id == ^package.package_family_id and id != ^package.id)
+    |> Ash.Query.sort(:package_set)
+    |> Ash.read!()
   end
 
   defp load_channels do
