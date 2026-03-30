@@ -7,7 +7,14 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
   end
 
   code_interface do
+    define :read
     define :find, args: [:channel, :revision]
+    define :create
+    define :list_by_channel, args: [:channel]
+    define :record_result
+    define :by_channel, args: [:channel]
+    define :distinct_channels
+    define :find_latest, args: [:channel]
   end
 
   actions do
@@ -52,6 +59,27 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
 
     update :record_result do
       accept [:result]
+    end
+
+    read :by_channel do
+      argument :channel, :string do
+        allow_nil? false
+      end
+
+      filter expr(channel == ^arg(:channel))
+    end
+
+    read :distinct_channels do
+      prepare build(distinct: [:channel], sort: [:channel])
+    end
+
+    read :find_latest do
+      argument :channel, :string do
+        allow_nil? false
+      end
+
+      prepare build(sort: [released_at: :desc], limit: 1)
+      filter expr(channel == ^arg(:channel) and result in [:success, :partial_success])
     end
   end
 

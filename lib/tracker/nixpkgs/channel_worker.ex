@@ -2,7 +2,6 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
   use Oban.Worker, queue: :channels, max_attempts: 10
 
   import Ecto.Query, only: [from: 2]
-  require Ash.Query
   require Logger
 
   @metadata_channel "nixos-unstable-small"
@@ -216,9 +215,7 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
   """
   def filter_existing_releases(releases, channel) do
     existing_hashes =
-      Tracker.Nixpkgs.ChannelRevision
-      |> Ash.Query.filter(channel == ^channel)
-      |> Ash.read!()
+      Tracker.Nixpkgs.ChannelRevision.by_channel!(channel)
       |> MapSet.new(& &1.revision)
 
     Enum.reject(releases, fn release ->
@@ -248,10 +245,7 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
       |> maybe_put(:released_at, data["released_at"])
       |> maybe_put(:previous_channel_revision_id, previous_revision && previous_revision.id)
 
-    channel_revision =
-      Tracker.Nixpkgs.ChannelRevision
-      |> Ash.Changeset.for_create(:create, create_attrs)
-      |> Ash.create!()
+    channel_revision = Tracker.Nixpkgs.ChannelRevision.create!(create_attrs)
 
     # Slim down to only what we need, filtering out empty versions
     include_metadata? = channel == @metadata_channel
@@ -276,9 +270,7 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
       Logger.error("Failed to load channel #{channel} at #{revision}")
     end
 
-    channel_revision
-    |> Ash.Changeset.for_update(:record_result, %{result: bulk_status})
-    |> Ash.update!()
+    Tracker.Nixpkgs.ChannelRevision.record_result!(channel_revision, %{result: bulk_status})
 
     bulk_status
   end
@@ -517,13 +509,11 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
 
     # Step 3: Build lookup maps
     maintainer_id_map =
-      Tracker.Nixpkgs.Maintainer
-      |> Ash.read!()
+      Tracker.Nixpkgs.Maintainer.read!()
       |> Map.new(&{&1.github_id, &1.id})
 
     team_id_map =
-      Tracker.Nixpkgs.Team
-      |> Ash.read!()
+      Tracker.Nixpkgs.Team.read!()
       |> Map.new(&{&1.short_name, &1.id})
 
     # Step 4: Bulk upsert team members
@@ -583,11 +573,7 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
   end
 
   defp find_latest_revision(channel) do
-    Tracker.Nixpkgs.ChannelRevision
-    |> Ash.Query.filter(channel == ^channel and result in [:success, :partial_success])
-    |> Ash.Query.sort(released_at: :desc)
-    |> Ash.Query.limit(1)
-    |> Ash.read!()
+    Tracker.Nixpkgs.ChannelRevision.find_latest!(channel)
     |> List.first()
   end
 
@@ -617,21 +603,17 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
   end
 
   defp package_id_map do
-    Tracker.Nixpkgs.Package
-    |> Ash.read!()
+    Tracker.Nixpkgs.Package.read!()
     |> Map.new(&{&1.attribute, &1.id})
   end
 
   defp package_family_id_map do
-    Tracker.Nixpkgs.PackageFamily
-    |> Ash.read!()
+    Tracker.Nixpkgs.PackageFamily.read!()
     |> Map.new(&{{&1.name, &1.ecosystem}, &1.id})
   end
 
   defp package_ids_for_revision(channel_revision_id) do
-    Tracker.Nixpkgs.PackageRevision
-    |> Ash.Query.filter(channel_revision_id == ^channel_revision_id)
-    |> Ash.read!()
+    Tracker.Nixpkgs.PackageRevision.by_channel_revision!(channel_revision_id)
     |> MapSet.new(& &1.package_id)
   end
 

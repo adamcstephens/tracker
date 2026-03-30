@@ -1,8 +1,6 @@
 defmodule TrackerWeb.MaintainerLive.Show do
   use TrackerWeb, :live_view
 
-  require Ash.Query
-
   @impl true
   def render(assigns) do
     ~H"""
@@ -30,7 +28,7 @@ defmodule TrackerWeb.MaintainerLive.Show do
       <ul>
         <li :for={t <- @maintainer.teams}>
           <.link navigate={~p"/teams/#{t.short_name}"}>{t.short_name}</.link>
-          <span :if={t.scope}> —   {t.scope}</span>
+          <span :if={t.scope}> —    {t.scope}</span>
         </li>
       </ul>
     </div>
@@ -91,9 +89,7 @@ defmodule TrackerWeb.MaintainerLive.Show do
 
   @impl true
   def handle_params(%{"github" => github} = params, _url, socket) do
-    maintainer =
-      Ash.get!(Tracker.Nixpkgs.Maintainer, %{github: github})
-      |> Ash.load!([:teams])
+    maintainer = Tracker.Nixpkgs.Maintainer.get_by_github!(github, load: [:teams])
 
     search = Map.get(params, "search", "")
     page = params |> Map.get("page", "1") |> String.to_integer() |> max(1)
@@ -150,19 +146,9 @@ defmodule TrackerWeb.MaintainerLive.Show do
   end
 
   defp load_packages(maintainer_id, search, offset) do
-    query =
-      Tracker.Nixpkgs.Package
-      |> Ash.Query.filter(exists(package_maintainers, maintainer_id == ^maintainer_id))
-      |> Ash.Query.sort(:attribute)
-
-    query =
-      if search != "" do
-        Ash.Query.filter(query, contains(attribute, type(^search, :ci_string)))
-      else
-        query
-      end
-
-    Ash.read!(query, page: [offset: offset, limit: 15, count: true])
+    Tracker.Nixpkgs.Package.by_maintainer!(maintainer_id, search,
+      page: [offset: offset, limit: 15, count: true]
+    )
   end
 
   defp show_path(github, search, page) do

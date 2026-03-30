@@ -1,8 +1,6 @@
 defmodule TrackerWeb.ChannelLive.Index do
   use TrackerWeb, :live_view
 
-  require Ash.Query
-
   @valid_sort_fields ~w(name count latest_release)a
   @default_sort_by :latest_release
   @default_sort_dir :desc
@@ -100,8 +98,7 @@ defmodule TrackerWeb.ChannelLive.Index do
   end
 
   defp load_channels(sort_by, sort_dir) do
-    Tracker.Nixpkgs.ChannelRevision
-    |> Ash.read!()
+    Tracker.Nixpkgs.ChannelRevision.read!()
     |> Enum.group_by(& &1.channel)
     |> Enum.map(fn {name, revisions} ->
       latest = revisions |> Enum.max_by(& &1.released_at, DateTime, fn -> nil end)

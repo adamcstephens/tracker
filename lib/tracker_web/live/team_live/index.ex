@@ -72,9 +72,9 @@ defmodule TrackerWeb.TeamLive.Index do
     offset = (page - 1) * 15
 
     result =
-      Tracker.Nixpkgs.Team
-      |> Ash.Query.for_read(:list, %{search: search})
-      |> Ash.read!(page: [offset: offset, count: true, limit: 15])
+      Tracker.Nixpkgs.Team.list!(search,
+        page: [offset: offset, count: true, limit: 15]
+      )
 
     total_pages = ceil(result.count / 15)
 
@@ -92,9 +92,9 @@ defmodule TrackerWeb.TeamLive.Index do
   @impl true
   def handle_event("search", %{"search" => search}, socket) do
     result =
-      Tracker.Nixpkgs.Team
-      |> Ash.Query.for_read(:list, %{search: search})
-      |> Ash.read!(page: [offset: 0, count: true, limit: 15])
+      Tracker.Nixpkgs.Team.list!(search,
+        page: [offset: 0, count: true, limit: 15]
+      )
 
     total_pages = ceil(result.count / 15)
 

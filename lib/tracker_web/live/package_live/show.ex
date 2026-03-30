@@ -1,8 +1,6 @@
 defmodule TrackerWeb.PackageLive.Show do
   use TrackerWeb, :live_view
 
-  require Ash.Query
-
   @valid_sort_fields ~w(version channel revision_hash released_at)a
   @default_sort_by :released_at
   @default_sort_dir :desc
@@ -35,7 +33,7 @@ defmodule TrackerWeb.PackageLive.Show do
       <dt><strong>Teams</strong></dt>
       <dd :for={t <- @package.teams}>
         <.link navigate={~p"/teams/#{t.short_name}"}>{t.short_name}</.link>
-        <span :if={t.scope}> —     {t.scope}</span>
+        <span :if={t.scope}> —      {t.scope}</span>
       </dd>
     </dl>
 
@@ -246,8 +244,7 @@ defmodule TrackerWeb.PackageLive.Show do
   @impl true
   def handle_params(%{"name" => name} = params, _url, socket) do
     package =
-      Ash.get!(Tracker.Nixpkgs.Package, %{attribute: name})
-      |> Ash.load!([:maintainers, :teams])
+      Tracker.Nixpkgs.Package.get_by_attribute!(name, load: [:maintainers, :teams])
 
     family_siblings = load_family_siblings(package)
     package_events = load_package_events(package.id)
@@ -380,33 +377,16 @@ defmodule TrackerWeb.PackageLive.Show do
   end
 
   defp load_revisions(package_id, sort_by, sort_dir, channel_filter, version_filter, offset) do
-    Tracker.Nixpkgs.PackageRevision
-    |> Ash.Query.for_read(:list_by_package, %{package_id: package_id})
-    |> maybe_filter_channel(channel_filter)
-    |> maybe_filter_version(version_filter)
-    |> Ash.Query.sort([{sort_by, sort_dir}])
-    |> Ash.read!(page: [offset: offset, count: true])
-  end
-
-  defp maybe_filter_channel(query, ""), do: query
-
-  defp maybe_filter_channel(query, channel) do
-    Ash.Query.filter(query, channel_revision.channel == ^channel)
-  end
-
-  defp maybe_filter_version(query, ""), do: query
-
-  defp maybe_filter_version(query, version) do
-    Ash.Query.filter(query, contains(version, ^version))
+    Tracker.Nixpkgs.PackageRevision.list_by_package!(package_id, channel_filter, version_filter,
+      query: [sort: [{sort_by, sort_dir}]],
+      page: [offset: offset, count: true]
+    )
   end
 
   defp load_family_siblings(%{package_family_id: nil}), do: []
 
   defp load_family_siblings(package) do
-    Tracker.Nixpkgs.Package
-    |> Ash.Query.filter(package_family_id == ^package.package_family_id and id != ^package.id)
-    |> Ash.Query.sort(:package_set)
-    |> Ash.read!()
+    Tracker.Nixpkgs.Package.family_siblings!(package.package_family_id, package.id)
   end
 
   defp load_package_events(package_id) do
@@ -414,10 +394,7 @@ defmodule TrackerWeb.PackageLive.Show do
   end
 
   defp load_channels do
-    Tracker.Nixpkgs.ChannelRevision
-    |> Ash.Query.distinct(:channel)
-    |> Ash.Query.sort(:channel)
-    |> Ash.read!()
+    Tracker.Nixpkgs.ChannelRevision.distinct_channels!()
     |> Enum.map(& &1.channel)
   end
 
@@ -439,10 +416,7 @@ defmodule TrackerWeb.PackageLive.Show do
   defp load_version_changes(package_id, sort_by, sort_dir, channel_filter, version_filter) do
     # Load all revisions for this package ordered by release date
     # to determine which ones represent actual version changes per channel
-    all_revisions =
-      Tracker.Nixpkgs.PackageRevision
-      |> Ash.Query.for_read(:version_changes_by_package, %{package_id: package_id})
-      |> Ash.read!()
+    all_revisions = Tracker.Nixpkgs.PackageRevision.version_changes_by_package!(package_id)
 
     # Group by channel and find IDs where version changed
     change_ids =
