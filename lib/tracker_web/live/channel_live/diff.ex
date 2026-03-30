@@ -1,7 +1,7 @@
 defmodule TrackerWeb.ChannelLive.Diff do
   use TrackerWeb, :live_view
 
-  alias Tracker.Nixpkgs.{ChannelRevision, PackageEvent, PackageRevision, Package}
+  alias Tracker.Nixpkgs.{ChannelRevision, PackageEvent}
 
   @impl true
   def render(assigns) do
@@ -129,35 +129,6 @@ defmodule TrackerWeb.ChannelLive.Diff do
   end
 
   defp compute_version_changes(old_rev_id, new_rev_id) do
-    old_pkgs =
-      PackageRevision.by_channel_revision!(old_rev_id)
-      |> Map.new(&{&1.package_id, &1.version})
-
-    new_pkgs =
-      PackageRevision.by_channel_revision!(new_rev_id)
-      |> Map.new(&{&1.package_id, &1.version})
-
-    all_ids = MapSet.union(MapSet.new(Map.keys(old_pkgs)), MapSet.new(Map.keys(new_pkgs)))
-
-    changed =
-      all_ids
-      |> Enum.filter(fn id -> Map.get(old_pkgs, id) != Map.get(new_pkgs, id) end)
-      |> MapSet.new()
-
-    changed_ids = MapSet.to_list(changed)
-
-    attributes =
-      Package.read!(query: [filter: [id: [in: changed_ids]]])
-      |> Map.new(&{&1.id, &1.attribute})
-
-    changed
-    |> Enum.map(fn id ->
-      %{
-        attribute: Map.get(attributes, id, "unknown"),
-        old_version: Map.get(old_pkgs, id),
-        new_version: Map.get(new_pkgs, id)
-      }
-    end)
-    |> Enum.sort_by(& &1.attribute)
+    ChannelRevision.version_diff(old_rev_id, new_rev_id)
   end
 end
