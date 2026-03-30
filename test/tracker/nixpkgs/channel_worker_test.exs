@@ -294,6 +294,141 @@ defmodule Tracker.Nixpkgs.ChannelWorkerTest do
     end
   end
 
+  describe "write_to_database with package events" do
+    test "generates added events when packages appear in a new revision" do
+      # First revision: baseline, no events
+      data1 = %{
+        "version" => 2,
+        "revision" => "evt001",
+        "channel" => "nixos-unstable",
+        "released_at" => "2026-03-01T10:00:00Z",
+        "packages" => %{
+          "hello" => %{"version" => "2.12"},
+          "curl" => %{"version" => "8.0"}
+        }
+      }
+
+      ChannelWorker.write_to_database(data1)
+
+      assert Tracker.Nixpkgs.PackageEvent.list!() == []
+
+      # Second revision: adds "git", keeps "hello" and "curl"
+      data2 = %{
+        "version" => 2,
+        "revision" => "evt002",
+        "channel" => "nixos-unstable",
+        "released_at" => "2026-03-02T10:00:00Z",
+        "packages" => %{
+          "hello" => %{"version" => "2.12"},
+          "curl" => %{"version" => "8.0"},
+          "git" => %{"version" => "2.44"}
+        }
+      }
+
+      ChannelWorker.write_to_database(data2)
+
+      events = Tracker.Nixpkgs.PackageEvent.list!()
+      assert length(events) == 1
+
+      event = hd(events)
+      git_pkg = Ash.get!(Tracker.Nixpkgs.Package, %{attribute: "git"})
+      assert event.type == :added
+      assert event.package_id == git_pkg.id
+    end
+
+    test "generates removed events when packages disappear from a revision" do
+      data1 = %{
+        "version" => 2,
+        "revision" => "evr001",
+        "channel" => "nixos-unstable",
+        "released_at" => "2026-03-01T10:00:00Z",
+        "packages" => %{
+          "hello" => %{"version" => "2.12"},
+          "curl" => %{"version" => "8.0"}
+        }
+      }
+
+      ChannelWorker.write_to_database(data1)
+
+      # Second revision: removes "curl"
+      data2 = %{
+        "version" => 2,
+        "revision" => "evr002",
+        "channel" => "nixos-unstable",
+        "released_at" => "2026-03-02T10:00:00Z",
+        "packages" => %{
+          "hello" => %{"version" => "2.12"}
+        }
+      }
+
+      ChannelWorker.write_to_database(data2)
+
+      events = Tracker.Nixpkgs.PackageEvent.list!()
+      assert length(events) == 1
+
+      event = hd(events)
+      curl_pkg = Ash.get!(Tracker.Nixpkgs.Package, %{attribute: "curl"})
+      assert event.type == :removed
+      assert event.package_id == curl_pkg.id
+    end
+
+    test "does not generate events for first revision of a channel" do
+      data = %{
+        "version" => 2,
+        "revision" => "first001",
+        "channel" => "nixos-new-channel",
+        "released_at" => "2026-03-01T10:00:00Z",
+        "packages" => %{
+          "hello" => %{"version" => "2.12"},
+          "curl" => %{"version" => "8.0"}
+        }
+      }
+
+      ChannelWorker.write_to_database(data)
+
+      events = Tracker.Nixpkgs.PackageEvent.list!()
+      assert events == []
+    end
+
+    test "stores previous_channel_revision_id on channel revision" do
+      data1 = %{
+        "version" => 2,
+        "revision" => "prev001",
+        "channel" => "nixos-unstable",
+        "released_at" => "2026-03-01T10:00:00Z",
+        "packages" => %{"hello" => %{"version" => "2.12"}}
+      }
+
+      ChannelWorker.write_to_database(data1)
+
+      rev1 =
+        Ash.get!(Tracker.Nixpkgs.ChannelRevision, %{
+          channel: "nixos-unstable",
+          revision: "prev001"
+        })
+
+      assert rev1.previous_channel_revision_id == nil
+
+      data2 = %{
+        "version" => 2,
+        "revision" => "prev002",
+        "channel" => "nixos-unstable",
+        "released_at" => "2026-03-02T10:00:00Z",
+        "packages" => %{"hello" => %{"version" => "2.12"}}
+      }
+
+      ChannelWorker.write_to_database(data2)
+
+      rev2 =
+        Ash.get!(Tracker.Nixpkgs.ChannelRevision, %{
+          channel: "nixos-unstable",
+          revision: "prev002"
+        })
+
+      assert rev2.previous_channel_revision_id == rev1.id
+    end
+  end
+
   describe "write_to_database with package families" do
     test "creates package families for dotted attributes" do
       data = %{
