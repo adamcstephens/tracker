@@ -31,41 +31,30 @@ defmodule TrackerWeb.PackageLive.Show do
       </:item>
     </.list>
 
-    <div :if={@package.teams != []} style="margin-top: 1rem;">
-      <h2>Teams</h2>
-      <ul>
-        <li :for={t <- @package.teams}>
-          <.link navigate={~p"/teams/#{t.short_name}"}><strong>{t.short_name}</strong></.link>
-          <span :if={t.scope}> —        {t.scope}</span>
-          <ul :if={t.members != []}>
-            <li :for={m <- t.members}>
-              <.maintainer_link maintainer={m} />
-            </li>
-          </ul>
-        </li>
-      </ul>
-    </div>
+    <dl :if={@package.teams != []}>
+      <dt><strong>Teams</strong></dt>
+      <dd :for={t <- @package.teams}>
+        <.link navigate={~p"/teams/#{t.short_name}"}>{t.short_name}</.link>
+        <span :if={t.scope}> —   {t.scope}</span>
+      </dd>
+    </dl>
 
-    <div :if={@package.maintainers != []} style="margin-top: 1rem;">
-      <h2>Maintainers</h2>
-      <ul>
-        <li :for={m <- @package.maintainers}>
-          <.maintainer_link maintainer={m} />
-        </li>
-      </ul>
-    </div>
+    <dl :if={@package.maintainers != []}>
+      <dt><strong>Maintainers</strong></dt>
+      <dd :for={m <- @package.maintainers}>
+        <.maintainer_link maintainer={m} />
+      </dd>
+    </dl>
 
-    <div :if={@family_siblings != []} style="margin-top: 1rem;">
-      <h2>Also available in</h2>
-      <ul>
-        <li :for={sibling <- @family_siblings}>
-          <.link navigate={~p"/packages/#{sibling.attribute}"}>
-            {sibling.package_set || sibling.attribute}
-          </.link>
-          <span :if={sibling.set_version}> ({sibling.set_version})</span>
-        </li>
-      </ul>
-    </div>
+    <dl :if={@family_siblings != []}>
+      <dt><strong>Also available in</strong></dt>
+      <dd :for={sibling <- @family_siblings}>
+        <.link navigate={~p"/packages/#{sibling.attribute}"}>
+          {sibling.package_set || sibling.attribute}
+        </.link>
+        <span :if={sibling.set_version}> ({sibling.set_version})</span>
+      </dd>
+    </dl>
 
     <div class="revisions-header">
       <h2>Revisions</h2>
@@ -229,7 +218,7 @@ defmodule TrackerWeb.PackageLive.Show do
   def handle_params(%{"name" => name} = params, _url, socket) do
     package =
       Ash.get!(Tracker.Nixpkgs.Package, %{attribute: name})
-      |> Ash.load!([:maintainers, teams: [:members]])
+      |> Ash.load!([:maintainers, :teams])
 
     family_siblings = load_family_siblings(package)
 
@@ -241,17 +230,23 @@ defmodule TrackerWeb.PackageLive.Show do
     page = params |> Map.get("page", "1") |> String.to_integer() |> max(1)
     offset = (page - 1) * 15
 
-    result = load_revisions(package.id, sort_by, sort_dir, channel_filter, version_filter, offset)
     channels = load_channels()
 
-    revisions =
+    {revisions, total_count, has_more?} =
       if all_revisions? do
-        result.results
+        result =
+          load_revisions(package.id, sort_by, sort_dir, channel_filter, version_filter, offset)
+
+        {result.results, result.count, result.more?}
       else
-        filter_to_version_changes(result.results, package.id)
+        all_changes =
+          load_version_changes(package.id, sort_by, sort_dir, channel_filter, version_filter)
+
+        page_results = all_changes |> Enum.drop(offset) |> Enum.take(15)
+        {page_results, length(all_changes), length(all_changes) > offset + 15}
       end
 
-    total_pages = ceil(result.count / 15)
+    total_pages = ceil(total_count / 15)
     current_page = div(offset, 15) + 1
 
     {:noreply,
@@ -267,7 +262,7 @@ defmodule TrackerWeb.PackageLive.Show do
      |> assign(:all_revisions?, all_revisions?)
      |> assign(:channels, channels)
      |> assign(:has_prev_page?, offset > 0)
-     |> assign(:has_next_page?, result.more?)
+     |> assign(:has_next_page?, has_more?)
      |> assign(:total_pages, total_pages)
      |> assign(:current_page, current_page)}
   end
@@ -406,7 +401,7 @@ defmodule TrackerWeb.PackageLive.Show do
   defp toggle_dir(:asc), do: :desc
   defp toggle_dir(:desc), do: :asc
 
-  defp filter_to_version_changes(revisions, package_id) do
+  defp load_version_changes(package_id, sort_by, sort_dir, channel_filter, version_filter) do
     # Load all revisions for this package ordered by release date
     # to determine which ones represent actual version changes per channel
     all_revisions =
@@ -431,8 +426,29 @@ defmodule TrackerWeb.PackageLive.Show do
       end)
       |> MapSet.new()
 
-    Enum.filter(revisions, &MapSet.member?(change_ids, &1.id))
+    all_revisions
+    |> Enum.filter(&MapSet.member?(change_ids, &1.id))
+    |> maybe_filter_channel_list(channel_filter)
+    |> maybe_filter_version_list(version_filter)
+    |> Enum.sort_by(&sort_key(&1, sort_by), sort_dir)
   end
+
+  defp maybe_filter_channel_list(revisions, ""), do: revisions
+
+  defp maybe_filter_channel_list(revisions, channel) do
+    Enum.filter(revisions, &(&1.channel_revision.channel == channel))
+  end
+
+  defp maybe_filter_version_list(revisions, ""), do: revisions
+
+  defp maybe_filter_version_list(revisions, version) do
+    Enum.filter(revisions, &String.contains?(&1.version, version))
+  end
+
+  defp sort_key(rev, :version), do: rev.version
+  defp sort_key(rev, :channel), do: rev.channel_revision.channel
+  defp sort_key(rev, :revision_hash), do: rev.channel_revision.revision
+  defp sort_key(rev, :released_at), do: rev.channel_revision.released_at
 
   defp revisions_path(package_name, sort_by, sort_dir, channel, version, all_revisions?, page) do
     params =
