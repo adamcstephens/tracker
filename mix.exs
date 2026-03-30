@@ -76,7 +76,8 @@ defmodule Tracker.MixProject do
       {:sourceror, "~> 1.7", only: [:dev, :test]},
       {:swoosh, "~> 1.5"},
       {:telemetry_metrics, "~> 1.0"},
-      {:telemetry_poller, "~> 1.0"}
+      {:telemetry_poller, "~> 1.0"},
+      {:typedstruct, "~> 0.5.4"}
     ]
   end
 

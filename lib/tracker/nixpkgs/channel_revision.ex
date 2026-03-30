@@ -14,7 +14,7 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
     define :record_result
     define :by_channel, args: [:channel]
     define :distinct_channels
-    define :find_latest, args: [:channel]
+    define :find_by_short_hash, args: [:channel, :short_hash]
   end
 
   actions do
@@ -73,13 +73,21 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
       prepare build(distinct: [:channel], sort: [:channel])
     end
 
-    read :find_latest do
+    read :find_by_short_hash do
+      get? true
+
       argument :channel, :string do
         allow_nil? false
       end
 
-      prepare build(sort: [released_at: :desc], limit: 1)
-      filter expr(channel == ^arg(:channel) and result in [:success, :partial_success])
+      argument :short_hash, :string do
+        allow_nil? false
+      end
+
+      filter expr(
+               channel == ^arg(:channel) and
+                 fragment("? LIKE ? || '%'", revision, ^arg(:short_hash))
+             )
     end
   end
 

@@ -120,8 +120,7 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
     limit = Keyword.get(opts, :limit)
 
     releases =
-      list_releases(channel)
-      |> parse_releases()
+      Tracker.Nixpkgs.ReleaseCache.get_releases(channel)
       |> filter_existing_releases(channel)
 
     releases = if limit, do: Enum.take(releases, limit), else: releases
@@ -138,34 +137,6 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
 
     {:ok, length(releases)}
   end
-
-  defp list_releases(channel) do
-    req_s3 = req() |> ReqS3.attach()
-    list_releases(req_s3, channel, nil, [])
-  end
-
-  defp list_releases(req_s3, channel, marker, acc) do
-    params =
-      [delimiter: "/", prefix: "#{channel_to_s3_prefix(channel)}"]
-      |> then(fn p -> if marker, do: Keyword.put(p, :marker, marker), else: p end)
-
-    resp = Req.get!(req_s3, url: "s3://nix-releases", params: params)
-    body = resp.body["ListBucketResult"]
-    contents = body["Contents"] |> List.wrap()
-
-    all_contents = acc ++ contents
-
-    if body["IsTruncated"] == "true" do
-      list_releases(req_s3, channel, body["NextMarker"], all_contents)
-    else
-      all_contents
-    end
-  end
-
-  # Channel names like "nixos-25.11-small" map to S3 prefix "nixos/25.11-small/"
-  defp channel_to_s3_prefix("nixos-" <> rest), do: "nixos/#{rest}/"
-  defp channel_to_s3_prefix("nixpkgs-" <> rest), do: "nixpkgs/#{rest}/"
-  defp channel_to_s3_prefix(channel), do: "#{channel}/"
 
   @releases_base_url "https://releases.nixos.org"
 
@@ -188,24 +159,6 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
       %{"LastModified" => last_modified} -> last_modified
       _ -> nil
     end
-  end
-
-  @doc """
-  Parses S3 Contents entries into release maps, sorted by `LastModified` descending (newest first).
-  """
-  def parse_releases(contents) do
-    contents
-    |> List.wrap()
-    |> Enum.map(fn %{"Key" => key, "LastModified" => last_modified} ->
-      short_hash = key |> String.split(".") |> List.last()
-
-      %{
-        short_hash: short_hash,
-        base_url: "#{@releases_base_url}/#{key}",
-        released_at: last_modified
-      }
-    end)
-    |> Enum.sort_by(& &1.released_at, :desc)
   end
 
   @doc """
@@ -238,7 +191,22 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
         limit -> Enum.take(packages, limit)
       end
 
-    previous_revision = find_latest_revision(channel)
+    alias Tracker.Nixpkgs.ReleaseCache
+
+    short_hash = String.slice(revision, 0..6)
+    previous_release = ReleaseCache.find_previous_release(channel, short_hash)
+
+    previous_revision =
+      case previous_release do
+        nil ->
+          nil
+
+        %ReleaseCache.Release{short_hash: prev_hash} ->
+          case Tracker.Nixpkgs.ChannelRevision.find_by_short_hash(channel, prev_hash) do
+            {:ok, rev} -> rev
+            _ -> nil
+          end
+      end
 
     create_attrs =
       %{revision: revision, channel: channel}
@@ -570,11 +538,6 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
     end)
 
     :ok
-  end
-
-  defp find_latest_revision(channel) do
-    Tracker.Nixpkgs.ChannelRevision.find_latest!(channel)
-    |> List.first()
   end
 
   defp detect_package_events(channel_revision, previous_revision) do
