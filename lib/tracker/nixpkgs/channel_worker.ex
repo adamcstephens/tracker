@@ -2,6 +2,7 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
   use Oban.Worker, queue: :channels, max_attempts: 10
 
   import Ecto.Query, only: [from: 2]
+  require Ash.Query
   require Logger
 
   @metadata_channel "nixos-unstable-small"
@@ -214,14 +215,11 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
   Matches short hashes from release directory names against existing full revision hashes.
   """
   def filter_existing_releases(releases, channel) do
-    %{rows: rows} =
-      Ecto.Adapters.SQL.query!(
-        Tracker.Repo,
-        "SELECT revision FROM channel_revisions WHERE channel = $1",
-        [channel]
-      )
-
-    existing_hashes = MapSet.new(rows, fn [revision] -> revision end)
+    existing_hashes =
+      Tracker.Nixpkgs.ChannelRevision
+      |> Ash.Query.filter(channel == ^channel)
+      |> Ash.read!()
+      |> MapSet.new(& &1.revision)
 
     Enum.reject(releases, fn release ->
       Enum.any?(existing_hashes, &String.starts_with?(&1, release.short_hash))
@@ -266,10 +264,7 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
     bulk_status = load_packages(packages, channel_revision)
 
     if include_metadata? and bulk_status != :error do
-      %{rows: rows} =
-        Ecto.Adapters.SQL.query!(Tracker.Repo, "SELECT attribute, id FROM packages")
-
-      id_map = Map.new(rows, fn [attribute, id] -> {attribute, id} end)
+      id_map = package_id_map()
       load_maintainers_and_teams(id_map, maintainer_data, team_data, package_joins)
     end
 
@@ -333,10 +328,7 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
       )
     end)
 
-    %{rows: family_rows} =
-      Ecto.Adapters.SQL.query!(Tracker.Repo, "SELECT name, ecosystem, id FROM package_families")
-
-    family_id_map = Map.new(family_rows, fn [name, eco, id] -> {{name, eco}, id} end)
+    family_id_map = package_family_id_map()
 
     # Step 1: Bulk upsert packages in chunks (includes metadata and family data)
     pkg_status =
@@ -372,11 +364,8 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
     if pkg_status == :error do
       :error
     else
-      # Step 2: Build attribute -> id lookup map via raw SQL (memory efficient)
-      %{rows: rows} =
-        Ecto.Adapters.SQL.query!(Tracker.Repo, "SELECT attribute, id FROM packages")
-
-      id_map = Map.new(rows, fn [attribute, id] -> {attribute, id} end)
+      # Step 2: Build attribute -> id lookup map
+      id_map = package_id_map()
 
       # Step 3: Bulk create package revisions in chunks
       rev_status =
@@ -527,15 +516,15 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
     end
 
     # Step 3: Build lookup maps
-    %{rows: maint_rows} =
-      Ecto.Adapters.SQL.query!(Tracker.Repo, "SELECT github_id, id FROM maintainers")
+    maintainer_id_map =
+      Tracker.Nixpkgs.Maintainer
+      |> Ash.read!()
+      |> Map.new(&{&1.github_id, &1.id})
 
-    maintainer_id_map = Map.new(maint_rows, fn [github_id, id] -> {github_id, id} end)
-
-    %{rows: team_rows} =
-      Ecto.Adapters.SQL.query!(Tracker.Repo, "SELECT short_name, id FROM teams")
-
-    team_id_map = Map.new(team_rows, fn [short_name, id] -> {short_name, id} end)
+    team_id_map =
+      Tracker.Nixpkgs.Team
+      |> Ash.read!()
+      |> Map.new(&{&1.short_name, &1.id})
 
     # Step 4: Bulk upsert team members
     team_data
@@ -594,52 +583,26 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
   end
 
   defp find_latest_revision(channel) do
-    %{rows: rows} =
-      Ecto.Adapters.SQL.query!(
-        Tracker.Repo,
-        """
-        SELECT id FROM channel_revisions
-        WHERE channel = $1 AND result IN ('success', 'partial_success')
-        ORDER BY released_at DESC
-        LIMIT 1
-        """,
-        [channel]
-      )
-
-    case rows do
-      [[id]] -> %{id: id}
-      [] -> nil
-    end
+    Tracker.Nixpkgs.ChannelRevision
+    |> Ash.Query.filter(channel == ^channel and result in [:success, :partial_success])
+    |> Ash.Query.sort(released_at: :desc)
+    |> Ash.Query.limit(1)
+    |> Ash.read!()
+    |> List.first()
   end
 
   defp detect_package_events(channel_revision, previous_revision) do
-    %{rows: added_rows} =
-      Ecto.Adapters.SQL.query!(
-        Tracker.Repo,
-        """
-        SELECT package_id FROM package_revisions WHERE channel_revision_id = $1
-        EXCEPT
-        SELECT package_id FROM package_revisions WHERE channel_revision_id = $2
-        """,
-        [channel_revision.id, previous_revision.id]
-      )
+    new_package_ids = package_ids_for_revision(channel_revision.id)
+    prev_package_ids = package_ids_for_revision(previous_revision.id)
 
-    %{rows: removed_rows} =
-      Ecto.Adapters.SQL.query!(
-        Tracker.Repo,
-        """
-        SELECT package_id FROM package_revisions WHERE channel_revision_id = $1
-        EXCEPT
-        SELECT package_id FROM package_revisions WHERE channel_revision_id = $2
-        """,
-        [previous_revision.id, channel_revision.id]
-      )
+    added = MapSet.difference(new_package_ids, prev_package_ids)
+    removed = MapSet.difference(prev_package_ids, new_package_ids)
 
     events =
-      Enum.map(added_rows, fn [package_id] ->
+      Enum.map(added, fn package_id ->
         %{type: :added, package_id: package_id, channel_revision_id: channel_revision.id}
       end) ++
-        Enum.map(removed_rows, fn [package_id] ->
+        Enum.map(removed, fn package_id ->
           %{type: :removed, package_id: package_id, channel_revision_id: channel_revision.id}
         end)
 
@@ -651,6 +614,25 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
         return_errors?: true
       )
     end)
+  end
+
+  defp package_id_map do
+    Tracker.Nixpkgs.Package
+    |> Ash.read!()
+    |> Map.new(&{&1.attribute, &1.id})
+  end
+
+  defp package_family_id_map do
+    Tracker.Nixpkgs.PackageFamily
+    |> Ash.read!()
+    |> Map.new(&{{&1.name, &1.ecosystem}, &1.id})
+  end
+
+  defp package_ids_for_revision(channel_revision_id) do
+    Tracker.Nixpkgs.PackageRevision
+    |> Ash.Query.filter(channel_revision_id == ^channel_revision_id)
+    |> Ash.read!()
+    |> MapSet.new(& &1.package_id)
   end
 
   defp worst_status(:error, _), do: :error
