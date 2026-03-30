@@ -132,4 +132,35 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
   identities do
     identity :unique_channel_revision, [:channel, :revision]
   end
+
+  @doc """
+  Returns version changes between two channel revisions as a list of maps
+  with `:attribute`, `:old_version`, and `:new_version` keys.
+
+  Only includes packages where the version differs (including added/removed).
+  """
+  def version_diff(old_rev_id, new_rev_id) do
+    %{rows: rows} =
+      Tracker.Repo.query!(
+        """
+        WITH old_revs AS (
+          SELECT package_id, version FROM package_revisions WHERE channel_revision_id = $1
+        ),
+        new_revs AS (
+          SELECT package_id, version FROM package_revisions WHERE channel_revision_id = $2
+        )
+        SELECT p.attribute, o.version, n.version
+        FROM old_revs o
+        FULL OUTER JOIN new_revs n ON o.package_id = n.package_id
+        JOIN packages p ON p.id = COALESCE(n.package_id, o.package_id)
+        WHERE o.version IS DISTINCT FROM n.version
+        ORDER BY p.attribute
+        """,
+        [old_rev_id, new_rev_id]
+      )
+
+    Enum.map(rows, fn [attribute, old_version, new_version] ->
+      %{attribute: attribute, old_version: old_version, new_version: new_version}
+    end)
+  end
 end

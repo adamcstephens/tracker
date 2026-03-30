@@ -17,6 +17,7 @@ defmodule TrackerWeb.ChannelLive.Show do
       <table role="grid">
         <thead>
           <tr>
+            <th></th>
             <.sort_header
               field={:revision}
               label="Revision"
@@ -40,6 +41,14 @@ defmodule TrackerWeb.ChannelLive.Show do
         <tbody id="revisions">
           <tr :for={rev <- @revisions}>
             <td>
+              <input
+                type="checkbox"
+                checked={rev.revision in @selected_revisions}
+                phx-click="toggle-rev"
+                phx-value-revision={rev.revision}
+              />
+            </td>
+            <td>
               <.revision_link revision={rev.revision} />
             </td>
             <td>{format_result(rev.result)}</td>
@@ -48,6 +57,15 @@ defmodule TrackerWeb.ChannelLive.Show do
         </tbody>
       </table>
     </figure>
+
+    <a
+      :if={length(@selected_revisions) == 2}
+      href={~p"/channels/diff/#{Enum.at(@selected_revisions, 0)}/#{Enum.at(@selected_revisions, 1)}"}
+      role="button"
+      style="margin-top: 1rem; display: inline-block;"
+    >
+      Show diff
+    </a>
 
     <p :if={not @has_revisions?}>
       No revisions found.
@@ -118,7 +136,10 @@ defmodule TrackerWeb.ChannelLive.Show do
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, assign_new(socket, :current_user, fn -> nil end)}
+    {:ok,
+     socket
+     |> assign_new(:current_user, fn -> nil end)
+     |> assign(:selected_revisions, [])}
   end
 
   @impl true
@@ -190,6 +211,23 @@ defmodule TrackerWeb.ChannelLive.Show do
            max(socket.assigns.current_page - 1, 1)
          )
      )}
+  end
+
+  @impl true
+  def handle_event("toggle-rev", %{"revision" => revision}, socket) do
+    selected = socket.assigns.selected_revisions
+
+    selected =
+      if revision in selected do
+        List.delete(selected, revision)
+      else
+        case selected do
+          [_a, _b] -> [List.last(selected), revision]
+          _ -> selected ++ [revision]
+        end
+      end
+
+    {:noreply, assign(socket, :selected_revisions, selected)}
   end
 
   defp load_revisions(channel, sort_by, sort_dir, offset) do
