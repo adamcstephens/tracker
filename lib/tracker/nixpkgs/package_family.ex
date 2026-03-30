@@ -9,10 +9,15 @@ defmodule Tracker.Nixpkgs.PackageFamily do
   code_interface do
     define :read
     define :bulk_upsert, args: [:name]
+    define :id_map, action: :id_map
   end
 
   actions do
     defaults [:read]
+
+    read :id_map do
+      prepare build(select: [:name, :ecosystem])
+    end
 
     create :bulk_upsert do
       accept [:name, :ecosystem]
