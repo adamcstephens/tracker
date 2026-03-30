@@ -125,9 +125,9 @@ defmodule TrackerWeb.MaintainerLive.Index do
 
   defp load_maintainers(socket) do
     page =
-      Tracker.Nixpkgs.Maintainer
-      |> Ash.Query.for_read(:list, %{search: socket.assigns.search})
-      |> Ash.read!(page: [offset: socket.assigns.offset, count: true])
+      Tracker.Nixpkgs.Maintainer.list!(socket.assigns.search,
+        page: [offset: socket.assigns.offset, count: true]
+      )
 
     total_pages = ceil(page.count / 15)
     current_page = div(socket.assigns.offset, 15) + 1

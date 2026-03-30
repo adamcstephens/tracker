@@ -6,6 +6,13 @@ defmodule Tracker.Nixpkgs.Team do
     repo Tracker.Repo
   end
 
+  code_interface do
+    define :read
+    define :list, args: [{:optional, :search}]
+    define :bulk_upsert
+    define :get_by_short_name, action: :read, get_by: [:short_name]
+  end
+
   actions do
     defaults [:read]
 

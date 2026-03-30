@@ -23,7 +23,7 @@ defmodule Mix.Tasks.Tracker.BackfillFamilies do
     alias Tracker.Nixpkgs.PackageSetMapping
 
     # Step 1: Read all package attributes
-    packages = Ash.read!(Tracker.Nixpkgs.Package)
+    packages = Tracker.Nixpkgs.Package.read!()
 
     Logger.info("Backfilling families for #{length(packages)} packages")
 
@@ -53,8 +53,7 @@ defmodule Mix.Tasks.Tracker.BackfillFamilies do
 
     # Step 4: Build family lookup
     family_id_map =
-      Tracker.Nixpkgs.PackageFamily
-      |> Ash.read!()
+      Tracker.Nixpkgs.PackageFamily.read!()
       |> Map.new(&{{&1.name, &1.ecosystem}, &1.id})
 
     # Step 5: Update packages via bulk upsert

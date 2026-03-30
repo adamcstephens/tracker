@@ -1,8 +1,6 @@
 defmodule TrackerWeb.ChannelLive.Show do
   use TrackerWeb, :live_view
 
-  require Ash.Query
-
   @valid_sort_fields ~w(released_at revision result)a
   @default_sort_by :released_at
   @default_sort_dir :desc
@@ -195,10 +193,10 @@ defmodule TrackerWeb.ChannelLive.Show do
   end
 
   defp load_revisions(channel, sort_by, sort_dir, offset) do
-    Tracker.Nixpkgs.ChannelRevision
-    |> Ash.Query.for_read(:list_by_channel, %{channel: channel})
-    |> Ash.Query.sort([{sort_by, sort_dir}])
-    |> Ash.read!(page: [offset: offset, count: true])
+    Tracker.Nixpkgs.ChannelRevision.list_by_channel!(channel,
+      query: [sort: [{sort_by, sort_dir}]],
+      page: [offset: offset, count: true]
+    )
   end
 
   defp parse_sort_by(nil), do: @default_sort_by

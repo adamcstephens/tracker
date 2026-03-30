@@ -6,6 +6,11 @@ defmodule Tracker.Nixpkgs.TeamMember do
     repo Tracker.Repo
   end
 
+  code_interface do
+    define :read
+    define :load
+  end
+
   actions do
     defaults [:read]
 

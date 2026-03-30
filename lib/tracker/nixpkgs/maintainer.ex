@@ -6,6 +6,13 @@ defmodule Tracker.Nixpkgs.Maintainer do
     repo Tracker.Repo
   end
 
+  code_interface do
+    define :read
+    define :list, args: [{:optional, :search}]
+    define :bulk_upsert
+    define :get_by_github, action: :read, get_by: [:github]
+  end
+
   actions do
     defaults [:read]
 

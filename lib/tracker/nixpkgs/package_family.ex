@@ -6,6 +6,11 @@ defmodule Tracker.Nixpkgs.PackageFamily do
     repo Tracker.Repo
   end
 
+  code_interface do
+    define :read
+    define :bulk_upsert, args: [:name]
+  end
+
   actions do
     defaults [:read]
 

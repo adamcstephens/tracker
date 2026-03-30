@@ -122,9 +122,7 @@ defmodule TrackerWeb.PackageLive.Index do
 
   defp load_packages(socket) do
     page =
-      Tracker.Nixpkgs.Package
-      |> Ash.Query.for_read(:list, %{search: socket.assigns.search})
-      |> Ash.read!(
+      Tracker.Nixpkgs.Package.list!(socket.assigns.search,
         actor: socket.assigns[:current_user],
         page: [offset: socket.assigns.offset, count: true]
       )

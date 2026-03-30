@@ -6,6 +6,14 @@ defmodule Tracker.Nixpkgs.PackageRevision do
     repo Tracker.Repo
   end
 
+  code_interface do
+    define :read
+    define :list_by_package, args: [:package_id, {:optional, :channel}, {:optional, :version}]
+    define :version_changes_by_package, args: [:package_id]
+    define :by_channel_revision, args: [:channel_revision_id]
+    define :load
+  end
+
   actions do
     defaults [:read, create: [:version]]
 
@@ -14,6 +22,9 @@ defmodule Tracker.Nixpkgs.PackageRevision do
         allow_nil? false
       end
 
+      argument :channel, :string
+      argument :version, :string
+
       pagination do
         offset? true
         countable true
@@ -21,7 +32,20 @@ defmodule Tracker.Nixpkgs.PackageRevision do
       end
 
       prepare build(load: [:channel_revision])
-      filter expr(package_id == ^arg(:package_id))
+
+      filter expr(
+               package_id == ^arg(:package_id) and
+                 if not is_nil(^arg(:channel)) and ^arg(:channel) != "" do
+                   channel_revision.channel == ^arg(:channel)
+                 else
+                   true
+                 end and
+                 if not is_nil(^arg(:version)) and ^arg(:version) != "" do
+                   contains(version, ^arg(:version))
+                 else
+                   true
+                 end
+             )
     end
 
     read :version_changes_by_package do
@@ -31,6 +55,14 @@ defmodule Tracker.Nixpkgs.PackageRevision do
 
       prepare build(load: [:channel_revision], sort: [released_at: :asc])
       filter expr(package_id == ^arg(:package_id))
+    end
+
+    read :by_channel_revision do
+      argument :channel_revision_id, :integer do
+        allow_nil? false
+      end
+
+      filter expr(channel_revision_id == ^arg(:channel_revision_id))
     end
 
     create :load do

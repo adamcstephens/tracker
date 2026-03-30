@@ -1,8 +1,6 @@
 defmodule TrackerWeb.TeamLive.Show do
   use TrackerWeb, :live_view
 
-  require Ash.Query
-
   @impl true
   def render(assigns) do
     ~H"""
@@ -88,9 +86,7 @@ defmodule TrackerWeb.TeamLive.Show do
 
   @impl true
   def handle_params(%{"short_name" => short_name} = params, _url, socket) do
-    team =
-      Ash.get!(Tracker.Nixpkgs.Team, %{short_name: short_name})
-      |> Ash.load!([:members])
+    team = Tracker.Nixpkgs.Team.get_by_short_name!(short_name, load: [:members])
 
     search = Map.get(params, "search", "")
     page = params |> Map.get("page", "1") |> String.to_integer() |> max(1)
@@ -146,19 +142,9 @@ defmodule TrackerWeb.TeamLive.Show do
   end
 
   defp load_packages(team_id, search, offset) do
-    query =
-      Tracker.Nixpkgs.Package
-      |> Ash.Query.filter(exists(package_teams, team_id == ^team_id))
-      |> Ash.Query.sort(:attribute)
-
-    query =
-      if search != "" do
-        Ash.Query.filter(query, contains(attribute, type(^search, :ci_string)))
-      else
-        query
-      end
-
-    Ash.read!(query, page: [offset: offset, limit: 15, count: true])
+    Tracker.Nixpkgs.Package.by_team!(team_id, search,
+      page: [offset: offset, limit: 15, count: true]
+    )
   end
 
   defp show_path(short_name, search, page) do
