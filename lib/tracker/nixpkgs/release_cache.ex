@@ -60,9 +60,13 @@ defmodule Tracker.Nixpkgs.ReleaseCache do
   # S3 listing (extracted from ChannelWorker)
 
   @doc """
-  Parses S3 Contents entries into Release structs, sorted by `LastModified` descending (newest first).
+  Returns the full cached state: a map of channel name to release list.
   """
-  def parse_releases(contents) do
+  def list_releases(server \\ __MODULE__) do
+    GenServer.call(server, :list_releases)
+  end
+
+  defp parse_releases(contents) do
     contents
     |> List.wrap()
     |> Enum.map(fn %{"Key" => key, "LastModified" => last_modified} ->
@@ -77,19 +81,13 @@ defmodule Tracker.Nixpkgs.ReleaseCache do
     |> Enum.sort_by(& &1.released_at, :desc)
   end
 
-  @doc """
-  Maps a channel name to its S3 prefix in the nix-releases bucket.
-  """
-  def channel_to_s3_prefix("nixos-" <> rest), do: "nixos/#{rest}/"
-  def channel_to_s3_prefix("nixpkgs-" <> rest), do: "nixpkgs/#{rest}/"
-  def channel_to_s3_prefix(channel), do: "#{channel}/"
+  defp channel_to_s3_prefix("nixos-" <> rest), do: "nixos/#{rest}/"
+  defp channel_to_s3_prefix("nixpkgs-" <> rest), do: "nixpkgs/#{rest}/"
+  defp channel_to_s3_prefix(channel), do: "#{channel}/"
 
-  @doc """
-  Lists all releases for a channel from S3, paginating through all results.
-  """
-  def list_releases(channel) do
+  defp fetch_releases(channel) do
     req_s3 = req() |> ReqS3.attach()
-    list_releases(req_s3, channel, nil, [])
+    fetch_releases(req_s3, channel, nil, [])
   end
 
   # GenServer callbacks
@@ -123,6 +121,10 @@ defmodule Tracker.Nixpkgs.ReleaseCache do
   end
 
   @impl GenServer
+  def handle_call(:list_releases, _from, state) do
+    {:reply, state, state}
+  end
+
   def handle_call({:get_releases, channel}, _from, state) do
     {:reply, Map.get(state, channel, []), state}
   end
@@ -152,14 +154,14 @@ defmodule Tracker.Nixpkgs.ReleaseCache do
     Map.new(all_channels, fn channel ->
       releases =
         channel
-        |> list_releases()
+        |> fetch_releases()
         |> parse_releases()
 
       {channel, releases}
     end)
   end
 
-  defp list_releases(req_s3, channel, marker, acc) do
+  defp fetch_releases(req_s3, channel, marker, acc) do
     params =
       [delimiter: "/", prefix: channel_to_s3_prefix(channel)]
       |> then(fn p -> if marker, do: Keyword.put(p, :marker, marker), else: p end)
@@ -171,7 +173,7 @@ defmodule Tracker.Nixpkgs.ReleaseCache do
     all_contents = acc ++ contents
 
     if body["IsTruncated"] == "true" do
-      list_releases(req_s3, channel, body["NextMarker"], all_contents)
+      fetch_releases(req_s3, channel, body["NextMarker"], all_contents)
     else
       all_contents
     end
