@@ -186,38 +186,46 @@ defmodule Tracker.Nixpkgs.Package do
     identity :unique_attribute, [:attribute]
   end
 
+  # 10 columns: attribute, description, homepage, position, licenses,
+  # package_family_id, package_set, set_version, inserted_at, updated_at
+  @insert_cols 10
+  @max_rows div(65_535, @insert_cols)
+
   @doc """
   Bulk upsert packages using raw Ecto insert_all for performance.
 
-  Expects a list of maps with keys: :attribute, and optionally :description,
+  Handles chunking internally based on PostgreSQL's parameter limit.
+  Expects an enumerable of maps with keys: :attribute, and optionally :description,
   :homepage, :position, :licenses, :package_family_id, :package_set, :set_version.
   """
   def bulk_upsert_all(records) do
     now = DateTime.utc_now(:second)
 
-    entries =
-      Enum.map(records, fn record ->
-        record
-        |> Map.put(:inserted_at, now)
-        |> Map.put(:updated_at, now)
-      end)
-
-    Tracker.Repo.insert_all(
-      "packages",
-      entries,
-      on_conflict:
-        {:replace,
-         [
-           :description,
-           :homepage,
-           :position,
-           :licenses,
-           :package_family_id,
-           :package_set,
-           :set_version,
-           :updated_at
-         ]},
-      conflict_target: :attribute
-    )
+    records
+    |> Stream.map(fn record ->
+      record
+      |> Map.put(:inserted_at, now)
+      |> Map.put(:updated_at, now)
+    end)
+    |> Stream.chunk_every(@max_rows)
+    |> Enum.each(fn chunk ->
+      Tracker.Repo.insert_all(
+        "packages",
+        chunk,
+        on_conflict:
+          {:replace,
+           [
+             :description,
+             :homepage,
+             :position,
+             :licenses,
+             :package_family_id,
+             :package_set,
+             :set_version,
+             :updated_at
+           ]},
+        conflict_target: :attribute
+      )
+    end)
   end
 end

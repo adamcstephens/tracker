@@ -67,6 +67,21 @@ defmodule Tracker.Nixpkgs.PackageEvent do
     timestamps()
   end
 
+  # 6 columns: id, type, package_id, channel_revision_id, inserted_at, updated_at
+  @ash_cols 6
+  @max_batch div(65_535, @ash_cols)
+
+  def bulk_create_all(records) do
+    records
+    |> Stream.chunk_every(@max_batch)
+    |> Enum.each(fn chunk ->
+      Ash.bulk_create(chunk, __MODULE__, :create,
+        batch_size: @max_batch,
+        return_errors?: true
+      )
+    end)
+  end
+
   relationships do
     belongs_to :package, Tracker.Nixpkgs.Package, attribute_type: :integer, allow_nil?: false
 

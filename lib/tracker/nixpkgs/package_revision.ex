@@ -102,27 +102,33 @@ defmodule Tracker.Nixpkgs.PackageRevision do
     identity :unique_package_revision, [:channel_revision_id, :package_id]
   end
 
+  # 5 columns: package_id, channel_revision_id, version, inserted_at, updated_at
+  @insert_cols 5
+  @max_rows div(65_535, @insert_cols)
+
   @doc """
   Bulk insert package revisions using raw Ecto insert_all for performance.
 
-  Expects a list of maps with keys: :package_id, :channel_revision_id, :version.
-  Conflicts are silently skipped.
+  Handles chunking internally based on PostgreSQL's parameter limit.
+  Expects an enumerable of maps with keys: :package_id, :channel_revision_id, :version.
   """
   def bulk_insert_all(records) do
     now = DateTime.utc_now(:second)
 
-    entries =
-      Enum.map(records, fn record ->
-        record
-        |> Map.put(:inserted_at, now)
-        |> Map.put(:updated_at, now)
-      end)
-
-    Tracker.Repo.insert_all(
-      "package_revisions",
-      entries,
-      on_conflict: {:replace, [:version, :updated_at]},
-      conflict_target: [:channel_revision_id, :package_id]
-    )
+    records
+    |> Stream.map(fn record ->
+      record
+      |> Map.put(:inserted_at, now)
+      |> Map.put(:updated_at, now)
+    end)
+    |> Stream.chunk_every(@max_rows)
+    |> Enum.each(fn chunk ->
+      Tracker.Repo.insert_all(
+        "package_revisions",
+        chunk,
+        on_conflict: {:replace, [:version, :updated_at]},
+        conflict_target: [:channel_revision_id, :package_id]
+      )
+    end)
   end
 end
