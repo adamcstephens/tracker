@@ -23,15 +23,14 @@ defmodule Mix.Tasks.Tracker.BackfillFamilies do
     alias Tracker.Nixpkgs.PackageSetMapping
 
     # Step 1: Read all package attributes
-    %{rows: rows} =
-      Ecto.Adapters.SQL.query!(Tracker.Repo, "SELECT id, attribute FROM packages")
+    packages = Ash.read!(Tracker.Nixpkgs.Package)
 
-    Logger.info("Backfilling families for #{length(rows)} packages")
+    Logger.info("Backfilling families for #{length(packages)} packages")
 
     # Step 2: Parse all attributes
     parsed =
-      Enum.map(rows, fn [id, attribute] ->
-        {id, attribute, PackageSetMapping.parse(attribute)}
+      Enum.map(packages, fn pkg ->
+        {pkg.id, pkg.attribute, PackageSetMapping.parse(pkg.attribute)}
       end)
 
     # Step 3: Collect and upsert unique families
@@ -53,10 +52,10 @@ defmodule Mix.Tasks.Tracker.BackfillFamilies do
     Logger.info("Upserted #{length(families)} package families")
 
     # Step 4: Build family lookup
-    %{rows: family_rows} =
-      Ecto.Adapters.SQL.query!(Tracker.Repo, "SELECT name, ecosystem, id FROM package_families")
-
-    family_id_map = Map.new(family_rows, fn [name, eco, id] -> {{name, eco}, id} end)
+    family_id_map =
+      Tracker.Nixpkgs.PackageFamily
+      |> Ash.read!()
+      |> Map.new(&{{&1.name, &1.ecosystem}, &1.id})
 
     # Step 5: Update packages via bulk upsert
     parsed
