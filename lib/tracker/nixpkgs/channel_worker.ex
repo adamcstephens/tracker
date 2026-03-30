@@ -14,6 +14,7 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
     case Tracker.Nixpkgs.ChannelRevision.find(channel, revision) do
       {:ok, %Tracker.Nixpkgs.ChannelRevision{result: result}}
       when result in [:success, :partial_success] and not force? ->
+        schedule_next(args)
         :ok
 
       _ ->
@@ -23,10 +24,19 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
           |> write_to_database()
 
         case result do
-          :success -> :ok
-          :partial_success -> :ok
-          :error -> {:error, :load_failed}
-          {:error, reason} -> {:error, reason}
+          :success ->
+            schedule_next(args)
+            :ok
+
+          :partial_success ->
+            schedule_next(args)
+            :ok
+
+          :error ->
+            {:error, :load_failed}
+
+          {:error, reason} ->
+            {:error, reason}
         end
     end
   end
@@ -106,11 +116,17 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
   Backfills historical channel data from releases.nixos.org.
 
   Lists all releases for the given channel from S3, filters out already-loaded
-  revisions, and schedules Oban jobs for the rest (newest first).
+  revisions, and schedules chained Oban jobs starting from the oldest release.
+  Each job schedules the next upon completion, ensuring sequential chronological
+  ingestion so package events are generated correctly.
+
+  Already-loaded revisions are filtered out before scheduling, but if a revision
+  is encountered during execution that was loaded between scheduling and execution,
+  it will be skipped quickly and the chain continues.
 
   ## Options
 
-    * `:limit` - maximum number of jobs to schedule (useful for testing)
+    * `:limit` - maximum number of releases to process, taken from the oldest
 
   ## Examples
 
@@ -121,21 +137,64 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
 
     releases =
       Tracker.Nixpkgs.ReleaseCache.get_releases(channel)
+      |> Enum.reverse()
       |> filter_existing_releases(channel)
 
     releases = if limit, do: Enum.take(releases, limit), else: releases
 
-    Enum.each(releases, fn release ->
-      %{
-        "channel" => channel,
-        "base_url" => release.base_url,
-        "released_at" => release.released_at
-      }
-      |> new()
-      |> Oban.insert!()
-    end)
+    case releases do
+      [] ->
+        {:ok, 0}
 
-    {:ok, length(releases)}
+      [first | rest] ->
+        %{
+          "channel" => channel,
+          "base_url" => first.base_url,
+          "released_at" => first.released_at,
+          "short_hash" => first.short_hash,
+          "remaining" => length(rest)
+        }
+        |> new()
+        |> Oban.insert!()
+
+        {:ok, length(releases)}
+    end
+  end
+
+  @doc """
+  Schedules the next backfill job by looking up the next release in the cache.
+
+  Called after a backfill job completes successfully. No-op if there are no
+  remaining releases or if the key is absent (non-backfill jobs).
+  """
+  def schedule_next(%{"remaining" => remaining, "short_hash" => short_hash, "channel" => channel})
+      when remaining > 0 do
+    releases = Tracker.Nixpkgs.ReleaseCache.get_releases(channel) |> Enum.reverse()
+
+    case find_next_release(releases, short_hash) do
+      nil ->
+        :ok
+
+      next ->
+        %{
+          "channel" => channel,
+          "base_url" => next.base_url,
+          "released_at" => next.released_at,
+          "short_hash" => next.short_hash,
+          "remaining" => remaining - 1
+        }
+        |> new()
+        |> Oban.insert!()
+    end
+  end
+
+  def schedule_next(_args), do: :ok
+
+  defp find_next_release(releases, short_hash) do
+    case Enum.find_index(releases, &(&1.short_hash == short_hash)) do
+      nil -> nil
+      index -> Enum.at(releases, index + 1)
+    end
   end
 
   @releases_base_url "https://releases.nixos.org"
