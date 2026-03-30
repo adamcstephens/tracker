@@ -83,14 +83,3 @@ config :phoenix_live_view,
 
 # Disable swoosh api client as it is only required for production adapters.
 config :swoosh, :api_client, false
-
-config :tracker,
-  # loader_limit: 20,
-  http_cache: true,
-  channels: [
-    "nixos-24.11",
-    "nixos-24.11-small",
-    "nixos-unstable",
-    "nixos-unstable-small",
-    "nixpkgs-unstable"
-  ]

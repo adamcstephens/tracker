@@ -17,7 +17,7 @@
 - Remove dead code
 - Use Ash resource code interfaces outside the resource modules.
 - You must get permission to use raw SQL.
-- Always use typedstruct structs instead of maps.
+- Always use typedstruct structs instead of maps
 
 ## Testing
 

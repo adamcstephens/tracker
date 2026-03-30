@@ -7,6 +7,15 @@
 # General application configuration
 import Config
 
+config :tracker,
+  # loader_limit: 20,
+  http_cache: true,
+  channels: [
+    "nixos-unstable",
+    "nixos-unstable-small",
+    "nixpkgs-unstable"
+  ]
+
 config :tracker, Oban,
   engine: Oban.Engines.Basic,
   notifier: Oban.Notifiers.Postgres,
