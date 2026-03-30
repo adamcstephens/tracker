@@ -35,7 +35,7 @@ defmodule TrackerWeb.PackageLive.Show do
       <dt><strong>Teams</strong></dt>
       <dd :for={t <- @package.teams}>
         <.link navigate={~p"/teams/#{t.short_name}"}>{t.short_name}</.link>
-        <span :if={t.scope}> —   {t.scope}</span>
+        <span :if={t.scope}> —     {t.scope}</span>
       </dd>
     </dl>
 
@@ -55,6 +55,35 @@ defmodule TrackerWeb.PackageLive.Show do
         <span :if={sibling.set_version}> ({sibling.set_version})</span>
       </dd>
     </dl>
+
+    <section :if={@package_events != []}>
+      <h2>Lifecycle Events</h2>
+      <figure>
+        <table role="grid">
+          <thead>
+            <tr>
+              <th>Event</th>
+              <th>Channel</th>
+              <th>Revision</th>
+              <th>Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr :for={event <- @package_events}>
+              <td>
+                <mark :if={event.type == :added}>added</mark>
+                <del :if={event.type == :removed}>removed</del>
+              </td>
+              <td>{event.channel_revision.channel}</td>
+              <td>
+                <.revision_link revision={event.channel_revision.revision} />
+              </td>
+              <td>{format_released_at(event.channel_revision.released_at)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </figure>
+    </section>
 
     <div class="revisions-header">
       <h2>Revisions</h2>
@@ -221,6 +250,7 @@ defmodule TrackerWeb.PackageLive.Show do
       |> Ash.load!([:maintainers, :teams])
 
     family_siblings = load_family_siblings(package)
+    package_events = load_package_events(package.id)
 
     sort_by = parse_sort_by(params["sort_by"])
     sort_dir = parse_sort_dir(params["sort_dir"])
@@ -254,6 +284,7 @@ defmodule TrackerWeb.PackageLive.Show do
      |> assign(:page_title, package.attribute)
      |> assign(:package, package)
      |> assign(:family_siblings, family_siblings)
+     |> assign(:package_events, package_events)
      |> assign(:revisions, revisions)
      |> assign(:sort_by, sort_by)
      |> assign(:sort_dir, sort_dir)
@@ -376,6 +407,10 @@ defmodule TrackerWeb.PackageLive.Show do
     |> Ash.Query.filter(package_family_id == ^package.package_family_id and id != ^package.id)
     |> Ash.Query.sort(:package_set)
     |> Ash.read!()
+  end
+
+  defp load_package_events(package_id) do
+    Tracker.Nixpkgs.PackageEvent.list_by_package!(package_id)
   end
 
   defp load_channels do

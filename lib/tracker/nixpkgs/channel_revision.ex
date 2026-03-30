@@ -29,7 +29,7 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
 
     create :create do
       primary? true
-      accept [:channel, :revision, :released_at]
+      accept [:channel, :revision, :released_at, :previous_channel_revision_id]
       upsert? true
       upsert_identity :unique_channel_revision
       upsert_fields [:released_at, :updated_at]
@@ -73,6 +73,13 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
     attribute :released_at, :utc_datetime, allow_nil?: false, public?: true
 
     timestamps()
+  end
+
+  relationships do
+    belongs_to :previous_channel_revision, __MODULE__ do
+      attribute_type :integer
+      allow_nil? true
+    end
   end
 
   identities do

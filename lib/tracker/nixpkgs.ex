@@ -14,5 +14,6 @@ defmodule Tracker.Nixpkgs do
     resource Tracker.Nixpkgs.PackageMaintainer
     resource Tracker.Nixpkgs.PackageTeam
     resource Tracker.Nixpkgs.TeamMember
+    resource Tracker.Nixpkgs.PackageEvent
   end
 end

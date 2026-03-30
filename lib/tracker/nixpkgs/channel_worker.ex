@@ -243,9 +243,12 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
         limit -> Enum.take(packages, limit)
       end
 
+    previous_revision = find_latest_revision(channel)
+
     create_attrs =
       %{revision: revision, channel: channel}
       |> maybe_put(:released_at, data["released_at"])
+      |> maybe_put(:previous_channel_revision_id, previous_revision && previous_revision.id)
 
     channel_revision =
       Tracker.Nixpkgs.ChannelRevision
@@ -268,6 +271,10 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
 
       id_map = Map.new(rows, fn [attribute, id] -> {attribute, id} end)
       load_maintainers_and_teams(id_map, maintainer_data, team_data, package_joins)
+    end
+
+    if bulk_status != :error and previous_revision do
+      detect_package_events(channel_revision, previous_revision)
     end
 
     if bulk_status != :success do
@@ -584,6 +591,66 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
     end)
 
     :ok
+  end
+
+  defp find_latest_revision(channel) do
+    %{rows: rows} =
+      Ecto.Adapters.SQL.query!(
+        Tracker.Repo,
+        """
+        SELECT id FROM channel_revisions
+        WHERE channel = $1 AND result IN ('success', 'partial_success')
+        ORDER BY released_at DESC
+        LIMIT 1
+        """,
+        [channel]
+      )
+
+    case rows do
+      [[id]] -> %{id: id}
+      [] -> nil
+    end
+  end
+
+  defp detect_package_events(channel_revision, previous_revision) do
+    %{rows: added_rows} =
+      Ecto.Adapters.SQL.query!(
+        Tracker.Repo,
+        """
+        SELECT package_id FROM package_revisions WHERE channel_revision_id = $1
+        EXCEPT
+        SELECT package_id FROM package_revisions WHERE channel_revision_id = $2
+        """,
+        [channel_revision.id, previous_revision.id]
+      )
+
+    %{rows: removed_rows} =
+      Ecto.Adapters.SQL.query!(
+        Tracker.Repo,
+        """
+        SELECT package_id FROM package_revisions WHERE channel_revision_id = $1
+        EXCEPT
+        SELECT package_id FROM package_revisions WHERE channel_revision_id = $2
+        """,
+        [previous_revision.id, channel_revision.id]
+      )
+
+    events =
+      Enum.map(added_rows, fn [package_id] ->
+        %{type: :added, package_id: package_id, channel_revision_id: channel_revision.id}
+      end) ++
+        Enum.map(removed_rows, fn [package_id] ->
+          %{type: :removed, package_id: package_id, channel_revision_id: channel_revision.id}
+        end)
+
+    events
+    |> Stream.chunk_every(@chunk_size)
+    |> Enum.each(fn chunk ->
+      Ash.bulk_create(chunk, Tracker.Nixpkgs.PackageEvent, :create,
+        batch_size: 5000,
+        return_errors?: true
+      )
+    end)
   end
 
   defp worst_status(:error, _), do: :error
