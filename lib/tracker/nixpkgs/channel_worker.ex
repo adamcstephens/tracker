@@ -18,42 +18,22 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
         :ok
 
       _ ->
-        result =
-          fetch_channel(channel, revision, base_url)
-          |> maybe_put("released_at", args["released_at"])
-          |> write_to_database()
+        fetch_channel(channel, revision, base_url)
+        |> maybe_put("released_at", args["released_at"])
+        |> write_to_database()
 
-        case result do
-          :success ->
-            schedule_next(args)
-            :ok
-
-          :partial_success ->
-            schedule_next(args)
-            :ok
-
-          :error ->
-            {:error, :load_failed}
-
-          {:error, reason} ->
-            {:error, reason}
-        end
+        schedule_next(args)
+        :ok
     end
   end
 
   def perform(%Oban.Job{args: %{"channel" => channel} = args}) do
     force? = args["force"] == true
-    result = load_channel(channel, force: force?)
+    load_channel(channel, force: force?)
 
     %{"channel" => channel} |> new(schedule_in: 4 * 60 * 60) |> Oban.insert!()
 
-    case result do
-      :ok -> :ok
-      :success -> :ok
-      :partial_success -> :ok
-      :error -> {:error, :load_failed}
-      {:error, reason} -> {:error, reason}
-    end
+    :ok
   end
 
   def start_all_channels() do
@@ -282,36 +262,30 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
       |> Map.reject(fn {_attr, info} -> info["version"] == "" end)
       |> extract_packages(include_metadata?)
 
-    {bulk_status, id_map} = load_packages(packages, channel_revision)
+    id_map = load_packages(packages, channel_revision)
 
-    if bulk_status != :error do
-      parallel_tasks =
-        [
-          if(include_metadata?,
-            do:
-              Task.async(fn ->
-                load_maintainers_and_teams(id_map, maintainer_data, team_data, package_joins)
-              end)
-          ),
-          if(previous_revision,
-            do:
-              Task.async(fn ->
-                detect_package_events(channel_revision, previous_revision)
-              end)
-          )
-        ]
-        |> Enum.reject(&is_nil/1)
+    parallel_tasks =
+      [
+        if(include_metadata?,
+          do:
+            Task.async(fn ->
+              load_maintainers_and_teams(id_map, maintainer_data, team_data, package_joins)
+            end)
+        ),
+        if(previous_revision,
+          do:
+            Task.async(fn ->
+              detect_package_events(channel_revision, previous_revision)
+            end)
+        )
+      ]
+      |> Enum.reject(&is_nil/1)
 
-      Task.await_many(parallel_tasks, :infinity)
-    end
+    Task.await_many(parallel_tasks, :infinity)
 
-    if bulk_status != :success do
-      Logger.error("Failed to load channel #{channel} at #{revision}")
-    end
+    Tracker.Nixpkgs.ChannelRevision.record_result!(channel_revision, %{result: :success})
 
-    Tracker.Nixpkgs.ChannelRevision.record_result!(channel_revision, %{result: bulk_status})
-
-    bulk_status
+    :success
   end
 
   def write_to_database(%{"version" => version}) do
@@ -352,75 +326,48 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
 
     families
     |> Stream.chunk_every(@chunk_size)
-    |> Enum.each(fn chunk ->
-      Ash.bulk_create(chunk, Tracker.Nixpkgs.PackageFamily, :bulk_upsert,
-        batch_size: @chunk_size,
-        return_errors?: true
-      )
-    end)
+    |> Enum.each(&Tracker.Nixpkgs.PackageFamily.bulk_upsert_all/1)
 
     family_id_map = package_family_id_map()
 
     # Step 1: Bulk upsert packages in chunks (includes metadata and family data)
-    pkg_status =
-      packages
-      |> Stream.map(fn {attribute, entry} ->
-        parsed = Map.fetch!(parsed_attrs, attribute)
+    packages
+    |> Stream.map(fn {attribute, entry} ->
+      parsed = Map.fetch!(parsed_attrs, attribute)
 
-        family_id =
-          if parsed.family_name,
-            do: Map.get(family_id_map, {parsed.family_name, parsed.ecosystem || ""}),
-            else: nil
+      family_id =
+        if parsed.family_name,
+          do: Map.get(family_id_map, {parsed.family_name, parsed.ecosystem || ""}),
+          else: nil
 
-        %{attribute: attribute}
-        |> maybe_put(:description, entry[:description])
-        |> maybe_put(:homepage, entry[:homepage])
-        |> maybe_put(:position, entry[:position])
-        |> maybe_put(:licenses, entry[:licenses])
-        |> maybe_put(:package_family_id, family_id)
-        |> maybe_put(:package_set, parsed.package_set)
-        |> maybe_put(:set_version, parsed.set_version)
-      end)
-      |> Stream.chunk_every(@chunk_size)
-      |> Enum.reduce(:success, fn chunk, acc ->
-        %{status: status} =
-          Ash.bulk_create(chunk, Tracker.Nixpkgs.Package, :bulk_upsert,
-            batch_size: @chunk_size,
-            return_errors?: true
-          )
+      %{attribute: attribute}
+      |> maybe_put(:description, entry[:description])
+      |> maybe_put(:homepage, entry[:homepage])
+      |> maybe_put(:position, entry[:position])
+      |> maybe_put(:licenses, entry[:licenses])
+      |> maybe_put(:package_family_id, family_id)
+      |> maybe_put(:package_set, parsed.package_set)
+      |> maybe_put(:set_version, parsed.set_version)
+    end)
+    |> Stream.chunk_every(@chunk_size)
+    |> Enum.each(&Tracker.Nixpkgs.Package.bulk_upsert_all/1)
 
-        worst_status(acc, status)
-      end)
+    # Step 2: Build attribute -> id lookup map
+    id_map = package_id_map()
 
-    if pkg_status == :error do
-      {:error, %{}}
-    else
-      # Step 2: Build attribute -> id lookup map
-      id_map = package_id_map()
+    # Step 3: Bulk create package revisions in chunks
+    packages
+    |> Stream.map(fn {attribute, entry} ->
+      %{
+        package_id: Map.fetch!(id_map, attribute),
+        channel_revision_id: channel_revision.id,
+        version: entry.version
+      }
+    end)
+    |> Stream.chunk_every(@chunk_size)
+    |> Enum.each(&Tracker.Nixpkgs.PackageRevision.bulk_insert_all/1)
 
-      # Step 3: Bulk create package revisions in chunks
-      rev_status =
-        packages
-        |> Stream.map(fn {attribute, entry} ->
-          %{
-            package_id: Map.fetch!(id_map, attribute),
-            channel_revision_id: channel_revision.id,
-            version: entry.version
-          }
-        end)
-        |> Stream.chunk_every(@chunk_size)
-        |> Enum.reduce(:success, fn chunk, acc ->
-          %{status: status} =
-            Ash.bulk_create(chunk, Tracker.Nixpkgs.PackageRevision, :load,
-              batch_size: @chunk_size,
-              return_errors?: true
-            )
-
-          worst_status(acc, status)
-        end)
-
-      {worst_status(pkg_status, rev_status), id_map}
-    end
+    id_map
   end
 
   defp extract_packages(packages, false) do
@@ -672,10 +619,4 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
     Tracker.Nixpkgs.PackageRevision.by_channel_revision!(channel_revision_id)
     |> MapSet.new(& &1.package_id)
   end
-
-  defp worst_status(:error, _), do: :error
-  defp worst_status(_, :error), do: :error
-  defp worst_status(:partial_success, _), do: :partial_success
-  defp worst_status(_, :partial_success), do: :partial_success
-  defp worst_status(:success, :success), do: :success
 end
