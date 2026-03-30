@@ -295,7 +295,23 @@ defmodule Tracker.Nixpkgs.ChannelWorkerTest do
   end
 
   describe "write_to_database with package events" do
+    alias Tracker.Nixpkgs.ReleaseCache
+    alias Tracker.Nixpkgs.ReleaseCache.Release
+
     test "generates added events when packages appear in a new revision" do
+      ReleaseCache.put_releases("nixos-unstable", [
+        %Release{
+          short_hash: "evt002",
+          base_url: "https://example.com/evt002",
+          released_at: "2026-03-02T10:00:00Z"
+        },
+        %Release{
+          short_hash: "evt001",
+          base_url: "https://example.com/evt001",
+          released_at: "2026-03-01T10:00:00Z"
+        }
+      ])
+
       # First revision: baseline, no events
       data1 = %{
         "version" => 2,
@@ -337,6 +353,19 @@ defmodule Tracker.Nixpkgs.ChannelWorkerTest do
     end
 
     test "generates removed events when packages disappear from a revision" do
+      ReleaseCache.put_releases("nixos-unstable", [
+        %Release{
+          short_hash: "evr002",
+          base_url: "https://example.com/evr002",
+          released_at: "2026-03-02T10:00:00Z"
+        },
+        %Release{
+          short_hash: "evr001",
+          base_url: "https://example.com/evr001",
+          released_at: "2026-03-01T10:00:00Z"
+        }
+      ])
+
       data1 = %{
         "version" => 2,
         "revision" => "evr001",
@@ -391,6 +420,19 @@ defmodule Tracker.Nixpkgs.ChannelWorkerTest do
     end
 
     test "stores previous_channel_revision_id on channel revision" do
+      ReleaseCache.put_releases("nixos-unstable", [
+        %Release{
+          short_hash: "prev002",
+          base_url: "https://example.com/prev002",
+          released_at: "2026-03-02T10:00:00Z"
+        },
+        %Release{
+          short_hash: "prev001",
+          base_url: "https://example.com/prev001",
+          released_at: "2026-03-01T10:00:00Z"
+        }
+      ])
+
       data1 = %{
         "version" => 2,
         "revision" => "prev001",
