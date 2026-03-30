@@ -15,6 +15,7 @@ defmodule Tracker.Nixpkgs.Package do
     define :by_maintainer, args: [:maintainer_id, {:optional, :search}]
     define :by_team, args: [:team_id, {:optional, :search}]
     define :family_siblings, args: [:package_family_id, :exclude_id]
+    define :id_map, action: :id_map
   end
 
   actions do
@@ -101,6 +102,10 @@ defmodule Tracker.Nixpkgs.Package do
 
       prepare build(sort: :package_set)
       filter expr(package_family_id == ^arg(:package_family_id) and id != ^arg(:exclude_id))
+    end
+
+    read :id_map do
+      prepare build(select: [:attribute])
     end
 
     create :create do

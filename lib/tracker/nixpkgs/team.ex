@@ -11,10 +11,15 @@ defmodule Tracker.Nixpkgs.Team do
     define :list, args: [{:optional, :search}]
     define :bulk_upsert
     define :get_by_short_name, action: :read, get_by: [:short_name]
+    define :id_map, action: :id_map
   end
 
   actions do
     defaults [:read]
+
+    read :id_map do
+      prepare build(select: [:short_name])
+    end
 
     read :list do
       argument :search, :ci_string

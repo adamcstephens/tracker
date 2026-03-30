@@ -11,10 +11,15 @@ defmodule Tracker.Nixpkgs.Maintainer do
     define :list, args: [{:optional, :search}]
     define :bulk_upsert
     define :get_by_github, action: :read, get_by: [:github]
+    define :id_map, action: :id_map
   end
 
   actions do
     defaults [:read]
+
+    read :id_map do
+      prepare build(select: [:github_id])
+    end
 
     read :list do
       argument :search, :ci_string
