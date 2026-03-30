@@ -94,7 +94,10 @@ defmodule Tracker.Nixpkgs.ReleaseCache do
 
   @impl GenServer
   def init(opts) do
-    if Keyword.get(opts, :load, true) do
+    load? =
+      Keyword.get(opts, :load, Application.get_env(:tracker, :release_cache_load, true))
+
+    if load? do
       {:ok, %{}, {:continue, :load}}
     else
       {:ok, %{}}

@@ -471,6 +471,180 @@ defmodule Tracker.Nixpkgs.ChannelWorkerTest do
     end
   end
 
+  describe "backfill_channel/2" do
+    alias Tracker.Nixpkgs.ReleaseCache
+    alias Tracker.Nixpkgs.ReleaseCache.Release
+
+    setup do
+      ReleaseCache.put_releases("nixos-test", [
+        %Release{
+          short_hash: "ccc3333",
+          base_url: "https://releases.nixos.org/nixos/test/test.ccc3333",
+          released_at: "2026-03-03T10:00:00Z"
+        },
+        %Release{
+          short_hash: "bbb2222",
+          base_url: "https://releases.nixos.org/nixos/test/test.bbb2222",
+          released_at: "2026-03-02T10:00:00Z"
+        },
+        %Release{
+          short_hash: "aaa1111",
+          base_url: "https://releases.nixos.org/nixos/test/test.aaa1111",
+          released_at: "2026-03-01T10:00:00Z"
+        }
+      ])
+
+      :ok
+    end
+
+    test "inserts one job with oldest release first and remaining count" do
+      assert {:ok, 3} = ChannelWorker.backfill_channel("nixos-test")
+
+      jobs =
+        from(j in Oban.Job,
+          where: j.queue == "channels" and j.args["channel"] == "nixos-test"
+        )
+        |> Tracker.Repo.all()
+
+      assert length(jobs) == 1
+      job = hd(jobs)
+
+      # Oldest release should be scheduled first
+      assert job.args["base_url"] ==
+               "https://releases.nixos.org/nixos/test/test.aaa1111"
+
+      assert job.args["released_at"] == "2026-03-01T10:00:00Z"
+      assert job.args["remaining"] == 2
+      refute Map.has_key?(job.args, "remaining_releases")
+    end
+
+    test "limit takes the oldest N releases" do
+      assert {:ok, 2} = ChannelWorker.backfill_channel("nixos-test", limit: 2)
+
+      jobs =
+        from(j in Oban.Job,
+          where: j.queue == "channels" and j.args["channel"] == "nixos-test"
+        )
+        |> Tracker.Repo.all()
+
+      assert length(jobs) == 1
+      job = hd(jobs)
+
+      assert job.args["base_url"] =~ "aaa1111"
+      assert job.args["remaining"] == 1
+    end
+
+    test "returns {:ok, 0} and inserts no jobs when all releases exist" do
+      # Pre-populate all revisions
+      for {rev, date} <- [
+            {"aaa1111", "2026-03-01T10:00:00Z"},
+            {"bbb2222", "2026-03-02T10:00:00Z"},
+            {"ccc3333", "2026-03-03T10:00:00Z"}
+          ] do
+        Tracker.Nixpkgs.ChannelRevision.create!(%{
+          revision: rev,
+          channel: "nixos-test",
+          released_at: date
+        })
+      end
+
+      assert {:ok, 0} = ChannelWorker.backfill_channel("nixos-test")
+
+      jobs =
+        from(j in Oban.Job,
+          where: j.queue == "channels" and j.args["channel"] == "nixos-test"
+        )
+        |> Tracker.Repo.all()
+
+      assert jobs == []
+    end
+  end
+
+  describe "schedule_next/1" do
+    alias Tracker.Nixpkgs.ReleaseCache
+    alias Tracker.Nixpkgs.ReleaseCache.Release
+
+    setup do
+      ReleaseCache.put_releases("nixos-test", [
+        %Release{
+          short_hash: "ccc3333",
+          base_url: "https://releases.nixos.org/nixos/test/test.ccc3333",
+          released_at: "2026-03-03T10:00:00Z"
+        },
+        %Release{
+          short_hash: "bbb2222",
+          base_url: "https://releases.nixos.org/nixos/test/test.bbb2222",
+          released_at: "2026-03-02T10:00:00Z"
+        },
+        %Release{
+          short_hash: "aaa1111",
+          base_url: "https://releases.nixos.org/nixos/test/test.aaa1111",
+          released_at: "2026-03-01T10:00:00Z"
+        }
+      ])
+
+      :ok
+    end
+
+    test "schedules next release from ReleaseCache" do
+      args = %{
+        "channel" => "nixos-test",
+        "base_url" => "https://releases.nixos.org/nixos/test/test.aaa1111",
+        "short_hash" => "aaa1111",
+        "remaining" => 2
+      }
+
+      ChannelWorker.schedule_next(args)
+
+      jobs =
+        from(j in Oban.Job,
+          where: j.queue == "channels" and j.args["channel"] == "nixos-test"
+        )
+        |> Tracker.Repo.all()
+
+      assert length(jobs) == 1
+      job = hd(jobs)
+      assert job.args["base_url"] =~ "bbb2222"
+      assert job.args["released_at"] == "2026-03-02T10:00:00Z"
+      assert job.args["remaining"] == 1
+    end
+
+    test "is a no-op when remaining is 0" do
+      args = %{
+        "channel" => "nixos-test",
+        "base_url" => "https://releases.nixos.org/nixos/test/test.ccc3333",
+        "remaining" => 0
+      }
+
+      ChannelWorker.schedule_next(args)
+
+      jobs =
+        from(j in Oban.Job,
+          where: j.queue == "channels" and j.args["channel"] == "nixos-test"
+        )
+        |> Tracker.Repo.all()
+
+      assert jobs == []
+    end
+
+    test "is a no-op when remaining key is absent" do
+      args = %{
+        "channel" => "nixos-test",
+        "base_url" => "https://releases.nixos.org/nixos/test/test.aaa1111"
+      }
+
+      ChannelWorker.schedule_next(args)
+
+      jobs =
+        from(j in Oban.Job,
+          where: j.queue == "channels" and j.args["channel"] == "nixos-test"
+        )
+        |> Tracker.Repo.all()
+
+      assert jobs == []
+    end
+  end
+
   describe "write_to_database with package families" do
     test "creates package families for dotted attributes" do
       data = %{
