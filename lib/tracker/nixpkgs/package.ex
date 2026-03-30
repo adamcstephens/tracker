@@ -185,4 +185,39 @@ defmodule Tracker.Nixpkgs.Package do
   identities do
     identity :unique_attribute, [:attribute]
   end
+
+  @doc """
+  Bulk upsert packages using raw Ecto insert_all for performance.
+
+  Expects a list of maps with keys: :attribute, and optionally :description,
+  :homepage, :position, :licenses, :package_family_id, :package_set, :set_version.
+  """
+  def bulk_upsert_all(records) do
+    now = DateTime.utc_now(:second)
+
+    entries =
+      Enum.map(records, fn record ->
+        record
+        |> Map.put(:inserted_at, now)
+        |> Map.put(:updated_at, now)
+      end)
+
+    Tracker.Repo.insert_all(
+      "packages",
+      entries,
+      on_conflict:
+        {:replace,
+         [
+           :description,
+           :homepage,
+           :position,
+           :licenses,
+           :package_family_id,
+           :package_set,
+           :set_version,
+           :updated_at
+         ]},
+      conflict_target: :attribute
+    )
+  end
 end
