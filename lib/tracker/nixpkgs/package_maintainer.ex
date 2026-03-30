@@ -35,6 +35,21 @@ defmodule Tracker.Nixpkgs.PackageMaintainer do
       allow_nil?: false
   end
 
+  # 5 columns: id, package_id, maintainer_id, inserted_at, updated_at
+  @ash_cols 5
+  @max_batch div(65_535, @ash_cols)
+
+  def bulk_create_all(records) do
+    records
+    |> Stream.chunk_every(@max_batch)
+    |> Enum.each(fn chunk ->
+      Ash.bulk_create(chunk, __MODULE__, :load,
+        batch_size: @max_batch,
+        return_errors?: true
+      )
+    end)
+  end
+
   identities do
     identity :unique_package_maintainer, [:package_id, :maintainer_id]
   end

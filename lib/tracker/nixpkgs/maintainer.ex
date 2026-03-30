@@ -79,6 +79,21 @@ defmodule Tracker.Nixpkgs.Maintainer do
     end
   end
 
+  # 8 columns: id, github_id, name, email, github, matrix, inserted_at, updated_at
+  @ash_cols 8
+  @max_batch div(65_535, @ash_cols)
+
+  def bulk_upsert_all(records) do
+    records
+    |> Stream.chunk_every(@max_batch)
+    |> Enum.each(fn chunk ->
+      Ash.bulk_create(chunk, __MODULE__, :bulk_upsert,
+        batch_size: @max_batch,
+        return_errors?: true
+      )
+    end)
+  end
+
   identities do
     identity :unique_github_id, [:github_id]
     identity :unique_github, [:github]

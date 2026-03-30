@@ -307,8 +307,6 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
     end
   end
 
-  @chunk_size 10_000
-
   # packages is %{attribute => %{version, description?, homepage?}} (already slimmed)
   defp load_packages(packages, channel_revision) do
     alias Tracker.Nixpkgs.PackageSetMapping
@@ -324,15 +322,13 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
       |> Enum.uniq_by(&{&1.family_name, &1.ecosystem})
       |> Enum.map(&%{name: &1.family_name, ecosystem: &1.ecosystem || ""})
 
-    families
-    |> Stream.chunk_every(@chunk_size)
-    |> Enum.each(&Tracker.Nixpkgs.PackageFamily.bulk_upsert_all/1)
+    Tracker.Nixpkgs.PackageFamily.bulk_upsert_all(families)
 
     family_id_map = package_family_id_map()
 
-    # Step 1: Bulk upsert packages in chunks (includes metadata and family data)
+    # Step 1: Bulk upsert packages
     packages
-    |> Stream.map(fn {attribute, entry} ->
+    |> Enum.map(fn {attribute, entry} ->
       parsed = Map.fetch!(parsed_attrs, attribute)
 
       family_id =
@@ -349,23 +345,21 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
       |> maybe_put(:package_set, parsed.package_set)
       |> maybe_put(:set_version, parsed.set_version)
     end)
-    |> Stream.chunk_every(@chunk_size)
-    |> Enum.each(&Tracker.Nixpkgs.Package.bulk_upsert_all/1)
+    |> Tracker.Nixpkgs.Package.bulk_upsert_all()
 
     # Step 2: Build attribute -> id lookup map
     id_map = package_id_map()
 
-    # Step 3: Bulk create package revisions in chunks
+    # Step 3: Bulk create package revisions
     packages
-    |> Stream.map(fn {attribute, entry} ->
+    |> Enum.map(fn {attribute, entry} ->
       %{
         package_id: Map.fetch!(id_map, attribute),
         channel_revision_id: channel_revision.id,
         version: entry.version
       }
     end)
-    |> Stream.chunk_every(@chunk_size)
-    |> Enum.each(&Tracker.Nixpkgs.PackageRevision.bulk_insert_all/1)
+    |> Tracker.Nixpkgs.PackageRevision.bulk_insert_all()
 
     id_map
   end
@@ -475,29 +469,16 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
     # Step 1: Bulk upsert maintainers and teams in parallel
     maintainer_task =
       Task.async(fn ->
-        maintainer_data
-        |> Map.values()
-        |> Stream.chunk_every(@chunk_size)
-        |> Enum.each(fn chunk ->
-          Ash.bulk_create(chunk, Tracker.Nixpkgs.Maintainer, :bulk_upsert,
-            batch_size: @chunk_size,
-            return_errors?: true
-          )
-        end)
-
+        maintainer_data |> Map.values() |> Tracker.Nixpkgs.Maintainer.bulk_upsert_all()
         maintainer_id_map()
       end)
 
     team_task =
       Task.async(fn ->
-        team_attrs = Enum.map(Map.values(team_data), &Map.delete(&1, :member_github_ids))
-
-        if team_attrs != [] do
-          Ash.bulk_create(team_attrs, Tracker.Nixpkgs.Team, :bulk_upsert,
-            batch_size: @chunk_size,
-            return_errors?: true
-          )
-        end
+        team_data
+        |> Map.values()
+        |> Enum.map(&Map.delete(&1, :member_github_ids))
+        |> Tracker.Nixpkgs.Team.bulk_upsert_all()
 
         team_id_map()
       end)
@@ -516,13 +497,7 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
             %{team_id: team_id, maintainer_id: Map.fetch!(maintainer_id_map, github_id)}
           end)
         end)
-        |> Stream.chunk_every(@chunk_size)
-        |> Enum.each(fn chunk ->
-          Ash.bulk_create(chunk, Tracker.Nixpkgs.TeamMember, :load,
-            batch_size: @chunk_size,
-            return_errors?: true
-          )
-        end)
+        |> Tracker.Nixpkgs.TeamMember.bulk_create_all()
       end)
 
     pkg_maintainer_task =
@@ -537,13 +512,7 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
             %{package_id: package_id, maintainer_id: Map.fetch!(maintainer_id_map, github_id)}
           end)
         end)
-        |> Stream.chunk_every(@chunk_size)
-        |> Enum.each(fn chunk ->
-          Ash.bulk_create(chunk, Tracker.Nixpkgs.PackageMaintainer, :load,
-            batch_size: @chunk_size,
-            return_errors?: true
-          )
-        end)
+        |> Tracker.Nixpkgs.PackageMaintainer.bulk_create_all()
       end)
 
     pkg_team_task =
@@ -556,13 +525,7 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
             %{package_id: package_id, team_id: Map.fetch!(team_id_map, short_name)}
           end)
         end)
-        |> Stream.chunk_every(@chunk_size)
-        |> Enum.each(fn chunk ->
-          Ash.bulk_create(chunk, Tracker.Nixpkgs.PackageTeam, :load,
-            batch_size: @chunk_size,
-            return_errors?: true
-          )
-        end)
+        |> Tracker.Nixpkgs.PackageTeam.bulk_create_all()
       end)
 
     Task.await_many([team_member_task, pkg_maintainer_task, pkg_team_task])
@@ -585,14 +548,7 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
           %{type: :removed, package_id: package_id, channel_revision_id: channel_revision.id}
         end)
 
-    events
-    |> Stream.chunk_every(@chunk_size)
-    |> Enum.each(fn chunk ->
-      Ash.bulk_create(chunk, Tracker.Nixpkgs.PackageEvent, :create,
-        batch_size: @chunk_size,
-        return_errors?: true
-      )
-    end)
+    Tracker.Nixpkgs.PackageEvent.bulk_create_all(events)
   end
 
   defp package_id_map do
