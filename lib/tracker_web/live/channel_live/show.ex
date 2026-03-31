@@ -139,33 +139,57 @@ defmodule TrackerWeb.ChannelLive.Show do
     {:ok,
      socket
      |> assign_new(:current_user, fn -> nil end)
-     |> assign(:selected_revisions, [])}
+     |> assign(:selected_revisions, [])
+     |> assign(:subscribed_channel, nil)}
   end
 
   @impl true
   def handle_params(%{"channel" => channel} = params, _url, socket) do
+    if connected?(socket) && socket.assigns.subscribed_channel != channel do
+      if socket.assigns.subscribed_channel do
+        Phoenix.PubSub.unsubscribe(
+          Tracker.PubSub,
+          "channel_revisions:#{socket.assigns.subscribed_channel}"
+        )
+      end
+
+      Phoenix.PubSub.subscribe(Tracker.PubSub, "channel_revisions:#{channel}")
+    end
+
     sort_by = parse_sort_by(params["sort_by"])
     sort_dir = parse_sort_dir(params["sort_dir"])
     page = params |> Map.get("page", "1") |> String.to_integer() |> max(1)
-    offset = (page - 1) * 15
-
-    revisions = load_revisions(channel, sort_by, sort_dir, offset)
-
-    total_pages = ceil(revisions.count / 15)
-    current_page = div(offset, 15) + 1
 
     {:noreply,
      socket
      |> assign(:page_title, channel)
      |> assign(:channel, channel)
-     |> assign(:revisions, revisions.results)
-     |> assign(:has_revisions?, revisions.results != [])
      |> assign(:sort_by, sort_by)
      |> assign(:sort_dir, sort_dir)
-     |> assign(:has_prev_page?, offset > 0)
-     |> assign(:has_next_page?, revisions.more?)
-     |> assign(:total_pages, total_pages)
-     |> assign(:current_page, current_page)}
+     |> assign(:subscribed_channel, channel)
+     |> assign_revisions(channel, sort_by, sort_dir, page)}
+  end
+
+  @impl true
+  def handle_info({:channel_revision_completed, _payload}, socket) do
+    %{channel: channel, sort_by: sort_by, sort_dir: sort_dir, current_page: page} =
+      socket.assigns
+
+    {:noreply, assign_revisions(socket, channel, sort_by, sort_dir, page)}
+  end
+
+  defp assign_revisions(socket, channel, sort_by, sort_dir, page) do
+    offset = (page - 1) * 15
+    revisions = load_revisions(channel, sort_by, sort_dir, offset)
+    total_pages = ceil(revisions.count / 15)
+
+    socket
+    |> assign(:revisions, revisions.results)
+    |> assign(:has_revisions?, revisions.results != [])
+    |> assign(:has_prev_page?, offset > 0)
+    |> assign(:has_next_page?, revisions.more?)
+    |> assign(:total_pages, total_pages)
+    |> assign(:current_page, page)
   end
 
   @impl true

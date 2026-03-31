@@ -651,6 +651,27 @@ defmodule Tracker.Nixpkgs.ChannelWorkerTest do
     end
   end
 
+  describe "write_to_database broadcasts on success" do
+    test "broadcasts on the channel_revisions topic after success" do
+      Phoenix.PubSub.subscribe(Tracker.PubSub, "channel_revisions:nixos-unstable")
+
+      data = %{
+        "version" => 2,
+        "revision" => "pub001",
+        "channel" => "nixos-unstable",
+        "released_at" => "2026-03-29T10:00:00Z",
+        "packages" => %{
+          "hello" => %{"version" => "2.12"}
+        }
+      }
+
+      ChannelWorker.write_to_database(data)
+
+      assert_receive {:channel_revision_completed,
+                      %{channel: "nixos-unstable", revision: "pub001"}}
+    end
+  end
+
   describe "write_to_database with package families" do
     test "creates package families for dotted attributes" do
       data = %{

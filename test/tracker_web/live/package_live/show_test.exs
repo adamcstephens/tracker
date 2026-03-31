@@ -42,6 +42,36 @@ defmodule TrackerWeb.PackageLive.ShowTest do
     %{package: package, cr1: cr1, cr2: cr2}
   end
 
+  test "updates when a new revision is broadcast", %{conn: conn, package: package} do
+    {:ok, view, html} = live(conn, ~p"/packages/#{package.attribute}")
+
+    refute html =~ "3.0.0"
+
+    cr3 =
+      Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
+        channel: "nixos-unstable",
+        revision: "new111aaa222333",
+        released_at: ~U[2026-03-20 10:00:00Z]
+      })
+
+    Tracker.Nixpkgs.PackageRevision
+    |> Ash.Changeset.for_create(:load, %{
+      version: "3.0.0",
+      package_id: package.id,
+      channel_revision_id: cr3.id
+    })
+    |> Ash.create!()
+
+    Phoenix.PubSub.broadcast(
+      Tracker.PubSub,
+      "channel_revisions:nixos-unstable",
+      {:channel_revision_completed, %{channel: "nixos-unstable", revision: "new111aaa222333"}}
+    )
+
+    html = render(view)
+    assert html =~ "3.0.0"
+  end
+
   test "displays package attribute as heading", %{conn: conn, package: package} do
     {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}")
 

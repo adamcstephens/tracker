@@ -284,6 +284,12 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
 
     Tracker.Nixpkgs.ChannelRevision.record_result!(channel_revision, %{result: :success})
 
+    Phoenix.PubSub.broadcast(
+      Tracker.PubSub,
+      "channel_revisions:#{channel}",
+      {:channel_revision_completed, %{channel: channel, revision: revision}}
+    )
+
     :success
   end
 

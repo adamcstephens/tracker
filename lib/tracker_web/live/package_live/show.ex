@@ -33,7 +33,7 @@ defmodule TrackerWeb.PackageLive.Show do
       <dt><strong>Teams</strong></dt>
       <dd :for={t <- @package.teams}>
         <.link navigate={~p"/teams/#{t.short_name}"}>{t.short_name}</.link>
-        <span :if={t.scope}> —            {t.scope}</span>
+        <span :if={t.scope}> —              {t.scope}</span>
       </dd>
     </dl>
 
@@ -243,7 +243,7 @@ defmodule TrackerWeb.PackageLive.Show do
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, socket}
+    {:ok, assign(socket, :subscribed_channels, [])}
   end
 
   @impl true
@@ -252,7 +252,6 @@ defmodule TrackerWeb.PackageLive.Show do
       Tracker.Nixpkgs.Package.get_by_attribute!(name, load: [:maintainers, :teams])
 
     family_siblings = load_family_siblings(package)
-    package_events = load_package_events(package.id)
 
     sort_by = parse_sort_by(params["sort_by"])
     sort_dir = parse_sort_dir(params["sort_dir"])
@@ -260,44 +259,106 @@ defmodule TrackerWeb.PackageLive.Show do
     version_filter = params["version"] || ""
     all_revisions? = params["all_revisions"] == "true"
     page = params |> Map.get("page", "1") |> String.to_integer() |> max(1)
-    offset = (page - 1) * 15
 
     channels = load_channels()
 
-    {revisions, total_count, has_more?} =
-      if all_revisions? do
-        result =
-          load_revisions(package.id, sort_by, sort_dir, channel_filter, version_filter, offset)
+    if connected?(socket) do
+      old_channels = socket.assigns.subscribed_channels
+      new_channels = channels
 
-        {result.results, result.count, result.more?}
-      else
-        all_changes =
-          load_version_changes(package.id, sort_by, sort_dir, channel_filter, version_filter)
-
-        page_results = all_changes |> Enum.drop(offset) |> Enum.take(15)
-        {page_results, length(all_changes), length(all_changes) > offset + 15}
+      for ch <- old_channels -- new_channels do
+        Phoenix.PubSub.unsubscribe(Tracker.PubSub, "channel_revisions:#{ch}")
       end
 
-    total_pages = ceil(total_count / 15)
-    current_page = div(offset, 15) + 1
+      for ch <- new_channels -- old_channels do
+        Phoenix.PubSub.subscribe(Tracker.PubSub, "channel_revisions:#{ch}")
+      end
+    end
 
     {:noreply,
      socket
      |> assign(:page_title, package.attribute)
      |> assign(:package, package)
      |> assign(:family_siblings, family_siblings)
-     |> assign(:package_events, package_events)
-     |> assign(:revisions, revisions)
      |> assign(:sort_by, sort_by)
      |> assign(:sort_dir, sort_dir)
      |> assign(:channel_filter, channel_filter)
      |> assign(:version_filter, version_filter)
      |> assign(:all_revisions?, all_revisions?)
      |> assign(:channels, channels)
-     |> assign(:has_prev_page?, offset > 0)
-     |> assign(:has_next_page?, has_more?)
-     |> assign(:total_pages, total_pages)
-     |> assign(:current_page, current_page)}
+     |> assign(:subscribed_channels, channels)
+     |> assign_package_data(
+       package.id,
+       sort_by,
+       sort_dir,
+       channel_filter,
+       version_filter,
+       all_revisions?,
+       page
+     )}
+  end
+
+  @impl true
+  def handle_info({:channel_revision_completed, _payload}, socket) do
+    %{
+      package: package,
+      sort_by: sort_by,
+      sort_dir: sort_dir,
+      channel_filter: channel_filter,
+      version_filter: version_filter,
+      all_revisions?: all_revisions?,
+      current_page: current_page
+    } = socket.assigns
+
+    {:noreply,
+     assign_package_data(
+       socket,
+       package.id,
+       sort_by,
+       sort_dir,
+       channel_filter,
+       version_filter,
+       all_revisions?,
+       current_page
+     )}
+  end
+
+  defp assign_package_data(
+         socket,
+         package_id,
+         sort_by,
+         sort_dir,
+         channel_filter,
+         version_filter,
+         all_revisions?,
+         page
+       ) do
+    offset = (page - 1) * 15
+    package_events = load_package_events(package_id)
+
+    {revisions, total_count, has_more?} =
+      if all_revisions? do
+        result =
+          load_revisions(package_id, sort_by, sort_dir, channel_filter, version_filter, offset)
+
+        {result.results, result.count, result.more?}
+      else
+        all_changes =
+          load_version_changes(package_id, sort_by, sort_dir, channel_filter, version_filter)
+
+        page_results = all_changes |> Enum.drop(offset) |> Enum.take(15)
+        {page_results, length(all_changes), length(all_changes) > offset + 15}
+      end
+
+    total_pages = ceil(total_count / 15)
+
+    socket
+    |> assign(:package_events, package_events)
+    |> assign(:revisions, revisions)
+    |> assign(:has_prev_page?, offset > 0)
+    |> assign(:has_next_page?, has_more?)
+    |> assign(:total_pages, total_pages)
+    |> assign(:current_page, page)
   end
 
   @impl true

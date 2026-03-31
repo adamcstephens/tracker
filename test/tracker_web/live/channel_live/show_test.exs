@@ -22,6 +22,27 @@ defmodule TrackerWeb.ChannelLive.ShowTest do
     %{cr1: cr1, cr2: cr2}
   end
 
+  test "updates when a new revision is broadcast", %{conn: conn} do
+    {:ok, view, html} = live(conn, ~p"/channels/nixos-unstable")
+
+    refute html =~ "fff999"
+
+    Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
+      channel: "nixos-unstable",
+      revision: "fff999ggg000111",
+      released_at: ~U[2026-03-20 10:00:00Z]
+    })
+
+    Phoenix.PubSub.broadcast(
+      Tracker.PubSub,
+      "channel_revisions:nixos-unstable",
+      {:channel_revision_completed, %{channel: "nixos-unstable", revision: "fff999ggg000111"}}
+    )
+
+    html = render(view)
+    assert html =~ "fff999g"
+  end
+
   test "renders checkboxes for revision selection", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/channels/nixos-unstable")
 
