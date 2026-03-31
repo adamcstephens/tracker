@@ -40,7 +40,7 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
       accept [:channel, :revision, :released_at, :previous_channel_revision_id]
       upsert? true
       upsert_identity :unique_channel_revision
-      upsert_fields [:released_at, :updated_at]
+      upsert_fields [:released_at, :previous_channel_revision_id, :updated_at]
     end
 
     read :list_by_channel do

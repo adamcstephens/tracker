@@ -33,7 +33,7 @@ defmodule TrackerWeb.PackageLive.Show do
       <dt><strong>Teams</strong></dt>
       <dd :for={t <- @package.teams}>
         <.link navigate={~p"/teams/#{t.short_name}"}>{t.short_name}</.link>
-        <span :if={t.scope}> —         {t.scope}</span>
+        <span :if={t.scope}> —          {t.scope}</span>
       </dd>
     </dl>
 
@@ -74,7 +74,10 @@ defmodule TrackerWeb.PackageLive.Show do
               </td>
               <td>{event.channel_revision.channel}</td>
               <td>
-                <.revision_link revision={event.channel_revision.revision} />
+                <.revision_link
+                  revision={event.channel_revision.revision}
+                  channel={event.channel_revision.channel}
+                />
               </td>
               <td>{format_released_at(event.channel_revision.released_at)}</td>
             </tr>
@@ -137,7 +140,10 @@ defmodule TrackerWeb.PackageLive.Show do
             <td>{rev.version}</td>
             <td>{rev.channel_revision.channel}</td>
             <td>
-              <.revision_link revision={rev.channel_revision.revision} />
+              <.revision_link
+                revision={rev.channel_revision.revision}
+                channel={rev.channel_revision.channel}
+              />
             </td>
             <td>{format_released_at(rev.channel_revision.released_at)}</td>
           </tr>
@@ -221,15 +227,13 @@ defmodule TrackerWeb.PackageLive.Show do
 
   defp revision_link(assigns) do
     ~H"""
-    <a
-      href={"https://github.com/NixOS/nixpkgs/commit/#{@revision}"}
-      target="_blank"
-      rel="noopener noreferrer"
+    <.link
+      navigate={~p"/channels/#{@channel}/revisions/#{String.slice(@revision, 0, 7)}"}
       title={@revision}
       class="revision-link"
     >
       {String.slice(@revision, 0, 7)}
-    </a>
+    </.link>
     """
   end
 

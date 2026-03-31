@@ -208,24 +208,28 @@ defmodule Tracker.Nixpkgs.Package do
       |> Map.put(:updated_at, now)
     end)
     |> Stream.chunk_every(@max_rows)
-    |> Enum.each(fn chunk ->
-      Tracker.Repo.insert_all(
-        "packages",
-        chunk,
-        on_conflict:
-          {:replace,
-           [
-             :description,
-             :homepage,
-             :position,
-             :licenses,
-             :package_family_id,
-             :package_set,
-             :set_version,
-             :updated_at
-           ]},
-        conflict_target: :attribute
-      )
+    |> Enum.reduce(%{}, fn chunk, acc ->
+      {_count, rows} =
+        Tracker.Repo.insert_all(
+          "packages",
+          chunk,
+          on_conflict:
+            {:replace,
+             [
+               :description,
+               :homepage,
+               :position,
+               :licenses,
+               :package_family_id,
+               :package_set,
+               :set_version,
+               :updated_at
+             ]},
+          conflict_target: :attribute,
+          returning: [:id, :attribute]
+        )
+
+      Map.merge(acc, Map.new(rows, fn %{id: id, attribute: attr} -> {attr, id} end))
     end)
   end
 end

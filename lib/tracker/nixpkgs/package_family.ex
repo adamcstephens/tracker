@@ -72,12 +72,19 @@ defmodule Tracker.Nixpkgs.PackageFamily do
       |> Map.put(:updated_at, now)
     end)
     |> Stream.chunk_every(@max_rows)
-    |> Enum.each(fn chunk ->
-      Tracker.Repo.insert_all(
-        "package_families",
-        chunk,
-        on_conflict: {:replace, [:updated_at]},
-        conflict_target: [:name, :ecosystem]
+    |> Enum.reduce(%{}, fn chunk, acc ->
+      {_count, rows} =
+        Tracker.Repo.insert_all(
+          "package_families",
+          chunk,
+          on_conflict: {:replace, [:updated_at]},
+          conflict_target: [:name, :ecosystem],
+          returning: [:id, :name, :ecosystem]
+        )
+
+      Map.merge(
+        acc,
+        Map.new(rows, fn %{id: id, name: name, ecosystem: eco} -> {{name, eco}, id} end)
       )
     end)
   end

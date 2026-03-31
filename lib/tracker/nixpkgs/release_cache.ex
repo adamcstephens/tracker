@@ -132,11 +132,11 @@ defmodule Tracker.Nixpkgs.ReleaseCache do
     {:reply, Map.get(state, channel, []), state}
   end
 
-  def handle_call({:find_previous_release, channel, short_hash}, _from, state) do
+  def handle_call({:find_previous_release, channel, revision}, _from, state) do
     releases = Map.get(state, channel, [])
 
     result =
-      case Enum.find_index(releases, &(&1.short_hash == short_hash)) do
+      case Enum.find_index(releases, &String.starts_with?(revision, &1.short_hash)) do
         nil -> nil
         index -> Enum.at(releases, index + 1)
       end

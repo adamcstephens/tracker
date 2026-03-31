@@ -49,7 +49,7 @@ defmodule TrackerWeb.ChannelLive.Show do
               />
             </td>
             <td>
-              <.revision_link revision={rev.revision} />
+              <.revision_link revision={rev.revision} channel={@channel} />
             </td>
             <td>{format_result(rev.result)}</td>
             <td>{format_date(rev.released_at)}</td>
@@ -114,15 +114,13 @@ defmodule TrackerWeb.ChannelLive.Show do
 
   defp revision_link(assigns) do
     ~H"""
-    <a
-      href={"https://github.com/NixOS/nixpkgs/commit/#{@revision}"}
-      target="_blank"
-      rel="noopener noreferrer"
+    <.link
+      navigate={~p"/channels/#{@channel}/revisions/#{String.slice(@revision, 0, 7)}"}
       title={@revision}
       class="revision-link"
     >
       {String.slice(@revision, 0, 7)}
-    </a>
+    </.link>
     """
   end
 
