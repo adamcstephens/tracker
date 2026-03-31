@@ -301,6 +301,10 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
   defp maybe_put(map, _key, nil), do: map
   defp maybe_put(map, key, value), do: Map.put(map, key, value)
 
+  defp normalize_homepage(nil), do: nil
+  defp normalize_homepage(urls) when is_list(urls), do: urls
+  defp normalize_homepage(url) when is_binary(url), do: [url]
+
   defp req do
     if Application.get_env(:tracker, :http_cache, false) do
       Req.new(
@@ -378,7 +382,7 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
       entry =
         %{version: info["version"]}
         |> maybe_put(:description, meta["description"])
-        |> maybe_put(:homepage, meta["homepage"])
+        |> maybe_put(:homepage, normalize_homepage(meta["homepage"]))
         |> maybe_put(:position, meta["position"])
         |> maybe_put(:licenses, extract_licenses(meta["license"], attr))
 

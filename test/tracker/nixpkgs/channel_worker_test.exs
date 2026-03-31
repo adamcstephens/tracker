@@ -294,6 +294,79 @@ defmodule Tracker.Nixpkgs.ChannelWorkerTest do
     end
   end
 
+  describe "write_to_database with homepage metadata" do
+    test "normalizes string homepage to array" do
+      data = %{
+        "version" => 2,
+        "revision" => "hp001",
+        "channel" => "nixos-unstable-small",
+        "released_at" => "2026-03-29T10:00:00Z",
+        "packages" => %{
+          "hello" => %{
+            "version" => "2.12.1",
+            "meta" => %{
+              "homepage" => "https://www.gnu.org/software/hello/"
+            }
+          }
+        }
+      }
+
+      ChannelWorker.write_to_database(data)
+
+      package = Ash.get!(Tracker.Nixpkgs.Package, %{attribute: "hello"})
+      assert package.homepage == ["https://www.gnu.org/software/hello/"]
+    end
+
+    test "stores list homepage as array" do
+      data = %{
+        "version" => 2,
+        "revision" => "hp002",
+        "channel" => "nixos-unstable-small",
+        "released_at" => "2026-03-29T10:00:00Z",
+        "packages" => %{
+          "osmtools" => %{
+            "version" => "1.0",
+            "meta" => %{
+              "homepage" => [
+                "https://wiki.openstreetmap.org/wiki/osmconvert",
+                "https://wiki.openstreetmap.org/wiki/osmfilter"
+              ]
+            }
+          }
+        }
+      }
+
+      ChannelWorker.write_to_database(data)
+
+      package = Ash.get!(Tracker.Nixpkgs.Package, %{attribute: "osmtools"})
+
+      assert package.homepage == [
+               "https://wiki.openstreetmap.org/wiki/osmconvert",
+               "https://wiki.openstreetmap.org/wiki/osmfilter"
+             ]
+    end
+
+    test "stores nil when no homepage" do
+      data = %{
+        "version" => 2,
+        "revision" => "hp003",
+        "channel" => "nixos-unstable-small",
+        "released_at" => "2026-03-29T10:00:00Z",
+        "packages" => %{
+          "no-hp-pkg" => %{
+            "version" => "1.0",
+            "meta" => %{}
+          }
+        }
+      }
+
+      ChannelWorker.write_to_database(data)
+
+      package = Ash.get!(Tracker.Nixpkgs.Package, %{attribute: "no-hp-pkg"})
+      assert package.homepage == nil
+    end
+  end
+
   describe "write_to_database with nil version" do
     test "skips packages with nil version" do
       data = %{
