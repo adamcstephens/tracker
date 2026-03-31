@@ -232,8 +232,7 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
 
     alias Tracker.Nixpkgs.ReleaseCache
 
-    short_hash = String.slice(revision, 0..6)
-    previous_release = ReleaseCache.find_previous_release(channel, short_hash)
+    previous_release = ReleaseCache.find_previous_release(channel, revision)
 
     previous_revision =
       case previous_release do
@@ -322,35 +321,31 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
       |> Enum.uniq_by(&{&1.family_name, &1.ecosystem})
       |> Enum.map(&%{name: &1.family_name, ecosystem: &1.ecosystem || ""})
 
-    Tracker.Nixpkgs.PackageFamily.bulk_upsert_all(families)
-
-    family_id_map = package_family_id_map()
+    family_id_map = Tracker.Nixpkgs.PackageFamily.bulk_upsert_all(families)
 
     # Step 1: Bulk upsert packages
-    packages
-    |> Enum.map(fn {attribute, entry} ->
-      parsed = Map.fetch!(parsed_attrs, attribute)
+    id_map =
+      packages
+      |> Enum.map(fn {attribute, entry} ->
+        parsed = Map.fetch!(parsed_attrs, attribute)
 
-      family_id =
-        if parsed.family_name,
-          do: Map.get(family_id_map, {parsed.family_name, parsed.ecosystem || ""}),
-          else: nil
+        family_id =
+          if parsed.family_name,
+            do: Map.get(family_id_map, {parsed.family_name, parsed.ecosystem || ""}),
+            else: nil
 
-      %{attribute: attribute}
-      |> maybe_put(:description, entry[:description])
-      |> maybe_put(:homepage, entry[:homepage])
-      |> maybe_put(:position, entry[:position])
-      |> maybe_put(:licenses, entry[:licenses])
-      |> maybe_put(:package_family_id, family_id)
-      |> maybe_put(:package_set, parsed.package_set)
-      |> maybe_put(:set_version, parsed.set_version)
-    end)
-    |> Tracker.Nixpkgs.Package.bulk_upsert_all()
+        %{attribute: attribute}
+        |> maybe_put(:description, entry[:description])
+        |> maybe_put(:homepage, entry[:homepage])
+        |> maybe_put(:position, entry[:position])
+        |> maybe_put(:licenses, entry[:licenses])
+        |> maybe_put(:package_family_id, family_id)
+        |> maybe_put(:package_set, parsed.package_set)
+        |> maybe_put(:set_version, parsed.set_version)
+      end)
+      |> Tracker.Nixpkgs.Package.bulk_upsert_all()
 
-    # Step 2: Build attribute -> id lookup map
-    id_map = package_id_map()
-
-    # Step 3: Bulk create package revisions
+    # Step 2: Bulk create package revisions
     packages
     |> Enum.map(fn {attribute, entry} ->
       %{
@@ -549,16 +544,6 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
         end)
 
     Tracker.Nixpkgs.PackageEvent.bulk_create_all(events)
-  end
-
-  defp package_id_map do
-    Tracker.Nixpkgs.Package.id_map!()
-    |> Map.new(&{&1.attribute, &1.id})
-  end
-
-  defp package_family_id_map do
-    Tracker.Nixpkgs.PackageFamily.id_map!()
-    |> Map.new(&{{&1.name, &1.ecosystem}, &1.id})
   end
 
   defp maintainer_id_map do

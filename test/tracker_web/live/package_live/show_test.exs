@@ -55,11 +55,14 @@ defmodule TrackerWeb.PackageLive.ShowTest do
     assert html =~ "nixos-unstable"
   end
 
-  test "displays truncated revision hash linked to github", %{conn: conn, package: package} do
+  test "displays truncated revision hash linked to revision show page", %{
+    conn: conn,
+    package: package
+  } do
     {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}")
 
     assert html =~ "abc123d"
-    assert html =~ "https://github.com/NixOS/nixpkgs/commit/abc123def456789"
+    assert html =~ "/channels/nixos-unstable/revisions/abc123d"
   end
 
   test "shows empty state when no revisions", %{conn: conn} do

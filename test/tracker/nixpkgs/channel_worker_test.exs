@@ -420,22 +420,26 @@ defmodule Tracker.Nixpkgs.ChannelWorkerTest do
     end
 
     test "stores previous_channel_revision_id on channel revision" do
+      # Use realistic hash lengths: cache stores 12-char hashes from S3,
+      # but revisions are full 40-char git hashes
       ReleaseCache.put_releases("nixos-unstable", [
         %Release{
-          short_hash: "prev002",
-          base_url: "https://example.com/prev002",
+          short_hash: "prev002abcde",
+          base_url: "https://example.com/prev002abcde",
           released_at: "2026-03-02T10:00:00Z"
         },
         %Release{
-          short_hash: "prev001",
-          base_url: "https://example.com/prev001",
+          short_hash: "prev001abcde",
+          base_url: "https://example.com/prev001abcde",
           released_at: "2026-03-01T10:00:00Z"
         }
       ])
 
+      rev1_hash = "prev001abcdef1234567890123456789012345678"
+
       data1 = %{
         "version" => 2,
-        "revision" => "prev001",
+        "revision" => rev1_hash,
         "channel" => "nixos-unstable",
         "released_at" => "2026-03-01T10:00:00Z",
         "packages" => %{"hello" => %{"version" => "2.12"}}
@@ -446,14 +450,16 @@ defmodule Tracker.Nixpkgs.ChannelWorkerTest do
       rev1 =
         Ash.get!(Tracker.Nixpkgs.ChannelRevision, %{
           channel: "nixos-unstable",
-          revision: "prev001"
+          revision: rev1_hash
         })
 
       assert rev1.previous_channel_revision_id == nil
 
+      rev2_hash = "prev002abcdef1234567890123456789012345678"
+
       data2 = %{
         "version" => 2,
-        "revision" => "prev002",
+        "revision" => rev2_hash,
         "channel" => "nixos-unstable",
         "released_at" => "2026-03-02T10:00:00Z",
         "packages" => %{"hello" => %{"version" => "2.12"}}
@@ -464,7 +470,7 @@ defmodule Tracker.Nixpkgs.ChannelWorkerTest do
       rev2 =
         Ash.get!(Tracker.Nixpkgs.ChannelRevision, %{
           channel: "nixos-unstable",
-          revision: "prev002"
+          revision: rev2_hash
         })
 
       assert rev2.previous_channel_revision_id == rev1.id

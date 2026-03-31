@@ -9,8 +9,8 @@ defmodule TrackerWeb.ChannelLive.Diff do
     <.header>
       {@channel}
       <:subtitle>
-        Comparing <.revision_link revision={@rev_a.revision} /> &rarr;
-        <.revision_link revision={@rev_b.revision} /> &middot;
+        Comparing <.revision_link revision={@rev_a.revision} channel={@channel} /> &rarr;
+        <.revision_link revision={@rev_b.revision} channel={@channel} /> &middot;
         <a
           href={"https://github.com/NixOS/nixpkgs/compare/#{@rev_a.revision}...#{@rev_b.revision}"}
           target="_blank"
@@ -39,7 +39,7 @@ defmodule TrackerWeb.ChannelLive.Diff do
               </td>
               <td>{format_event_type(event.type)}</td>
               <td>
-                <.revision_link revision={event.channel_revision.revision} />
+                <.revision_link revision={event.channel_revision.revision} channel={@channel} />
               </td>
             </tr>
           </tbody>
@@ -81,15 +81,13 @@ defmodule TrackerWeb.ChannelLive.Diff do
 
   defp revision_link(assigns) do
     ~H"""
-    <a
-      href={"https://github.com/NixOS/nixpkgs/commit/#{@revision}"}
-      target="_blank"
-      rel="noopener noreferrer"
+    <.link
+      navigate={~p"/channels/#{@channel}/revisions/#{String.slice(@revision, 0, 7)}"}
       title={@revision}
       class="revision-link"
     >
       {String.slice(@revision, 0, 7)}
-    </a>
+    </.link>
     """
   end
 
