@@ -149,7 +149,7 @@ defmodule Tracker.Nixpkgs.Package do
     end
 
     attribute :description, :string, public?: true
-    attribute :homepage, :string, public?: true
+    attribute :homepage, {:array, :string}, public?: true
     attribute :position, :string, public?: true
     attribute :licenses, {:array, :string}, public?: true
     attribute :package_set, :string, public?: true

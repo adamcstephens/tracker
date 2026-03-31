@@ -17,9 +17,11 @@ defmodule TrackerWeb.PackageLive.Show do
     <.list>
       <:item title="Attribute">{@package.attribute}</:item>
       <:item :if={@package.homepage} title="Homepage">
-        <a href={@package.homepage} target="_blank" rel="noopener noreferrer">
-          {@package.homepage}
-        </a>
+        <span :for={url <- @package.homepage}>
+          <a href={url} target="_blank" rel="noopener noreferrer">
+            {url}
+          </a>
+        </span>
       </:item>
       <:item :if={@package.position} title="Position">
         <.nixpkgs_position position={@package.position} />
@@ -33,7 +35,7 @@ defmodule TrackerWeb.PackageLive.Show do
       <dt><strong>Teams</strong></dt>
       <dd :for={t <- @package.teams}>
         <.link navigate={~p"/teams/#{t.short_name}"}>{t.short_name}</.link>
-        <span :if={t.scope}> —               {t.scope}</span>
+        <span :if={t.scope}> —                {t.scope}</span>
       </dd>
     </dl>
 
