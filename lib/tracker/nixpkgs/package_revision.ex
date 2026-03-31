@@ -10,7 +10,6 @@ defmodule Tracker.Nixpkgs.PackageRevision do
     define :read
     define :list_by_package, args: [:package_id, {:optional, :channel}, {:optional, :version}]
     define :version_changes_by_package, args: [:package_id]
-    define :by_channel_revision, args: [:channel_revision_id]
     define :load
   end
 
@@ -57,14 +56,6 @@ defmodule Tracker.Nixpkgs.PackageRevision do
       filter expr(package_id == ^arg(:package_id))
     end
 
-    read :by_channel_revision do
-      argument :channel_revision_id, :integer do
-        allow_nil? false
-      end
-
-      filter expr(channel_revision_id == ^arg(:channel_revision_id))
-    end
-
     create :load do
       accept [:version, :channel_revision_id, :package_id]
       upsert? true
@@ -107,11 +98,39 @@ defmodule Tracker.Nixpkgs.PackageRevision do
   @max_rows div(65_535, @insert_cols)
 
   @doc """
-  Bulk insert package revisions using raw Ecto insert_all for performance.
+  Computes the set difference of package_ids between two channel revisions.
 
-  Handles chunking internally based on PostgreSQL's parameter limit.
-  Expects an enumerable of maps with keys: :package_id, :channel_revision_id, :version.
+  Returns `{added_ids, removed_ids}` where:
+  - `added_ids` are package_ids present in `new_id` but not `prev_id`
+  - `removed_ids` are package_ids present in `prev_id` but not `new_id`
+
+  Uses SQL EXCEPT for efficient server-side set operations.
   """
+  def diff_package_ids(new_id, prev_id) do
+    {:ok, %{rows: rows}} =
+      Tracker.Repo.query(
+        """
+        SELECT package_id, 'added' AS type FROM (
+          SELECT package_id FROM package_revisions WHERE channel_revision_id = $1
+          EXCEPT
+          SELECT package_id FROM package_revisions WHERE channel_revision_id = $2
+        ) added
+        UNION ALL
+        SELECT package_id, 'removed' AS type FROM (
+          SELECT package_id FROM package_revisions WHERE channel_revision_id = $2
+          EXCEPT
+          SELECT package_id FROM package_revisions WHERE channel_revision_id = $1
+        ) removed
+        """,
+        [new_id, prev_id]
+      )
+
+    Enum.split_with(rows, fn [_, type] -> type == "added" end)
+    |> then(fn {added, removed} ->
+      {Enum.map(added, &hd/1), Enum.map(removed, &hd/1)}
+    end)
+  end
+
   def bulk_insert_all(records) do
     now = DateTime.utc_now(:second)
 
