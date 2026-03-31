@@ -294,6 +294,34 @@ defmodule Tracker.Nixpkgs.ChannelWorkerTest do
     end
   end
 
+  describe "write_to_database with nil version" do
+    test "skips packages with nil version" do
+      data = %{
+        "version" => 2,
+        "revision" => "nil001",
+        "channel" => "nixos-unstable",
+        "released_at" => "2026-03-29T10:00:00Z",
+        "packages" => %{
+          "hello" => %{"version" => "2.12"},
+          "rPackages.MarketMatching" => %{
+            "name" => "r-MarketMatching",
+            "system" => "x86_64-linux",
+            "meta" => %{}
+          }
+        }
+      }
+
+      ChannelWorker.write_to_database(data)
+
+      hello = Ash.get!(Tracker.Nixpkgs.Package, %{attribute: "hello"})
+      assert hello != nil
+
+      # Package without version should not have a package_revision
+      assert {:error, _} =
+               Ash.get(Tracker.Nixpkgs.Package, %{attribute: "rPackages.MarketMatching"})
+    end
+  end
+
   describe "write_to_database with package events" do
     alias Tracker.Nixpkgs.ReleaseCache
     alias Tracker.Nixpkgs.ReleaseCache.Release
