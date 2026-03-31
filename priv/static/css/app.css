@@ -332,6 +332,14 @@ a.revision-link {
 	width: auto;
 }
 
+.revision-filters button {
+	margin-bottom: 0;
+	padding: 0.25rem 0.5rem;
+	font-size: 0.875rem;
+	height: auto;
+	width: auto;
+}
+
 .revision-filters label {
 	display: flex;
 	align-items: center;

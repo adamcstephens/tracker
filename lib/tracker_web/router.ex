@@ -31,7 +31,7 @@ defmodule TrackerWeb.Router do
       live "/channels", ChannelLive.Index, :index
       live "/channels/:channel", ChannelLive.Show, :show
       live "/channels/:channel/revisions/:revision", ChannelLive.RevisionShow, :show
-      live "/channels/diff/:rev_a/:rev_b", ChannelLive.Diff, :diff
+      live "/channels/:channel/diff/:rev_a/:rev_b", ChannelLive.Diff, :diff
       live "/maintainers", MaintainerLive.Index, :index
       live "/maintainers/:github", MaintainerLive.Show, :show
       live "/teams", TeamLive.Index, :index

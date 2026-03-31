@@ -100,12 +100,15 @@ defmodule TrackerWeb.ChannelLive.Diff do
   end
 
   @impl true
-  def handle_params(%{"rev_a" => rev_a_hash, "rev_b" => rev_b_hash}, _url, socket) do
-    rev_a = ChannelRevision.find_by_hash!(rev_a_hash)
-    rev_b = ChannelRevision.find_by_hash!(rev_b_hash)
+  def handle_params(
+        %{"channel" => channel, "rev_a" => rev_a_hash, "rev_b" => rev_b_hash},
+        _url,
+        socket
+      ) do
+    rev_a = ChannelRevision.find!(channel, rev_a_hash)
+    rev_b = ChannelRevision.find!(channel, rev_b_hash)
 
     {older, newer} = order_revisions(rev_a, rev_b)
-    channel = newer.channel
 
     events =
       PackageEvent.list_between_revisions!(channel, older.released_at, newer.released_at)

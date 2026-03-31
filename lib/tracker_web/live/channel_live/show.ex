@@ -60,7 +60,9 @@ defmodule TrackerWeb.ChannelLive.Show do
 
     <a
       :if={length(@selected_revisions) == 2}
-      href={~p"/channels/diff/#{Enum.at(@selected_revisions, 0)}/#{Enum.at(@selected_revisions, 1)}"}
+      href={
+        ~p"/channels/#{@channel}/diff/#{Enum.at(@selected_revisions, 0)}/#{Enum.at(@selected_revisions, 1)}"
+      }
       role="button"
       style="margin-top: 1rem; display: inline-block;"
     >

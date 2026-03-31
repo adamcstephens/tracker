@@ -33,7 +33,7 @@ defmodule TrackerWeb.PackageLive.Show do
       <dt><strong>Teams</strong></dt>
       <dd :for={t <- @package.teams}>
         <.link navigate={~p"/teams/#{t.short_name}"}>{t.short_name}</.link>
-        <span :if={t.scope}> —          {t.scope}</span>
+        <span :if={t.scope}> —            {t.scope}</span>
       </dd>
     </dl>
 
@@ -112,6 +112,7 @@ defmodule TrackerWeb.PackageLive.Show do
             checked={@all_revisions?}
           /> All revisions
         </label>
+        <button type="submit">Filter</button>
       </form>
     </div>
 
