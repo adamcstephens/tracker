@@ -10,4 +10,10 @@ if [ ! -d "$DATADIR" ]; then
   echo "listen_addresses = ''" >> "$DATADIR/postgresql.conf"
 fi
 
-exec postgres -D "$DATADIR"
+exec postgres -D "$DATADIR" \
+  -c shared_buffers=4GB \
+  -c effective_cache_size=12GB \
+  -c maintenance_work_mem=512MB \
+  -c work_mem=16MB \
+  -c random_page_cost=1.1 \
+  -c effective_io_concurrency=200

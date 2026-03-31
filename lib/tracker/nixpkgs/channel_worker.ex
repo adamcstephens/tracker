@@ -529,11 +529,8 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
   end
 
   defp detect_package_events(channel_revision, previous_revision) do
-    new_package_ids = package_ids_for_revision(channel_revision.id)
-    prev_package_ids = package_ids_for_revision(previous_revision.id)
-
-    added = MapSet.difference(new_package_ids, prev_package_ids)
-    removed = MapSet.difference(prev_package_ids, new_package_ids)
+    {added, removed} =
+      Tracker.Nixpkgs.PackageRevision.diff_package_ids(channel_revision.id, previous_revision.id)
 
     events =
       Enum.map(added, fn package_id ->
@@ -554,10 +551,5 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
   defp team_id_map do
     Tracker.Nixpkgs.Team.id_map!()
     |> Map.new(&{&1.short_name, &1.id})
-  end
-
-  defp package_ids_for_revision(channel_revision_id) do
-    Tracker.Nixpkgs.PackageRevision.by_channel_revision!(channel_revision_id)
-    |> MapSet.new(& &1.package_id)
   end
 end
