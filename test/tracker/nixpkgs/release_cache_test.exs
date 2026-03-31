@@ -93,4 +93,26 @@ defmodule Tracker.Nixpkgs.ReleaseCacheTest do
       assert ReleaseCache.find_previous_release(pid, "nonexistent", "aaa") == nil
     end
   end
+
+  describe "release cutoff" do
+    test "parse_releases excludes releases older than the cutoff date" do
+      # Simulate S3 contents with one old and one new release
+      contents = [
+        %{
+          "Key" => "nixos/unstable/nixos-unstable-new.abc1234",
+          "LastModified" => "2025-06-15T10:00:00Z"
+        },
+        %{
+          "Key" => "nixos/unstable/nixos-unstable-old.def5678",
+          "LastModified" => "2024-12-31T23:59:59Z"
+        }
+      ]
+
+      releases =
+        ReleaseCache.parse_releases(contents)
+
+      assert length(releases) == 1
+      assert hd(releases).short_hash == "abc1234"
+    end
+  end
 end

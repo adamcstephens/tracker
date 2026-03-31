@@ -12,6 +12,11 @@ defmodule Tracker.Nixpkgs.ReleaseCache do
 
   @releases_base_url "https://releases.nixos.org"
 
+  # Oldest release date we'll ingest. packages.json.br was introduced around
+  # 2020-03-27 02:16:34 (first seen on nixos-unstable-small), but we default
+  # to 2025-01-01 for now.
+  @release_cutoff_date "2025-01-01T00:00:00"
+
   defmodule Release do
     use TypedStruct
 
@@ -66,7 +71,8 @@ defmodule Tracker.Nixpkgs.ReleaseCache do
     GenServer.call(server, :list_releases)
   end
 
-  defp parse_releases(contents) do
+  @doc false
+  def parse_releases(contents) do
     contents
     |> List.wrap()
     |> Enum.map(fn %{"Key" => key, "LastModified" => last_modified} ->
@@ -78,6 +84,7 @@ defmodule Tracker.Nixpkgs.ReleaseCache do
         released_at: last_modified
       }
     end)
+    |> Enum.reject(fn release -> release.released_at < @release_cutoff_date end)
     |> Enum.sort_by(& &1.released_at, :desc)
   end
 
