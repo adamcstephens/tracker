@@ -258,7 +258,7 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
 
     {packages, maintainer_data, team_data, package_joins} =
       packages
-      |> Map.reject(fn {_attr, info} -> info["version"] == "" end)
+      |> Map.reject(fn {_attr, info} -> info["version"] in ["", nil] end)
       |> extract_packages(include_metadata?)
 
     id_map = load_packages(packages, channel_revision)
