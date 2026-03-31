@@ -505,7 +505,7 @@ defmodule TrackerWeb.PackageLive.Show do
     |> Enum.filter(&MapSet.member?(change_ids, &1.id))
     |> maybe_filter_channel_list(channel_filter)
     |> maybe_filter_version_list(version_filter)
-    |> Enum.sort_by(&sort_key(&1, sort_by), sort_dir)
+    |> Enum.sort_by(&sort_key(&1, sort_by), sort_order(sort_by, sort_dir))
   end
 
   defp maybe_filter_channel_list(revisions, ""), do: revisions
@@ -524,6 +524,9 @@ defmodule TrackerWeb.PackageLive.Show do
   defp sort_key(rev, :channel), do: rev.channel_revision.channel
   defp sort_key(rev, :revision_hash), do: rev.channel_revision.revision
   defp sort_key(rev, :released_at), do: rev.channel_revision.released_at
+
+  defp sort_order(:released_at, dir), do: {dir, DateTime}
+  defp sort_order(_, dir), do: dir
 
   defp revisions_path(package_name, sort_by, sort_dir, channel, version, all_revisions?, page) do
     params =
