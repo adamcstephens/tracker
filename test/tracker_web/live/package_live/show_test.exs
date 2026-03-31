@@ -120,6 +120,50 @@ defmodule TrackerWeb.PackageLive.ShowTest do
     assert version_order(html) == ["2.13.0", "2.12.1"]
   end
 
+  test "released_at descending sorts by temporal order across months", %{conn: conn} do
+    # Regression: DateTime structs compared with >= use term ordering
+    # (day before month), so Aug 30 > Sep 29 in broken comparison
+    pkg =
+      Tracker.Nixpkgs.Package
+      |> Ash.Changeset.for_create(:create, %{attribute: "crossmonth-pkg"})
+      |> Ash.create!()
+
+    cr_aug =
+      Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
+        channel: "nixos-unstable",
+        revision: "aug30aaa111222",
+        released_at: ~U[2025-08-30 17:40:00Z]
+      })
+
+    cr_sep =
+      Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
+        channel: "nixos-unstable",
+        revision: "sep29bbb333444",
+        released_at: ~U[2025-09-29 10:56:00Z]
+      })
+
+    Tracker.Nixpkgs.PackageRevision
+    |> Ash.Changeset.for_create(:load, %{
+      version: "6.16.0",
+      package_id: pkg.id,
+      channel_revision_id: cr_aug.id
+    })
+    |> Ash.create!()
+
+    Tracker.Nixpkgs.PackageRevision
+    |> Ash.Changeset.for_create(:load, %{
+      version: "6.17.0",
+      package_id: pkg.id,
+      channel_revision_id: cr_sep.id
+    })
+    |> Ash.create!()
+
+    {:ok, _view, html} = live(conn, ~p"/packages/crossmonth-pkg")
+
+    # Sep 29 is newer than Aug 30, so 6.17.0 must appear first
+    assert version_order(html) == ["6.17.0", "6.16.0"]
+  end
+
   test "sort by version ascending via URL param", %{conn: conn, package: package} do
     {:ok, _view, html} =
       live(conn, ~p"/packages/#{package.attribute}?sort_by=version&sort_dir=asc")
