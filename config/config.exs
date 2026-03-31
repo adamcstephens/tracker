@@ -9,7 +9,6 @@ import Config
 
 config :tracker,
   # loader_limit: 20,
-  http_cache: true,
   channels: [
     "nixos-unstable",
     "nixos-unstable-small",

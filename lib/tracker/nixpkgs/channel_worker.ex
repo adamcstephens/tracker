@@ -9,7 +9,7 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"channel" => channel, "base_url" => base_url} = args}) do
     force? = args["force"] == true
-    revision = Req.get!(req(), url: base_url <> "/git-revision").body
+    revision = Req.get!(Tracker.Nixpkgs.S3Cache.new(), url: base_url <> "/git-revision").body
 
     case Tracker.Nixpkgs.ChannelRevision.find(channel, revision) do
       {:ok, %Tracker.Nixpkgs.ChannelRevision{result: result}}
@@ -75,17 +75,21 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
     # get the redirected URL so we are consistent across queries
     # cache: false because we always want the latest redirect
     [base_url] =
-      Req.get!(req(), url: "https://channels.nixos.org/#{channel}", redirect: false, cache: false).headers[
+      Req.get!(Tracker.Nixpkgs.S3Cache.new(),
+        url: "https://channels.nixos.org/#{channel}",
+        redirect: false,
+        cache: false
+      ).headers[
         "location"
       ]
 
-    revision = Req.get!(req(), url: base_url <> "/git-revision").body
+    revision = Req.get!(Tracker.Nixpkgs.S3Cache.new(), url: base_url <> "/git-revision").body
 
     {revision, base_url}
   end
 
   def fetch_channel(channel, revision, base_url) do
-    Req.get!(req(), url: base_url <> "/packages.json.br", raw: true).body
+    Req.get!(Tracker.Nixpkgs.S3Cache.new(), url: base_url <> "/packages.json.br", raw: true).body
     |> ExBrotli.decompress!()
     |> :json.decode()
     |> Map.put("revision", revision)
@@ -187,7 +191,7 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
   """
   def fetch_released_at(base_url) do
     key = String.replace_prefix(base_url, @releases_base_url <> "/", "")
-    req_s3 = req() |> ReqS3.attach()
+    req_s3 = Req.new() |> ReqS3.attach()
 
     resp = Req.get!(req_s3, url: "s3://nix-releases", params: [prefix: key, max_keys: 1])
 
@@ -304,17 +308,6 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
   defp normalize_homepage(nil), do: nil
   defp normalize_homepage(urls) when is_list(urls), do: urls
   defp normalize_homepage(url) when is_binary(url), do: [url]
-
-  defp req do
-    if Application.get_env(:tracker, :http_cache, false) do
-      Req.new(
-        cache: true,
-        cache_dir: Application.get_env(:tracker, :cache_dir, "_build/releases_cache")
-      )
-    else
-      Req.new()
-    end
-  end
 
   # packages is %{attribute => %{version, description?, homepage?}} (already slimmed)
   defp load_packages(packages, channel_revision) do

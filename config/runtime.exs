@@ -20,6 +20,15 @@ if System.get_env("PHX_SERVER") do
   config :tracker, TrackerWeb.Endpoint, server: true
 end
 
+if System.get_env("TRACKER_S3_BUCKET") do
+  config :tracker, :s3_cache,
+    bucket: System.fetch_env!("TRACKER_S3_BUCKET"),
+    access_key_id: System.fetch_env!("TRACKER_S3_ACCESS_KEY"),
+    secret_access_key: System.fetch_env!("TRACKER_S3_SECRET_KEY"),
+    endpoint: System.fetch_env!("TRACKER_S3_ENDPOINT"),
+    region: System.fetch_env!("TRACKER_S3_REGION")
+end
+
 github_client_id = System.fetch_env!("TRACKER_GITHUB_CLIENT_ID")
 
 github_client_secret =
