@@ -93,7 +93,7 @@ defmodule Tracker.Nixpkgs.ReleaseCache do
   defp channel_to_s3_prefix(channel), do: "#{channel}/"
 
   defp fetch_releases(channel) do
-    req_s3 = req() |> ReqS3.attach()
+    req_s3 = Req.new() |> ReqS3.attach()
     fetch_releases(req_s3, channel, nil, [])
   end
 
@@ -192,14 +192,5 @@ defmodule Tracker.Nixpkgs.ReleaseCache do
   defp schedule_refresh do
     interval = Application.get_env(:tracker, :release_cache_interval, :timer.hours(1))
     Process.send_after(self(), :refresh, interval)
-  end
-
-  defp req do
-    if Application.get_env(:tracker, :http_cache, false) do
-      cache_dir = Application.get_env(:tracker, :cache_dir, "_build/releases_cache")
-      Req.new(cache: true, cache_dir: cache_dir)
-    else
-      Req.new()
-    end
   end
 end

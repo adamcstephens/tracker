@@ -28,7 +28,7 @@ defmodule TrackerWeb.MaintainerLive.Show do
       <ul>
         <li :for={t <- @maintainer.teams}>
           <.link navigate={~p"/teams/#{t.short_name}"}>{t.short_name}</.link>
-          <span :if={t.scope}> —       {t.scope}</span>
+          <span :if={t.scope}> —        {t.scope}</span>
         </li>
       </ul>
     </div>
