@@ -8,7 +8,7 @@ defmodule Tracker.Nixpkgs.Change do
 
   code_interface do
     define :read
-    define :list, args: [{:optional, :search}, {:optional, :author}, {:optional, :base_ref}]
+    define :list, args: [{:optional, :search}, {:optional, :base_ref}]
     define :get_by_number, action: :read, get_by: [:number]
     define :by_package, args: [:package_id]
     define :by_maintainer_github_id, args: [:github_id]
@@ -23,7 +23,6 @@ defmodule Tracker.Nixpkgs.Change do
 
     read :list do
       argument :search, :ci_string
-      argument :author, :string
       argument :base_ref, :string
 
       pagination do
@@ -34,15 +33,10 @@ defmodule Tracker.Nixpkgs.Change do
 
       filter expr(
                if not is_nil(^arg(:search)) and ^arg(:search) != "" do
-                 contains(title, ^arg(:search))
+                 contains(title, ^arg(:search)) or contains(author, ^arg(:search))
                else
                  true
                end and
-                 if not is_nil(^arg(:author)) and ^arg(:author) != "" do
-                   author == ^arg(:author)
-                 else
-                   true
-                 end and
                  if not is_nil(^arg(:base_ref)) and ^arg(:base_ref) != "" do
                    base_ref == ^arg(:base_ref)
                  else
