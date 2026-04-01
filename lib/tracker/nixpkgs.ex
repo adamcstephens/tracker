@@ -20,5 +20,7 @@ defmodule Tracker.Nixpkgs do
     resource Tracker.Nixpkgs.OptionRevision
     resource Tracker.Nixpkgs.OptionEvent
     resource Tracker.Nixpkgs.OptionPackage
+    resource Tracker.Nixpkgs.Change
+    resource Tracker.Nixpkgs.ChangePackage
   end
 end
