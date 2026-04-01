@@ -22,7 +22,7 @@ defmodule TrackerWeb.ModuleLive.Show do
       <ul>
         <li :for={pkg <- @packages}>
           <.link navigate={~p"/packages/#{pkg.attribute}"}>{pkg.attribute}</.link>
-          <small :if={pkg.description}> —    {pkg.description}</small>
+          <small :if={pkg.description}> —      {pkg.description}</small>
         </li>
       </ul>
     </section>

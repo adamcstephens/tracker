@@ -35,7 +35,7 @@ defmodule TrackerWeb.PackageLive.Show do
       <dt><strong>Teams</strong></dt>
       <dd :for={t <- @package.teams}>
         <.link navigate={~p"/teams/#{t.short_name}"}>{t.short_name}</.link>
-        <span :if={t.scope}> —                         {t.scope}</span>
+        <span :if={t.scope}> —                             {t.scope}</span>
       </dd>
     </dl>
 
@@ -67,7 +67,7 @@ defmodule TrackerWeb.PackageLive.Show do
           <% rev = Map.get(@option_revisions, opt.id) %>
           <small :if={rev}>
             <span :if={rev.type}> ({rev.type})</span>
-            <span :if={rev.description}> —        {rev.description}</span>
+            <span :if={rev.description}> —            {rev.description}</span>
           </small>
         </li>
       </ul>
@@ -162,6 +162,13 @@ defmodule TrackerWeb.PackageLive.Show do
           /> All revisions
         </label>
         <button type="submit">Filter</button>
+        <a
+          href={"/feeds/packages/#{@package.attribute}"}
+          title="Atom feed"
+          style="display: flex; align-items: center;"
+        >
+          <img src="/images/feed.svg" alt="Atom feed" width="20" height="20" />
+        </a>
       </form>
     </div>
 

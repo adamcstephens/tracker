@@ -11,6 +11,11 @@ defmodule TrackerWeb.ChannelLive.Show do
     <.header>
       {@channel}
       <:subtitle>Channel revisions</:subtitle>
+      <:actions>
+        <a href={"/feeds/channels/#{@channel}"} title="Atom feed">
+          <img src="/images/feed.svg" alt="Atom feed" width="20" height="20" />
+        </a>
+      </:actions>
     </.header>
 
     <figure :if={@has_revisions?}>

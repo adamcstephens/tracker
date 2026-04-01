@@ -38,6 +38,7 @@ defmodule Tracker.MixProject do
       {:usage_rules, "~> 1.0", only: [:dev]},
       {:tidewave, "~> 0.5", only: [:dev]},
       {:ash, "~> 3.0"},
+      {:atomex, "~> 0.5.1"},
       {:ash_admin, "~> 0.14"},
       {:ash_authentication, "~> 4.0"},
       {:ash_authentication_phoenix, "~> 2.15"},
