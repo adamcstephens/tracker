@@ -173,7 +173,10 @@ defmodule Tracker.Nixpkgs.OptionsWorker do
     end)
     |> Tracker.Nixpkgs.OptionRevision.bulk_insert_all()
 
-    # Step 5: Detect option events if there's a previous revision
+    # Step 5: Link options to packages
+    link_options_to_packages(options_map, option_id_map)
+
+    # Step 6: Detect option events if there's a previous revision
     if channel_revision.previous_channel_revision_id do
       detect_option_events(channel_revision)
     end
@@ -270,6 +273,42 @@ defmodule Tracker.Nixpkgs.OptionsWorker do
         end)
 
     Tracker.Nixpkgs.OptionEvent.bulk_create_all(events)
+  end
+
+  defp link_options_to_packages(options_map, option_id_map) do
+    alias Tracker.Nixpkgs.OptionPackageLinker
+
+    links = OptionPackageLinker.extract_links(options_map)
+
+    # Collect unique attribute paths and batch lookup package IDs
+    attr_paths = links |> Enum.map(&elem(&1, 1)) |> Enum.uniq()
+
+    package_id_map =
+      case attr_paths do
+        [] ->
+          %{}
+
+        paths ->
+          from(p in "packages",
+            where: p.attribute in ^paths,
+            select: {p.attribute, p.id}
+          )
+          |> Tracker.Repo.all()
+          |> Map.new()
+      end
+
+    # Build join records, skipping unresolved attributes
+    links
+    |> Enum.flat_map(fn {option_name, attr_path} ->
+      with {:ok, option_id} <- Map.fetch(option_id_map, option_name),
+           {:ok, package_id} <- Map.fetch(package_id_map, attr_path) do
+        [%{option_id: option_id, package_id: package_id}]
+      else
+        _ -> []
+      end
+    end)
+    |> Enum.uniq()
+    |> Tracker.Nixpkgs.OptionPackage.bulk_create_all()
   end
 
   defp maybe_put(map, _key, nil), do: map

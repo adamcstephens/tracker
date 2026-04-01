@@ -19,5 +19,6 @@ defmodule Tracker.Nixpkgs do
     resource Tracker.Nixpkgs.Option
     resource Tracker.Nixpkgs.OptionRevision
     resource Tracker.Nixpkgs.OptionEvent
+    resource Tracker.Nixpkgs.OptionPackage
   end
 end

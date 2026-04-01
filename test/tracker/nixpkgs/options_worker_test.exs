@@ -388,6 +388,97 @@ defmodule Tracker.Nixpkgs.OptionsWorkerTest do
     end
   end
 
+  describe "option-package linking" do
+    test "creates OptionPackage links for type=package with pkgs.ATTR default" do
+      channel_revision = create_successful_revision("nixos-unstable", "link001")
+
+      # Create packages in the DB first
+      Tracker.Nixpkgs.Package.bulk_upsert_all([
+        %{attribute: "nginx"},
+        %{attribute: "openssh"}
+      ])
+
+      options = %{
+        "services.nginx.package" => %{
+          "declarations" => ["nixos/modules/services/web-servers/nginx/default.nix"],
+          "description" => "The nginx package.",
+          "loc" => ["services", "nginx", "package"],
+          "readOnly" => false,
+          "type" => "package",
+          "default" => %{"_type" => "literalExpression", "text" => "pkgs.nginx"}
+        },
+        "services.openssh.package" => %{
+          "declarations" => ["nixos/modules/services/networking/ssh/sshd.nix"],
+          "description" => "The openssh package.",
+          "loc" => ["services", "openssh", "package"],
+          "readOnly" => false,
+          "type" => "package",
+          "default" => %{"_type" => "literalExpression", "text" => "pkgs.openssh"}
+        }
+      }
+
+      OptionsWorker.write_to_database(options, channel_revision)
+
+      option_packages = Ash.read!(Tracker.Nixpkgs.OptionPackage)
+      assert length(option_packages) == 2
+
+      nginx_opt =
+        Enum.find(Ash.read!(Tracker.Nixpkgs.Option), &(&1.name == "services.nginx.package"))
+
+      nginx_pkg_id = Tracker.Nixpkgs.Package.get_by_attribute!("nginx").id
+
+      assert Enum.any?(option_packages, fn op ->
+               op.option_id == nginx_opt.id and op.package_id == nginx_pkg_id
+             end)
+    end
+
+    test "skips unresolved attribute paths" do
+      channel_revision = create_successful_revision("nixos-unstable", "link002")
+
+      # No packages in DB — attribute won't resolve
+      options = %{
+        "services.nonexistent.package" => %{
+          "declarations" => ["nixos/modules/test.nix"],
+          "description" => "Test.",
+          "loc" => ["services", "nonexistent", "package"],
+          "readOnly" => false,
+          "type" => "package",
+          "default" => %{"_type" => "literalExpression", "text" => "pkgs.does-not-exist"}
+        }
+      }
+
+      OptionsWorker.write_to_database(options, channel_revision)
+
+      assert Ash.read!(Tracker.Nixpkgs.OptionPackage) == []
+    end
+
+    test "creates links from relatedPackages field" do
+      channel_revision = create_successful_revision("nixos-unstable", "link003")
+
+      Tracker.Nixpkgs.Package.bulk_upsert_all([
+        %{attribute: "xorg.xorgserver"},
+        %{attribute: "xterm"}
+      ])
+
+      options = %{
+        "services.xserver.enable" => %{
+          "declarations" => ["nixos/modules/services/x11/xserver.nix"],
+          "description" => "Enable X server.",
+          "loc" => ["services", "xserver", "enable"],
+          "readOnly" => false,
+          "type" => "boolean",
+          "relatedPackages" =>
+            "- [`pkgs.xorg.xorgserver`](#opt-services.xserver.package)\n- [`pkgs.xterm`](#opt-something)"
+        }
+      }
+
+      OptionsWorker.write_to_database(options, channel_revision)
+
+      option_packages = Ash.read!(Tracker.Nixpkgs.OptionPackage)
+      assert length(option_packages) == 2
+    end
+  end
+
   describe "backfill_channel/1" do
     test "schedules jobs for successful revisions missing options" do
       alias Tracker.Nixpkgs.ReleaseCache
