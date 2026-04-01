@@ -44,3 +44,4 @@ data/
 .secret.envrc
 *key.pem
 .s.PGSQL*
+.dev-*

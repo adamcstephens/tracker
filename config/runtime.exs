@@ -34,7 +34,7 @@ github_client_id = System.fetch_env!("TRACKER_GITHUB_CLIENT_ID")
 github_client_secret =
   System.fetch_env!("TRACKER_GITHUB_CLIENT_SECRET_FILE") |> File.read!() |> String.trim()
 
-github_app_id = System.fetch_env!("TRACKER_GITHUB_APP_ID") |> Integer.parse()
+github_app_id = System.fetch_env!("TRACKER_GITHUB_APP_ID") |> String.to_integer()
 
 github_app_private_key =
   System.fetch_env!("TRACKER_GITHUB_APP_PRIVATE_KEY_FILE") |> File.read!() |> String.trim()
