@@ -15,15 +15,16 @@ defmodule Tracker.Nixpkgs.ChangePollWorkerTest do
         step: nil
       }
 
-      assert {:snooze, 60} = ChangePollWorker.handle_fetch_result({:error, error})
+      assert {:snooze, _seconds} =
+               ChangePollWorker.handle_fetch_result({:error, error}, "fake-token")
     end
   end
 
   describe "process_pull_requests/1" do
     test "enqueues jobs for merged PRs" do
       pulls = [
-        %GitHub.PullRequest{number: 1001, merged_at: ~U[2026-04-01 12:00:00Z]},
-        %GitHub.PullRequest{number: 1002, merged_at: ~U[2026-04-01 13:00:00Z]}
+        pr_struct(number: 1001, merged_at: ~U[2026-04-01 12:00:00Z]),
+        pr_struct(number: 1002, merged_at: ~U[2026-04-01 13:00:00Z])
       ]
 
       assert {:ok, 2} = ChangePollWorker.process_pull_requests(pulls)
@@ -34,8 +35,8 @@ defmodule Tracker.Nixpkgs.ChangePollWorkerTest do
 
     test "skips PRs that are not merged" do
       pulls = [
-        %GitHub.PullRequest{number: 2001, merged_at: nil},
-        %GitHub.PullRequest{number: 2002, merged_at: nil}
+        pr_struct(number: 2001, merged_at: nil, merged: false, state: "closed"),
+        pr_struct(number: 2002, merged_at: nil, merged: false, state: "open")
       ]
 
       assert {:ok, 0} = ChangePollWorker.process_pull_requests(pulls)
@@ -55,8 +56,8 @@ defmodule Tracker.Nixpkgs.ChangePollWorkerTest do
       ])
 
       pulls = [
-        %GitHub.PullRequest{number: 3001, merged_at: ~U[2026-04-01 12:00:00Z]},
-        %GitHub.PullRequest{number: 3002, merged_at: ~U[2026-04-01 13:00:00Z]}
+        pr_struct(number: 3001, merged_at: ~U[2026-04-01 12:00:00Z]),
+        pr_struct(number: 3002, merged_at: ~U[2026-04-01 13:00:00Z])
       ]
 
       assert {:ok, 1} = ChangePollWorker.process_pull_requests(pulls)
@@ -64,5 +65,36 @@ defmodule Tracker.Nixpkgs.ChangePollWorkerTest do
       refute_enqueued(worker: Tracker.Nixpkgs.ChangeProcessWorker, args: %{"number" => 3001})
       assert_enqueued(worker: Tracker.Nixpkgs.ChangeProcessWorker, args: %{"number" => 3002})
     end
+
+    test "upserts Change records from list data" do
+      pulls = [
+        pr_struct(number: 4001, title: "feat: cool thing", merged_at: ~U[2026-04-01 12:00:00Z])
+      ]
+
+      ChangePollWorker.process_pull_requests(pulls)
+
+      change = Tracker.Nixpkgs.Change.get_by_number!(4001)
+      assert change.title == "feat: cool thing"
+      assert change.merge_commit_sha == "abc123"
+    end
+  end
+
+  defp pr_struct(overrides \\ []) do
+    defaults = [
+      number: 1,
+      title: "test PR",
+      state: "closed",
+      merged: true,
+      merged_at: ~U[2026-04-01 12:00:00Z],
+      created_at: ~U[2026-04-01 10:00:00Z],
+      merge_commit_sha: "abc123",
+      html_url: "https://github.com/NixOS/nixpkgs/pull/1",
+      user: %GitHub.User{login: "testuser", id: 1},
+      merged_by: %GitHub.User{login: "merger", id: 2},
+      base: %GitHub.PullRequest.Base{ref: "master"},
+      labels: []
+    ]
+
+    struct!(GitHub.PullRequest, Keyword.merge(defaults, overrides))
   end
 end
