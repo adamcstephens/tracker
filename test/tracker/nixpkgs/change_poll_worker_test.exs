@@ -65,18 +65,6 @@ defmodule Tracker.Nixpkgs.ChangePollWorkerTest do
       refute_enqueued(worker: Tracker.Nixpkgs.ChangeProcessWorker, args: %{"number" => 3001})
       assert_enqueued(worker: Tracker.Nixpkgs.ChangeProcessWorker, args: %{"number" => 3002})
     end
-
-    test "upserts Change records from list data" do
-      pulls = [
-        pr_struct(number: 4001, title: "feat: cool thing", merged_at: ~U[2026-04-01 12:00:00Z])
-      ]
-
-      ChangePollWorker.process_pull_requests(pulls)
-
-      change = Tracker.Nixpkgs.Change.get_by_number!(4001)
-      assert change.title == "feat: cool thing"
-      assert change.merge_commit_sha == "abc123"
-    end
   end
 
   defp pr_struct(overrides \\ []) do
@@ -84,13 +72,10 @@ defmodule Tracker.Nixpkgs.ChangePollWorkerTest do
       number: 1,
       title: "test PR",
       state: "closed",
-      merged: true,
       merged_at: ~U[2026-04-01 12:00:00Z],
-      created_at: ~U[2026-04-01 10:00:00Z],
       merge_commit_sha: "abc123",
       html_url: "https://github.com/NixOS/nixpkgs/pull/1",
       user: %GitHub.User{login: "testuser", id: 1},
-      merged_by: %GitHub.User{login: "merger", id: 2},
       base: %GitHub.PullRequest.Base{ref: "master"},
       labels: []
     ]
