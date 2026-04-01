@@ -35,10 +35,8 @@ defmodule TrackerWeb.ChannelLive.Index do
           <tr
             :for={{dom_id, channel} <- @streams.channels}
             id={dom_id}
-            phx-click={JS.navigate(~p"/channels/#{channel.name}")}
-            style="cursor: pointer"
           >
-            <td>{channel.name}</td>
+            <td><.link navigate={~p"/channels/#{channel.name}"}>{channel.name}</.link></td>
             <td>{channel.count}</td>
             <td>{format_date(channel.latest_release)}</td>
           </tr>

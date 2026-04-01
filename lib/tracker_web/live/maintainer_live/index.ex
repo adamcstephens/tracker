@@ -21,16 +21,11 @@ defmodule TrackerWeb.MaintainerLive.Index do
     <.table
       id="maintainers"
       rows={@streams.maintainers}
-      row_click={fn {_id, m} -> JS.navigate(~p"/maintainers/#{m.github}") end}
     >
-      <:col :let={{_id, m}} label="Name">{m.name || m.github}</:col>
+      <:col :let={{_id, m}} label="Name">
+        <.link navigate={~p"/maintainers/#{m.github}"}>{m.name || m.github}</.link>
+      </:col>
       <:col :let={{_id, m}} label="GitHub">{m.github}</:col>
-
-      <:action :let={{_id, m}}>
-        <div class="sr-only">
-          <.link navigate={~p"/maintainers/#{m.github}"}>Show</.link>
-        </div>
-      </:action>
     </.table>
 
     <nav style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-top: 1rem;">
