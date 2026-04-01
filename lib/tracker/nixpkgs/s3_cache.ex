@@ -83,7 +83,7 @@ defmodule Tracker.Nixpkgs.S3Cache do
       url = URI.to_string(request.url)
       key = cache_key(url)
 
-      case get_from_cache(config, key) do
+      case get_object(config, key) do
         {:ok, body} ->
           response = %Req.Response{status: 200, body: body}
           request = Req.Request.merge_options(request, s3_cache_hit: true)
@@ -116,15 +116,15 @@ defmodule Tracker.Nixpkgs.S3Cache do
         actual_hash = :crypto.hash(:sha256, body) |> Base.encode16(case: :lower)
 
         if actual_hash == expected_hash do
-          put_in_cache(config, key, body)
+          put_object(config, key, body)
           sidecar_key = key <> ".sha256"
-          put_in_cache(config, sidecar_key, sidecar_body)
+          put_object(config, sidecar_key, sidecar_body)
         else
           raise "SHA-256 mismatch for #{url}: expected #{expected_hash}, got #{actual_hash}"
         end
 
       :no_sidecar ->
-        put_in_cache(config, key, body)
+        put_object(config, key, body)
     end
   end
 
@@ -149,7 +149,10 @@ defmodule Tracker.Nixpkgs.S3Cache do
     end
   end
 
-  defp cache_req(config) do
+  @doc """
+  Builds a Req request configured for S3 access.
+  """
+  def s3_req(config) do
     req = Req.new()
 
     if config.plug do
@@ -167,7 +170,10 @@ defmodule Tracker.Nixpkgs.S3Cache do
     end
   end
 
-  defp cache_url(config, key) do
+  @doc """
+  Builds the S3 URL for a given key.
+  """
+  def s3_url(config, key) do
     if config.plug do
       "/#{config.bucket}/#{key}"
     else
@@ -175,9 +181,12 @@ defmodule Tracker.Nixpkgs.S3Cache do
     end
   end
 
-  defp get_from_cache(config, key) do
-    req = cache_req(config)
-    url = cache_url(config, key)
+  @doc """
+  Gets an object from S3. Returns `{:ok, body}` or `:miss`.
+  """
+  def get_object(config, key) do
+    req = s3_req(config)
+    url = s3_url(config, key)
 
     case Req.get(req, url: url, decode_body: false, retry: false) do
       {:ok, %Req.Response{status: 200, body: body}} ->
@@ -188,9 +197,12 @@ defmodule Tracker.Nixpkgs.S3Cache do
     end
   end
 
-  defp put_in_cache(config, key, body) do
-    req = cache_req(config)
-    url = cache_url(config, key)
+  @doc """
+  Puts an object into S3. Returns `:ok` or `:error`.
+  """
+  def put_object(config, key, body) do
+    req = s3_req(config)
+    url = s3_url(config, key)
 
     case Req.put(req, url: url, body: body) do
       {:ok, %Req.Response{status: status}} when status in 200..299 ->
