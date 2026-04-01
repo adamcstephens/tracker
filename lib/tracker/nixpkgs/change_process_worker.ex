@@ -16,7 +16,7 @@ defmodule Tracker.Nixpkgs.ChangeProcessWorker do
 
     with {:ok, pr} <- GitHub.Pulls.get(owner, repo, number, auth: token),
          {:ok, change} <- upsert_change(pr),
-         {:ok, attrdiff} <- fetch_attrdiff(pr.merge_commit_sha, token) do
+         {:ok, attrdiff} <- fetch_attrdiff(number, pr.merge_commit_sha, token) do
       link_packages(change, attrdiff)
       :ok
     else
@@ -94,11 +94,11 @@ defmodule Tracker.Nixpkgs.ChangeProcessWorker do
     |> Enum.map(& &1.id)
   end
 
-  defp fetch_attrdiff(merge_commit_sha, token) do
+  defp fetch_attrdiff(pr_number, merge_commit_sha, token) do
     [owner, repo] = String.split(@repo, "/")
 
     with {:ok, run_id} <- find_merge_group_run(owner, repo, merge_commit_sha, token),
-         {:ok, attrdiff} <- download_changed_paths(owner, repo, run_id, token) do
+         {:ok, attrdiff} <- download_changed_paths(owner, repo, pr_number, run_id, token) do
       {:ok, attrdiff}
     end
   end
@@ -133,7 +133,7 @@ defmodule Tracker.Nixpkgs.ChangeProcessWorker do
     end
   end
 
-  defp download_changed_paths(owner, repo, run_id, token) do
+  defp download_changed_paths(owner, repo, pr_number, run_id, token) do
     case GitHub.Actions.list_workflow_run_artifacts(owner, repo, run_id, auth: token) do
       {:ok, %{artifacts: artifacts}} ->
         case Enum.find(artifacts, &(&1.name == "comparison")) do
@@ -141,53 +141,15 @@ defmodule Tracker.Nixpkgs.ChangeProcessWorker do
             {:error, "No comparison artifact found for run #{run_id}"}
 
           artifact ->
-            download_and_extract_attrdiff(artifact.archive_download_url, token)
+            Tracker.Nixpkgs.ChangeArtifactCache.fetch_comparison(
+              pr_number,
+              artifact.archive_download_url,
+              token
+            )
         end
 
       {:error, reason} ->
         {:error, reason}
-    end
-  end
-
-  defp download_and_extract_attrdiff(archive_url, token) do
-    case Req.get(archive_url,
-           headers: %{"authorization" => "bearer #{token}", "user-agent" => "Tracker"},
-           redirect: true,
-           decode_body: false
-         ) do
-      {:ok, %{status: 200, body: zip_body}} ->
-        extract_attrdiff_from_zip(zip_body)
-
-      {:ok, %{status: status}} ->
-        {:error, "Artifact download failed with status #{status}"}
-
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
-
-  defp extract_attrdiff_from_zip(zip_body) do
-    case :zip.extract(zip_body, [:memory]) do
-      {:ok, files} ->
-        case List.keyfind(files, ~c"changed-paths.json", 0) do
-          {_, contents} ->
-            case Jason.decode(contents) do
-              {:ok, %{"attrdiff" => attrdiff}} ->
-                {:ok, attrdiff}
-
-              {:ok, _} ->
-                {:error, "changed-paths.json missing attrdiff key"}
-
-              {:error, reason} ->
-                {:error, "Failed to parse changed-paths.json: #{inspect(reason)}"}
-            end
-
-          nil ->
-            {:error, "changed-paths.json not found in comparison artifact"}
-        end
-
-      {:error, reason} ->
-        {:error, "Failed to extract zip: #{inspect(reason)}"}
     end
   end
 
