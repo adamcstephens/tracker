@@ -29,8 +29,6 @@ defmodule Tracker.Nixpkgs.Change do
         default_limit 15
       end
 
-      prepare build(sort: [number: :desc])
-
       filter expr(
                if not is_nil(^arg(:search)) and ^arg(:search) != "" do
                  contains(title, ^arg(:search))
