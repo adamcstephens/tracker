@@ -8,12 +8,44 @@ defmodule Tracker.Nixpkgs.Module do
 
   code_interface do
     define :read
+    define :list, args: [{:optional, :search}]
+    define :get_by_id, args: [:id]
     define :bulk_upsert, args: [:declaration]
     define :id_map, action: :id_map
   end
 
   actions do
     defaults [:read]
+
+    read :list do
+      argument :search, :ci_string
+
+      pagination do
+        offset? true
+        countable true
+        default_limit 15
+      end
+
+      prepare build(sort: :display_name, load: [:option_count])
+
+      filter expr(
+               if not is_nil(^arg(:search)) and ^arg(:search) != "" do
+                 contains(display_name, ^arg(:search))
+               else
+                 true
+               end
+             )
+    end
+
+    read :get_by_id do
+      get? true
+
+      argument :id, :integer do
+        allow_nil? false
+      end
+
+      filter expr(id == ^arg(:id))
+    end
 
     read :id_map do
       prepare build(select: [:declaration])
@@ -45,6 +77,10 @@ defmodule Tracker.Nixpkgs.Module do
 
   relationships do
     has_many :options, Tracker.Nixpkgs.Option
+  end
+
+  aggregates do
+    count :option_count, :options
   end
 
   identities do
