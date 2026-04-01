@@ -1,6 +1,8 @@
 defmodule TrackerWeb.ModuleLive.Show do
   use TrackerWeb, :live_view
 
+  import TrackerWeb.CodeHighlight
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -20,7 +22,7 @@ defmodule TrackerWeb.ModuleLive.Show do
       <ul>
         <li :for={pkg <- @packages}>
           <.link navigate={~p"/packages/#{pkg.attribute}"}>{pkg.attribute}</.link>
-          <small :if={pkg.description}> —   {pkg.description}</small>
+          <small :if={pkg.description}> —    {pkg.description}</small>
         </li>
       </ul>
     </section>
@@ -47,10 +49,10 @@ defmodule TrackerWeb.ModuleLive.Show do
 
           <dl>
             <dt :if={rev.default}>Default</dt>
-            <dd :if={rev.default}><pre><code>{rev.default}</code></pre></dd>
+            <dd :if={rev.default}><.code_block code={rev.default} /></dd>
 
             <dt :if={rev.example}>Example</dt>
-            <dd :if={rev.example}><pre><code>{rev.example}</code></pre></dd>
+            <dd :if={rev.example}><.code_block code={rev.example} /></dd>
           </dl>
         </div>
 

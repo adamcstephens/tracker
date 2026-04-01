@@ -58,6 +58,7 @@ defmodule Tracker.MixProject do
       {:httpoison, "~> 2.2"},
       {:igniter, "~> 0.5", only: [:dev, :test]},
       {:jason, "~> 1.2"},
+      {:lumis, "~> 0.1.2"},
       {:jose, "~> 1.11"},
       {:oapi_github, "~> 0.3.3"},
       {:oban, "~> 2.0"},
