@@ -37,6 +37,8 @@ defmodule TrackerWeb.Router do
       live "/options", OptionLive.Index, :index
       live "/maintainers", MaintainerLive.Index, :index
       live "/maintainers/:github", MaintainerLive.Show, :show
+      live "/changes", ChangeLive.Index, :index
+      live "/changes/:number", ChangeLive.Show, :show
       live "/teams", TeamLive.Index, :index
       live "/teams/:short_name", TeamLive.Show, :show
     end
