@@ -17,6 +17,7 @@ defmodule Tracker.Nixpkgs.Package do
     define :family_siblings, args: [:package_family_id, :exclude_id]
     define :by_module, args: [:module_id]
     define :id_map, action: :id_map
+    define :ids_by_attributes, args: [:attributes]
   end
 
   actions do
@@ -115,6 +116,12 @@ defmodule Tracker.Nixpkgs.Package do
 
     read :id_map do
       prepare build(select: [:attribute])
+    end
+
+    read :ids_by_attributes do
+      argument :attributes, {:array, :string}, allow_nil?: false
+
+      filter expr(attribute in ^arg(:attributes))
     end
 
     create :create do
