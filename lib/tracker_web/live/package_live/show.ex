@@ -35,7 +35,7 @@ defmodule TrackerWeb.PackageLive.Show do
       <dt><strong>Teams</strong></dt>
       <dd :for={t <- @package.teams}>
         <.link navigate={~p"/teams/#{t.short_name}"}>{t.short_name}</.link>
-        <span :if={t.scope}> —                  {t.scope}</span>
+        <span :if={t.scope}> —                   {t.scope}</span>
       </dd>
     </dl>
 
@@ -55,6 +55,23 @@ defmodule TrackerWeb.PackageLive.Show do
         <span :if={sibling.set_version}> ({sibling.set_version})</span>
       </dd>
     </dl>
+
+    <section :if={@package.options != []}>
+      <h2>NixOS Options</h2>
+      <ul>
+        <li :for={opt <- @package.options}>
+          <.link :if={opt.module} navigate={"/modules/#{opt.module.display_name}#opt-#{opt.name}"}>
+            {opt.name}
+          </.link>
+          <span :if={!opt.module}>{opt.name}</span>
+          <% rev = Map.get(@option_revisions, opt.id) %>
+          <small :if={rev}>
+            <span :if={rev.type}> ({rev.type})</span>
+            <span :if={rev.description}> —  {rev.description}</span>
+          </small>
+        </li>
+      </ul>
+    </section>
 
     <section :if={@package_events != []}>
       <h2>Lifecycle Events</h2>
@@ -251,9 +268,17 @@ defmodule TrackerWeb.PackageLive.Show do
   @impl true
   def handle_params(%{"name" => name} = params, _url, socket) do
     package =
-      Tracker.Nixpkgs.Package.get_by_attribute!(name, load: [:maintainers, :teams])
+      Tracker.Nixpkgs.Package.get_by_attribute!(name,
+        load: [:maintainers, :teams, options: [:module]]
+      )
 
     family_siblings = load_family_siblings(package)
+    option_ids = Enum.map(package.options, & &1.id)
+
+    option_revisions =
+      option_ids
+      |> Tracker.Nixpkgs.OptionRevision.latest_by_option_ids!()
+      |> Map.new(&{&1.option_id, &1})
 
     sort_by = parse_sort_by(params["sort_by"])
     sort_dir = parse_sort_dir(params["sort_dir"])
@@ -282,6 +307,7 @@ defmodule TrackerWeb.PackageLive.Show do
      |> assign(:page_title, package.attribute)
      |> assign(:package, package)
      |> assign(:family_siblings, family_siblings)
+     |> assign(:option_revisions, option_revisions)
      |> assign(:sort_by, sort_by)
      |> assign(:sort_dir, sort_dir)
      |> assign(:channel_filter, channel_filter)
