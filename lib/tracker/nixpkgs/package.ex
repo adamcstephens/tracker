@@ -128,7 +128,7 @@ defmodule Tracker.Nixpkgs.Package do
       prepare build(sort: :attribute)
 
       filter expr(
-               exists(changes, id == ^arg(:change_id)) and
+               exists(change_packages, change_id == ^arg(:change_id)) and
                  if not is_nil(^arg(:search)) and ^arg(:search) != "" do
                    contains(attribute, ^arg(:search))
                  else
@@ -225,6 +225,8 @@ defmodule Tracker.Nixpkgs.Package do
       source_attribute_on_join_resource :package_id
       destination_attribute_on_join_resource :option_id
     end
+
+    has_many :change_packages, Tracker.Nixpkgs.ChangePackage
 
     many_to_many :changes, Tracker.Nixpkgs.Change do
       through Tracker.Nixpkgs.ChangePackage
