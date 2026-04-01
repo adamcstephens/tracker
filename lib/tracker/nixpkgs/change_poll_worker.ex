@@ -43,8 +43,8 @@ defmodule Tracker.Nixpkgs.ChangePollWorker do
   def process_pull_requests(pulls) do
     merged_numbers =
       pulls
-      |> Enum.filter(&(&1["merged_at"] != nil))
-      |> Enum.map(& &1["number"])
+      |> Enum.filter(& &1.merged_at)
+      |> Enum.map(& &1.number)
 
     existing =
       case merged_numbers do
@@ -72,12 +72,14 @@ defmodule Tracker.Nixpkgs.ChangePollWorker do
 
   defp fetch_merged_pulls do
     [owner, repo] = String.split(@repo, "/")
+    token = Tracker.GitHub.installation_token!()
 
     case GitHub.Pulls.list(owner, repo,
            state: "closed",
            sort: "updated",
            direction: "desc",
-           per_page: 100
+           per_page: 100,
+           auth: token
          ) do
       {:ok, pulls} ->
         {:ok, pulls}

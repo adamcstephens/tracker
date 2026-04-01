@@ -22,18 +22,8 @@ defmodule Tracker.Nixpkgs.ChangePollWorkerTest do
   describe "process_pull_requests/1" do
     test "enqueues jobs for merged PRs" do
       pulls = [
-        %{
-          "number" => 1001,
-          "state" => "closed",
-          "merged_at" => "2026-04-01T12:00:00Z",
-          "title" => "fix: something"
-        },
-        %{
-          "number" => 1002,
-          "state" => "closed",
-          "merged_at" => "2026-04-01T13:00:00Z",
-          "title" => "feat: add thing"
-        }
+        %GitHub.PullRequest{number: 1001, merged_at: ~U[2026-04-01 12:00:00Z]},
+        %GitHub.PullRequest{number: 1002, merged_at: ~U[2026-04-01 13:00:00Z]}
       ]
 
       assert {:ok, 2} = ChangePollWorker.process_pull_requests(pulls)
@@ -44,18 +34,8 @@ defmodule Tracker.Nixpkgs.ChangePollWorkerTest do
 
     test "skips PRs that are not merged" do
       pulls = [
-        %{
-          "number" => 2001,
-          "state" => "closed",
-          "merged_at" => nil,
-          "title" => "closed without merge"
-        },
-        %{
-          "number" => 2002,
-          "state" => "open",
-          "merged_at" => nil,
-          "title" => "still open"
-        }
+        %GitHub.PullRequest{number: 2001, merged_at: nil},
+        %GitHub.PullRequest{number: 2002, merged_at: nil}
       ]
 
       assert {:ok, 0} = ChangePollWorker.process_pull_requests(pulls)
@@ -75,18 +55,8 @@ defmodule Tracker.Nixpkgs.ChangePollWorkerTest do
       ])
 
       pulls = [
-        %{
-          "number" => 3001,
-          "state" => "closed",
-          "merged_at" => "2026-04-01T12:00:00Z",
-          "title" => "already tracked"
-        },
-        %{
-          "number" => 3002,
-          "state" => "closed",
-          "merged_at" => "2026-04-01T13:00:00Z",
-          "title" => "new one"
-        }
+        %GitHub.PullRequest{number: 3001, merged_at: ~U[2026-04-01 12:00:00Z]},
+        %GitHub.PullRequest{number: 3002, merged_at: ~U[2026-04-01 13:00:00Z]}
       ]
 
       assert {:ok, 1} = ChangePollWorker.process_pull_requests(pulls)
