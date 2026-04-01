@@ -53,21 +53,15 @@ defmodule Tracker.Nixpkgs.ChangePollWorker do
         numbers -> existing_change_numbers(numbers)
       end
 
-    new_pulls = Enum.reject(merged, &MapSet.member?(existing, &1.number))
+    new_numbers = Enum.reject(merged_numbers, &MapSet.member?(existing, &1))
 
-    # Upsert Change records from the list data so the process worker
-    # can skip the individual PR fetch (saves 1 API call per PR)
-    new_pulls
-    |> Enum.map(&Tracker.Nixpkgs.ChangeProcessWorker.parse_pr_payload/1)
-    |> Tracker.Nixpkgs.Change.bulk_upsert_all()
-
-    Enum.each(new_pulls, fn pr ->
-      %{"number" => pr.number}
+    Enum.each(new_numbers, fn number ->
+      %{"number" => number}
       |> Tracker.Nixpkgs.ChangeProcessWorker.new()
       |> Oban.insert!()
     end)
 
-    {:ok, length(new_pulls)}
+    {:ok, length(new_numbers)}
   end
 
   @doc """

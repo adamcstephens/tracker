@@ -13,7 +13,10 @@ defmodule Tracker.Nixpkgs.ChangeProcessWorker do
   def perform(%Oban.Job{args: %{"number" => number}}) do
     token = Tracker.GitHub.installation_token!()
 
-    with {:ok, change} <- ensure_change(number, token),
+    [owner, repo] = String.split(@repo, "/")
+
+    with {:ok, pr} <- GitHub.Pulls.get(owner, repo, number, auth: token),
+         {:ok, change} <- upsert_change(pr),
          {:ok, attrdiff} <- fetch_attrdiff(number, change.merge_commit_sha, token) do
       link_packages(change, attrdiff)
 
@@ -40,20 +43,6 @@ defmodule Tracker.Nixpkgs.ChangeProcessWorker do
       {:error, reason} ->
         Logger.error("Failed to process PR ##{number}: #{inspect(reason)}")
         {:error, reason}
-    end
-  end
-
-  defp ensure_change(number, token) do
-    case Tracker.Nixpkgs.Change.get_by_number(number) do
-      {:ok, change} when not is_nil(change.merge_commit_sha) ->
-        {:ok, change}
-
-      _ ->
-        [owner, repo] = String.split(@repo, "/")
-
-        with {:ok, pr} <- GitHub.Pulls.get(owner, repo, number, auth: token) do
-          upsert_change(pr)
-        end
     end
   end
 
