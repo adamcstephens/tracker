@@ -194,7 +194,7 @@ defmodule TrackerWeb.ChangeLive.Index do
      )}
   end
 
-  defp changes_path(assigns, overrides \\ []) do
+  defp changes_path(assigns, overrides) do
     search = Keyword.get(overrides, :search, assigns.search)
     base_ref = Keyword.get(overrides, :base_ref, assigns.base_ref_filter)
     sort_by = Keyword.get(overrides, :sort_by, assigns.sort_by)
