@@ -16,6 +16,13 @@ defmodule Tracker.Nixpkgs.ChangeProcessWorker do
     with {:ok, change} <- ensure_change(number, token),
          {:ok, attrdiff} <- fetch_attrdiff(number, change.merge_commit_sha, token) do
       link_packages(change, attrdiff)
+
+      Phoenix.PubSub.broadcast(
+        Tracker.PubSub,
+        "changes",
+        {:change_processed, %{number: number}}
+      )
+
       :ok
     else
       {:error, %GitHub.Error{reason: :rate_limited}} ->
