@@ -82,7 +82,7 @@ defmodule TrackerWeb.ChannelLive.Diff do
   defp revision_link(assigns) do
     ~H"""
     <.link
-      navigate={~p"/channels/#{@channel}/revisions/#{String.slice(@revision, 0, 7)}"}
+      navigate={~p"/channels/#{@channel}/revisions/#{@revision}"}
       title={@revision}
       class="revision-link"
     >
@@ -105,8 +105,8 @@ defmodule TrackerWeb.ChannelLive.Diff do
         _url,
         socket
       ) do
-    rev_a = ChannelRevision.find!(channel, rev_a_hash)
-    rev_b = ChannelRevision.find!(channel, rev_b_hash)
+    rev_a = ChannelRevision.find_by_channel_hash!(channel, rev_a_hash)
+    rev_b = ChannelRevision.find_by_channel_hash!(channel, rev_b_hash)
 
     {older, newer} = order_revisions(rev_a, rev_b)
 

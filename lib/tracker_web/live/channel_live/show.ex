@@ -117,7 +117,7 @@ defmodule TrackerWeb.ChannelLive.Show do
   defp revision_link(assigns) do
     ~H"""
     <.link
-      navigate={~p"/channels/#{@channel}/revisions/#{String.slice(@revision, 0, 7)}"}
+      navigate={~p"/channels/#{@channel}/revisions/#{@revision}"}
       title={@revision}
       class="revision-link"
     >

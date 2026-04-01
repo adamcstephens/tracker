@@ -20,7 +20,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
 
     package =
       Tracker.Nixpkgs.Package
-      |> Ash.Changeset.for_create(:create, %{attribute: "hello"})
+      |> Ash.Changeset.for_create(:create, %{attribute: "pkgshow-hello"})
       |> Ash.create!()
 
     Tracker.Nixpkgs.PackageRevision
@@ -75,7 +75,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
   test "displays package attribute as heading", %{conn: conn, package: package} do
     {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}")
 
-    assert html =~ "hello"
+    assert html =~ "pkgshow-hello"
   end
 
   test "displays revision with version and channel", %{conn: conn, package: package} do
@@ -92,7 +92,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
     {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}")
 
     assert html =~ "abc123d"
-    assert html =~ "/channels/nixos-unstable/revisions/abc123d"
+    assert html =~ "/channels/nixos-unstable/revisions/abc123def456789"
   end
 
   test "shows empty state when no revisions", %{conn: conn} do
@@ -300,7 +300,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
       cr3 =
         Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
           channel: "nixos-unstable",
-          revision: "aaa111bbb222333",
+          revision: "noop111bbb222333",
           released_at: ~U[2026-03-10 10:00:00Z]
         })
 
@@ -316,7 +316,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
       cr4 =
         Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
           channel: "nixos-unstable",
-          revision: "ccc333ddd444555",
+          revision: "chg333ddd444555",
           released_at: ~U[2026-03-20 10:00:00Z]
         })
 
