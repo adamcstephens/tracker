@@ -58,6 +58,39 @@ defmodule Tracker.Nixpkgs.ChangeTest do
       assert change.title == "new title"
       assert change.state == :merged
     end
+
+    test "stores additional metadata fields" do
+      id_map =
+        Change.bulk_upsert_all([
+          %{
+            number: 4001,
+            title: "nixos/incus: add useACMEHost option",
+            state: :merged,
+            author: "herbetom",
+            author_github_id: 1234,
+            merged_by_github_id: 5678,
+            url: "https://github.com/NixOS/nixpkgs/pull/4001",
+            base_ref: "master",
+            labels: ["6.topic: nixos", "8.has: module (update)", "backport release-25.11"],
+            merge_commit_sha: "abc123def456",
+            gh_created_at: ~U[2026-03-28 16:15:06Z],
+            merged_at: ~U[2026-03-31 01:57:58Z]
+          }
+        ])
+
+      change = Ash.get!(Change, id_map[4001])
+      assert change.author_github_id == 1234
+      assert change.merged_by_github_id == 5678
+      assert change.base_ref == "master"
+
+      assert change.labels == [
+               "6.topic: nixos",
+               "8.has: module (update)",
+               "backport release-25.11"
+             ]
+
+      assert change.merge_commit_sha == "abc123def456"
+    end
   end
 
   describe "relationships" do
