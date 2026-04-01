@@ -165,8 +165,6 @@ defmodule Tracker.Nixpkgs.ChannelWorkerTest do
 
       ChannelWorker.write_to_database(data)
 
-      require Ash.Query
-
       pm_count =
         Tracker.Nixpkgs.PackageMaintainer
         |> Ash.read!()

@@ -17,6 +17,7 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
     define :distinct_channels
     define :find_by_hash, args: [:hash]
     define :find_by_channel_hash, args: [:channel, :hash]
+    define :without_options, args: [:channel]
   end
 
   actions do
@@ -79,6 +80,18 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
       prepare build(distinct: [:channel], sort: [:channel])
     end
 
+    read :without_options do
+      argument :channel, :string, allow_nil?: false
+
+      prepare build(sort: [{:released_at, :asc}])
+
+      filter expr(
+               channel == ^arg(:channel) and
+                 result == :success and
+                 not exists(option_revisions, true)
+             )
+    end
+
     read :find_by_channel_hash do
       get? true
 
@@ -136,6 +149,8 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
       attribute_type :integer
       allow_nil? true
     end
+
+    has_many :option_revisions, Tracker.Nixpkgs.OptionRevision
   end
 
   identities do
