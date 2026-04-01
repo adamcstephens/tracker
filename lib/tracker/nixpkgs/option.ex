@@ -8,6 +8,7 @@ defmodule Tracker.Nixpkgs.Option do
 
   code_interface do
     define :read
+    define :list, args: [{:optional, :search}]
     define :list_by_module, args: [:module_id]
     define :bulk_upsert, args: [:name]
     define :id_map, action: :id_map
@@ -15,6 +16,26 @@ defmodule Tracker.Nixpkgs.Option do
 
   actions do
     defaults [:read]
+
+    read :list do
+      argument :search, :ci_string
+
+      pagination do
+        offset? true
+        countable true
+        default_limit 15
+      end
+
+      prepare build(sort: :name, load: [:module])
+
+      filter expr(
+               if not is_nil(^arg(:search)) and ^arg(:search) != "" do
+                 contains(name, ^arg(:search))
+               else
+                 true
+               end
+             )
+    end
 
     read :list_by_module do
       argument :module_id, :integer do
