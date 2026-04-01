@@ -35,7 +35,7 @@ defmodule TrackerWeb.PackageLive.Show do
       <dt><strong>Teams</strong></dt>
       <dd :for={t <- @package.teams}>
         <.link navigate={~p"/teams/#{t.short_name}"}>{t.short_name}</.link>
-        <span :if={t.scope}> —                     {t.scope}</span>
+        <span :if={t.scope}> —                      {t.scope}</span>
       </dd>
     </dl>
 
@@ -67,10 +67,40 @@ defmodule TrackerWeb.PackageLive.Show do
           <% rev = Map.get(@option_revisions, opt.id) %>
           <small :if={rev}>
             <span :if={rev.type}> ({rev.type})</span>
-            <span :if={rev.description}> —    {rev.description}</span>
+            <span :if={rev.description}> —     {rev.description}</span>
           </small>
         </li>
       </ul>
+    </section>
+
+    <section :if={@recent_changes != []}>
+      <h2>Recent Changes</h2>
+      <figure>
+        <table role="grid">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Title</th>
+              <th>Author</th>
+              <th>Merged</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr :for={change <- @recent_changes}>
+              <td>
+                <.link navigate={~p"/changes/#{change.number}"}>{change.number}</.link>
+              </td>
+              <td>
+                <span style="display: block; max-width: 40ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                  {change.title}
+                </span>
+              </td>
+              <td>{change.author}</td>
+              <td>{format_released_at(change.merged_at)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </figure>
     </section>
 
     <section :if={@package_events != []}>
@@ -272,6 +302,7 @@ defmodule TrackerWeb.PackageLive.Show do
         load: [:maintainers, :teams, options: [:module]]
       )
 
+    recent_changes = load_recent_changes(package.id)
     family_siblings = load_family_siblings(package)
     option_ids = Enum.map(package.options, & &1.id)
 
@@ -306,6 +337,7 @@ defmodule TrackerWeb.PackageLive.Show do
      socket
      |> assign(:page_title, package.attribute)
      |> assign(:package, package)
+     |> assign(:recent_changes, recent_changes)
      |> assign(:family_siblings, family_siblings)
      |> assign(:option_revisions, option_revisions)
      |> assign(:sort_by, sort_by)
@@ -475,6 +507,10 @@ defmodule TrackerWeb.PackageLive.Show do
       query: [sort: [{sort_by, sort_dir}]],
       page: [offset: offset, count: true]
     )
+  end
+
+  defp load_recent_changes(package_id) do
+    Tracker.Nixpkgs.Change.by_package!(package_id, page: [limit: 10]).results
   end
 
   defp load_family_siblings(%{package_family_id: nil}), do: []

@@ -9,6 +9,9 @@ defmodule Tracker.Nixpkgs.Change do
   code_interface do
     define :read
     define :list, args: [{:optional, :search}]
+    define :get_by_number, action: :read, get_by: [:number]
+    define :by_package, args: [:package_id]
+    define :by_maintainer_github_id, args: [:github_id]
     define :bulk_upsert, args: [:number]
     define :existing_numbers, args: [:numbers]
   end
@@ -34,6 +37,32 @@ defmodule Tracker.Nixpkgs.Change do
                  true
                end
              )
+    end
+
+    read :by_package do
+      argument :package_id, :integer, allow_nil?: false
+
+      pagination do
+        offset? true
+        countable true
+        default_limit 10
+      end
+
+      prepare build(sort: [number: :desc])
+      filter expr(exists(change_packages, package_id == ^arg(:package_id)))
+    end
+
+    read :by_maintainer_github_id do
+      argument :github_id, :integer, allow_nil?: false
+
+      pagination do
+        offset? true
+        countable true
+        default_limit 15
+      end
+
+      prepare build(sort: [number: :desc])
+      filter expr(author_github_id == ^arg(:github_id) or merged_by_github_id == ^arg(:github_id))
     end
 
     read :existing_numbers do

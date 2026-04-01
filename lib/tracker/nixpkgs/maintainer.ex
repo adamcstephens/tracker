@@ -11,6 +11,7 @@ defmodule Tracker.Nixpkgs.Maintainer do
     define :list, args: [{:optional, :search}]
     define :bulk_upsert
     define :get_by_github, action: :read, get_by: [:github]
+    define :get_by_github_id, action: :read, get_by: [:github_id]
     define :id_map, action: :id_map
   end
 

@@ -28,10 +28,40 @@ defmodule TrackerWeb.MaintainerLive.Show do
       <ul>
         <li :for={t <- @maintainer.teams}>
           <.link navigate={~p"/teams/#{t.short_name}"}>{t.short_name}</.link>
-          <span :if={t.scope}> —          {t.scope}</span>
+          <span :if={t.scope}> —           {t.scope}</span>
         </li>
       </ul>
     </div>
+
+    <section :if={@recent_changes != []}>
+      <h2>Recent Changes</h2>
+      <figure>
+        <table role="grid">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Title</th>
+              <th>Role</th>
+              <th>Merged</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr :for={change <- @recent_changes}>
+              <td>
+                <.link navigate={~p"/changes/#{change.number}"}>{change.number}</.link>
+              </td>
+              <td>
+                <span style="display: block; max-width: 40ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                  {change.title}
+                </span>
+              </td>
+              <td>{change_role(change, @maintainer.github_id)}</td>
+              <td>{format_datetime(change.merged_at)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </figure>
+    </section>
 
     <h2>Packages ({@package_count})</h2>
 
@@ -90,6 +120,7 @@ defmodule TrackerWeb.MaintainerLive.Show do
   @impl true
   def handle_params(%{"github" => github} = params, _url, socket) do
     maintainer = Tracker.Nixpkgs.Maintainer.get_by_github!(github, load: [:teams])
+    recent_changes = load_recent_changes(maintainer.github_id)
 
     search = Map.get(params, "search", "")
     page = params |> Map.get("page", "1") |> String.to_integer() |> max(1)
@@ -102,6 +133,7 @@ defmodule TrackerWeb.MaintainerLive.Show do
      socket
      |> assign(:page_title, maintainer.name || maintainer.github)
      |> assign(:maintainer, maintainer)
+     |> assign(:recent_changes, recent_changes)
      |> assign(:search, search)
      |> stream(:packages, packages.results, reset: true)
      |> assign(:has_prev_page?, offset > 0)
@@ -143,6 +175,29 @@ defmodule TrackerWeb.MaintainerLive.Show do
            max(socket.assigns.current_page - 1, 1)
          )
      )}
+  end
+
+  defp format_datetime(nil), do: "-"
+  defp format_datetime(dt), do: Calendar.strftime(dt, "%Y-%m-%d %H:%M")
+
+  defp change_role(change, github_id) do
+    cond do
+      change.author_github_id == github_id and change.merged_by_github_id == github_id ->
+        "author & merger"
+
+      change.author_github_id == github_id ->
+        "author"
+
+      change.merged_by_github_id == github_id ->
+        "merger"
+
+      true ->
+        ""
+    end
+  end
+
+  defp load_recent_changes(github_id) do
+    Tracker.Nixpkgs.Change.by_maintainer_github_id!(github_id, page: [limit: 10]).results
   end
 
   defp load_packages(maintainer_id, search, offset) do
