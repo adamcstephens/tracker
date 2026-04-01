@@ -18,6 +18,7 @@ defmodule Tracker.Nixpkgs.Package do
     define :by_module, args: [:module_id]
     define :id_map, action: :id_map
     define :ids_by_attributes, args: [:attributes]
+    define :by_change, args: [:change_id, {:optional, :search}]
   end
 
   actions do
@@ -112,6 +113,28 @@ defmodule Tracker.Nixpkgs.Package do
       prepare build(sort: :attribute)
 
       filter expr(exists(options, module_id == ^arg(:module_id)))
+    end
+
+    read :by_change do
+      argument :change_id, :integer, allow_nil?: false
+      argument :search, :ci_string
+
+      pagination do
+        offset? true
+        countable true
+        default_limit 15
+      end
+
+      prepare build(sort: :attribute)
+
+      filter expr(
+               exists(changes, id == ^arg(:change_id)) and
+                 if not is_nil(^arg(:search)) and ^arg(:search) != "" do
+                   contains(attribute, ^arg(:search))
+                 else
+                   true
+                 end
+             )
     end
 
     read :id_map do
