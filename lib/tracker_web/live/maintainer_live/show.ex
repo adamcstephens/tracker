@@ -28,7 +28,7 @@ defmodule TrackerWeb.MaintainerLive.Show do
       <ul>
         <li :for={t <- @maintainer.teams}>
           <.link navigate={~p"/teams/#{t.short_name}"}>{t.short_name}</.link>
-          <span :if={t.scope}> —           {t.scope}</span>
+          <span :if={t.scope}> —            {t.scope}</span>
         </li>
       </ul>
     </div>
@@ -114,7 +114,17 @@ defmodule TrackerWeb.MaintainerLive.Show do
 
   @impl true
   def mount(_params, _session, socket) do
+    if connected?(socket) do
+      Phoenix.PubSub.subscribe(Tracker.PubSub, "changes")
+    end
+
     {:ok, assign_new(socket, :current_user, fn -> nil end)}
+  end
+
+  @impl true
+  def handle_info({:change_processed, _payload}, socket) do
+    {:noreply,
+     assign(socket, :recent_changes, load_recent_changes(socket.assigns.maintainer.github_id))}
   end
 
   @impl true

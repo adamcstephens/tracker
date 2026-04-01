@@ -35,7 +35,7 @@ defmodule TrackerWeb.PackageLive.Show do
       <dt><strong>Teams</strong></dt>
       <dd :for={t <- @package.teams}>
         <.link navigate={~p"/teams/#{t.short_name}"}>{t.short_name}</.link>
-        <span :if={t.scope}> —                      {t.scope}</span>
+        <span :if={t.scope}> —                       {t.scope}</span>
       </dd>
     </dl>
 
@@ -67,7 +67,7 @@ defmodule TrackerWeb.PackageLive.Show do
           <% rev = Map.get(@option_revisions, opt.id) %>
           <small :if={rev}>
             <span :if={rev.type}> ({rev.type})</span>
-            <span :if={rev.description}> —     {rev.description}</span>
+            <span :if={rev.description}> —      {rev.description}</span>
           </small>
         </li>
       </ul>
@@ -331,6 +331,8 @@ defmodule TrackerWeb.PackageLive.Show do
       for ch <- new_channels -- old_channels do
         Phoenix.PubSub.subscribe(Tracker.PubSub, "channel_revisions:#{ch}")
       end
+
+      Phoenix.PubSub.subscribe(Tracker.PubSub, "changes")
     end
 
     {:noreply,
@@ -356,6 +358,11 @@ defmodule TrackerWeb.PackageLive.Show do
        all_revisions?,
        page
      )}
+  end
+
+  @impl true
+  def handle_info({:change_processed, _payload}, socket) do
+    {:noreply, assign(socket, :recent_changes, load_recent_changes(socket.assigns.package.id))}
   end
 
   @impl true
