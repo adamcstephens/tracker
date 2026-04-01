@@ -25,6 +25,11 @@ defmodule TrackerWeb.PackageLive.Index do
       <:col :let={{_id, package}} label="Attribute">
         <.link navigate={~p"/packages/#{package.attribute}"}>{package.attribute}</.link>
       </:col>
+      <:col :let={{_id, package}} label="Description">
+        <span style="display: block; max-width: 30ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+          {package.description}
+        </span>
+      </:col>
     </.table>
 
     <nav style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-top: 1rem;">
