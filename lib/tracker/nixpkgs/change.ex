@@ -8,12 +8,13 @@ defmodule Tracker.Nixpkgs.Change do
 
   code_interface do
     define :read
-    define :list, args: [{:optional, :search}]
+    define :list, args: [{:optional, :search}, {:optional, :author}, {:optional, :base_ref}]
     define :get_by_number, action: :read, get_by: [:number]
     define :by_package, args: [:package_id]
     define :by_maintainer_github_id, args: [:github_id]
     define :update_package_count
     define :bulk_upsert, args: [:number]
+    define :distinct_base_refs
     define :existing_numbers, args: [:numbers]
   end
 
@@ -22,6 +23,8 @@ defmodule Tracker.Nixpkgs.Change do
 
     read :list do
       argument :search, :ci_string
+      argument :author, :string
+      argument :base_ref, :string
 
       pagination do
         offset? true
@@ -34,7 +37,17 @@ defmodule Tracker.Nixpkgs.Change do
                  contains(title, ^arg(:search))
                else
                  true
-               end
+               end and
+                 if not is_nil(^arg(:author)) and ^arg(:author) != "" do
+                   author == ^arg(:author)
+                 else
+                   true
+                 end and
+                 if not is_nil(^arg(:base_ref)) and ^arg(:base_ref) != "" do
+                   base_ref == ^arg(:base_ref)
+                 else
+                   true
+                 end
              )
     end
 
@@ -66,6 +79,10 @@ defmodule Tracker.Nixpkgs.Change do
 
     update :update_package_count do
       accept [:package_count]
+    end
+
+    read :distinct_base_refs do
+      prepare build(distinct: [:base_ref], select: [:base_ref], sort: [:base_ref])
     end
 
     read :existing_numbers do
