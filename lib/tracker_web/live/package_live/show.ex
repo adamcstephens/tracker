@@ -35,7 +35,7 @@ defmodule TrackerWeb.PackageLive.Show do
       <dt><strong>Teams</strong></dt>
       <dd :for={t <- @package.teams}>
         <.link navigate={~p"/teams/#{t.short_name}"}>{t.short_name}</.link>
-        <span :if={t.scope}> —                        {t.scope}</span>
+        <span :if={t.scope}> —                         {t.scope}</span>
       </dd>
     </dl>
 
@@ -67,7 +67,7 @@ defmodule TrackerWeb.PackageLive.Show do
           <% rev = Map.get(@option_revisions, opt.id) %>
           <small :if={rev}>
             <span :if={rev.type}> ({rev.type})</span>
-            <span :if={rev.description}> —       {rev.description}</span>
+            <span :if={rev.description}> —        {rev.description}</span>
           </small>
         </li>
       </ul>
@@ -187,7 +187,13 @@ defmodule TrackerWeb.PackageLive.Show do
         </thead>
         <tbody id="revisions">
           <tr :for={rev <- @revisions}>
-            <td>{rev.version}</td>
+            <td>
+              <.github_version_link
+                version={rev.version}
+                position={@package.position}
+                revision={rev.channel_revision.revision}
+              />
+            </td>
             <td>{rev.channel_revision.channel}</td>
             <td>
               <.revision_link
@@ -245,6 +251,25 @@ defmodule TrackerWeb.PackageLive.Show do
   defp sort_indicator(sort_by, :asc, field) when sort_by == field, do: "↑"
   defp sort_indicator(sort_by, :desc, field) when sort_by == field, do: "↓"
   defp sort_indicator(_, _, _), do: ""
+
+  defp github_version_link(%{position: nil} = assigns) do
+    ~H"{@version}"
+  end
+
+  defp github_version_link(assigns) do
+    path = assigns.position |> String.split(":") |> hd()
+    assigns = assign(assigns, :path, path)
+
+    ~H"""
+    <a
+      href={"https://github.com/NixOS/nixpkgs/blob/#{@revision}/#{@path}"}
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      {@version}
+    </a>
+    """
+  end
 
   defp nixpkgs_position(assigns) do
     [path, line] =
