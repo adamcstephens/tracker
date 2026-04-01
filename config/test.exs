@@ -1,5 +1,6 @@
 import Config
 config :tracker, Oban, testing: :manual
+config :tracker, channels: []
 config :tracker, token_signing_secret: "thIXDz5NECPXPg1mNAqRn8lxdK3Jre7j"
 config :ash, disable_async?: true
 
