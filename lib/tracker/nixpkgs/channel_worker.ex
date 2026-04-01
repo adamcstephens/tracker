@@ -228,7 +228,7 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
           nil
 
         %ReleaseCache.Release{short_hash: prev_hash} ->
-          case Tracker.Nixpkgs.ChannelRevision.find_by_short_hash(channel, prev_hash) do
+          case Tracker.Nixpkgs.ChannelRevision.find_by_channel_hash(channel, prev_hash) do
             {:ok, rev} -> rev
             _ -> nil
           end

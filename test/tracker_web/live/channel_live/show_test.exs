@@ -7,14 +7,14 @@ defmodule TrackerWeb.ChannelLive.ShowTest do
     cr1 =
       Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
         channel: "nixos-unstable",
-        revision: "aaa111bbb222333",
+        revision: "shw111aaa222333",
         released_at: ~U[2026-03-01 10:00:00Z]
       })
 
     cr2 =
       Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
         channel: "nixos-unstable",
-        revision: "ccc333ddd444555",
+        revision: "shw222bbb444555",
         released_at: ~U[2026-03-15 10:00:00Z],
         previous_channel_revision_id: cr1.id
       })
@@ -65,7 +65,7 @@ defmodule TrackerWeb.ChannelLive.ShowTest do
       |> render_click()
 
     assert html =~ "Show diff"
-    assert html =~ ~p"/channels/diff/#{cr1.revision}/#{cr2.revision}"
+    assert html =~ ~p"/channels/nixos-unstable/diff/#{cr1.revision}/#{cr2.revision}"
   end
 
   test "unchecking a revision hides diff link", %{conn: conn, cr1: cr1, cr2: cr2} do
@@ -91,7 +91,7 @@ defmodule TrackerWeb.ChannelLive.ShowTest do
     cr3 =
       Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
         channel: "nixos-unstable",
-        revision: "eee555fff666777",
+        revision: "shw333fff666777",
         released_at: ~U[2026-03-20 10:00:00Z]
       })
 
@@ -111,7 +111,7 @@ defmodule TrackerWeb.ChannelLive.ShowTest do
       |> render_click()
 
     assert html =~ "Show diff"
-    assert html =~ ~p"/channels/diff/#{cr2.revision}/#{cr3.revision}"
+    assert html =~ ~p"/channels/nixos-unstable/diff/#{cr2.revision}/#{cr3.revision}"
     refute html =~ ~s|checked="checked" phx-value-revision="#{cr1.revision}"|
   end
 end

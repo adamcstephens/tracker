@@ -29,7 +29,7 @@ defmodule Tracker.Nixpkgs.Admin do
       Admin.repair_revision("nixos-25.11", "71caefc")
   """
   def repair_revision(channel, revision_prefix) do
-    broken = ChannelRevision.find_by_short_hash!(channel, revision_prefix)
+    broken = ChannelRevision.find_by_channel_hash!(channel, revision_prefix)
     Logger.info("Found broken revision: id=#{broken.id} revision=#{broken.revision}")
 
     next = find_next_revision(broken.id)

@@ -7,14 +7,14 @@ defmodule TrackerWeb.ChannelLive.RevisionShowTest do
     cr1 =
       Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
         channel: "nixos-unstable",
-        revision: "aaa111bbb222333",
+        revision: "rev111aaa222333",
         released_at: ~U[2026-03-01 10:00:00Z]
       })
 
     cr2 =
       Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
         channel: "nixos-unstable",
-        revision: "ccc333ddd444555",
+        revision: "rev222bbb444555",
         released_at: ~U[2026-03-15 10:00:00Z],
         previous_channel_revision_id: cr1.id
       })
@@ -22,13 +22,13 @@ defmodule TrackerWeb.ChannelLive.RevisionShowTest do
     cr_no_prev =
       Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
         channel: "nixos-24.11",
-        revision: "eee555fff666777",
+        revision: "rev333fff666777",
         released_at: ~U[2026-03-20 10:00:00Z]
       })
 
     pkg_hello =
       Tracker.Nixpkgs.Package
-      |> Ash.Changeset.for_create(:create, %{attribute: "hello"})
+      |> Ash.Changeset.for_create(:create, %{attribute: "revshow-hello"})
       |> Ash.create!()
 
     # hello: version changed between cr1 and cr2
@@ -86,7 +86,7 @@ defmodule TrackerWeb.ChannelLive.RevisionShowTest do
       live(conn, ~p"/channels/nixos-unstable/revisions/#{short(cr2)}")
 
     # Should show version changes from cr1 -> cr2
-    assert html =~ "hello"
+    assert html =~ "revshow-hello"
     assert html =~ "2.12.1"
     assert html =~ "2.13.0"
   end

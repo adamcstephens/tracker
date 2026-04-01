@@ -117,7 +117,7 @@ defmodule TrackerWeb.ChannelLive.RevisionShow do
 
   @impl true
   def handle_params(%{"channel" => channel, "revision" => rev_hash}, _url, socket) do
-    revision = ChannelRevision.find_by_short_hash!(channel, rev_hash)
+    revision = ChannelRevision.find_by_channel_hash!(channel, rev_hash)
 
     previous_revision =
       if revision.previous_channel_revision_id do
