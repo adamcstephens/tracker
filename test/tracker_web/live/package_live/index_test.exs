@@ -55,7 +55,7 @@ defmodule TrackerWeb.PackageLive.IndexTest do
   end
 
   defp attribute_order(html) do
-    ~r/<td[^>]*>\s*([a-z][\w.-]*)\s*<\/td>/
+    ~r/<td[^>]*>\s*(?:<a[^>]*>)?\s*([a-z][\w.-]*)\s*(?:<\/a>)?\s*<\/td>/
     |> Regex.scan(html)
     |> Enum.map(fn [_, attr] -> attr end)
   end

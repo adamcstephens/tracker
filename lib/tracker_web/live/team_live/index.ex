@@ -21,16 +21,11 @@ defmodule TrackerWeb.TeamLive.Index do
     <.table
       id="teams"
       rows={@streams.teams}
-      row_click={fn {_id, t} -> JS.navigate(~p"/teams/#{t.short_name}") end}
     >
-      <:col :let={{_id, t}} label="Name">{t.short_name}</:col>
+      <:col :let={{_id, t}} label="Name">
+        <.link navigate={~p"/teams/#{t.short_name}"}>{t.short_name}</.link>
+      </:col>
       <:col :let={{_id, t}} label="Scope">{t.scope}</:col>
-
-      <:action :let={{_id, t}}>
-        <div class="sr-only">
-          <.link navigate={~p"/teams/#{t.short_name}"}>Show</.link>
-        </div>
-      </:action>
     </.table>
 
     <nav
