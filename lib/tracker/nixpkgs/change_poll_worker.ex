@@ -9,6 +9,7 @@ defmodule Tracker.Nixpkgs.ChangePollWorker do
 
   @repo "NixOS/nixpkgs"
   @poll_interval_seconds 5 * 60
+  @backfill_cutoff_days 90
 
   @impl Oban.Worker
   def perform(%Oban.Job{}) do
@@ -61,6 +62,68 @@ defmodule Tracker.Nixpkgs.ChangePollWorker do
     end)
 
     {:ok, length(new_numbers)}
+  end
+
+  @doc """
+  Backfills historical merged PRs by paging backwards through the GitHub API.
+
+  Stops when it reaches PRs older than 90 days (artifact expiry window).
+  Enqueues ChangeProcessWorker jobs for each new PR found.
+  """
+  def backfill do
+    token = Tracker.GitHub.installation_token!()
+    cutoff = DateTime.utc_now() |> DateTime.add(-@backfill_cutoff_days, :day)
+    [owner, repo] = String.split(@repo, "/")
+
+    backfill_page(owner, repo, token, cutoff, 1, 0)
+  end
+
+  defp backfill_page(owner, repo, token, cutoff, page_num, total_enqueued) do
+    case GitHub.Pulls.list(owner, repo,
+           state: "closed",
+           sort: "updated",
+           direction: "desc",
+           per_page: 100,
+           page: page_num,
+           auth: token
+         ) do
+      {:ok, []} ->
+        Logger.info("Backfill complete: no more PRs. Enqueued #{total_enqueued} jobs.")
+        {:ok, total_enqueued}
+
+      {:ok, pulls} ->
+        merged = Enum.filter(pulls, & &1.merged_at)
+
+        oldest = merged |> Enum.map(& &1.merged_at) |> Enum.min(DateTime, fn -> nil end)
+
+        if oldest && DateTime.before?(oldest, cutoff) do
+          # Filter to only PRs within the cutoff
+          recent = Enum.filter(merged, &(!DateTime.before?(&1.merged_at, cutoff)))
+          {:ok, count} = process_pull_requests(recent)
+
+          Logger.info(
+            "Backfill complete: reached #{@backfill_cutoff_days}-day cutoff. Enqueued #{total_enqueued + count} jobs."
+          )
+
+          {:ok, total_enqueued + count}
+        else
+          {:ok, count} = process_pull_requests(pulls)
+
+          Logger.info("Backfill page #{page_num}: enqueued #{count} jobs")
+          backfill_page(owner, repo, token, cutoff, page_num + 1, total_enqueued + count)
+        end
+
+      {:error, %GitHub.Error{reason: :rate_limited}} ->
+        Logger.warning(
+          "Rate limited during backfill at page #{page_num}, stopping. Enqueued #{total_enqueued} jobs so far."
+        )
+
+        {:ok, total_enqueued}
+
+      {:error, reason} ->
+        Logger.error("Backfill failed at page #{page_num}: #{inspect(reason)}")
+        {:error, reason}
+    end
   end
 
   defp existing_change_numbers(numbers) do
