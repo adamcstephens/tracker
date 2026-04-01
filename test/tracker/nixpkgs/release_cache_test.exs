@@ -138,6 +138,40 @@ defmodule Tracker.Nixpkgs.ReleaseCacheTest do
     test "find_by_base_url returns nil for unknown channel", %{pid: pid} do
       assert ReleaseCache.find_by_base_url(pid, "nonexistent", "https://example.com/foo") == nil
     end
+
+    test "find_by_revision returns release matching full revision prefix", %{pid: pid} do
+      releases = [
+        %Release{
+          short_hash: "abc1234",
+          base_url: "https://releases.nixos.org/nixos/unstable/abc1234",
+          released_at: "2025-03-02T10:00:00Z"
+        },
+        %Release{
+          short_hash: "def5678",
+          base_url: "https://releases.nixos.org/nixos/unstable/def5678",
+          released_at: "2025-03-01T10:00:00Z"
+        }
+      ]
+
+      ReleaseCache.put_releases(pid, "nixos-unstable", releases)
+
+      assert %Release{short_hash: "abc1234"} =
+               ReleaseCache.find_by_revision(pid, "nixos-unstable", "abc1234full9999999")
+    end
+
+    test "find_by_revision returns nil when no match", %{pid: pid} do
+      releases = [
+        %Release{
+          short_hash: "abc1234",
+          base_url: "https://releases.nixos.org/nixos/unstable/abc1234",
+          released_at: "2025-03-02T10:00:00Z"
+        }
+      ]
+
+      ReleaseCache.put_releases(pid, "nixos-unstable", releases)
+
+      assert ReleaseCache.find_by_revision(pid, "nixos-unstable", "zzz999full") == nil
+    end
   end
 
   describe "release cutoff" do

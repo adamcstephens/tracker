@@ -25,18 +25,11 @@ defmodule Tracker.Nixpkgs.OptionsWorker do
       )
       |> Tracker.Repo.all()
 
-    releases =
-      Tracker.Nixpkgs.ReleaseCache.get_releases(channel)
-      |> Map.new(fn release -> {release.short_hash, release} end)
-
-    # Match revisions to releases by short_hash prefix
     jobs_to_schedule =
       Enum.flat_map(revisions_needing_options, fn %{revision: revision} ->
-        case Enum.find(releases, fn {short_hash, _} ->
-               String.starts_with?(revision, short_hash)
-             end) do
-          {_hash, release} ->
-            [%{revision: revision, base_url: release.base_url}]
+        case Tracker.Nixpkgs.ReleaseCache.find_by_revision(channel, revision) do
+          %{base_url: base_url} ->
+            [%{revision: revision, base_url: base_url}]
 
           nil ->
             Logger.warning("No release found for revision #{revision} during options backfill")
@@ -76,17 +69,11 @@ defmodule Tracker.Nixpkgs.OptionsWorker do
         :ok
 
       %{revision: revision} ->
-        releases =
-          Tracker.Nixpkgs.ReleaseCache.get_releases(channel)
-          |> Map.new(fn release -> {release.short_hash, release} end)
-
-        case Enum.find(releases, fn {short_hash, _} ->
-               String.starts_with?(revision, short_hash)
-             end) do
-          {_hash, release} ->
+        case Tracker.Nixpkgs.ReleaseCache.find_by_revision(channel, revision) do
+          %{base_url: base_url} ->
             new(%{
               "channel" => channel,
-              "base_url" => release.base_url,
+              "base_url" => base_url,
               "revision" => revision,
               "remaining" => remaining - 1
             })

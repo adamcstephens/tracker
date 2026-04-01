@@ -142,7 +142,6 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
           "channel" => channel,
           "base_url" => first.base_url,
           "released_at" => first.released_at,
-          "short_hash" => first.short_hash,
           "remaining" => length(rest)
         }
         |> new()
@@ -158,11 +157,11 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
   Called after a backfill job completes successfully. No-op if there are no
   remaining releases or if the key is absent (non-backfill jobs).
   """
-  def schedule_next(%{"remaining" => remaining, "short_hash" => short_hash, "channel" => channel})
+  def schedule_next(%{"remaining" => remaining, "base_url" => base_url, "channel" => channel})
       when remaining > 0 do
     releases = Tracker.Nixpkgs.ReleaseCache.get_releases(channel) |> Enum.reverse()
 
-    case find_next_release(releases, short_hash) do
+    case find_next_release(releases, base_url) do
       nil ->
         :ok
 
@@ -171,7 +170,6 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
           "channel" => channel,
           "base_url" => next.base_url,
           "released_at" => next.released_at,
-          "short_hash" => next.short_hash,
           "remaining" => remaining - 1
         }
         |> new()
@@ -181,8 +179,8 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
 
   def schedule_next(_args), do: :ok
 
-  defp find_next_release(releases, short_hash) do
-    case Enum.find_index(releases, &(&1.short_hash == short_hash)) do
+  defp find_next_release(releases, base_url) do
+    case Enum.find_index(releases, &(&1.base_url == base_url)) do
       nil -> nil
       index -> Enum.at(releases, index + 1)
     end
@@ -191,7 +189,7 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
   @doc """
   Filters out releases that already exist in the database for the given channel.
 
-  Matches short hashes from release directory names against existing full revision hashes.
+  Uses base_url to match releases against existing channel revisions.
   """
   def filter_existing_releases(releases, channel) do
     existing_hashes =

@@ -94,9 +94,7 @@ defmodule Tracker.Nixpkgs.Admin do
   end
 
   defp find_release!(channel, revision) do
-    releases = ReleaseCache.get_releases(channel) |> Enum.reverse()
-
-    Enum.find(releases, fn r -> String.starts_with?(revision, r.short_hash) end) ||
+    ReleaseCache.find_by_revision(channel, revision) ||
       raise "Release not found in cache for revision #{revision} on channel #{channel}"
   end
 
