@@ -195,6 +195,12 @@ defmodule Tracker.Nixpkgs.Package do
       source_attribute_on_join_resource :package_id
       destination_attribute_on_join_resource :option_id
     end
+
+    many_to_many :changes, Tracker.Nixpkgs.Change do
+      through Tracker.Nixpkgs.ChangePackage
+      source_attribute_on_join_resource :package_id
+      destination_attribute_on_join_resource :change_id
+    end
   end
 
   identities do
