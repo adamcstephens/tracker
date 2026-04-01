@@ -21,7 +21,7 @@ defmodule TrackerWeb.ModuleLive.Index do
     <.table
       id="modules"
       rows={@streams.modules}
-      row_click={fn {_id, m} -> JS.navigate(~p"/modules/#{m.id}") end}
+      row_click={fn {_id, m} -> JS.navigate(~p"/modules/#{m.display_name}") end}
     >
       <:col :let={{_id, m}} label="Display Name">{m.display_name}</:col>
       <:col :let={{_id, m}} label="Declaration">
@@ -31,7 +31,7 @@ defmodule TrackerWeb.ModuleLive.Index do
 
       <:action :let={{_id, m}}>
         <div class="sr-only">
-          <.link navigate={~p"/modules/#{m.id}"}>Show</.link>
+          <.link navigate={~p"/modules/#{m.display_name}"}>Show</.link>
         </div>
       </:action>
     </.table>

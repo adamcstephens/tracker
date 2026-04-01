@@ -9,7 +9,7 @@ defmodule Tracker.Nixpkgs.Module do
   code_interface do
     define :read
     define :list, args: [{:optional, :search}]
-    define :get_by_id, args: [:id]
+    define :get_by_name, args: [:name]
     define :bulk_upsert, args: [:declaration]
     define :id_map, action: :id_map
   end
@@ -37,14 +37,14 @@ defmodule Tracker.Nixpkgs.Module do
              )
     end
 
-    read :get_by_id do
+    read :get_by_name do
       get? true
 
-      argument :id, :integer do
+      argument :name, :string do
         allow_nil? false
       end
 
-      filter expr(id == ^arg(:id))
+      filter expr(display_name == ^arg(:name))
     end
 
     read :id_map do
