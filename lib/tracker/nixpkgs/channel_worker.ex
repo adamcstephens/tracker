@@ -54,8 +54,14 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
         :ok
 
       _ ->
+        released_at =
+          case Tracker.Nixpkgs.ReleaseCache.find_by_base_url(channel, base_url) do
+            %{released_at: released_at} -> released_at
+            nil -> nil
+          end
+
         fetch_channel(channel, revision, base_url)
-        |> maybe_put("released_at", fetch_released_at(base_url))
+        |> maybe_put("released_at", released_at)
         |> write_to_database()
     end
   end
@@ -179,29 +185,6 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
     case Enum.find_index(releases, &(&1.short_hash == short_hash)) do
       nil -> nil
       index -> Enum.at(releases, index + 1)
-    end
-  end
-
-  @releases_base_url "https://releases.nixos.org"
-
-  @doc """
-  Fetches the `LastModified` timestamp from S3 for a given release base URL.
-
-  Does a targeted S3 listing with `max_keys: 1` to get the timestamp without
-  downloading the full channel listing.
-  """
-  def fetch_released_at(base_url) do
-    key = String.replace_prefix(base_url, @releases_base_url <> "/", "")
-    req_s3 = Req.new() |> ReqS3.attach()
-
-    resp = Req.get!(req_s3, url: "s3://nix-releases", params: [prefix: key, max_keys: 1])
-
-    resp.body["ListBucketResult"]["Contents"]
-    |> List.wrap()
-    |> List.first()
-    |> case do
-      %{"LastModified" => last_modified} -> last_modified
-      _ -> nil
     end
   end
 
