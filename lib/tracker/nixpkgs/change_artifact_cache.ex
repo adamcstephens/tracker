@@ -95,6 +95,7 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCache do
            decode_body: false
          ) do
       {:ok, %{status: 200, body: body}} -> {:ok, body}
+      {:ok, %{status: 410}} -> {:error, :artifact_expired}
       {:ok, %{status: status}} -> {:error, "Artifact download failed with status #{status}"}
       {:error, reason} -> {:error, reason}
     end

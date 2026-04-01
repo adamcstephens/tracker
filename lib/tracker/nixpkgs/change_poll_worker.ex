@@ -92,22 +92,16 @@ defmodule Tracker.Nixpkgs.ChangePollWorker do
         {:ok, total_enqueued}
 
       {:ok, pulls} ->
-        merged = Enum.filter(pulls, & &1.merged_at)
+        recent = Enum.filter(pulls, &(&1.merged_at && !DateTime.before?(&1.merged_at, cutoff)))
 
-        oldest = merged |> Enum.map(& &1.merged_at) |> Enum.min(DateTime, fn -> nil end)
-
-        if oldest && DateTime.before?(oldest, cutoff) do
-          # Filter to only PRs within the cutoff
-          recent = Enum.filter(merged, &(!DateTime.before?(&1.merged_at, cutoff)))
-          {:ok, count} = process_pull_requests(recent)
-
+        if recent == [] do
           Logger.info(
-            "Backfill complete: reached #{@backfill_cutoff_days}-day cutoff. Enqueued #{total_enqueued + count} jobs."
+            "Backfill complete: all PRs on page #{page_num} are past #{@backfill_cutoff_days}-day cutoff. Enqueued #{total_enqueued} jobs."
           )
 
-          {:ok, total_enqueued + count}
+          {:ok, total_enqueued}
         else
-          {:ok, count} = process_pull_requests(pulls)
+          {:ok, count} = process_pull_requests(recent)
 
           Logger.info("Backfill page #{page_num}: enqueued #{count} jobs")
           backfill_page(owner, repo, token, cutoff, page_num + 1, total_enqueued + count)

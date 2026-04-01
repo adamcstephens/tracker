@@ -27,6 +27,10 @@ defmodule Tracker.Nixpkgs.ChangeProcessWorker do
       {:snooze, _} = snooze ->
         snooze
 
+      {:error, :artifact_expired} ->
+        Logger.info("Artifacts expired for PR ##{number}, discarding")
+        {:discard, :artifact_expired}
+
       {:error, reason} ->
         Logger.error("Failed to process PR ##{number}: #{inspect(reason)}")
         {:error, reason}
