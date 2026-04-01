@@ -36,10 +36,30 @@ defmodule Tracker.Nixpkgs.Change do
     end
 
     create :bulk_upsert do
-      accept [:number, :title, :state, :author, :url, :gh_created_at, :merged_at]
+      accept [
+        :number,
+        :title,
+        :state,
+        :author,
+        :url,
+        :gh_created_at,
+        :merged_at,
+        :merge_commit_sha
+      ]
+
       upsert? true
       upsert_identity :unique_number
-      upsert_fields [:title, :state, :author, :url, :gh_created_at, :merged_at, :updated_at]
+
+      upsert_fields [
+        :title,
+        :state,
+        :author,
+        :url,
+        :gh_created_at,
+        :merged_at,
+        :merge_commit_sha,
+        :updated_at
+      ]
     end
   end
 
@@ -66,12 +86,14 @@ defmodule Tracker.Nixpkgs.Change do
     attribute :url, :string, public?: true
     attribute :gh_created_at, :utc_datetime, public?: true
     attribute :merged_at, :utc_datetime, public?: true
+    attribute :merge_commit_sha, :string, public?: true
 
     timestamps()
   end
 
   relationships do
     has_many :change_packages, Tracker.Nixpkgs.ChangePackage
+    has_many :change_channels, Tracker.Nixpkgs.ChangeChannel
 
     many_to_many :packages, Tracker.Nixpkgs.Package do
       through Tracker.Nixpkgs.ChangePackage
@@ -84,8 +106,8 @@ defmodule Tracker.Nixpkgs.Change do
     identity :unique_number, [:number]
   end
 
-  # 9 columns: number, title, state, author, url, gh_created_at, merged_at, inserted_at, updated_at
-  @insert_cols 9
+  # 10 columns: number, title, state, author, url, gh_created_at, merged_at, merge_commit_sha, inserted_at, updated_at
+  @insert_cols 10
   @max_rows div(65_535, @insert_cols)
 
   @doc """
@@ -110,7 +132,17 @@ defmodule Tracker.Nixpkgs.Change do
           "changes",
           chunk,
           on_conflict:
-            {:replace, [:title, :state, :author, :url, :gh_created_at, :merged_at, :updated_at]},
+            {:replace,
+             [
+               :title,
+               :state,
+               :author,
+               :url,
+               :gh_created_at,
+               :merged_at,
+               :merge_commit_sha,
+               :updated_at
+             ]},
           conflict_target: :number,
           returning: [:id, :number]
         )
