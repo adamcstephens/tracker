@@ -13,22 +13,24 @@ defmodule Tracker.Nixpkgs.ChangePollWorker do
 
   @impl Oban.Worker
   def perform(%Oban.Job{}) do
-    fetch_merged_pulls() |> handle_fetch_result()
+    token = Tracker.GitHub.installation_token!()
+    fetch_merged_pulls(token) |> handle_fetch_result(token)
   end
 
   @doc false
-  def handle_fetch_result({:ok, pulls}) do
+  def handle_fetch_result({:ok, pulls}, _token) do
     process_pull_requests(pulls)
     reschedule()
     :ok
   end
 
-  def handle_fetch_result({:error, %GitHub.Error{reason: :rate_limited}}) do
-    Logger.warning("GitHub API rate limited, snoozing poll worker")
-    {:snooze, 60}
+  def handle_fetch_result({:error, %GitHub.Error{reason: :rate_limited}}, token) do
+    snooze_seconds = Tracker.GitHub.seconds_until_reset(token)
+    Logger.warning("GitHub API rate limited, snoozing poll worker #{snooze_seconds}s")
+    {:snooze, snooze_seconds}
   end
 
-  def handle_fetch_result({:error, reason}) do
+  def handle_fetch_result({:error, reason}, _token) do
     Logger.error("Failed to fetch pulls: #{inspect(reason)}")
     {:error, reason}
   end
@@ -42,10 +44,8 @@ defmodule Tracker.Nixpkgs.ChangePollWorker do
   Returns `{:ok, count}` with the number of jobs enqueued.
   """
   def process_pull_requests(pulls) do
-    merged_numbers =
-      pulls
-      |> Enum.filter(& &1.merged_at)
-      |> Enum.map(& &1.number)
+    merged = Enum.filter(pulls, & &1.merged_at)
+    merged_numbers = Enum.map(merged, & &1.number)
 
     existing =
       case merged_numbers do
@@ -53,15 +53,21 @@ defmodule Tracker.Nixpkgs.ChangePollWorker do
         numbers -> existing_change_numbers(numbers)
       end
 
-    new_numbers = Enum.reject(merged_numbers, &MapSet.member?(existing, &1))
+    new_pulls = Enum.reject(merged, &MapSet.member?(existing, &1.number))
 
-    Enum.each(new_numbers, fn number ->
-      %{"number" => number}
+    # Upsert Change records from the list data so the process worker
+    # can skip the individual PR fetch (saves 1 API call per PR)
+    new_pulls
+    |> Enum.map(&Tracker.Nixpkgs.ChangeProcessWorker.parse_pr_payload/1)
+    |> Tracker.Nixpkgs.Change.bulk_upsert_all()
+
+    Enum.each(new_pulls, fn pr ->
+      %{"number" => pr.number}
       |> Tracker.Nixpkgs.ChangeProcessWorker.new()
       |> Oban.insert!()
     end)
 
-    {:ok, length(new_numbers)}
+    {:ok, length(new_pulls)}
   end
 
   @doc """
@@ -108,8 +114,11 @@ defmodule Tracker.Nixpkgs.ChangePollWorker do
         end
 
       {:error, %GitHub.Error{reason: :rate_limited}} ->
+        seconds = Tracker.GitHub.seconds_until_reset(token)
+        minutes = div(seconds, 60)
+
         Logger.warning(
-          "Rate limited during backfill at page #{page_num}, stopping. Enqueued #{total_enqueued} jobs so far."
+          "Rate limited during backfill at page #{page_num}. Enqueued #{total_enqueued} jobs. Reset in #{minutes}m."
         )
 
         {:ok, total_enqueued}
@@ -127,9 +136,8 @@ defmodule Tracker.Nixpkgs.ChangePollWorker do
     |> MapSet.new()
   end
 
-  defp fetch_merged_pulls do
+  defp fetch_merged_pulls(token) do
     [owner, repo] = String.split(@repo, "/")
-    token = Tracker.GitHub.installation_token!()
 
     case GitHub.Pulls.list(owner, repo,
            state: "closed",

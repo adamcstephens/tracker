@@ -19,6 +19,21 @@ defmodule Tracker.GitHub do
     token
   end
 
+  @doc """
+  Returns the number of seconds until the rate limit resets.
+
+  Falls back to 60 seconds if the rate limit endpoint can't be reached.
+  """
+  def seconds_until_reset(token) do
+    case GitHub.RateLimit.get(auth: token) do
+      {:ok, %{rate: %{reset: reset}}} ->
+        max(reset - System.os_time(:second), 1)
+
+      _ ->
+        60
+    end
+  end
+
   defp github_config!(key) do
     Application.fetch_env!(:tracker, :github) |> Keyword.fetch!(key)
   end

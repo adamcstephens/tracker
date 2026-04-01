@@ -11,18 +11,17 @@ defmodule Tracker.Nixpkgs.ChangeProcessWorker do
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"number" => number}}) do
-    [owner, repo] = String.split(@repo, "/")
     token = Tracker.GitHub.installation_token!()
 
-    with {:ok, pr} <- GitHub.Pulls.get(owner, repo, number, auth: token),
-         {:ok, change} <- upsert_change(pr),
-         {:ok, attrdiff} <- fetch_attrdiff(number, pr.merge_commit_sha, token) do
+    with {:ok, change} <- ensure_change(number, token),
+         {:ok, attrdiff} <- fetch_attrdiff(number, change.merge_commit_sha, token) do
       link_packages(change, attrdiff)
       :ok
     else
       {:error, %GitHub.Error{reason: :rate_limited}} ->
-        Logger.warning("Rate limited processing PR ##{number}, snoozing")
-        {:snooze, 60}
+        snooze_seconds = Tracker.GitHub.seconds_until_reset(token)
+        Logger.warning("Rate limited processing PR ##{number}, snoozing #{snooze_seconds}s")
+        {:snooze, snooze_seconds}
 
       {:snooze, _} = snooze ->
         snooze
@@ -34,6 +33,20 @@ defmodule Tracker.Nixpkgs.ChangeProcessWorker do
       {:error, reason} ->
         Logger.error("Failed to process PR ##{number}: #{inspect(reason)}")
         {:error, reason}
+    end
+  end
+
+  defp ensure_change(number, token) do
+    case Tracker.Nixpkgs.Change.get_by_number(number) do
+      {:ok, change} when not is_nil(change.merge_commit_sha) ->
+        {:ok, change}
+
+      _ ->
+        [owner, repo] = String.split(@repo, "/")
+
+        with {:ok, pr} <- GitHub.Pulls.get(owner, repo, number, auth: token) do
+          upsert_change(pr)
+        end
     end
   end
 
