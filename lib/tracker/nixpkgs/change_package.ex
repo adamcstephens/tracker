@@ -15,15 +15,22 @@ defmodule Tracker.Nixpkgs.ChangePackage do
     defaults [:read]
 
     create :load do
-      accept [:change_id, :package_id]
+      accept [:change_id, :package_id, :type]
       upsert? true
       upsert_identity :unique_change_package
-      upsert_fields [:updated_at]
+      upsert_fields [:type, :updated_at]
     end
   end
 
   attributes do
     integer_primary_key :id
+
+    attribute :type, :atom do
+      allow_nil? false
+      public? true
+      constraints one_of: [:added, :changed, :removed]
+    end
+
     timestamps()
   end
 
@@ -32,8 +39,8 @@ defmodule Tracker.Nixpkgs.ChangePackage do
     belongs_to :package, Tracker.Nixpkgs.Package, attribute_type: :integer, allow_nil?: false
   end
 
-  # 5 columns: id, change_id, package_id, inserted_at, updated_at
-  @ash_cols 5
+  # 6 columns: id, change_id, package_id, type, inserted_at, updated_at
+  @ash_cols 6
   @max_batch div(65_535, @ash_cols)
 
   def bulk_create_all(records) do

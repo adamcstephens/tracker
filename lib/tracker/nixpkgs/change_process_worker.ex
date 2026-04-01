@@ -73,32 +73,39 @@ defmodule Tracker.Nixpkgs.ChangeProcessWorker do
   Returns `{:ok, count}` with the number of packages linked.
   """
   def link_packages(change, attrdiff) do
-    attributes =
-      (attrdiff["added"] || []) ++
-        (attrdiff["changed"] || []) ++
-        (attrdiff["removed"] || [])
+    typed_attrs =
+      Enum.flat_map(~w(added changed removed), fn type ->
+        Enum.map(attrdiff[type] || [], &{String.to_existing_atom(type), &1})
+      end)
 
-    case attributes do
+    case typed_attrs do
       [] ->
         {:ok, 0}
 
-      attrs ->
-        package_ids = find_package_ids(attrs)
+      _ ->
+        all_attrs = Enum.map(typed_attrs, &elem(&1, 1))
+        package_id_map = find_package_id_map(all_attrs)
 
-        records = Enum.map(package_ids, fn id -> %{change_id: change.id, package_id: id} end)
+        records =
+          typed_attrs
+          |> Enum.filter(fn {_type, attr} -> Map.has_key?(package_id_map, attr) end)
+          |> Enum.map(fn {type, attr} ->
+            %{change_id: change.id, package_id: package_id_map[attr], type: type}
+          end)
+
         Tracker.Nixpkgs.ChangePackage.bulk_create_all(records)
 
-        count = length(package_ids)
+        count = length(records)
         Tracker.Nixpkgs.Change.update_package_count!(change, %{package_count: count})
 
         {:ok, count}
     end
   end
 
-  defp find_package_ids(attributes) do
+  defp find_package_id_map(attributes) do
     attributes
     |> Tracker.Nixpkgs.Package.ids_by_attributes!()
-    |> Enum.map(& &1.id)
+    |> Map.new(&{&1.attribute, &1.id})
   end
 
   defp fetch_attrdiff(pr_number, merge_commit_sha, token) do

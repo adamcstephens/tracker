@@ -34,7 +34,7 @@ defmodule Tracker.Nixpkgs.ChangeProcessWorkerTest do
   end
 
   describe "link_packages/2" do
-    test "links change to existing packages from attrdiff" do
+    test "links change to existing packages from attrdiff with types" do
       Package.bulk_upsert_all([
         %{attribute: "nixos-install-tools"},
         %{attribute: "curl"}
@@ -52,9 +52,13 @@ defmodule Tracker.Nixpkgs.ChangeProcessWorkerTest do
 
       assert linked == 2
 
-      change = Ash.load!(change, :packages)
+      change = Ash.load!(change, [:packages, :change_packages])
       attrs = Enum.map(change.packages, & &1.attribute) |> Enum.sort()
       assert attrs == ["curl", "nixos-install-tools"]
+
+      types = change.change_packages |> Enum.sort_by(& &1.package_id) |> Enum.map(& &1.type)
+      assert :added in types
+      assert :changed in types
     end
 
     test "skips attributes not found in packages table" do
