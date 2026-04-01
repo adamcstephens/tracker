@@ -697,7 +697,6 @@ defmodule Tracker.Nixpkgs.ChannelWorkerTest do
       args = %{
         "channel" => "nixos-test",
         "base_url" => "https://releases.nixos.org/nixos/test/test.aaa1111",
-        "short_hash" => "aaa1111",
         "remaining" => 2
       }
 

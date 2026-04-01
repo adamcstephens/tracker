@@ -58,6 +58,10 @@ defmodule Tracker.Nixpkgs.ReleaseCache do
     GenServer.call(server, {:find_by_base_url, channel, base_url})
   end
 
+  def find_by_revision(server \\ __MODULE__, channel, revision) do
+    GenServer.call(server, {:find_by_revision, channel, revision})
+  end
+
   def refresh(server \\ __MODULE__) do
     GenServer.cast(server, :refresh)
   end
@@ -153,6 +157,15 @@ defmodule Tracker.Nixpkgs.ReleaseCache do
       end
 
     {:reply, result, state}
+  end
+
+  def handle_call({:find_by_revision, channel, revision}, _from, state) do
+    release =
+      state
+      |> Map.get(channel, [])
+      |> Enum.find(&String.starts_with?(revision, &1.short_hash))
+
+    {:reply, release, state}
   end
 
   def handle_call({:find_by_base_url, channel, base_url}, _from, state) do
