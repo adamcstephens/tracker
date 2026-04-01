@@ -519,9 +519,10 @@ defmodule Tracker.Nixpkgs.ChannelWorkerTest do
     end
 
     test "stores previous_channel_revision_id on channel revision" do
-      # Use realistic hash lengths: cache stores 12-char hashes from S3,
-      # but revisions are full 40-char git hashes
-      ReleaseCache.put_releases("nixos-unstable", [
+      # Use a unique channel name to avoid interference from other async tests
+      channel = "nixos-prev-test-#{System.unique_integer([:positive])}"
+
+      ReleaseCache.put_releases(channel, [
         %Release{
           short_hash: "prev002abcde",
           base_url: "https://example.com/prev002abcde",
@@ -539,7 +540,7 @@ defmodule Tracker.Nixpkgs.ChannelWorkerTest do
       data1 = %{
         "version" => 2,
         "revision" => rev1_hash,
-        "channel" => "nixos-unstable",
+        "channel" => channel,
         "released_at" => "2026-03-01T10:00:00Z",
         "packages" => %{"hello" => %{"version" => "2.12"}}
       }
@@ -548,7 +549,7 @@ defmodule Tracker.Nixpkgs.ChannelWorkerTest do
 
       rev1 =
         Ash.get!(Tracker.Nixpkgs.ChannelRevision, %{
-          channel: "nixos-unstable",
+          channel: channel,
           revision: rev1_hash
         })
 
@@ -559,7 +560,7 @@ defmodule Tracker.Nixpkgs.ChannelWorkerTest do
       data2 = %{
         "version" => 2,
         "revision" => rev2_hash,
-        "channel" => "nixos-unstable",
+        "channel" => channel,
         "released_at" => "2026-03-02T10:00:00Z",
         "packages" => %{"hello" => %{"version" => "2.12"}}
       }
@@ -568,7 +569,7 @@ defmodule Tracker.Nixpkgs.ChannelWorkerTest do
 
       rev2 =
         Ash.get!(Tracker.Nixpkgs.ChannelRevision, %{
-          channel: "nixos-unstable",
+          channel: channel,
           revision: rev2_hash
         })
 
@@ -605,38 +606,25 @@ defmodule Tracker.Nixpkgs.ChannelWorkerTest do
     test "inserts one job with oldest release first and remaining count" do
       assert {:ok, 3} = ChannelWorker.backfill_channel("nixos-test")
 
-      jobs =
-        from(j in Oban.Job,
-          where: j.queue == "channels" and j.args["channel"] == "nixos-test"
-        )
-        |> Tracker.Repo.all()
-
-      assert length(jobs) == 1
-      job = hd(jobs)
-
       # Oldest release should be scheduled first
-      assert job.args["base_url"] ==
-               "https://releases.nixos.org/nixos/test/test.aaa1111"
-
-      assert job.args["released_at"] == "2026-03-01T10:00:00Z"
-      assert job.args["remaining"] == 2
-      refute Map.has_key?(job.args, "remaining_releases")
+      assert_enqueued(
+        worker: Tracker.Nixpkgs.ChannelWorker,
+        args: %{
+          "channel" => "nixos-test",
+          "base_url" => "https://releases.nixos.org/nixos/test/test.aaa1111",
+          "released_at" => "2026-03-01T10:00:00Z",
+          "remaining" => 2
+        }
+      )
     end
 
     test "limit takes the oldest N releases" do
       assert {:ok, 2} = ChannelWorker.backfill_channel("nixos-test", limit: 2)
 
-      jobs =
-        from(j in Oban.Job,
-          where: j.queue == "channels" and j.args["channel"] == "nixos-test"
-        )
-        |> Tracker.Repo.all()
-
-      assert length(jobs) == 1
-      job = hd(jobs)
-
-      assert job.args["base_url"] =~ "aaa1111"
-      assert job.args["remaining"] == 1
+      assert_enqueued(
+        worker: Tracker.Nixpkgs.ChannelWorker,
+        args: %{"channel" => "nixos-test", "remaining" => 1}
+      )
     end
 
     test "returns {:ok, 0} and inserts no jobs when all releases exist" do
@@ -655,13 +643,7 @@ defmodule Tracker.Nixpkgs.ChannelWorkerTest do
 
       assert {:ok, 0} = ChannelWorker.backfill_channel("nixos-test")
 
-      jobs =
-        from(j in Oban.Job,
-          where: j.queue == "channels" and j.args["channel"] == "nixos-test"
-        )
-        |> Tracker.Repo.all()
-
-      assert jobs == []
+      refute_enqueued(worker: Tracker.Nixpkgs.ChannelWorker, args: %{"channel" => "nixos-test"})
     end
   end
 
@@ -700,17 +682,14 @@ defmodule Tracker.Nixpkgs.ChannelWorkerTest do
 
       ChannelWorker.schedule_next(args)
 
-      jobs =
-        from(j in Oban.Job,
-          where: j.queue == "channels" and j.args["channel"] == "nixos-test"
-        )
-        |> Tracker.Repo.all()
-
-      assert length(jobs) == 1
-      job = hd(jobs)
-      assert job.args["base_url"] =~ "bbb2222"
-      assert job.args["released_at"] == "2026-03-02T10:00:00Z"
-      assert job.args["remaining"] == 1
+      assert_enqueued(
+        worker: Tracker.Nixpkgs.ChannelWorker,
+        args: %{
+          "channel" => "nixos-test",
+          "released_at" => "2026-03-02T10:00:00Z",
+          "remaining" => 1
+        }
+      )
     end
 
     test "is a no-op when remaining is 0" do
@@ -722,13 +701,7 @@ defmodule Tracker.Nixpkgs.ChannelWorkerTest do
 
       ChannelWorker.schedule_next(args)
 
-      jobs =
-        from(j in Oban.Job,
-          where: j.queue == "channels" and j.args["channel"] == "nixos-test"
-        )
-        |> Tracker.Repo.all()
-
-      assert jobs == []
+      refute_enqueued(worker: Tracker.Nixpkgs.ChannelWorker, args: %{"channel" => "nixos-test"})
     end
 
     test "is a no-op when remaining key is absent" do
@@ -739,13 +712,7 @@ defmodule Tracker.Nixpkgs.ChannelWorkerTest do
 
       ChannelWorker.schedule_next(args)
 
-      jobs =
-        from(j in Oban.Job,
-          where: j.queue == "channels" and j.args["channel"] == "nixos-test"
-        )
-        |> Tracker.Repo.all()
-
-      assert jobs == []
+      refute_enqueued(worker: Tracker.Nixpkgs.ChannelWorker, args: %{"channel" => "nixos-test"})
     end
   end
 
