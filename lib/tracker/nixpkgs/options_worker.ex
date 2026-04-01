@@ -1,7 +1,6 @@
 defmodule Tracker.Nixpkgs.OptionsWorker do
   use Oban.Worker, queue: :channels, max_attempts: 10
 
-  import Ecto.Query, only: [from: 2]
   require Logger
 
   @doc """
@@ -15,15 +14,7 @@ defmodule Tracker.Nixpkgs.OptionsWorker do
 
     # Find successful revisions that have no option_revisions
     revisions_needing_options =
-      from(cr in "channel_revisions",
-        left_join: orev in "option_revisions",
-        on: orev.channel_revision_id == cr.id,
-        where: cr.channel == ^channel and cr.result == "success" and is_nil(orev.id),
-        select: %{id: cr.id, revision: cr.revision},
-        order_by: [asc: cr.released_at],
-        group_by: [cr.id, cr.revision, cr.released_at]
-      )
-      |> Tracker.Repo.all()
+      Tracker.Nixpkgs.ChannelRevision.without_options!(channel)
 
     jobs_to_schedule =
       Enum.flat_map(revisions_needing_options, fn %{revision: revision} ->
@@ -88,16 +79,8 @@ defmodule Tracker.Nixpkgs.OptionsWorker do
   def schedule_next(_args), do: :ok
 
   defp next_revision_needing_options(channel) do
-    from(cr in "channel_revisions",
-      left_join: orev in "option_revisions",
-      on: orev.channel_revision_id == cr.id,
-      where: cr.channel == ^channel and cr.result == "success" and is_nil(orev.id),
-      select: %{id: cr.id, revision: cr.revision},
-      order_by: [asc: cr.released_at],
-      group_by: [cr.id, cr.revision, cr.released_at],
-      limit: 1
-    )
-    |> Tracker.Repo.one()
+    Tracker.Nixpkgs.ChannelRevision.without_options!(channel, query: [limit: 1])
+    |> List.first()
   end
 
   @impl Oban.Worker
@@ -280,12 +263,8 @@ defmodule Tracker.Nixpkgs.OptionsWorker do
           %{}
 
         paths ->
-          from(p in "packages",
-            where: p.attribute in ^paths,
-            select: {p.attribute, p.id}
-          )
-          |> Tracker.Repo.all()
-          |> Map.new()
+          Tracker.Nixpkgs.Package.ids_by_attributes!(paths)
+          |> Map.new(&{&1.attribute, &1.id})
       end
 
     # Build join records, skipping unresolved attributes

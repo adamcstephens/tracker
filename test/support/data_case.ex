@@ -22,8 +22,6 @@ defmodule Tracker.DataCase do
 
       use Oban.Testing, repo: Tracker.Repo
 
-      import Ecto
-      import Ecto.Changeset
       import Ecto.Query
       import Tracker.DataCase
     end
