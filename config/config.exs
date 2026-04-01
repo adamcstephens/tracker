@@ -18,7 +18,7 @@ config :tracker,
 config :tracker, Oban,
   engine: Oban.Engines.Basic,
   notifier: Oban.Notifiers.Postgres,
-  queues: [channels: 1],
+  queues: [channels: 1, changes: 1],
   repo: Tracker.Repo
 
 config :mime,

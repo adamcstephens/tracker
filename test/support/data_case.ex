@@ -20,6 +20,8 @@ defmodule Tracker.DataCase do
     quote do
       alias Tracker.Repo
 
+      use Oban.Testing, repo: Tracker.Repo
+
       import Ecto
       import Ecto.Changeset
       import Ecto.Query

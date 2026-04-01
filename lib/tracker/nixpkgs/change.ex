@@ -10,6 +10,7 @@ defmodule Tracker.Nixpkgs.Change do
     define :read
     define :list, args: [{:optional, :search}]
     define :bulk_upsert, args: [:number]
+    define :existing_numbers, args: [:numbers]
   end
 
   actions do
@@ -33,6 +34,13 @@ defmodule Tracker.Nixpkgs.Change do
                  true
                end
              )
+    end
+
+    read :existing_numbers do
+      argument :numbers, {:array, :integer}, allow_nil?: false
+
+      prepare build(select: [:number])
+      filter expr(number in ^arg(:numbers))
     end
 
     create :bulk_upsert do
