@@ -29,29 +29,35 @@ if System.get_env("TRACKER_S3_BUCKET") do
     region: System.fetch_env!("TRACKER_S3_REGION")
 end
 
-github_client_id = System.fetch_env!("TRACKER_GITHUB_CLIENT_ID")
+if config_env() != :test do
+  github_client_id = System.fetch_env!("TRACKER_GITHUB_CLIENT_ID")
 
-github_client_secret =
-  System.fetch_env!("TRACKER_GITHUB_CLIENT_SECRET_FILE") |> File.read!() |> String.trim()
+  github_client_secret =
+    System.fetch_env!("TRACKER_GITHUB_CLIENT_SECRET_FILE") |> File.read!() |> String.trim()
 
-github_app_id = System.fetch_env!("TRACKER_GITHUB_APP_ID") |> String.to_integer()
+  github_app_id = System.fetch_env!("TRACKER_GITHUB_APP_ID") |> String.to_integer()
 
-github_app_private_key =
-  System.fetch_env!("TRACKER_GITHUB_APP_PRIVATE_KEY_FILE") |> File.read!() |> String.trim()
+  github_app_private_key =
+    System.fetch_env!("TRACKER_GITHUB_APP_PRIVATE_KEY_FILE") |> File.read!() |> String.trim()
 
-config :tracker,
-  github: [
-    client_id: github_client_id,
-    client_secret: github_client_secret,
-    redirect_uri: System.fetch_env!("TRACKER_GITHUB_REDIRECT_URI")
-  ]
+  github_installation_id =
+    System.fetch_env!("TRACKER_GITHUB_INSTALLATION_ID") |> String.to_integer()
 
-config :oapi_github,
-  app_name: "Tracker",
-  apps: [
-    {:tracker, github_app_id, github_app_private_key}
-  ],
-  default_auth: {github_client_id, github_client_secret}
+  config :tracker,
+    github: [
+      client_id: github_client_id,
+      client_secret: github_client_secret,
+      redirect_uri: System.fetch_env!("TRACKER_GITHUB_REDIRECT_URI"),
+      installation_id: github_installation_id
+    ]
+
+  config :oapi_github,
+    app_name: "Tracker",
+    apps: [
+      {:tracker, github_app_id, github_app_private_key}
+    ],
+    default_auth: {github_client_id, github_client_secret}
+end
 
 if config_env() == :prod do
   database_url =
