@@ -17,8 +17,10 @@ defmodule Tracker.Nixpkgs.ChangeProcessWorker do
 
     with {:ok, pr} <- GitHub.Pulls.get(owner, repo, number, auth: token),
          {:ok, change} <- upsert_change(pr),
-         {:ok, attrdiff} <- fetch_attrdiff(number, change.merge_commit_sha, token) do
+         {:ok, attrdiff} <-
+           tag_change(fetch_attrdiff(number, change.merge_commit_sha, token), change) do
       link_packages(change, attrdiff)
+      set_processing_status(change, :processed)
 
       Phoenix.PubSub.broadcast(
         Tracker.PubSub,
@@ -36,9 +38,24 @@ defmodule Tracker.Nixpkgs.ChangeProcessWorker do
       {:snooze, _} = snooze ->
         snooze
 
+      {:error, :artifact_expired, change} ->
+        Logger.warning(msg: "Artifacts expired, discarding", pr: number)
+        set_processing_status(change, :artifact_expired)
+        :ok
+
+      {:error, :no_workflow_run, change} ->
+        Logger.warning(msg: "No Merge Group workflow run found, discarding", pr: number)
+        set_processing_status(change, :no_workflow_run)
+        :ok
+
       {:error, :artifact_expired} ->
-        Logger.info("Artifacts expired for PR ##{number}, discarding")
+        Logger.warning(msg: "Artifacts expired before change upserted, discarding", pr: number)
         {:discard, :artifact_expired}
+
+      {:error, reason, change} ->
+        Logger.error("Failed to process PR ##{number}: #{inspect(reason)}")
+        set_processing_status(change, :failed)
+        {:error, reason}
 
       {:error, reason} ->
         Logger.error("Failed to process PR ##{number}: #{inspect(reason)}")
@@ -141,7 +158,7 @@ defmodule Tracker.Nixpkgs.ChangeProcessWorker do
               Logger.info("Merge Group run not yet complete for #{sha}, snoozing")
               {:snooze, 120}
             else
-              {:error, "No Merge Group workflow run found for #{sha}"}
+              {:error, :no_workflow_run}
             end
 
           run ->
@@ -174,6 +191,17 @@ defmodule Tracker.Nixpkgs.ChangeProcessWorker do
       {:error, reason} ->
         {:error, reason}
     end
+  end
+
+  defp tag_change({:ok, _} = ok, _change), do: ok
+  defp tag_change({:snooze, _} = snooze, _change), do: snooze
+  defp tag_change({:error, reason}, change), do: {:error, reason, change}
+
+  @doc """
+  Sets the processing_status on a Change record.
+  """
+  def set_processing_status(change, status) do
+    Tracker.Nixpkgs.Change.update_processing_status!(change, %{processing_status: status})
   end
 
   defp parse_state(%{merged: true}), do: :merged

@@ -13,6 +13,7 @@ defmodule Tracker.Nixpkgs.Change do
     define :by_package, args: [:package_id]
     define :by_maintainer_github_id, args: [:github_id]
     define :update_package_count
+    define :update_processing_status
     define :bulk_upsert, args: [:number]
     define :distinct_base_refs
     define :existing_numbers, args: [:numbers]
@@ -75,6 +76,10 @@ defmodule Tracker.Nixpkgs.Change do
       accept [:package_count]
     end
 
+    update :update_processing_status do
+      accept [:processing_status]
+    end
+
     read :distinct_base_refs do
       prepare build(distinct: [:base_ref], select: [:base_ref], sort: [:base_ref])
     end
@@ -99,7 +104,8 @@ defmodule Tracker.Nixpkgs.Change do
         :labels,
         :gh_created_at,
         :merged_at,
-        :merge_commit_sha
+        :merge_commit_sha,
+        :processing_status
       ]
 
       upsert? true
@@ -117,6 +123,7 @@ defmodule Tracker.Nixpkgs.Change do
         :gh_created_at,
         :merged_at,
         :merge_commit_sha,
+        :processing_status,
         :updated_at
       ]
     end
@@ -152,6 +159,11 @@ defmodule Tracker.Nixpkgs.Change do
     attribute :merge_commit_sha, :string, public?: true
     attribute :package_count, :integer, public?: true, default: 0
 
+    attribute :processing_status, :atom,
+      public?: true,
+      default: :pending,
+      constraints: [one_of: [:pending, :processed, :artifact_expired, :no_workflow_run, :failed]]
+
     timestamps()
   end
 
@@ -170,9 +182,10 @@ defmodule Tracker.Nixpkgs.Change do
     identity :unique_number, [:number]
   end
 
-  # 14 columns: number, title, state, author, author_github_id, merged_by_github_id,
-  # url, base_ref, labels, gh_created_at, merged_at, merge_commit_sha, inserted_at, updated_at
-  @insert_cols 14
+  # 15 columns: number, title, state, author, author_github_id, merged_by_github_id,
+  # url, base_ref, labels, gh_created_at, merged_at, merge_commit_sha, processing_status,
+  # inserted_at, updated_at
+  @insert_cols 15
   @max_rows div(65_535, @insert_cols)
 
   @doc """
@@ -189,6 +202,7 @@ defmodule Tracker.Nixpkgs.Change do
       |> Map.put(:inserted_at, now)
       |> Map.put(:updated_at, now)
       |> Map.update(:state, :open, &to_string/1)
+      |> Map.update(:processing_status, "pending", &to_string/1)
     end)
     |> Stream.chunk_every(@max_rows)
     |> Enum.reduce(%{}, fn chunk, acc ->
@@ -210,6 +224,7 @@ defmodule Tracker.Nixpkgs.Change do
                :gh_created_at,
                :merged_at,
                :merge_commit_sha,
+               :processing_status,
                :updated_at
              ]},
           conflict_target: :number,

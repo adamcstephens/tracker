@@ -20,6 +20,7 @@ defmodule Tracker.Nixpkgs.ChangeProcessWorkerTest do
       assert change.base_ref == "master"
       assert change.labels == ["6.topic: nixos", "backport release-25.11"]
       assert change.merge_commit_sha == "f2b75e04afe69bf02253b3895390045d47f9fbc0"
+      assert change.processing_status == :pending
     end
 
     test "upserts on repeated calls" do
@@ -85,6 +86,40 @@ defmodule Tracker.Nixpkgs.ChangeProcessWorkerTest do
       {:ok, linked} = ChangeProcessWorker.link_packages(change, attrdiff)
 
       assert linked == 0
+    end
+  end
+
+  describe "set_processing_status/2" do
+    test "sets status to :processed" do
+      {:ok, change} = ChangeProcessWorker.upsert_change(pr_struct())
+
+      updated = ChangeProcessWorker.set_processing_status(change, :processed)
+
+      assert updated.processing_status == :processed
+    end
+
+    test "sets status to :artifact_expired" do
+      {:ok, change} = ChangeProcessWorker.upsert_change(pr_struct())
+
+      updated = ChangeProcessWorker.set_processing_status(change, :artifact_expired)
+
+      assert updated.processing_status == :artifact_expired
+    end
+
+    test "sets status to :no_workflow_run" do
+      {:ok, change} = ChangeProcessWorker.upsert_change(pr_struct())
+
+      updated = ChangeProcessWorker.set_processing_status(change, :no_workflow_run)
+
+      assert updated.processing_status == :no_workflow_run
+    end
+
+    test "sets status to :failed" do
+      {:ok, change} = ChangeProcessWorker.upsert_change(pr_struct())
+
+      updated = ChangeProcessWorker.set_processing_status(change, :failed)
+
+      assert updated.processing_status == :failed
     end
   end
 
