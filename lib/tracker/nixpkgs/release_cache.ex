@@ -4,9 +4,14 @@ defmodule Tracker.Nixpkgs.ReleaseCache do
 
   Periodically polls the nix-releases S3 bucket and stores parsed release
   entries per channel, sorted by `released_at` desc (newest first).
+
+  Refreshes happen asynchronously in a background task so reads never
+  block on S3 fetches.
   """
 
   use GenServer
+
+  require Logger
 
   alias Tracker.Nixpkgs.ReleaseCache.Release
 
@@ -113,42 +118,51 @@ defmodule Tracker.Nixpkgs.ReleaseCache do
       Keyword.get(opts, :load, Application.get_env(:tracker, :release_cache_load, true))
 
     if load? do
-      {:ok, %{}, {:continue, :load}}
+      {:ok, %{releases: %{}, refreshing: false}, {:continue, :load}}
     else
-      {:ok, %{}}
+      {:ok, %{releases: %{}, refreshing: false}}
     end
   end
 
   @impl GenServer
   def handle_continue(:load, state) do
-    state = refresh_channels(state)
-    schedule_refresh()
-    {:noreply, state}
+    {:noreply, start_async_refresh(state)}
   end
 
   @impl GenServer
   def handle_info(:refresh, state) do
-    state = refresh_channels(state)
-    schedule_refresh()
+    {:noreply, start_async_refresh(state)}
+  end
+
+  def handle_info({:refresh_complete, new_releases}, state) do
+    {:noreply, %{state | releases: new_releases, refreshing: false}}
+  end
+
+  def handle_info({:DOWN, _ref, :process, _pid, :normal}, state) do
     {:noreply, state}
+  end
+
+  def handle_info({:DOWN, _ref, :process, _pid, reason}, state) do
+    Logger.error("ReleaseCache refresh task failed: #{inspect(reason)}")
+    {:noreply, %{state | refreshing: false}}
   end
 
   @impl GenServer
   def handle_cast(:refresh, state) do
-    {:noreply, refresh_channels(state)}
+    {:noreply, start_async_refresh(state)}
   end
 
   @impl GenServer
   def handle_call(:list_releases, _from, state) do
-    {:reply, state, state}
+    {:reply, state.releases, state}
   end
 
   def handle_call({:get_releases, channel}, _from, state) do
-    {:reply, Map.get(state, channel, []), state}
+    {:reply, Map.get(state.releases, channel, []), state}
   end
 
   def handle_call({:find_previous_release, channel, revision}, _from, state) do
-    releases = Map.get(state, channel, [])
+    releases = Map.get(state.releases, channel, [])
 
     result =
       case Enum.find_index(releases, &String.starts_with?(revision, &1.short_hash)) do
@@ -161,7 +175,7 @@ defmodule Tracker.Nixpkgs.ReleaseCache do
 
   def handle_call({:find_by_revision, channel, revision}, _from, state) do
     release =
-      state
+      state.releases
       |> Map.get(channel, [])
       |> Enum.find(&String.starts_with?(revision, &1.short_hash))
 
@@ -170,7 +184,7 @@ defmodule Tracker.Nixpkgs.ReleaseCache do
 
   def handle_call({:find_by_base_url, channel, base_url}, _from, state) do
     release =
-      state
+      state.releases
       |> Map.get(channel, [])
       |> Enum.find(&(&1.base_url == base_url))
 
@@ -178,14 +192,30 @@ defmodule Tracker.Nixpkgs.ReleaseCache do
   end
 
   def handle_call({:put_releases, channel, releases}, _from, state) do
-    {:reply, :ok, Map.put(state, channel, releases)}
+    {:reply, :ok, %{state | releases: Map.put(state.releases, channel, releases)}}
   end
 
   # Private
 
-  defp refresh_channels(state) do
+  defp start_async_refresh(state) do
+    if state.refreshing do
+      state
+    else
+      server = self()
+
+      Task.start(fn ->
+        new_releases = do_refresh(state.releases)
+        send(server, {:refresh_complete, new_releases})
+      end)
+
+      schedule_refresh()
+      %{state | refreshing: true}
+    end
+  end
+
+  defp do_refresh(current_releases) do
     configured = Application.get_env(:tracker, :channels, [])
-    all_channels = Enum.uniq(configured ++ Map.keys(state))
+    all_channels = Enum.uniq(configured ++ Map.keys(current_releases))
 
     Map.new(all_channels, fn channel ->
       releases =
