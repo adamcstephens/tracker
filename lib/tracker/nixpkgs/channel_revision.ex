@@ -12,6 +12,7 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
     define :create
     define :list_by_channel, args: [:channel]
     define :record_result
+    define :record_options_result
     define :by_channel, args: [:channel]
     define :distinct_channels
     define :find_by_short_hash, args: [:channel, :short_hash]
@@ -60,6 +61,10 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
 
     update :record_result do
       accept [:result]
+    end
+
+    update :record_options_result do
+      accept [:options_result]
     end
 
     read :by_channel do
@@ -116,6 +121,10 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
     end
 
     attribute :result, :atom, constraints: [one_of: [:success, :partial_success, :error]]
+
+    attribute :options_result, :atom,
+      constraints: [one_of: [:success, :error]],
+      public?: true
 
     attribute :released_at, :utc_datetime, allow_nil?: false, public?: true
 

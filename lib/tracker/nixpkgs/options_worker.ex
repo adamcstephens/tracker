@@ -122,6 +122,10 @@ defmodule Tracker.Nixpkgs.OptionsWorker do
         fetch_options(base_url)
         |> write_to_database(channel_revision)
 
+        Tracker.Nixpkgs.ChannelRevision.record_options_result!(channel_revision, %{
+          options_result: :success
+        })
+
         schedule_next(args)
         :ok
 
