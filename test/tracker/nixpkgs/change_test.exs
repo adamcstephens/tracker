@@ -112,7 +112,7 @@ defmodule Tracker.Nixpkgs.ChangeTest do
       package_id = pkg_map["curl"]
 
       Tracker.Nixpkgs.ChangePackage.bulk_create_all([
-        %{change_id: change_id, package_id: package_id}
+        %{change_id: change_id, package_id: package_id, type: :changed}
       ])
 
       change =
