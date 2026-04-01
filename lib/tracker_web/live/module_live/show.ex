@@ -1,8 +1,6 @@
 defmodule TrackerWeb.ModuleLive.Show do
   use TrackerWeb, :live_view
 
-  import Ecto.Query, only: [from: 2]
-
   @impl true
   def render(assigns) do
     ~H"""
@@ -16,6 +14,16 @@ defmodule TrackerWeb.ModuleLive.Show do
         <code>{@module.declaration}</code>
       </:item>
     </.list>
+
+    <section :if={@packages != []}>
+      <h2>Packages</h2>
+      <ul>
+        <li :for={pkg <- @packages}>
+          <.link navigate={~p"/packages/#{pkg.attribute}"}>{pkg.attribute}</.link>
+          <small :if={pkg.description}> —  {pkg.description}</small>
+        </li>
+      </ul>
+    </section>
 
     <h2>Options ({@option_count})</h2>
 
@@ -107,12 +115,19 @@ defmodule TrackerWeb.ModuleLive.Show do
 
     # Load latest revision for each option on this page
     option_ids = Enum.map(options_page.results, & &1.id)
-    revisions = load_latest_revisions(option_ids)
+
+    revisions =
+      option_ids
+      |> Tracker.Nixpkgs.OptionRevision.latest_by_option_ids!()
+      |> Map.new(&{&1.option_id, &1})
+
+    packages = Tracker.Nixpkgs.Package.by_module!(mod.id)
 
     {:noreply,
      socket
      |> assign(:page_title, mod.display_name)
      |> assign(:module, mod)
+     |> assign(:packages, packages)
      |> assign(:option_count, options_page.count)
      |> assign(:revisions, revisions)
      |> stream(:options, options_page.results, reset: true)
@@ -147,29 +162,5 @@ defmodule TrackerWeb.ModuleLive.Show do
       "" -> "/modules/#{name}"
       qs -> "/modules/#{name}?#{qs}"
     end
-  end
-
-  # Load the most recent OptionRevision for each option_id.
-  # Returns a map of option_id => %OptionRevision{}.
-  defp load_latest_revisions([]), do: %{}
-
-  defp load_latest_revisions(option_ids) do
-    from(orev in "option_revisions",
-      join: cr in "channel_revisions",
-      on: cr.id == orev.channel_revision_id,
-      where: orev.option_id in ^option_ids,
-      distinct: orev.option_id,
-      order_by: [asc: orev.option_id, desc: cr.released_at],
-      select: %{
-        option_id: orev.option_id,
-        description: orev.description,
-        type: orev.type,
-        default: orev.default,
-        example: orev.example,
-        read_only: orev.read_only
-      }
-    )
-    |> Tracker.Repo.all()
-    |> Map.new(&{&1.option_id, &1})
   end
 end

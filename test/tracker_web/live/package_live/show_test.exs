@@ -241,6 +241,59 @@ defmodule TrackerWeb.PackageLive.ShowTest do
     refute html =~ "Also available in"
   end
 
+  describe "linked options" do
+    setup %{package: package, cr1: cr1} do
+      mod =
+        Tracker.Nixpkgs.Module
+        |> Ash.Changeset.for_create(:bulk_upsert, %{
+          declaration: "services.hello",
+          display_name: "services.hello"
+        })
+        |> Ash.create!()
+
+      option =
+        Tracker.Nixpkgs.Option
+        |> Ash.Changeset.for_create(:bulk_upsert, %{
+          name: "services.hello.enable",
+          module_id: mod.id
+        })
+        |> Ash.create!()
+
+      Tracker.Nixpkgs.OptionPackage.load!(%{option_id: option.id, package_id: package.id})
+
+      Tracker.Nixpkgs.OptionRevision
+      |> Ash.Changeset.for_create(:load, %{
+        option_id: option.id,
+        channel_revision_id: cr1.id,
+        type: "boolean",
+        description: "Whether to enable hello service."
+      })
+      |> Ash.create!()
+
+      %{option: option, module: mod}
+    end
+
+    test "shows linked options section", %{conn: conn, package: package} do
+      {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}")
+
+      assert html =~ "NixOS Options"
+      assert html =~ "services.hello.enable"
+    end
+
+    test "shows option type and description", %{conn: conn, package: package} do
+      {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}")
+
+      assert html =~ "boolean"
+      assert html =~ "Whether to enable hello service."
+    end
+
+    test "option links to module show page", %{conn: conn, package: package, module: mod} do
+      {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}")
+
+      assert html =~ ~s|/modules/#{mod.display_name}#opt-services.hello.enable|
+    end
+  end
+
   describe "changes only toggle" do
     setup %{package: package} do
       # Add a third unstable revision with same version (noop bump)

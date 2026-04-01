@@ -9,10 +9,19 @@ defmodule Tracker.Nixpkgs.OptionRevision do
   code_interface do
     define :read
     define :load
+    define :latest_by_option_ids, args: [:option_ids]
   end
 
   actions do
     defaults [:read]
+
+    read :latest_by_option_ids do
+      argument :option_ids, {:array, :integer}, allow_nil?: false
+
+      filter expr(option_id in ^arg(:option_ids))
+
+      prepare build(sort: [option_id: :asc, released_at: :desc], distinct: [:option_id])
+    end
 
     create :load do
       accept [
@@ -71,6 +80,10 @@ defmodule Tracker.Nixpkgs.OptionRevision do
     belongs_to :channel_revision, Tracker.Nixpkgs.ChannelRevision,
       attribute_type: :integer,
       allow_nil?: false
+  end
+
+  calculations do
+    calculate :released_at, :utc_datetime, expr(channel_revision.released_at)
   end
 
   identities do
