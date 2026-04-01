@@ -12,29 +12,22 @@ defmodule TrackerWeb.ChangeLive.Index do
       Changes
     </.header>
 
-    <form phx-change="search" phx-submit="search" id="change-search" phx-hook="UpdateURL">
+    <form
+      phx-change="filter"
+      phx-submit="filter"
+      id="change-filters"
+      phx-hook="UpdateURL"
+      style="display: flex; gap: 0.5rem; align-items: end; margin-bottom: 1rem;"
+    >
       <input
         type="search"
         name="search"
         value={@search}
-        placeholder="Search changes..."
+        placeholder="Search title or author..."
         phx-debounce="300"
+        style="flex: 3;"
       />
-    </form>
-
-    <form
-      phx-change="filter"
-      phx-submit="filter"
-      style="display: flex; gap: 0.5rem; align-items: end;"
-    >
-      <input
-        type="text"
-        name="author"
-        value={@author_filter}
-        placeholder="Filter by author..."
-        phx-debounce="300"
-      />
-      <select name="base_ref" aria-label="Filter by base branch">
+      <select name="base_ref" aria-label="Filter by base branch" style="flex: 1;">
         <option value="">All branches</option>
         <option :for={base <- @base_refs} value={base} selected={base == @base_ref_filter}>
           {base}
@@ -131,7 +124,6 @@ defmodule TrackerWeb.ChangeLive.Index do
   @impl true
   def handle_params(params, _url, socket) do
     search = Map.get(params, "search", "")
-    author_filter = Map.get(params, "author", "")
     base_ref_filter = Map.get(params, "base_ref", "")
     sort_by = parse_sort_by(params["sort_by"])
     sort_dir = parse_sort_dir(params["sort_dir"])
@@ -142,7 +134,6 @@ defmodule TrackerWeb.ChangeLive.Index do
       socket
       |> assign(:page_title, "Changes")
       |> assign(:search, search)
-      |> assign(:author_filter, author_filter)
       |> assign(:base_ref_filter, base_ref_filter)
       |> assign(:sort_by, sort_by)
       |> assign(:sort_dir, sort_dir)
@@ -153,26 +144,21 @@ defmodule TrackerWeb.ChangeLive.Index do
   end
 
   @impl true
-  def handle_event("search", %{"search" => search}, socket) do
+  def handle_event("filter", params, socket) do
+    search = Map.get(params, "search", "")
+    base_ref = Map.get(params, "base_ref", "")
+
     socket =
       socket
       |> assign(:search, search)
+      |> assign(:base_ref_filter, base_ref)
       |> assign(:offset, 0)
       |> load_changes()
-      |> push_event("update-url", %{path: changes_path(socket.assigns, search: search, page: 1)})
+      |> push_event("update-url", %{
+        path: changes_path(socket.assigns, search: search, base_ref: base_ref, page: 1)
+      })
 
     {:noreply, socket}
-  end
-
-  @impl true
-  def handle_event("filter", params, socket) do
-    author = Map.get(params, "author", "")
-    base_ref = Map.get(params, "base_ref", "")
-
-    {:noreply,
-     push_patch(socket,
-       to: changes_path(socket.assigns, author: author, base_ref: base_ref, page: 1)
-     )}
   end
 
   @impl true
@@ -210,7 +196,6 @@ defmodule TrackerWeb.ChangeLive.Index do
 
   defp changes_path(assigns, overrides \\ []) do
     search = Keyword.get(overrides, :search, assigns.search)
-    author = Keyword.get(overrides, :author, assigns.author_filter)
     base_ref = Keyword.get(overrides, :base_ref, assigns.base_ref_filter)
     sort_by = Keyword.get(overrides, :sort_by, assigns.sort_by)
     sort_dir = Keyword.get(overrides, :sort_dir, assigns.sort_dir)
@@ -219,7 +204,6 @@ defmodule TrackerWeb.ChangeLive.Index do
     params =
       %{}
       |> then(fn p -> if search != "", do: Map.put(p, :search, search), else: p end)
-      |> then(fn p -> if author != "", do: Map.put(p, :author, author), else: p end)
       |> then(fn p -> if base_ref != "", do: Map.put(p, :base_ref, base_ref), else: p end)
       |> then(fn p ->
         if sort_by != @default_sort_by, do: Map.put(p, :sort_by, sort_by), else: p
@@ -238,7 +222,6 @@ defmodule TrackerWeb.ChangeLive.Index do
   defp load_changes(socket) do
     %{
       search: search,
-      author_filter: author,
       base_ref_filter: base_ref,
       sort_by: sort_by,
       sort_dir: sort_dir,
@@ -246,7 +229,7 @@ defmodule TrackerWeb.ChangeLive.Index do
     } = socket.assigns
 
     page =
-      Tracker.Nixpkgs.Change.list!(search, author, base_ref,
+      Tracker.Nixpkgs.Change.list!(search, base_ref,
         actor: socket.assigns[:current_user],
         query: [sort: [{sort_by, sort_dir}]],
         page: [offset: offset, count: true]
