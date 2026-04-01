@@ -77,4 +77,27 @@ defmodule TrackerWeb.ChangeLive.IndexTest do
     view |> element("th[phx-value-field=title]") |> render_click()
     assert_patched(view, ~p"/changes?sort_by=title&sort_dir=asc")
   end
+
+  test "updates when a new change is broadcast", %{conn: conn} do
+    {:ok, view, html} = live(conn, ~p"/changes")
+
+    refute html =~ "5003"
+
+    Tracker.Nixpkgs.Change.bulk_upsert_all([
+      %{
+        number: 5003,
+        title: "feat: broadcast test",
+        state: :merged,
+        author: "charlie",
+        base_ref: "master",
+        url: "https://github.com/NixOS/nixpkgs/pull/5003"
+      }
+    ])
+
+    Phoenix.PubSub.broadcast(Tracker.PubSub, "changes", {:change_processed, %{number: 5003}})
+
+    html = render(view)
+    assert html =~ "5003"
+    assert html =~ "broadcast test"
+  end
 end
