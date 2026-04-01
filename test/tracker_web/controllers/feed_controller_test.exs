@@ -1,0 +1,100 @@
+defmodule TrackerWeb.FeedControllerTest do
+  use TrackerWeb.ConnCase, async: true
+
+  describe "channel feed" do
+    setup do
+      Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
+        channel: "nixos-feed-test",
+        revision: "feed111aaa222333",
+        released_at: ~U[2026-03-01 10:00:00Z]
+      })
+
+      Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
+        channel: "nixos-feed-test",
+        revision: "feed222bbb333444",
+        released_at: ~U[2026-03-15 10:00:00Z]
+      })
+
+      :ok
+    end
+
+    test "returns valid Atom XML", %{conn: conn} do
+      conn = get(conn, "/feeds/channels/nixos-feed-test")
+
+      assert response_content_type(conn, :xml) =~ "application/atom+xml"
+      body = response(conn, 200)
+      assert body =~ "<?xml"
+      assert body =~ "<feed"
+      assert body =~ "nixos-feed-test"
+    end
+
+    test "includes channel revisions as entries", %{conn: conn} do
+      conn = get(conn, "/feeds/channels/nixos-feed-test")
+
+      body = response(conn, 200)
+      assert body =~ "feed111a"
+      assert body =~ "feed222b"
+    end
+  end
+
+  describe "package feed" do
+    setup do
+      cr1 =
+        Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
+          channel: "nixos-feed-pkg",
+          revision: "pkgfeed111aaa222",
+          released_at: ~U[2026-03-01 10:00:00Z]
+        })
+
+      cr2 =
+        Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
+          channel: "nixos-feed-pkg",
+          revision: "pkgfeed222bbb333",
+          released_at: ~U[2026-03-15 10:00:00Z]
+        })
+
+      package =
+        Tracker.Nixpkgs.Package
+        |> Ash.Changeset.for_create(:create, %{attribute: "feed-test-pkg"})
+        |> Ash.create!()
+
+      Tracker.Nixpkgs.PackageRevision
+      |> Ash.Changeset.for_create(:load, %{
+        version: "1.0.0",
+        package_id: package.id,
+        channel_revision_id: cr1.id
+      })
+      |> Ash.create!()
+
+      Tracker.Nixpkgs.PackageRevision
+      |> Ash.Changeset.for_create(:load, %{
+        version: "2.0.0",
+        package_id: package.id,
+        channel_revision_id: cr2.id
+      })
+      |> Ash.create!()
+
+      :ok
+    end
+
+    test "returns valid Atom XML with version changes", %{conn: conn} do
+      conn = get(conn, "/feeds/packages/feed-test-pkg")
+
+      assert response_content_type(conn, :xml) =~ "application/atom+xml"
+      body = response(conn, 200)
+      assert body =~ "<?xml"
+      assert body =~ "<feed"
+      assert body =~ "feed-test-pkg"
+      assert body =~ "1.0.0"
+      assert body =~ "2.0.0"
+    end
+
+    test "filters by channel query param", %{conn: conn} do
+      conn = get(conn, "/feeds/packages/feed-test-pkg?channel=nixos-feed-pkg")
+
+      body = response(conn, 200)
+      assert body =~ "nixos-feed-pkg"
+      assert body =~ "1.0.0"
+    end
+  end
+end

@@ -23,6 +23,9 @@ defmodule TrackerWeb.Router do
   scope "/", TrackerWeb do
     pipe_through :browser
 
+    get "/feeds/channels/:channel", FeedController, :channel
+    get "/feeds/packages/:name", FeedController, :package
+
     ash_authentication_live_session :authenticated_routes,
       on_mount: {TrackerWeb.LiveUserAuth, :live_user_optional} do
       live "/", PackageLive.Index, :index
