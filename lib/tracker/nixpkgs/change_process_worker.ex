@@ -84,7 +84,10 @@ defmodule Tracker.Nixpkgs.ChangeProcessWorker do
         records = Enum.map(package_ids, fn id -> %{change_id: change.id, package_id: id} end)
         Tracker.Nixpkgs.ChangePackage.bulk_create_all(records)
 
-        {:ok, length(package_ids)}
+        count = length(package_ids)
+        Tracker.Nixpkgs.Change.update_package_count!(change, %{package_count: count})
+
+        {:ok, count}
     end
   end
 

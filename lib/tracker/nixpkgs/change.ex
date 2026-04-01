@@ -12,6 +12,7 @@ defmodule Tracker.Nixpkgs.Change do
     define :get_by_number, action: :read, get_by: [:number]
     define :by_package, args: [:package_id]
     define :by_maintainer_github_id, args: [:github_id]
+    define :update_package_count
     define :bulk_upsert, args: [:number]
     define :existing_numbers, args: [:numbers]
   end
@@ -63,6 +64,10 @@ defmodule Tracker.Nixpkgs.Change do
 
       prepare build(sort: [number: :desc])
       filter expr(author_github_id == ^arg(:github_id) or merged_by_github_id == ^arg(:github_id))
+    end
+
+    update :update_package_count do
+      accept [:package_count]
     end
 
     read :existing_numbers do
@@ -136,6 +141,7 @@ defmodule Tracker.Nixpkgs.Change do
     attribute :gh_created_at, :utc_datetime, public?: true
     attribute :merged_at, :utc_datetime, public?: true
     attribute :merge_commit_sha, :string, public?: true
+    attribute :package_count, :integer, public?: true, default: 0
 
     timestamps()
   end

@@ -196,15 +196,17 @@ defmodule TrackerWeb.ChangeLive.Show do
   end
 
   defp load_packages(socket, change_id, search, offset) do
-    page =
-      Tracker.Nixpkgs.Package.by_change!(change_id, search, page: [offset: offset, count: true])
+    package_count = socket.assigns.change.package_count || 0
 
-    total_pages = if page.count > 0, do: ceil(page.count / 15), else: 0
+    page =
+      Tracker.Nixpkgs.Package.by_change!(change_id, search, page: [offset: offset])
+
+    total_pages = if package_count > 0, do: ceil(package_count / 15), else: 0
     current_page = div(offset, 15) + 1
 
     socket
     |> stream(:packages, page.results, reset: true)
-    |> assign(:package_count, page.count)
+    |> assign(:package_count, package_count)
     |> assign(:pkg_has_prev?, offset > 0)
     |> assign(:pkg_has_next?, page.more?)
     |> assign(:pkg_total_pages, total_pages)
