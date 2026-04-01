@@ -45,6 +45,12 @@ defmodule Tracker.Nixpkgs.Option do
     end
 
     has_many :option_revisions, Tracker.Nixpkgs.OptionRevision
+
+    many_to_many :packages, Tracker.Nixpkgs.Package do
+      through Tracker.Nixpkgs.OptionPackage
+      source_attribute_on_join_resource :option_id
+      destination_attribute_on_join_resource :package_id
+    end
   end
 
   identities do

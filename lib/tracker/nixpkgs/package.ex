@@ -180,6 +180,12 @@ defmodule Tracker.Nixpkgs.Package do
       source_attribute_on_join_resource :package_id
       destination_attribute_on_join_resource :team_id
     end
+
+    many_to_many :options, Tracker.Nixpkgs.Option do
+      through Tracker.Nixpkgs.OptionPackage
+      source_attribute_on_join_resource :package_id
+      destination_attribute_on_join_resource :option_id
+    end
   end
 
   identities do
