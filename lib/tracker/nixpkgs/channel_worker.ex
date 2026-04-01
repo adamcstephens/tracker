@@ -94,6 +94,7 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
     |> :json.decode()
     |> Map.put("revision", revision)
     |> Map.put("channel", channel)
+    |> Map.put("base_url", base_url)
   end
 
   @doc """
@@ -287,6 +288,15 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
     Task.await_many(parallel_tasks, :infinity)
 
     Tracker.Nixpkgs.ChannelRevision.record_result!(channel_revision, %{result: :success})
+
+    if base_url = data["base_url"] do
+      Tracker.Nixpkgs.OptionsWorker.new(%{
+        "channel" => channel,
+        "base_url" => base_url,
+        "revision" => revision
+      })
+      |> Oban.insert!()
+    end
 
     Phoenix.PubSub.broadcast(
       Tracker.PubSub,
