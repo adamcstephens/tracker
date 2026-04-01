@@ -1,17 +1,128 @@
 defmodule Tracker.Nixpkgs.OptionsWorker do
   use Oban.Worker, queue: :channels, max_attempts: 10
 
+  import Ecto.Query, only: [from: 2]
   require Logger
+
+  @doc """
+  Backfills options for successful channel revisions that have no option_revisions.
+
+  Looks up base_urls from ReleaseCache and schedules OptionsWorker jobs
+  oldest-first for each revision that needs options ingested.
+  """
+  def backfill_channel(channel, opts \\ []) do
+    limit = Keyword.get(opts, :limit)
+
+    # Find successful revisions that have no option_revisions
+    revisions_needing_options =
+      from(cr in "channel_revisions",
+        left_join: orev in "option_revisions",
+        on: orev.channel_revision_id == cr.id,
+        where: cr.channel == ^channel and cr.result == "success" and is_nil(orev.id),
+        select: %{id: cr.id, revision: cr.revision},
+        order_by: [asc: cr.released_at],
+        group_by: [cr.id, cr.revision, cr.released_at]
+      )
+      |> Tracker.Repo.all()
+
+    releases =
+      Tracker.Nixpkgs.ReleaseCache.get_releases(channel)
+      |> Map.new(fn release -> {release.short_hash, release} end)
+
+    # Match revisions to releases by short_hash prefix
+    jobs_to_schedule =
+      Enum.flat_map(revisions_needing_options, fn %{revision: revision} ->
+        case Enum.find(releases, fn {short_hash, _} ->
+               String.starts_with?(revision, short_hash)
+             end) do
+          {_hash, release} ->
+            [%{revision: revision, base_url: release.base_url}]
+
+          nil ->
+            Logger.warning("No release found for revision #{revision} during options backfill")
+            []
+        end
+      end)
+
+    jobs_to_schedule = if limit, do: Enum.take(jobs_to_schedule, limit), else: jobs_to_schedule
+
+    case jobs_to_schedule do
+      [] ->
+        {:ok, 0}
+
+      [first | rest] ->
+        new(%{
+          "channel" => channel,
+          "base_url" => first.base_url,
+          "revision" => first.revision,
+          "remaining" => length(rest)
+        })
+        |> Oban.insert!()
+
+        {:ok, length(jobs_to_schedule)}
+    end
+  end
+
+  @doc """
+  Schedules the next backfill job by finding the next revision needing options.
+
+  Called after a backfill job completes. No-op for non-backfill jobs.
+  """
+  def schedule_next(%{"remaining" => remaining, "channel" => channel})
+      when remaining > 0 do
+    # Find the next successful revision that still has no option_revisions
+    case next_revision_needing_options(channel) do
+      nil ->
+        :ok
+
+      %{revision: revision} ->
+        releases =
+          Tracker.Nixpkgs.ReleaseCache.get_releases(channel)
+          |> Map.new(fn release -> {release.short_hash, release} end)
+
+        case Enum.find(releases, fn {short_hash, _} ->
+               String.starts_with?(revision, short_hash)
+             end) do
+          {_hash, release} ->
+            new(%{
+              "channel" => channel,
+              "base_url" => release.base_url,
+              "revision" => revision,
+              "remaining" => remaining - 1
+            })
+            |> Oban.insert!()
+
+          nil ->
+            Logger.warning("No release found for revision #{revision} during options backfill")
+        end
+    end
+  end
+
+  def schedule_next(_args), do: :ok
+
+  defp next_revision_needing_options(channel) do
+    from(cr in "channel_revisions",
+      left_join: orev in "option_revisions",
+      on: orev.channel_revision_id == cr.id,
+      where: cr.channel == ^channel and cr.result == "success" and is_nil(orev.id),
+      select: %{id: cr.id, revision: cr.revision},
+      order_by: [asc: cr.released_at],
+      group_by: [cr.id, cr.revision, cr.released_at],
+      limit: 1
+    )
+    |> Tracker.Repo.one()
+  end
 
   @impl Oban.Worker
   def perform(%Oban.Job{
-        args: %{"channel" => channel, "base_url" => base_url, "revision" => revision}
+        args: %{"channel" => channel, "base_url" => base_url, "revision" => revision} = args
       }) do
     case Tracker.Nixpkgs.ChannelRevision.find(channel, revision) do
       {:ok, %Tracker.Nixpkgs.ChannelRevision{result: :success} = channel_revision} ->
         fetch_options(base_url)
         |> write_to_database(channel_revision)
 
+        schedule_next(args)
         :ok
 
       _ ->

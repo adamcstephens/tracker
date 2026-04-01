@@ -388,6 +388,138 @@ defmodule Tracker.Nixpkgs.OptionsWorkerTest do
     end
   end
 
+  describe "backfill_channel/1" do
+    test "schedules jobs for successful revisions missing options" do
+      alias Tracker.Nixpkgs.ReleaseCache
+      alias Tracker.Nixpkgs.ReleaseCache.Release
+
+      ReleaseCache.put_releases("nixos-unstable", [
+        %Release{
+          short_hash: "bkf002",
+          base_url: "https://releases.nixos.org/nixos/unstable/nixos-unstable.bkf002",
+          released_at: "2026-04-02T10:00:00Z"
+        },
+        %Release{
+          short_hash: "bkf001",
+          base_url: "https://releases.nixos.org/nixos/unstable/nixos-unstable.bkf001",
+          released_at: "2026-04-01T10:00:00Z"
+        }
+      ])
+
+      # Create two successful revisions (as if packages were already backfilled)
+      rev1 = create_successful_revision("nixos-unstable", "bkf001aaa111")
+      _rev2 = create_successful_revision("nixos-unstable", "bkf002bbb222")
+
+      # Give rev1 some option_revisions so it looks already processed
+      OptionsWorker.write_to_database(
+        %{
+          "services.nginx.enable" => %{
+            "declarations" => ["nixos/modules/services/web-servers/nginx/default.nix"],
+            "description" => "Enable nginx.",
+            "loc" => ["services", "nginx", "enable"],
+            "readOnly" => false,
+            "type" => "boolean"
+          }
+        },
+        rev1
+      )
+
+      # Backfill should only schedule a job for rev2 (rev1 already has options)
+      assert {:ok, 1} = OptionsWorker.backfill_channel("nixos-unstable")
+
+      import Ecto.Query
+
+      jobs =
+        from(j in Oban.Job,
+          where: j.queue == "channels" and j.worker == "Tracker.Nixpkgs.OptionsWorker"
+        )
+        |> Tracker.Repo.all()
+
+      assert length(jobs) == 1
+      job = hd(jobs)
+      assert job.args["channel"] == "nixos-unstable"
+      assert job.args["revision"] == "bkf002bbb222"
+
+      assert job.args["base_url"] ==
+               "https://releases.nixos.org/nixos/unstable/nixos-unstable.bkf002"
+
+      assert job.args["remaining"] == 0
+    end
+
+    test "schedules only the first job with remaining count for chaining" do
+      alias Tracker.Nixpkgs.ReleaseCache
+      alias Tracker.Nixpkgs.ReleaseCache.Release
+
+      ReleaseCache.put_releases("nixos-unstable", [
+        %Release{
+          short_hash: "chain003",
+          base_url: "https://releases.nixos.org/nixos/unstable/nixos-unstable.chain003",
+          released_at: "2026-04-03T10:00:00Z"
+        },
+        %Release{
+          short_hash: "chain002",
+          base_url: "https://releases.nixos.org/nixos/unstable/nixos-unstable.chain002",
+          released_at: "2026-04-02T10:00:00Z"
+        },
+        %Release{
+          short_hash: "chain001",
+          base_url: "https://releases.nixos.org/nixos/unstable/nixos-unstable.chain001",
+          released_at: "2026-04-01T10:00:00Z"
+        }
+      ])
+
+      _rev1 = create_successful_revision("nixos-unstable", "chain001aaa111")
+      _rev2 = create_successful_revision("nixos-unstable", "chain002bbb222")
+      _rev3 = create_successful_revision("nixos-unstable", "chain003ccc333")
+
+      # All 3 need options, but only 1 job should be scheduled (oldest first)
+      assert {:ok, 3} = OptionsWorker.backfill_channel("nixos-unstable")
+
+      import Ecto.Query
+
+      jobs =
+        from(j in Oban.Job,
+          where: j.queue == "channels" and j.worker == "Tracker.Nixpkgs.OptionsWorker"
+        )
+        |> Tracker.Repo.all()
+
+      assert length(jobs) == 1
+      job = hd(jobs)
+      assert job.args["revision"] == "chain001aaa111"
+      assert job.args["remaining"] == 2
+    end
+
+    test "returns zero when all revisions already have options" do
+      alias Tracker.Nixpkgs.ReleaseCache
+      alias Tracker.Nixpkgs.ReleaseCache.Release
+
+      ReleaseCache.put_releases("nixos-unstable", [
+        %Release{
+          short_hash: "bkf003",
+          base_url: "https://releases.nixos.org/nixos/unstable/nixos-unstable.bkf003",
+          released_at: "2026-04-01T10:00:00Z"
+        }
+      ])
+
+      rev = create_successful_revision("nixos-unstable", "bkf003ccc333")
+
+      OptionsWorker.write_to_database(
+        %{
+          "services.test.enable" => %{
+            "declarations" => ["nixos/modules/test.nix"],
+            "description" => "Test.",
+            "loc" => ["services", "test", "enable"],
+            "readOnly" => false,
+            "type" => "boolean"
+          }
+        },
+        rev
+      )
+
+      assert {:ok, 0} = OptionsWorker.backfill_channel("nixos-unstable")
+    end
+  end
+
   describe "display_name_for_options/1" do
     test "computes longest common prefix" do
       option_names = [
