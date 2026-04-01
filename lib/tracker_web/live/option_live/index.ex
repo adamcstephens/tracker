@@ -23,13 +23,13 @@ defmodule TrackerWeb.OptionLive.Index do
       rows={@streams.options}
     >
       <:col :let={{_id, o}} label="Option">
-        <.link :if={o.module_id} navigate={"/modules/#{o.module_id}#opt-#{o.name}"}>
+        <.link :if={o.module} navigate={"/modules/#{o.module.display_name}#opt-#{o.name}"}>
           {o.name}
         </.link>
-        <span :if={!o.module_id}>{o.name}</span>
+        <span :if={!o.module}>{o.name}</span>
       </:col>
       <:col :let={{_id, o}} label="Module">
-        <.link :if={o.module} navigate={~p"/modules/#{o.module.id}"}>
+        <.link :if={o.module} navigate={~p"/modules/#{o.module.display_name}"}>
           {o.module.display_name}
         </.link>
       </:col>

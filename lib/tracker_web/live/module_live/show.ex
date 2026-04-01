@@ -92,8 +92,8 @@ defmodule TrackerWeb.ModuleLive.Show do
   end
 
   @impl true
-  def handle_params(%{"id" => id} = params, _url, socket) do
-    mod = Tracker.Nixpkgs.Module.get_by_id!(String.to_integer(id))
+  def handle_params(%{"name" => name} = params, _url, socket) do
+    mod = Tracker.Nixpkgs.Module.get_by_name!(name)
 
     page_num = params |> Map.get("page", "1") |> String.to_integer() |> max(1)
     offset = (page_num - 1) * 15
@@ -126,7 +126,7 @@ defmodule TrackerWeb.ModuleLive.Show do
   def handle_event("next-page", _params, socket) do
     {:noreply,
      push_patch(socket,
-       to: show_path(socket.assigns.module.id, socket.assigns.current_page + 1)
+       to: show_path(socket.assigns.module.display_name, socket.assigns.current_page + 1)
      )}
   end
 
@@ -134,18 +134,18 @@ defmodule TrackerWeb.ModuleLive.Show do
   def handle_event("prev-page", _params, socket) do
     {:noreply,
      push_patch(socket,
-       to: show_path(socket.assigns.module.id, max(socket.assigns.current_page - 1, 1))
+       to: show_path(socket.assigns.module.display_name, max(socket.assigns.current_page - 1, 1))
      )}
   end
 
-  defp show_path(id, page) do
+  defp show_path(name, page) do
     params =
       %{}
       |> then(fn p -> if page > 1, do: Map.put(p, :page, page), else: p end)
 
     case URI.encode_query(params) do
-      "" -> "/modules/#{id}"
-      qs -> "/modules/#{id}?#{qs}"
+      "" -> "/modules/#{name}"
+      qs -> "/modules/#{name}?#{qs}"
     end
   end
 
