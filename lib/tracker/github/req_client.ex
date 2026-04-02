@@ -112,7 +112,12 @@ defmodule Tracker.GitHub.ReqClient do
   defp maybe_add_plug(opts, nil), do: opts
   defp maybe_add_plug(opts, plug), do: Keyword.put(opts, :plug, plug)
 
-  defp process_response(%Operation{} = operation, %Req.Response{status: 304}, _s3_config, cached_entry)
+  defp process_response(
+         %Operation{} = operation,
+         %Req.Response{status: 304},
+         _s3_config,
+         cached_entry
+       )
        when not is_nil(cached_entry) do
     # 304 Not Modified — use cached response body (free, no rate limit hit)
     cached_headers =
@@ -137,7 +142,12 @@ defmodule Tracker.GitHub.ReqClient do
     {:ok, operation}
   end
 
-  defp process_response(%Operation{} = operation, %Req.Response{status: status} = response, _s3_config, _cached)
+  defp process_response(
+         %Operation{} = operation,
+         %Req.Response{status: status} = response,
+         _s3_config,
+         _cached
+       )
        when status in @http_code_server_error do
     message = "Received server error response (#{status})"
     step = {__MODULE__, :request}

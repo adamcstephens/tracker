@@ -18,6 +18,7 @@ defmodule Tracker.Nixpkgs.ChangeProcessWorkerTest do
       assert change.merged_by_github_id == 67890
       assert change.url == "https://github.com/NixOS/nixpkgs/pull/504403"
       assert change.base_ref == "master"
+      assert change.head_ref == "nixos/incus-acme"
       assert change.labels == ["6.topic: nixos", "backport release-25.11"]
       assert change.merge_commit_sha == "f2b75e04afe69bf02253b3895390045d47f9fbc0"
       assert change.processing_status == :pending
@@ -87,6 +88,46 @@ defmodule Tracker.Nixpkgs.ChangeProcessWorkerTest do
 
       assert linked == 0
     end
+
+    test "skips linking when base_ref starts with staging" do
+      Package.bulk_upsert_all([%{attribute: "curl"}])
+
+      pr = %{pr_struct() | base: %GitHub.PullRequest.Base{ref: "staging"}}
+      {:ok, change} = ChangeProcessWorker.upsert_change(pr)
+
+      attrdiff = %{"added" => [], "changed" => ["curl"], "removed" => []}
+
+      {:ok, linked} = ChangeProcessWorker.link_packages(change, attrdiff)
+
+      assert linked == 0
+      change = Ash.load!(change, [:packages])
+      assert change.packages == []
+    end
+
+    test "skips linking when base_ref is staging-next" do
+      Package.bulk_upsert_all([%{attribute: "curl"}])
+
+      pr = %{pr_struct() | base: %GitHub.PullRequest.Base{ref: "staging-next"}}
+      {:ok, change} = ChangeProcessWorker.upsert_change(pr)
+
+      attrdiff = %{"added" => [], "changed" => ["curl"], "removed" => []}
+
+      {:ok, linked} = ChangeProcessWorker.link_packages(change, attrdiff)
+
+      assert linked == 0
+    end
+
+    test "links packages when base_ref is master" do
+      Package.bulk_upsert_all([%{attribute: "curl"}])
+
+      {:ok, change} = ChangeProcessWorker.upsert_change(pr_struct())
+
+      attrdiff = %{"added" => [], "changed" => ["curl"], "removed" => []}
+
+      {:ok, linked} = ChangeProcessWorker.link_packages(change, attrdiff)
+
+      assert linked == 1
+    end
   end
 
   describe "set_processing_status/2" do
@@ -143,6 +184,7 @@ defmodule Tracker.Nixpkgs.ChangeProcessWorkerTest do
       assert parsed.author_github_id == 12345
       assert parsed.merged_by_github_id == 67890
       assert parsed.base_ref == "master"
+      assert parsed.head_ref == "nixos/incus-acme"
       assert parsed.merge_commit_sha == "f2b75e04afe69bf02253b3895390045d47f9fbc0"
     end
 
@@ -171,6 +213,7 @@ defmodule Tracker.Nixpkgs.ChangeProcessWorkerTest do
       merged_by: %GitHub.User{login: "adamcstephens", id: 67890},
       html_url: "https://github.com/NixOS/nixpkgs/pull/504403",
       base: %GitHub.PullRequest.Base{ref: "master"},
+      head: %GitHub.PullRequest.Head{ref: "nixos/incus-acme"},
       labels: [
         %GitHub.PullRequest.Labels{name: "6.topic: nixos"},
         %GitHub.PullRequest.Labels{name: "backport release-25.11"}
