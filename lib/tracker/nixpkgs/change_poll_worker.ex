@@ -8,7 +8,6 @@ defmodule Tracker.Nixpkgs.ChangePollWorker do
   require Logger
 
   @repo "NixOS/nixpkgs"
-  @poll_interval_seconds 5 * 60
   @backfill_cutoff_days 90
 
   @impl Oban.Worker
@@ -20,7 +19,6 @@ defmodule Tracker.Nixpkgs.ChangePollWorker do
   @doc false
   def handle_fetch_result({:ok, pulls}, _token) do
     process_pull_requests(pulls)
-    reschedule()
     :ok
   end
 
@@ -146,9 +144,5 @@ defmodule Tracker.Nixpkgs.ChangePollWorker do
       {:error, reason} ->
         {:error, reason}
     end
-  end
-
-  defp reschedule do
-    %{} |> new(schedule_in: @poll_interval_seconds) |> Oban.insert!()
   end
 end

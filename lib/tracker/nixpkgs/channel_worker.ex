@@ -11,28 +11,18 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
     force? = args["force"] == true
     revision = Req.get!(Tracker.Nixpkgs.S3Cache.new(), url: base_url <> "/git-revision").body
 
-    case Tracker.Nixpkgs.ChannelRevision.find(channel, revision) do
-      {:ok, %Tracker.Nixpkgs.ChannelRevision{result: result}}
-      when result in [:success, :partial_success] and not force? ->
-        schedule_next(args)
-        :ok
-
-      _ ->
-        fetch_channel(channel, revision, base_url)
-        |> maybe_put("released_at", args["released_at"])
-        |> write_to_database()
-
-        schedule_next(args)
-        :ok
-    end
+    process_channel(channel, base_url, revision, args["released_at"], force: force?)
+    schedule_next(args)
+    :ok
   end
 
   def perform(%Oban.Job{args: %{"channel" => channel} = args}) do
     force? = args["force"] == true
-    load_channel(channel, force: force?)
+    {revision, base_url} = get_channel_revision(channel)
+    released_at = resolve_released_at(channel, base_url)
 
+    process_channel(channel, base_url, revision, released_at, force: force?)
     %{"channel" => channel} |> new(schedule_in: 4 * 60 * 60) |> Oban.insert!()
-
     :ok
   end
 
@@ -47,23 +37,9 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
   def load_channel(channel \\ "nixos-unstable", opts \\ []) do
     force? = Keyword.get(opts, :force, false)
     {revision, base_url} = get_channel_revision(channel)
+    released_at = resolve_released_at(channel, base_url)
 
-    case Tracker.Nixpkgs.ChannelRevision.find(channel, revision) do
-      {:ok, %Tracker.Nixpkgs.ChannelRevision{result: result}}
-      when result in [:success, :partial_success] and not force? ->
-        :ok
-
-      _ ->
-        released_at =
-          case Tracker.Nixpkgs.ReleaseCache.find_by_base_url(channel, base_url) do
-            %{released_at: released_at} -> released_at
-            nil -> nil
-          end
-
-        fetch_channel(channel, revision, base_url)
-        |> maybe_put("released_at", released_at)
-        |> write_to_database()
-    end
+    process_channel(channel, base_url, revision, released_at, force: force?)
   end
 
   def channel_job_running?(channel) do
@@ -179,6 +155,30 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
 
   def schedule_next(_args), do: :ok
 
+  defp has_options?(channel), do: String.starts_with?(channel, "nixos-")
+
+  defp process_channel(channel, base_url, revision, released_at, opts) do
+    force? = Keyword.get(opts, :force, false)
+
+    case Tracker.Nixpkgs.ChannelRevision.find(channel, revision) do
+      {:ok, %Tracker.Nixpkgs.ChannelRevision{result: result}}
+      when result in [:success, :partial_success] and not force? ->
+        :already_loaded
+
+      _ ->
+        fetch_channel(channel, revision, base_url)
+        |> maybe_put("released_at", released_at)
+        |> write_to_database()
+    end
+  end
+
+  defp resolve_released_at(channel, base_url) do
+    case Tracker.Nixpkgs.ReleaseCache.find_by_base_url(channel, base_url) do
+      %{released_at: released_at} -> released_at
+      nil -> DateTime.utc_now()
+    end
+  end
+
   defp find_next_release(releases, base_url) do
     case Enum.find_index(releases, &(&1.base_url == base_url)) do
       nil -> nil
@@ -233,8 +233,11 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
       end
 
     create_attrs =
-      %{revision: revision, channel: channel}
-      |> maybe_put(:released_at, data["released_at"])
+      %{
+        revision: revision,
+        channel: channel,
+        released_at: data["released_at"] || DateTime.utc_now()
+      }
       |> maybe_put(:previous_channel_revision_id, previous_revision && previous_revision.id)
 
     channel_revision = Tracker.Nixpkgs.ChannelRevision.create!(create_attrs)
@@ -270,7 +273,7 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
 
     Tracker.Nixpkgs.ChannelRevision.record_result!(channel_revision, %{result: :success})
 
-    if base_url = data["base_url"] do
+    if base_url = has_options?(channel) && data["base_url"] do
       Tracker.Nixpkgs.OptionsWorker.new(%{
         "channel" => channel,
         "base_url" => base_url,
