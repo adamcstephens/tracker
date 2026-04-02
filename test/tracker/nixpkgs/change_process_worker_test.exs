@@ -114,6 +114,14 @@ defmodule Tracker.Nixpkgs.ChangeProcessWorkerTest do
       assert updated.processing_status == :no_workflow_run
     end
 
+    test "sets status to :no_comparison_artifact" do
+      {:ok, change} = ChangeProcessWorker.upsert_change(pr_struct())
+
+      updated = ChangeProcessWorker.set_processing_status(change, :no_comparison_artifact)
+
+      assert updated.processing_status == :no_comparison_artifact
+    end
+
     test "sets status to :failed" do
       {:ok, change} = ChangeProcessWorker.upsert_change(pr_struct())
 
