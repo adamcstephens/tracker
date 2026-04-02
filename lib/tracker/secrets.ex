@@ -1,23 +1,39 @@
 defmodule Tracker.Secrets do
   use AshAuthentication.Secret
 
-  def secret_for([:authentication, :tokens, :signing_secret], Tracker.Accounts.User, _opts) do
+  def secret_for(
+        [:authentication, :tokens, :signing_secret],
+        Tracker.Accounts.User,
+        _opts,
+        _context
+      ) do
     Application.fetch_env(:tracker, :token_signing_secret)
   end
 
-  def secret_for([:authentication, :strategies, :github, :client_id], Tracker.Accounts.User, _) do
+  def secret_for(
+        [:authentication, :strategies, :github, :client_id],
+        Tracker.Accounts.User,
+        _,
+        _context
+      ) do
     get_github_config(:client_id)
   end
 
   def secret_for(
         [:authentication, :strategies, :github, :client_secret],
         Tracker.Accounts.User,
-        _
+        _,
+        _context
       ) do
     get_github_config(:client_secret)
   end
 
-  def secret_for([:authentication, :strategies, :github, :redirect_uri], Tracker.Accounts.User, _) do
+  def secret_for(
+        [:authentication, :strategies, :github, :redirect_uri],
+        Tracker.Accounts.User,
+        _,
+        _context
+      ) do
     get_github_config(:redirect_uri)
   end
 
