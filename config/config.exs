@@ -18,8 +18,9 @@ config :tracker,
 config :tracker, Oban,
   engine: Oban.Engines.Basic,
   notifier: Oban.Notifiers.Postgres,
-  queues: [channels: 1, changes: 1],
-  repo: Tracker.Repo
+  queues: [channels: 1, changes: 4],
+  repo: Tracker.Repo,
+  plugins: [Oban.Met]
 
 config :mime,
   extensions: %{"json" => "application/vnd.api+json"},
