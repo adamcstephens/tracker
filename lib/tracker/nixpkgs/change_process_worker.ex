@@ -99,6 +99,7 @@ defmodule Tracker.Nixpkgs.ChangeProcessWorker do
       merged_by_github_id: pr.merged_by && pr.merged_by.id,
       url: pr.html_url,
       base_ref: pr.base && pr.base.ref,
+      head_ref: pr.head && pr.head.ref,
       labels: Enum.map(pr.labels || [], & &1.name),
       merge_commit_sha: pr.merge_commit_sha,
       gh_created_at: parse_datetime(pr.created_at),
@@ -122,6 +123,27 @@ defmodule Tracker.Nixpkgs.ChangeProcessWorker do
   Returns `{:ok, count}` with the number of packages linked.
   """
   def link_packages(change, attrdiff) do
+    if staging_target?(change) do
+      update_package_count_from_attrdiff(change, attrdiff)
+      {:ok, 0}
+    else
+      do_link_packages(change, attrdiff)
+    end
+  end
+
+  defp staging_target?(change), do: String.starts_with?(change.base_ref || "", "staging")
+
+  defp update_package_count_from_attrdiff(change, attrdiff) do
+    count =
+      Enum.sum(
+        for type <- ~w(added changed removed),
+            do: length(attrdiff[type] || [])
+      )
+
+    Tracker.Nixpkgs.Change.update_package_count!(change, %{package_count: count})
+  end
+
+  defp do_link_packages(change, attrdiff) do
     typed_attrs =
       Enum.flat_map(~w(added changed removed), fn type ->
         Enum.map(attrdiff[type] || [], &{String.to_existing_atom(type), &1})

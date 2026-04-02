@@ -101,6 +101,7 @@ defmodule Tracker.Nixpkgs.Change do
         :merged_by_github_id,
         :url,
         :base_ref,
+        :head_ref,
         :labels,
         :gh_created_at,
         :merged_at,
@@ -119,6 +120,7 @@ defmodule Tracker.Nixpkgs.Change do
         :merged_by_github_id,
         :url,
         :base_ref,
+        :head_ref,
         :labels,
         :gh_created_at,
         :merged_at,
@@ -153,6 +155,7 @@ defmodule Tracker.Nixpkgs.Change do
     attribute :merged_by_github_id, :integer, public?: true
     attribute :url, :string, public?: true
     attribute :base_ref, :string, public?: true
+    attribute :head_ref, :string, public?: true
     attribute :labels, {:array, :string}, public?: true
     attribute :gh_created_at, :utc_datetime, public?: true
     attribute :merged_at, :utc_datetime, public?: true
@@ -191,10 +194,10 @@ defmodule Tracker.Nixpkgs.Change do
     identity :unique_number, [:number]
   end
 
-  # 15 columns: number, title, state, author, author_github_id, merged_by_github_id,
-  # url, base_ref, labels, gh_created_at, merged_at, merge_commit_sha, processing_status,
-  # inserted_at, updated_at
-  @insert_cols 15
+  # 16 columns: number, title, state, author, author_github_id, merged_by_github_id,
+  # url, base_ref, head_ref, labels, gh_created_at, merged_at, merge_commit_sha,
+  # processing_status, inserted_at, updated_at
+  @insert_cols 16
   @max_rows div(65_535, @insert_cols)
 
   @doc """
@@ -229,6 +232,7 @@ defmodule Tracker.Nixpkgs.Change do
                :merged_by_github_id,
                :url,
                :base_ref,
+               :head_ref,
                :labels,
                :gh_created_at,
                :merged_at,
