@@ -21,12 +21,16 @@ if System.get_env("PHX_SERVER") do
 end
 
 if System.get_env("TRACKER_S3_BUCKET") do
-  config :tracker, :s3_cache,
+  s3_opts = [
     bucket: System.fetch_env!("TRACKER_S3_BUCKET"),
     access_key_id: System.fetch_env!("TRACKER_S3_ACCESS_KEY"),
     secret_access_key: System.fetch_env!("TRACKER_S3_SECRET_KEY"),
     endpoint: System.fetch_env!("TRACKER_S3_ENDPOINT"),
     region: System.fetch_env!("TRACKER_S3_REGION")
+  ]
+
+  config :tracker, :s3_cache, s3_opts
+  config :tracker, :github_s3_cache, s3_opts
 end
 
 if config_env() != :test do
@@ -56,7 +60,14 @@ if config_env() != :test do
     apps: [
       {:tracker, github_app_id, github_app_private_key}
     ],
-    default_auth: {github_client_id, github_client_secret}
+    default_auth: {github_client_id, github_client_secret},
+    stack: [
+      {GitHub.Plugin.JasonSerializer, :encode_body, []},
+      {Tracker.GitHub.ReqClient, :request, []},
+      {GitHub.Plugin.JasonSerializer, :decode_body, []},
+      {GitHub.Plugin.TypedDecoder, :decode_response, []},
+      {GitHub.Plugin.TypedDecoder, :normalize_errors, []}
+    ]
 end
 
 if config_env() == :prod do
