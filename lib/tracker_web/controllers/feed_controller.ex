@@ -40,7 +40,7 @@ defmodule TrackerWeb.FeedController do
 
     latest_updated =
       case revisions do
-        [rev | _] -> rev.channel_revision.released_at
+        [rev | _] -> rev.released_at
         [] -> DateTime.utc_now()
       end
 
@@ -90,51 +90,28 @@ defmodule TrackerWeb.FeedController do
   end
 
   defp package_entry(name, rev) do
-    url =
-      "#{@base_url}/channels/#{rev.channel_revision.channel}/revisions/#{rev.channel_revision.revision}"
+    url = "#{@base_url}/channels/#{rev.channel}/revisions/#{rev.revision}"
 
     Atomex.Entry.new(
       "#{url}##{name}",
-      rev.channel_revision.released_at,
-      "#{name} #{rev.version} on #{rev.channel_revision.channel}"
+      rev.released_at,
+      "#{name} #{rev.version} on #{rev.channel}"
     )
     |> Atomex.Entry.link(url, rel: "alternate")
-    |> Atomex.Entry.published(rev.channel_revision.released_at)
-    |> Atomex.Entry.summary(
-      "#{name} updated to #{rev.version} on #{rev.channel_revision.channel}"
-    )
+    |> Atomex.Entry.published(rev.released_at)
+    |> Atomex.Entry.summary("#{name} updated to #{rev.version} on #{rev.channel}")
     |> Atomex.Entry.build()
   end
 
   defp load_package_version_changes(package_id, channel_filter) do
-    all_revisions = Tracker.Nixpkgs.PackageRevision.version_changes_by_package!(package_id)
+    {results, _count} =
+      Tracker.Nixpkgs.PackageRevision.version_changes_by_package(package_id,
+        channel: channel_filter,
+        sort_by: :released_at,
+        sort_dir: :desc,
+        limit: 50
+      )
 
-    change_ids =
-      all_revisions
-      |> Enum.group_by(& &1.channel_revision.channel)
-      |> Enum.flat_map(fn {_channel, channel_revs} ->
-        channel_revs
-        |> Enum.reduce({nil, []}, fn rev, {prev_version, acc} ->
-          if rev.version != prev_version do
-            {rev.version, [rev.id | acc]}
-          else
-            {prev_version, acc}
-          end
-        end)
-        |> elem(1)
-      end)
-      |> MapSet.new()
-
-    all_revisions
-    |> Enum.filter(&MapSet.member?(change_ids, &1.id))
-    |> then(fn revs ->
-      if channel_filter != "" do
-        Enum.filter(revs, &(&1.channel_revision.channel == channel_filter))
-      else
-        revs
-      end
-    end)
-    |> Enum.sort_by(& &1.channel_revision.released_at, {:desc, DateTime})
-    |> Enum.take(50)
+    results
   end
 end

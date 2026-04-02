@@ -9,7 +9,6 @@ defmodule Tracker.Nixpkgs.PackageRevision do
   code_interface do
     define :read
     define :list_by_package, args: [:package_id, {:optional, :channel}, {:optional, :version}]
-    define :version_changes_by_package, args: [:package_id]
     define :load
   end
 
@@ -47,15 +46,6 @@ defmodule Tracker.Nixpkgs.PackageRevision do
              )
     end
 
-    read :version_changes_by_package do
-      argument :package_id, :integer do
-        allow_nil? false
-      end
-
-      prepare build(load: [:channel_revision], sort: [released_at: :asc])
-      filter expr(package_id == ^arg(:package_id))
-    end
-
     create :load do
       accept [:version, :channel_revision_id, :package_id]
       upsert? true
@@ -91,6 +81,98 @@ defmodule Tracker.Nixpkgs.PackageRevision do
 
   identities do
     identity :unique_package_revision, [:channel_revision_id, :package_id]
+  end
+
+  @valid_sort_columns %{
+    released_at: "released_at",
+    version: "version",
+    channel: "channel",
+    revision_hash: "revision"
+  }
+
+  @valid_sort_dirs %{asc: "ASC", desc: "DESC"}
+
+  @doc """
+  Returns version changes for a package using a SQL window function.
+
+  Only returns revisions where the version differs from the previous revision
+  in the same channel (ordered by released_at).
+
+  Returns `{results, total_count}`.
+
+  ## Options
+
+    * `:channel` - filter to a specific channel (pushed inside the window)
+    * `:version` - filter by version substring (applied after window comparison)
+    * `:sort_by` - sort field, one of #{inspect(Map.keys(@valid_sort_columns))} (default: `:released_at`)
+    * `:sort_dir` - sort direction, `:asc` or `:desc` (default: `:desc`)
+    * `:limit` - max results (default: 15)
+    * `:offset` - offset for pagination (default: 0)
+  """
+  def version_changes_by_package(package_id, opts \\ []) do
+    channel = opts[:channel]
+    version = opts[:version]
+    sort_col = Map.get(@valid_sort_columns, opts[:sort_by] || :released_at, "released_at")
+    sort_dir = Map.get(@valid_sort_dirs, opts[:sort_dir] || :desc, "DESC")
+    limit = opts[:limit] || 15
+    offset = opts[:offset] || 0
+
+    sql = """
+    WITH ranked AS (
+      SELECT pr.id, pr.version, pr.package_id, pr.channel_revision_id,
+             cr.channel, cr.revision, cr.released_at,
+             LAG(pr.version) OVER (PARTITION BY cr.channel ORDER BY cr.released_at ASC) AS prev_version
+      FROM package_revisions pr
+      JOIN channel_revisions cr ON cr.id = pr.channel_revision_id
+      WHERE pr.package_id = $1
+        AND ($2::text IS NULL OR cr.channel = $2)
+    ),
+    version_changes AS (
+      SELECT id, version, package_id, channel_revision_id, channel, revision, released_at
+      FROM ranked
+      WHERE version != prev_version OR prev_version IS NULL
+    )
+    SELECT *, COUNT(*) OVER() AS total_count
+    FROM version_changes
+    WHERE ($3::text IS NULL OR version LIKE '%' || $3 || '%')
+    ORDER BY #{sort_col} #{sort_dir}
+    LIMIT $4 OFFSET $5
+    """
+
+    channel_param = if channel != nil and channel != "", do: channel, else: nil
+    version_param = if version != nil and version != "", do: version, else: nil
+
+    case Tracker.Repo.query(sql, [package_id, channel_param, version_param, limit, offset]) do
+      {:ok, %{rows: []}} ->
+        {[], 0}
+
+      {:ok, %{rows: rows}} ->
+        total_count = rows |> hd() |> List.last()
+
+        results =
+          Enum.map(rows, fn [
+                              id,
+                              version,
+                              package_id,
+                              channel_revision_id,
+                              channel,
+                              revision,
+                              released_at,
+                              _total_count
+                            ] ->
+            %__MODULE__.VersionChange{
+              id: id,
+              version: version,
+              package_id: package_id,
+              channel_revision_id: channel_revision_id,
+              channel: channel,
+              revision: revision,
+              released_at: DateTime.from_naive!(released_at, "Etc/UTC")
+            }
+          end)
+
+        {results, total_count}
+    end
   end
 
   # 5 columns: package_id, channel_revision_id, version, inserted_at, updated_at

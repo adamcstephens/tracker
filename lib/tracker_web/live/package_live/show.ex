@@ -35,7 +35,7 @@ defmodule TrackerWeb.PackageLive.Show do
       <dt><strong>Teams</strong></dt>
       <dd :for={t <- @package.teams}>
         <.link navigate={~p"/teams/#{t.short_name}"}>{t.short_name}</.link>
-        <span :if={t.scope}> -  {t.scope}</span>
+        <span :if={t.scope}>{t.scope}</span>
       </dd>
     </dl>
 
@@ -67,7 +67,7 @@ defmodule TrackerWeb.PackageLive.Show do
           <% rev = Map.get(@option_revisions, opt.id) %>
           <small :if={rev}>
             <span :if={rev.type}> ({rev.type})</span>
-            <span :if={rev.description}> -  {rev.description}</span>
+            <span :if={rev.description}>{rev.description}</span>
           </small>
         </li>
       </ul>
@@ -198,17 +198,17 @@ defmodule TrackerWeb.PackageLive.Show do
               <.github_version_link
                 version={rev.version}
                 position={@package.position}
-                revision={rev.channel_revision.revision}
+                revision={rev_revision(rev)}
               />
             </td>
-            <td>{rev.channel_revision.channel}</td>
+            <td>{rev_channel(rev)}</td>
             <td>
               <.revision_link
-                revision={rev.channel_revision.revision}
-                channel={rev.channel_revision.channel}
+                revision={rev_revision(rev)}
+                channel={rev_channel(rev)}
               />
             </td>
-            <td>{format_released_at(rev.channel_revision.released_at)}</td>
+            <td>{format_released_at(rev_released_at(rev))}</td>
           </tr>
         </tbody>
       </table>
@@ -318,6 +318,17 @@ defmodule TrackerWeb.PackageLive.Show do
     </.link>
     """
   end
+
+  alias Tracker.Nixpkgs.PackageRevision.VersionChange
+
+  defp rev_channel(%VersionChange{channel: channel}), do: channel
+  defp rev_channel(%{channel_revision: %{channel: channel}}), do: channel
+
+  defp rev_revision(%VersionChange{revision: revision}), do: revision
+  defp rev_revision(%{channel_revision: %{revision: revision}}), do: revision
+
+  defp rev_released_at(%VersionChange{released_at: released_at}), do: released_at
+  defp rev_released_at(%{channel_revision: %{released_at: released_at}}), do: released_at
 
   defp format_released_at(nil), do: "-"
   defp format_released_at(dt), do: Calendar.strftime(dt, "%Y-%m-%d %H:%M")
@@ -442,11 +453,17 @@ defmodule TrackerWeb.PackageLive.Show do
 
         {result.results, result.count, result.more?}
       else
-        all_changes =
-          load_version_changes(package_id, sort_by, sort_dir, channel_filter, version_filter)
+        {results, count} =
+          Tracker.Nixpkgs.PackageRevision.version_changes_by_package(package_id,
+            channel: channel_filter,
+            version: version_filter,
+            sort_by: sort_by,
+            sort_dir: sort_dir,
+            limit: 15,
+            offset: offset
+          )
 
-        page_results = all_changes |> Enum.drop(offset) |> Enum.take(15)
-        {page_results, length(all_changes), length(all_changes) > offset + 15}
+        {results, count, count > offset + 15}
       end
 
     total_pages = ceil(total_count / 15)
@@ -581,55 +598,6 @@ defmodule TrackerWeb.PackageLive.Show do
 
   defp toggle_dir(:asc), do: :desc
   defp toggle_dir(:desc), do: :asc
-
-  defp load_version_changes(package_id, sort_by, sort_dir, channel_filter, version_filter) do
-    # Load all revisions for this package ordered by release date
-    # to determine which ones represent actual version changes per channel
-    all_revisions = Tracker.Nixpkgs.PackageRevision.version_changes_by_package!(package_id)
-
-    # Group by channel and find IDs where version changed
-    change_ids =
-      all_revisions
-      |> Enum.group_by(& &1.channel_revision.channel)
-      |> Enum.flat_map(fn {_channel, channel_revs} ->
-        channel_revs
-        |> Enum.reduce({nil, []}, fn rev, {prev_version, acc} ->
-          if rev.version != prev_version do
-            {rev.version, [rev.id | acc]}
-          else
-            {prev_version, acc}
-          end
-        end)
-        |> elem(1)
-      end)
-      |> MapSet.new()
-
-    all_revisions
-    |> Enum.filter(&MapSet.member?(change_ids, &1.id))
-    |> maybe_filter_channel_list(channel_filter)
-    |> maybe_filter_version_list(version_filter)
-    |> Enum.sort_by(&sort_key(&1, sort_by), sort_order(sort_by, sort_dir))
-  end
-
-  defp maybe_filter_channel_list(revisions, ""), do: revisions
-
-  defp maybe_filter_channel_list(revisions, channel) do
-    Enum.filter(revisions, &(&1.channel_revision.channel == channel))
-  end
-
-  defp maybe_filter_version_list(revisions, ""), do: revisions
-
-  defp maybe_filter_version_list(revisions, version) do
-    Enum.filter(revisions, &String.contains?(&1.version, version))
-  end
-
-  defp sort_key(rev, :version), do: rev.version
-  defp sort_key(rev, :channel), do: rev.channel_revision.channel
-  defp sort_key(rev, :revision_hash), do: rev.channel_revision.revision
-  defp sort_key(rev, :released_at), do: rev.channel_revision.released_at
-
-  defp sort_order(:released_at, dir), do: {dir, DateTime}
-  defp sort_order(_, dir), do: dir
 
   defp revisions_path(package_name, sort_by, sort_dir, channel, version, all_revisions?, page) do
     params =
