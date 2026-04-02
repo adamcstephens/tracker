@@ -52,7 +52,7 @@ defmodule Tracker.Nixpkgs.Team do
   attributes do
     integer_primary_key :id
 
-    attribute :short_name, :string do
+    attribute :short_name, :ci_string do
       allow_nil? false
       public? true
     end

@@ -365,8 +365,8 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
 
       team_acc =
         Enum.reduce(teams, team_acc, fn t, acc ->
-          Map.put_new(acc, t["shortName"], %{
-            short_name: t["shortName"],
+          Map.put_new(acc, String.downcase(t["shortName"]), %{
+            short_name: String.downcase(t["shortName"]),
             scope: t["scope"],
             github: t["github"],
             github_id: t["githubId"],
@@ -384,7 +384,7 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
 
       # Track per-package join info
       maintainer_ids = Enum.map(non_team, & &1["githubId"])
-      team_names = Enum.map(teams, & &1["shortName"])
+      team_names = Enum.map(teams, &String.downcase(&1["shortName"]))
 
       joins =
         if maintainer_ids != [] or team_names != [] do
@@ -526,6 +526,6 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
 
   defp team_id_map do
     Tracker.Nixpkgs.Team.id_map!()
-    |> Map.new(&{&1.short_name, &1.id})
+    |> Map.new(&{to_string(&1.short_name), &1.id})
   end
 end

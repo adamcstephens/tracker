@@ -123,7 +123,7 @@ defmodule Tracker.Nixpkgs.ChannelWorkerTest do
       assert length(package.teams) == 1
 
       team = hd(package.teams)
-      assert team.short_name == "TestLXC"
+      assert to_string(team.short_name) == "testlxc"
       assert team.scope == "LXC, Incus"
 
       member_names = Enum.map(team.members, & &1.name) |> Enum.sort()
