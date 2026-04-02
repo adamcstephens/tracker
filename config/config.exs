@@ -7,13 +7,20 @@
 # General application configuration
 import Config
 
+channels = [
+  "nixos-unstable",
+  "nixos-unstable-small",
+  "nixpkgs-unstable"
+]
+
 config :tracker,
   # loader_limit: 20,
-  channels: [
-    "nixos-unstable",
-    "nixos-unstable-small",
-    "nixpkgs-unstable"
-  ]
+  channels: channels
+
+channel_crontab =
+  Enum.map(channels, fn channel ->
+    {"0 */4 * * *", Tracker.Nixpkgs.ChannelWorker, args: %{"channel" => channel}}
+  end)
 
 config :tracker, Oban,
   engine: Oban.Engines.Basic,
@@ -23,9 +30,10 @@ config :tracker, Oban,
   plugins: [
     Oban.Met,
     {Oban.Plugins.Cron,
-     crontab: [
-       {"*/5 * * * *", Tracker.Nixpkgs.ChangePollWorker}
-     ]}
+     crontab:
+       [
+         {"*/5 * * * *", Tracker.Nixpkgs.ChangePollWorker}
+       ] ++ channel_crontab}
   ]
 
 config :mime,

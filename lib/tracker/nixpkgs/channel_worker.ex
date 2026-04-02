@@ -1,7 +1,6 @@
 defmodule Tracker.Nixpkgs.ChannelWorker do
   use Oban.Worker, queue: :channels, max_attempts: 10
 
-  import Ecto.Query, only: [from: 2]
   require Logger
 
   @metadata_channel "nixos-unstable-small"
@@ -22,16 +21,7 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
     released_at = resolve_released_at(channel, base_url)
 
     process_channel(channel, base_url, revision, released_at, force: force?)
-    %{"channel" => channel} |> new(schedule_in: 4 * 60 * 60) |> Oban.insert!()
     :ok
-  end
-
-  def start_all_channels() do
-    Application.get_env(:tracker, :channels, [])
-    |> Enum.filter(&(not channel_job_running?(&1)))
-    |> Enum.each(fn channel ->
-      %{"channel" => channel} |> Tracker.Nixpkgs.ChannelWorker.new() |> Oban.insert()
-    end)
   end
 
   def load_channel(channel \\ "nixos-unstable", opts \\ []) do
@@ -40,17 +30,6 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
     released_at = resolve_released_at(channel, base_url)
 
     process_channel(channel, base_url, revision, released_at, force: force?)
-  end
-
-  def channel_job_running?(channel) do
-    query =
-      from j in Oban.Job,
-        where: j.state != "cancelled",
-        where: j.state != "discarded",
-        where: j.state != "completed",
-        where: j.args["channel"] == ^channel
-
-    Tracker.Repo.exists?(query)
   end
 
   def get_channel_revision(channel) do
