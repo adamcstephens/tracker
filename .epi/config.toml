@@ -1,5 +1,5 @@
 target = "~/.dotfiles#agents"
 default_name = "tracker-dev"
-cpus = 7
-memory = 16384
+cpus = 4
+memory = 9216
 ports = ["6950:6950"]
