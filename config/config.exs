@@ -8,6 +8,8 @@
 import Config
 
 channels = [
+  "nixos-25.11",
+  "nixos-25.11-small",
   "nixos-unstable",
   "nixos-unstable-small",
   "nixpkgs-unstable"
