@@ -716,6 +716,32 @@ defmodule Tracker.Nixpkgs.ChannelWorkerTest do
     end
   end
 
+  describe "write_to_database without released_at" do
+    test "falls back to current time when released_at is not provided" do
+      data = %{
+        "version" => 2,
+        "revision" => "nodate001",
+        "channel" => "nixos-unstable",
+        "packages" => %{
+          "hello" => %{"version" => "2.12"}
+        }
+      }
+
+      before = DateTime.utc_now() |> DateTime.truncate(:second)
+      ChannelWorker.write_to_database(data)
+      after_time = DateTime.utc_now() |> DateTime.add(1, :second) |> DateTime.truncate(:second)
+
+      rev =
+        Ash.get!(Tracker.Nixpkgs.ChannelRevision, %{
+          channel: "nixos-unstable",
+          revision: "nodate001"
+        })
+
+      assert DateTime.compare(rev.released_at, before) in [:gt, :eq]
+      assert DateTime.compare(rev.released_at, after_time) in [:lt, :eq]
+    end
+  end
+
   describe "write_to_database broadcasts on success" do
     test "broadcasts on the channel_revisions topic after success" do
       Phoenix.PubSub.subscribe(Tracker.PubSub, "channel_revisions:nixos-unstable")
@@ -734,6 +760,48 @@ defmodule Tracker.Nixpkgs.ChannelWorkerTest do
 
       assert_receive {:channel_revision_completed,
                       %{channel: "nixos-unstable", revision: "pub001"}}
+    end
+  end
+
+  describe "write_to_database options worker scheduling" do
+    test "schedules options worker for nixos channels" do
+      data = %{
+        "version" => 2,
+        "revision" => "opt001",
+        "channel" => "nixos-unstable",
+        "base_url" => "https://releases.nixos.org/nixos/unstable/nixos-25.05pre123.abc123",
+        "released_at" => "2026-03-29T10:00:00Z",
+        "packages" => %{
+          "hello" => %{"version" => "2.12"}
+        }
+      }
+
+      ChannelWorker.write_to_database(data)
+
+      assert_enqueued(
+        worker: Tracker.Nixpkgs.OptionsWorker,
+        args: %{"channel" => "nixos-unstable", "revision" => "opt001"}
+      )
+    end
+
+    test "does not schedule options worker for nixpkgs channels" do
+      data = %{
+        "version" => 2,
+        "revision" => "opt002",
+        "channel" => "nixpkgs-unstable",
+        "base_url" => "https://releases.nixos.org/nixpkgs/nixpkgs-26.05pre123.abc123",
+        "released_at" => "2026-03-29T10:00:00Z",
+        "packages" => %{
+          "hello" => %{"version" => "2.12"}
+        }
+      }
+
+      ChannelWorker.write_to_database(data)
+
+      refute_enqueued(
+        worker: Tracker.Nixpkgs.OptionsWorker,
+        args: %{"channel" => "nixpkgs-unstable"}
+      )
     end
   end
 

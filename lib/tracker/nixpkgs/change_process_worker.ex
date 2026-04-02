@@ -9,6 +9,24 @@ defmodule Tracker.Nixpkgs.ChangeProcessWorker do
 
   @repo "NixOS/nixpkgs"
 
+  @doc """
+  Re-enqueues processing for the given PR number(s).
+  """
+  def reprocess(numbers) when is_list(numbers) do
+    Enum.map(numbers, &reprocess/1)
+  end
+
+  def reprocess(number) when is_integer(number) do
+    case Tracker.Nixpkgs.Change.get_by_number(number) do
+      {:ok, change} -> set_processing_status(change, :pending)
+      _ -> :ok
+    end
+
+    %{number: number}
+    |> __MODULE__.new()
+    |> Oban.insert()
+  end
+
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"number" => number}}) do
     token = Tracker.GitHub.installation_token!()

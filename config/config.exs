@@ -20,7 +20,13 @@ config :tracker, Oban,
   notifier: Oban.Notifiers.Postgres,
   queues: [channels: 1, changes: 4],
   repo: Tracker.Repo,
-  plugins: [Oban.Met]
+  plugins: [
+    Oban.Met,
+    {Oban.Plugins.Cron,
+     crontab: [
+       {"*/5 * * * *", Tracker.Nixpkgs.ChangePollWorker}
+     ]}
+  ]
 
 config :mime,
   extensions: %{"json" => "application/vnd.api+json"},
