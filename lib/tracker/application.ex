@@ -11,6 +11,7 @@ defmodule Tracker.Application do
 
     children = [
       Tracker.Repo,
+      Tracker.GitHub.RateLimitCache,
       {Oban,
        AshOban.config(
          Application.fetch_env!(:tracker, :ash_domains),

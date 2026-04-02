@@ -29,6 +29,17 @@ defmodule Tracker.Nixpkgs.ChangeProcessWorker do
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"number" => number}}) do
+    case Tracker.GitHub.RateLimitCache.check() do
+      {:limited, seconds} ->
+        Logger.info("Rate limit cached, snoozing PR ##{number} for #{seconds}s")
+        {:snooze, seconds}
+
+      :ok ->
+        do_perform(number)
+    end
+  end
+
+  defp do_perform(number) do
     token = Tracker.GitHub.installation_token!()
 
     [owner, repo] = String.split(@repo, "/")
