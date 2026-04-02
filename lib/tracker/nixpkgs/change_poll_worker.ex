@@ -12,8 +12,15 @@ defmodule Tracker.Nixpkgs.ChangePollWorker do
 
   @impl Oban.Worker
   def perform(%Oban.Job{}) do
-    token = Tracker.GitHub.installation_token!()
-    fetch_merged_pulls(token) |> handle_fetch_result(token)
+    case Tracker.GitHub.RateLimitCache.check() do
+      {:limited, seconds} ->
+        Logger.info("Rate limited for #{seconds}s, skipping poll")
+        :ok
+
+      :ok ->
+        token = Tracker.GitHub.installation_token!()
+        fetch_merged_pulls(token) |> handle_fetch_result(token)
+    end
   end
 
   @doc false

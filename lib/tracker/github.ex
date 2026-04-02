@@ -27,6 +27,7 @@ defmodule Tracker.GitHub do
   def seconds_until_reset(token) do
     case GitHub.RateLimit.get(auth: token) do
       {:ok, %{rate: %{reset: reset}}} ->
+        Tracker.GitHub.RateLimitCache.set_reset(reset)
         max(reset - System.os_time(:second), 1)
 
       _ ->
