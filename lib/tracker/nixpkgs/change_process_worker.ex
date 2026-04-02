@@ -48,6 +48,11 @@ defmodule Tracker.Nixpkgs.ChangeProcessWorker do
         set_processing_status(change, :no_workflow_run)
         :ok
 
+      {:error, :no_comparison_artifact, change} ->
+        Logger.warning(msg: "No comparison artifact found, discarding", pr: number)
+        set_processing_status(change, :no_comparison_artifact)
+        :ok
+
       {:error, :artifact_expired} ->
         Logger.warning(msg: "Artifacts expired before change upserted, discarding", pr: number)
         {:discard, :artifact_expired}
@@ -178,7 +183,7 @@ defmodule Tracker.Nixpkgs.ChangeProcessWorker do
       {:ok, %{artifacts: artifacts}} ->
         case Enum.find(artifacts, &(&1.name == "comparison")) do
           nil ->
-            {:error, "No comparison artifact found for run #{run_id}"}
+            {:error, :no_comparison_artifact}
 
           artifact ->
             Tracker.Nixpkgs.ChangeArtifactCache.fetch_comparison(

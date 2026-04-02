@@ -162,7 +162,16 @@ defmodule Tracker.Nixpkgs.Change do
     attribute :processing_status, :atom,
       public?: true,
       default: :pending,
-      constraints: [one_of: [:pending, :processed, :artifact_expired, :no_workflow_run, :failed]]
+      constraints: [
+        one_of: [
+          :pending,
+          :processed,
+          :artifact_expired,
+          :no_workflow_run,
+          :no_comparison_artifact,
+          :failed
+        ]
+      ]
 
     timestamps()
   end
