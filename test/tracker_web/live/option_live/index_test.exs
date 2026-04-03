@@ -85,11 +85,30 @@ defmodule TrackerWeb.OptionLive.IndexTest do
       %{channel_revision: cr}
     end
 
-    test "shows channel dropdown", %{conn: conn} do
+    test "shows channel dropdown with only nixos channels", %{conn: conn} do
+      Tracker.Nixpkgs.ChannelRevision.create!(%{
+        channel: "nixpkgs-unstable",
+        revision: "nixpkgsrev123456",
+        released_at: ~U[2026-03-01 10:00:00Z]
+      })
+
       {:ok, _view, html} = live(conn, ~p"/options")
 
       assert html =~ "nixos-unstable"
       assert html =~ ~s(select)
+      refute html =~ "nixpkgs-unstable"
+    end
+
+    test "shows message when nixpkgs channel is in query params", %{conn: conn} do
+      Tracker.Nixpkgs.ChannelRevision.create!(%{
+        channel: "nixpkgs-unstable",
+        revision: "nixpkgsrev789012",
+        released_at: ~U[2026-03-01 10:00:00Z]
+      })
+
+      {:ok, _view, html} = live(conn, ~p"/options?channel=nixpkgs-unstable")
+
+      assert html =~ "doesn&#39;t have options"
     end
 
     test "scoping to channel shows only channel options", %{conn: conn} do

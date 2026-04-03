@@ -578,7 +578,7 @@ defmodule TrackerWeb.PackageLive.Show do
   end
 
   defp load_channels do
-    Tracker.Nixpkgs.ChannelRevision.distinct_channels!()
+    Tracker.Nixpkgs.ChannelRevision.distinct_nixos_channels!()
     |> Enum.map(& &1.channel)
   end
 
