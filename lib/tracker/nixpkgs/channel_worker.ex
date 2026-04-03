@@ -6,6 +6,9 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
   @metadata_channel "nixos-unstable-small"
 
   @impl Oban.Worker
+  def timeout(_job), do: :timer.minutes(30)
+
+  @impl Oban.Worker
   def perform(%Oban.Job{args: %{"channel" => channel, "base_url" => base_url} = args}) do
     force? = args["force"] == true
     revision = Req.get!(Tracker.Nixpkgs.S3Cache.new(), url: base_url <> "/git-revision").body
@@ -248,7 +251,7 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
       ]
       |> Enum.reject(&is_nil/1)
 
-    Task.await_many(parallel_tasks, :infinity)
+    Task.await_many(parallel_tasks, :timer.minutes(5))
 
     Tracker.Nixpkgs.ChannelRevision.record_result!(channel_revision, %{result: :success})
 
@@ -470,8 +473,8 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
         team_id_map()
       end)
 
-    maintainer_id_map = Task.await(maintainer_task)
-    team_id_map = Task.await(team_task)
+    maintainer_id_map = Task.await(maintainer_task, :timer.minutes(5))
+    team_id_map = Task.await(team_task, :timer.minutes(5))
 
     # Step 2: Bulk upsert team members, package_maintainers, and package_teams in parallel
     team_member_task =
@@ -515,7 +518,7 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
         |> Tracker.Nixpkgs.PackageTeam.bulk_create_all()
       end)
 
-    Task.await_many([team_member_task, pkg_maintainer_task, pkg_team_task])
+    Task.await_many([team_member_task, pkg_maintainer_task, pkg_team_task], :timer.minutes(5))
 
     :ok
   end
