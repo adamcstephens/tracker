@@ -35,7 +35,6 @@ defmodule TrackerWeb.OptionLive.IndexTest do
     mod =
       Tracker.Nixpkgs.Module
       |> Ash.Changeset.for_create(:bulk_upsert, %{
-        declaration: "services.opttest",
         display_name: "services.opttest"
       })
       |> Ash.create!()

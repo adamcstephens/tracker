@@ -9,7 +9,6 @@ defmodule TrackerWeb.ModuleLive.ShowTest do
     mod =
       Tracker.Nixpkgs.Module
       |> Ash.Changeset.for_create(:bulk_upsert, %{
-        declaration: "services.modshow",
         display_name: "services.modshow"
       })
       |> Ash.create!()
@@ -87,7 +86,6 @@ defmodule TrackerWeb.ModuleLive.ShowTest do
       other_mod =
         Tracker.Nixpkgs.Module
         |> Ash.Changeset.for_create(:bulk_upsert, %{
-          declaration: "services.other",
           display_name: "services.other"
         })
         |> Ash.create!()

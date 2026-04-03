@@ -20,8 +20,12 @@ defmodule TrackerWeb.ModuleLive.Show do
     </.header>
 
     <.list>
-      <:item title="Declaration">
-        <code>{@module.declaration}</code>
+      <:item title="Declarations">
+        <ul style="list-style: none; padding: 0; margin: 0;">
+          <li :for={md <- @module.module_declarations}>
+            <code>{md.path}</code>
+          </li>
+        </ul>
       </:item>
     </.list>
 

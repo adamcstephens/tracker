@@ -25,9 +25,6 @@ defmodule TrackerWeb.ModuleLive.Index do
       <:col :let={{_id, m}} label="Display Name">
         <.link navigate={~p"/modules/#{m.display_name}"}>{m.display_name}</.link>
       </:col>
-      <:col :let={{_id, m}} label="Declaration">
-        <code style="font-size: 0.85em;">{m.declaration}</code>
-      </:col>
       <:col :let={{_id, m}} label="Options">{m.option_count}</:col>
     </.table>
 

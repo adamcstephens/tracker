@@ -10,7 +10,7 @@ defmodule Tracker.Nixpkgs.Module do
     define :read
     define :list, args: [{:optional, :search}]
     define :get_by_name, args: [:name]
-    define :bulk_upsert, args: [:declaration]
+    define :bulk_upsert, args: [:display_name]
     define :id_map, action: :id_map
   end
 
@@ -44,28 +44,25 @@ defmodule Tracker.Nixpkgs.Module do
         allow_nil? false
       end
 
+      prepare build(load: [:module_declarations])
+
       filter expr(display_name == ^arg(:name))
     end
 
     read :id_map do
-      prepare build(select: [:declaration])
+      prepare build(select: [:display_name])
     end
 
     create :bulk_upsert do
-      accept [:declaration, :display_name]
+      accept [:display_name]
       upsert? true
-      upsert_identity :unique_declaration
-      upsert_fields [:display_name, :updated_at]
+      upsert_identity :unique_display_name
+      upsert_fields [:updated_at]
     end
   end
 
   attributes do
     integer_primary_key :id
-
-    attribute :declaration, :string do
-      allow_nil? false
-      public? true
-    end
 
     attribute :display_name, :string do
       allow_nil? false
@@ -77,6 +74,7 @@ defmodule Tracker.Nixpkgs.Module do
 
   relationships do
     has_many :options, Tracker.Nixpkgs.Option
+    has_many :module_declarations, Tracker.Nixpkgs.ModuleDeclaration
   end
 
   aggregates do
@@ -84,17 +82,17 @@ defmodule Tracker.Nixpkgs.Module do
   end
 
   identities do
-    identity :unique_declaration, [:declaration]
+    identity :unique_display_name, [:display_name]
   end
 
-  # 4 columns: declaration, display_name, inserted_at, updated_at
-  @insert_cols 4
+  # 3 columns: display_name, inserted_at, updated_at
+  @insert_cols 3
   @max_rows div(65_535, @insert_cols)
 
   @doc """
   Bulk upsert modules using raw Ecto insert_all for performance.
 
-  Returns a map of declaration => id.
+  Returns a map of display_name => id.
   """
   def bulk_upsert_all(records) do
     now = DateTime.utc_now(:second)
@@ -111,12 +109,12 @@ defmodule Tracker.Nixpkgs.Module do
         Tracker.Repo.insert_all(
           "modules",
           chunk,
-          on_conflict: {:replace, [:display_name, :updated_at]},
-          conflict_target: :declaration,
-          returning: [:id, :declaration]
+          on_conflict: {:replace, [:updated_at]},
+          conflict_target: :display_name,
+          returning: [:id, :display_name]
         )
 
-      Map.merge(acc, Map.new(rows, fn %{id: id, declaration: decl} -> {decl, id} end))
+      Map.merge(acc, Map.new(rows, fn %{id: id, display_name: name} -> {name, id} end))
     end)
   end
 end
