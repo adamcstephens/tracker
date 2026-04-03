@@ -127,6 +127,24 @@ defmodule TrackerWeb.ModuleLive.ShowTest do
       %{channel_revision: cr, module: mod, other_module: other_mod}
     end
 
+    test "shows message and hides declarations when nixpkgs channel is in query params", %{
+      conn: conn,
+      module: mod
+    } do
+      Tracker.Nixpkgs.ChannelRevision.create!(%{
+        channel: "nixpkgs-unstable",
+        revision: "nixpkgsmodrev1234",
+        released_at: ~U[2026-03-01 10:00:00Z]
+      })
+
+      {:ok, _view, html} =
+        live(conn, "/modules/#{mod.display_name}?channel=nixpkgs-unstable")
+
+      assert html =~ "doesn&#39;t have options"
+      refute html =~ "Options ("
+      refute html =~ "Declarations"
+    end
+
     test "shows channel and revision in subtitle", %{conn: conn, module: mod} do
       {:ok, _view, html} = live(conn, "/modules/#{mod.display_name}?channel=nixos-unstable")
 

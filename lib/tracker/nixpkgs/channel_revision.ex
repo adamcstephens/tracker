@@ -15,6 +15,7 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
     define :record_options_result
     define :by_channel, args: [:channel]
     define :distinct_channels
+    define :distinct_nixos_channels
     define :find_by_hash, args: [:hash]
     define :find_by_channel_hash, args: [:channel, :hash]
     define :latest_by_channel, args: [:channel]
@@ -79,6 +80,11 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
 
     read :distinct_channels do
       prepare build(distinct: [:channel], sort: [:channel])
+    end
+
+    read :distinct_nixos_channels do
+      prepare build(distinct: [:channel], sort: [:channel])
+      filter expr(fragment("? LIKE 'nixos-%'", channel))
     end
 
     read :without_options do

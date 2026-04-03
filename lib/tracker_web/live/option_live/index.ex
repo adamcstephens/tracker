@@ -34,6 +34,10 @@ defmodule TrackerWeb.OptionLive.Index do
       </fieldset>
     </form>
 
+    <p :if={@channel_unavailable?}>
+      The {@channel} channel doesn't have options data.
+    </p>
+
     <.table id="options" rows={@streams.options}>
       <:col :let={{_id, row}} label="Option">
         <.option_link option={option_record(row)} channel={@channel} rev={@rev} />
@@ -119,13 +123,14 @@ defmodule TrackerWeb.OptionLive.Index do
   @impl true
   def mount(_params, _session, socket) do
     channels =
-      Tracker.Nixpkgs.ChannelRevision.distinct_channels!()
+      Tracker.Nixpkgs.ChannelRevision.distinct_nixos_channels!()
       |> Enum.map(& &1.channel)
 
     {:ok,
      socket
      |> assign_new(:current_user, fn -> nil end)
-     |> assign(:channels, channels)}
+     |> assign(:channels, channels)
+     |> assign(:channel_unavailable?, false)}
   end
 
   @impl true
@@ -234,6 +239,7 @@ defmodule TrackerWeb.OptionLive.Index do
     current_page = div(socket.assigns.offset, 15) + 1
 
     socket
+    |> assign(:channel_unavailable?, false)
     |> stream(:options, page.results, reset: true)
     |> assign(:has_prev_page?, socket.assigns.offset > 0)
     |> assign(:has_next_page?, page.more?)
@@ -257,6 +263,7 @@ defmodule TrackerWeb.OptionLive.Index do
       current_page = div(socket.assigns.offset, 15) + 1
 
       socket
+      |> assign(:channel_unavailable?, false)
       |> stream(:options, page.results, reset: true)
       |> assign(:has_prev_page?, socket.assigns.offset > 0)
       |> assign(:has_next_page?, page.more?)
@@ -264,6 +271,7 @@ defmodule TrackerWeb.OptionLive.Index do
       |> assign(:current_page, current_page)
     else
       socket
+      |> assign(:channel_unavailable?, true)
       |> stream(:options, [], reset: true)
       |> assign(:has_prev_page?, false)
       |> assign(:has_next_page?, false)

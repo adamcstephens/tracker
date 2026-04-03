@@ -45,9 +45,13 @@ defmodule TrackerWeb.ModuleLive.Show do
       </ul>
     </section>
 
-    <h2>Options ({@option_count})</h2>
+    <p :if={@channel_unavailable?}>
+      The {@channel} channel doesn't have options data.
+    </p>
 
-    <div id="options-list">
+    <h2 :if={!@channel_unavailable?}>Options ({@option_count})</h2>
+
+    <div :if={!@channel_unavailable?} id="options-list">
       <div :for={{id, rev} <- @streams.options} id={id}>
         <article id={"opt-#{option_name(rev)}"} style="margin-bottom: 1.5rem;">
           <header>
@@ -83,7 +87,7 @@ defmodule TrackerWeb.ModuleLive.Show do
     </div>
 
     <nav
-      :if={@total_pages > 1}
+      :if={@total_pages > 1 and !@channel_unavailable?}
       style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-top: 1rem;"
     >
       <.button
@@ -107,7 +111,7 @@ defmodule TrackerWeb.ModuleLive.Show do
       </.button>
     </nav>
 
-    <section>
+    <section :if={!@channel_unavailable?}>
       <h2>Declarations ({length(@module.module_declarations)})</h2>
       <ul>
         <li :for={md <- @module.module_declarations}>
@@ -188,6 +192,7 @@ defmodule TrackerWeb.ModuleLive.Show do
      |> assign(:channel, channel)
      |> assign(:rev, rev)
      |> assign(:channel_revision, channel_revision)
+     |> assign(:channel_unavailable?, is_nil(channel_revision))
      |> assign(:option_count, option_count)
      |> stream(:options, options_stream, reset: true)
      |> assign(:has_prev_page?, offset > 0)
