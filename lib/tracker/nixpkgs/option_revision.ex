@@ -10,10 +10,34 @@ defmodule Tracker.Nixpkgs.OptionRevision do
     define :read
     define :load
     define :latest_by_option_ids, args: [:option_ids]
+    define :list_by_channel_revision, args: [:channel_revision_id, {:optional, :search}]
   end
 
   actions do
     defaults [:read]
+
+    read :list_by_channel_revision do
+      argument :channel_revision_id, :integer, allow_nil?: false
+      argument :search, :string, default: ""
+
+      pagination do
+        offset? true
+        countable true
+        default_limit 15
+      end
+
+      prepare build(sort: [option_name: :asc], load: [:option])
+
+      filter expr(channel_revision_id == ^arg(:channel_revision_id))
+
+      filter expr(
+               if ^arg(:search) != "" do
+                 contains(option.name, ^arg(:search))
+               else
+                 true
+               end
+             )
+    end
 
     read :latest_by_option_ids do
       argument :option_ids, {:array, :integer}, allow_nil?: false
@@ -84,6 +108,7 @@ defmodule Tracker.Nixpkgs.OptionRevision do
 
   calculations do
     calculate :released_at, :utc_datetime, expr(channel_revision.released_at)
+    calculate :option_name, :string, expr(option.name)
   end
 
   identities do
