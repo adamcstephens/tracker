@@ -637,6 +637,82 @@ defmodule Tracker.Nixpkgs.OptionsWorkerTest do
   end
 
   describe "module merging" do
+    test "splits modules when one declaration has options under multiple prefixes" do
+      channel_revision = create_successful_revision("nixos-unstable", "opt010")
+
+      options = %{
+        "boot.initrd.network.ifstate.enable" => %{
+          "declarations" => ["nixos/modules/services/networking/ifstate.nix"],
+          "description" => "Enable ifstate in initrd.",
+          "loc" => ["boot", "initrd", "network", "ifstate", "enable"],
+          "readOnly" => false,
+          "type" => "boolean"
+        },
+        "boot.initrd.network.ifstate.package" => %{
+          "declarations" => ["nixos/modules/services/networking/ifstate.nix"],
+          "description" => "The ifstate package for initrd.",
+          "loc" => ["boot", "initrd", "network", "ifstate", "package"],
+          "readOnly" => false,
+          "type" => "package"
+        },
+        "networking.ifstate.enable" => %{
+          "declarations" => ["nixos/modules/services/networking/ifstate.nix"],
+          "description" => "Enable ifstate.",
+          "loc" => ["networking", "ifstate", "enable"],
+          "readOnly" => false,
+          "type" => "boolean"
+        },
+        "networking.ifstate.package" => %{
+          "declarations" => ["nixos/modules/services/networking/ifstate.nix"],
+          "description" => "The ifstate package.",
+          "loc" => ["networking", "ifstate", "package"],
+          "readOnly" => false,
+          "type" => "package"
+        }
+      }
+
+      OptionsWorker.write_to_database(options, channel_revision)
+
+      modules = Ash.read!(Tracker.Nixpkgs.Module) |> Enum.sort_by(& &1.display_name)
+      assert length(modules) == 2
+
+      [boot_mod, net_mod] = modules
+      assert boot_mod.display_name == "boot.initrd.network.ifstate"
+      assert net_mod.display_name == "networking.ifstate"
+
+      # Both modules share the same declaration
+      declarations = Ash.read!(Tracker.Nixpkgs.ModuleDeclaration)
+      assert length(declarations) == 2
+
+      assert Enum.all?(
+               declarations,
+               &(&1.path == "nixos/modules/services/networking/ifstate.nix")
+             )
+
+      assert MapSet.new(Enum.map(declarations, & &1.module_id)) ==
+               MapSet.new([boot_mod.id, net_mod.id])
+
+      # Options are correctly assigned
+      boot_options =
+        Ash.read!(Tracker.Nixpkgs.Option)
+        |> Enum.filter(&(&1.module_id == boot_mod.id))
+        |> Enum.map(& &1.name)
+        |> Enum.sort()
+
+      assert boot_options == [
+               "boot.initrd.network.ifstate.enable",
+               "boot.initrd.network.ifstate.package"
+             ]
+
+      net_options =
+        Ash.read!(Tracker.Nixpkgs.Option)
+        |> Enum.filter(&(&1.module_id == net_mod.id))
+        |> Enum.map(& &1.name)
+        |> Enum.sort()
+
+      assert net_options == ["networking.ifstate.enable", "networking.ifstate.package"]
+    end
+
     test "merges modules with same display_name from different declarations" do
       channel_revision = create_successful_revision("nixos-unstable", "opt009")
 

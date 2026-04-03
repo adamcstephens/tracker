@@ -30,7 +30,7 @@ defmodule Tracker.Nixpkgs.ModuleDeclaration do
   end
 
   identities do
-    identity :unique_path, [:path]
+    identity :unique_path_module, [:path, :module_id]
   end
 
   # 4 columns: path, module_id, inserted_at, updated_at
@@ -56,8 +56,8 @@ defmodule Tracker.Nixpkgs.ModuleDeclaration do
       Tracker.Repo.insert_all(
         "module_declarations",
         chunk,
-        on_conflict: {:replace, [:module_id, :updated_at]},
-        conflict_target: :path
+        on_conflict: {:replace, [:updated_at]},
+        conflict_target: [:path, :module_id]
       )
     end)
   end
