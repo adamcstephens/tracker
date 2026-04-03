@@ -10,6 +10,12 @@ defmodule TrackerWeb.ModuleLive.Show do
       {@module.display_name}
       <:subtitle>
         Module
+        <span :if={@parent_module}>
+          · parent:
+          <.link navigate={module_path(@parent_module.display_name, @channel, @rev)}>
+            {@parent_module.display_name}
+          </.link>
+        </span>
         <span :if={@channel != ""}>
           · {@channel}
           <small :if={@channel_revision}>
@@ -28,6 +34,16 @@ defmodule TrackerWeb.ModuleLive.Show do
         </ul>
       </:item>
     </.list>
+
+    <section :if={@submodules != []}>
+      <h2>Submodules ({length(@submodules)})</h2>
+      <ul>
+        <li :for={sub <- @submodules}>
+          <.link navigate={module_path(sub.display_name, @channel, @rev)}>{sub.display_name}</.link>
+          <small>({sub.option_count} options)</small>
+        </li>
+      </ul>
+    </section>
 
     <section :if={@packages != []}>
       <h2>Packages</h2>
@@ -156,6 +172,8 @@ defmodule TrackerWeb.ModuleLive.Show do
     offset = (page_num - 1) * 15
 
     packages = Tracker.Nixpkgs.Package.by_module!(mod.id)
+    submodules = Tracker.Nixpkgs.Module.children!(mod.display_name)
+    parent_module = find_parent_module(mod.display_name)
 
     channel_revision =
       if channel != "" do
@@ -176,6 +194,8 @@ defmodule TrackerWeb.ModuleLive.Show do
      |> assign(:page_title, mod.display_name)
      |> assign(:module, mod)
      |> assign(:packages, packages)
+     |> assign(:submodules, submodules)
+     |> assign(:parent_module, parent_module)
      |> assign(:channel, channel)
      |> assign(:rev, rev)
      |> assign(:channel_revision, channel_revision)
@@ -243,6 +263,8 @@ defmodule TrackerWeb.ModuleLive.Show do
      )}
   end
 
+  defp module_path(name, channel, rev), do: show_path(name, channel, rev, 1)
+
   defp show_path(name, channel, rev, page) do
     params =
       %{}
@@ -253,6 +275,21 @@ defmodule TrackerWeb.ModuleLive.Show do
     case URI.encode_query(params) do
       "" -> "/modules/#{name}"
       qs -> "/modules/#{name}?#{qs}"
+    end
+  end
+
+  defp find_parent_module(display_name) do
+    case String.split(display_name, ".") do
+      [_single] ->
+        nil
+
+      parts ->
+        parent_name = parts |> Enum.drop(-1) |> Enum.join(".")
+
+        case Tracker.Nixpkgs.Module.get_by_name(parent_name) do
+          {:ok, mod} -> mod
+          _ -> nil
+        end
     end
   end
 

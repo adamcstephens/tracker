@@ -10,6 +10,7 @@ defmodule Tracker.Nixpkgs.Module do
     define :read
     define :list, args: [{:optional, :search}]
     define :get_by_name, args: [:name]
+    define :children, args: [:parent_name]
     define :bulk_upsert, args: [:display_name]
     define :id_map, action: :id_map
   end
@@ -47,6 +48,24 @@ defmodule Tracker.Nixpkgs.Module do
       prepare build(load: [:module_declarations])
 
       filter expr(display_name == ^arg(:name))
+    end
+
+    read :children do
+      argument :parent_name, :string do
+        allow_nil? false
+      end
+
+      prepare build(sort: :display_name, load: [:option_count])
+
+      filter expr(
+               fragment(
+                 "? LIKE ? || '.%' AND ? NOT LIKE ? || '.%.%'",
+                 display_name,
+                 ^arg(:parent_name),
+                 display_name,
+                 ^arg(:parent_name)
+               )
+             )
     end
 
     read :id_map do
