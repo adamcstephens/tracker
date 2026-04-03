@@ -188,6 +188,25 @@ defmodule Tracker.Nixpkgs.OptionsWorkerTest do
       assert Enum.all?(options_records, &(&1.module_id == mod.id))
     end
 
+    test "normalizes doubled nixos/modules/ prefix in declarations" do
+      channel_revision = create_successful_revision("nixos-unstable", "opt008")
+
+      options = %{
+        "console.font" => %{
+          "declarations" => ["nixos/modules/nixos/modules/config/console.nix"],
+          "description" => "The font used for the virtual consoles.",
+          "loc" => ["console", "font"],
+          "readOnly" => false,
+          "type" => "string"
+        }
+      }
+
+      OptionsWorker.write_to_database(options, channel_revision)
+
+      mod = hd(Ash.read!(Tracker.Nixpkgs.Module))
+      assert mod.declaration == "nixos/modules/config/console.nix"
+    end
+
     test "handles options with multiple declarations using the first one" do
       channel_revision = create_successful_revision("nixos-unstable", "opt005")
 

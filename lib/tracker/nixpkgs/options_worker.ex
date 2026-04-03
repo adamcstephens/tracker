@@ -219,7 +219,7 @@ defmodule Tracker.Nixpkgs.OptionsWorker do
   end
 
   # Use first declaration path, or derive a synthetic one from the option name prefix
-  defp resolve_declaration(_name, [first | _rest]), do: first
+  defp resolve_declaration(_name, [first | _rest]), do: normalize_declaration(first)
 
   defp resolve_declaration(name, []) do
     case String.split(name, ".") do
@@ -227,6 +227,12 @@ defmodule Tracker.Nixpkgs.OptionsWorker do
       parts -> parts |> Enum.take(2) |> Enum.join(".")
     end
   end
+
+  # Strip doubled "nixos/modules/" prefix caused by transient upstream nixpkgs bug
+  defp normalize_declaration("nixos/modules/nixos/modules/" <> rest),
+    do: "nixos/modules/" <> rest
+
+  defp normalize_declaration(declaration), do: declaration
 
   defp extract_text(%{"text" => text}), do: text
   defp extract_text(_), do: nil
