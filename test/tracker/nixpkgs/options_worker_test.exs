@@ -68,17 +68,20 @@ defmodule Tracker.Nixpkgs.OptionsWorkerTest do
       modules = Ash.read!(Tracker.Nixpkgs.Module)
       assert length(modules) == 2
 
-      nginx_mod =
-        Enum.find(
-          modules,
-          &(&1.declaration == "nixos/modules/services/web-servers/nginx/default.nix")
-        )
+      nginx_mod = Enum.find(modules, &(&1.display_name == "services.nginx"))
+      openssh_mod = Enum.find(modules, &(&1.display_name == "services.openssh"))
 
-      openssh_mod =
-        Enum.find(modules, &(&1.declaration == "nixos/modules/services/networking/ssh/sshd.nix"))
+      assert nginx_mod
+      assert openssh_mod
 
-      assert nginx_mod.display_name == "services.nginx"
-      assert openssh_mod.display_name == "services.openssh"
+      # Verify declarations are in the join table
+      declarations = Ash.read!(Tracker.Nixpkgs.ModuleDeclaration)
+
+      nginx_decl = Enum.find(declarations, &(&1.module_id == nginx_mod.id))
+      assert nginx_decl.path == "nixos/modules/services/web-servers/nginx/default.nix"
+
+      openssh_decl = Enum.find(declarations, &(&1.module_id == openssh_mod.id))
+      assert openssh_decl.path == "nixos/modules/services/networking/ssh/sshd.nix"
 
       # Should create 5 options
       options = Ash.read!(Tracker.Nixpkgs.Option)
@@ -179,10 +182,13 @@ defmodule Tracker.Nixpkgs.OptionsWorkerTest do
       assert length(modules) == 1
 
       mod = hd(modules)
-      # Synthetic declaration derived from first 2 segments of option name
-      assert mod.declaration == "services.misskey"
       # Display name is the longest common prefix of all option names under this module
       assert mod.display_name == "services.misskey.reverseProxy.webserver"
+
+      # Synthetic declaration derived from first 2 segments of option name
+      decl = hd(Ash.read!(Tracker.Nixpkgs.ModuleDeclaration))
+      assert decl.module_id == mod.id
+      assert decl.path == "services.misskey"
 
       options_records = Ash.read!(Tracker.Nixpkgs.Option)
       assert Enum.all?(options_records, &(&1.module_id == mod.id))
@@ -204,7 +210,9 @@ defmodule Tracker.Nixpkgs.OptionsWorkerTest do
       OptionsWorker.write_to_database(options, channel_revision)
 
       mod = hd(Ash.read!(Tracker.Nixpkgs.Module))
-      assert mod.declaration == "nixos/modules/config/console.nix"
+      decl = hd(Ash.read!(Tracker.Nixpkgs.ModuleDeclaration))
+      assert decl.module_id == mod.id
+      assert decl.path == "nixos/modules/config/console.nix"
     end
 
     test "handles options with multiple declarations using the first one" do
@@ -226,7 +234,11 @@ defmodule Tracker.Nixpkgs.OptionsWorkerTest do
       OptionsWorker.write_to_database(options, channel_revision)
 
       mod = hd(Ash.read!(Tracker.Nixpkgs.Module))
-      assert mod.declaration == "nixos/modules/tasks/filesystems.nix"
+      assert mod.display_name == "fileSystems"
+
+      decl = hd(Ash.read!(Tracker.Nixpkgs.ModuleDeclaration))
+      assert decl.module_id == mod.id
+      assert decl.path == "nixos/modules/tasks/filesystems.nix"
 
       opt = hd(Ash.read!(Tracker.Nixpkgs.Option))
       assert opt.module_id == mod.id
@@ -621,6 +633,62 @@ defmodule Tracker.Nixpkgs.OptionsWorkerTest do
       )
 
       assert {:ok, 0} = OptionsWorker.backfill_channel(channel)
+    end
+  end
+
+  describe "module merging" do
+    test "merges modules with same display_name from different declarations" do
+      channel_revision = create_successful_revision("nixos-unstable", "opt009")
+
+      options = %{
+        "boot.devSize" => %{
+          "declarations" => ["nixos/modules/system/boot/stage-2.nix"],
+          "description" => "Size of /dev.",
+          "loc" => ["boot", "devSize"],
+          "readOnly" => false,
+          "type" => "string"
+        },
+        "boot.runSize" => %{
+          "declarations" => ["nixos/modules/system/boot/stage-2.nix"],
+          "description" => "Size of /run.",
+          "loc" => ["boot", "runSize"],
+          "readOnly" => false,
+          "type" => "string"
+        },
+        "boot.growPartition" => %{
+          "declarations" => ["nixos/modules/system/boot/grow-partition.nix"],
+          "description" => "Whether to grow the root partition.",
+          "loc" => ["boot", "growPartition"],
+          "readOnly" => false,
+          "type" => "boolean"
+        }
+      }
+
+      OptionsWorker.write_to_database(options, channel_revision)
+
+      # Both declarations produce display_name "boot", so should merge into one module
+      modules = Ash.read!(Tracker.Nixpkgs.Module)
+      assert length(modules) == 1
+
+      mod = hd(modules)
+      assert mod.display_name == "boot"
+
+      # Should have two declarations in the join table
+      declarations = Ash.read!(Tracker.Nixpkgs.ModuleDeclaration)
+      assert length(declarations) == 2
+      assert Enum.all?(declarations, &(&1.module_id == mod.id))
+
+      paths = Enum.map(declarations, & &1.path) |> Enum.sort()
+
+      assert paths == [
+               "nixos/modules/system/boot/grow-partition.nix",
+               "nixos/modules/system/boot/stage-2.nix"
+             ]
+
+      # All 3 options should belong to the merged module
+      options_records = Ash.read!(Tracker.Nixpkgs.Option)
+      assert length(options_records) == 3
+      assert Enum.all?(options_records, &(&1.module_id == mod.id))
     end
   end
 

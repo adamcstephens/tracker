@@ -112,16 +112,23 @@ defmodule Tracker.Nixpkgs.OptionsWorker do
 
   def write_to_database(options_map, channel_revision) do
     # Step 1: Derive modules from declarations
-    {module_records, option_to_declaration} = derive_modules(options_map)
+    {module_records, declaration_records, option_to_display_name} = derive_modules(options_map)
 
-    # Step 2: Bulk upsert modules
+    # Step 2: Bulk upsert modules (keyed by display_name)
     module_id_map = Tracker.Nixpkgs.Module.bulk_upsert_all(module_records)
+
+    # Step 2b: Bulk upsert declarations with module_ids
+    declaration_records
+    |> Enum.map(fn %{path: path, display_name: dn} ->
+      %{path: path, module_id: Map.fetch!(module_id_map, dn)}
+    end)
+    |> Tracker.Nixpkgs.ModuleDeclaration.bulk_upsert_all()
 
     # Step 3: Bulk upsert options
     option_records =
       Enum.map(options_map, fn {name, _entry} ->
-        declaration = Map.get(option_to_declaration, name)
-        module_id = if declaration, do: Map.get(module_id_map, declaration)
+        display_name = Map.get(option_to_display_name, name)
+        module_id = if display_name, do: Map.get(module_id_map, display_name)
 
         %{name: name}
         |> maybe_put(:module_id, module_id)
@@ -201,21 +208,34 @@ defmodule Tracker.Nixpkgs.OptionsWorker do
         Map.update(acc, declaration, [name], &[name | &1])
       end)
 
+    # Group declarations by their computed display_name to merge modules
+    by_display_name =
+      Enum.group_by(
+        options_by_declaration,
+        fn {_declaration, option_names} -> display_name_for_options(option_names) end
+      )
+
     module_records =
-      Enum.map(options_by_declaration, fn {declaration, option_names} ->
-        %{
-          declaration: declaration,
-          display_name: display_name_for_options(option_names)
-        }
+      Enum.map(by_display_name, fn {display_name, _groups} ->
+        %{display_name: display_name}
       end)
 
-    option_to_declaration =
-      Enum.flat_map(options_by_declaration, fn {declaration, option_names} ->
-        Enum.map(option_names, &{&1, declaration})
+    declaration_records =
+      Enum.flat_map(by_display_name, fn {display_name, groups} ->
+        Enum.map(groups, fn {declaration, _option_names} ->
+          %{path: declaration, display_name: display_name}
+        end)
+      end)
+
+    option_to_display_name =
+      Enum.flat_map(by_display_name, fn {display_name, groups} ->
+        Enum.flat_map(groups, fn {_declaration, option_names} ->
+          Enum.map(option_names, &{&1, display_name})
+        end)
       end)
       |> Map.new()
 
-    {module_records, option_to_declaration}
+    {module_records, declaration_records, option_to_display_name}
   end
 
   # Use first declaration path, or derive a synthetic one from the option name prefix

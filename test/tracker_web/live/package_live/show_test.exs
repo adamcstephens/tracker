@@ -246,7 +246,6 @@ defmodule TrackerWeb.PackageLive.ShowTest do
       mod =
         Tracker.Nixpkgs.Module
         |> Ash.Changeset.for_create(:bulk_upsert, %{
-          declaration: "services.hello",
           display_name: "services.hello"
         })
         |> Ash.create!()

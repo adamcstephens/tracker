@@ -4,13 +4,9 @@ defmodule TrackerWeb.ModuleLive.IndexTest do
   import Phoenix.LiveViewTest
 
   setup do
-    for {decl, name} <- [
-          {"services.nginx", "services.nginx"},
-          {"services.postgresql", "services.postgresql"},
-          {"programs.git", "programs.git"}
-        ] do
+    for name <- ["services.nginx", "services.postgresql", "programs.git"] do
       Tracker.Nixpkgs.Module
-      |> Ash.Changeset.for_create(:bulk_upsert, %{declaration: decl, display_name: name})
+      |> Ash.Changeset.for_create(:bulk_upsert, %{display_name: name})
       |> Ash.create!()
     end
 
