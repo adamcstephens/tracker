@@ -25,16 +25,6 @@ defmodule TrackerWeb.ModuleLive.Show do
       </:subtitle>
     </.header>
 
-    <.list>
-      <:item title="Declarations">
-        <ul style="list-style: none; padding: 0; margin: 0;">
-          <li :for={md <- @module.module_declarations}>
-            <code>{md.path}</code>
-          </li>
-        </ul>
-      </:item>
-    </.list>
-
     <section :if={@submodules != []}>
       <h2>Submodules ({length(@submodules)})</h2>
       <ul>
@@ -117,7 +107,31 @@ defmodule TrackerWeb.ModuleLive.Show do
       </.button>
     </nav>
 
+    <section>
+      <h2>Declarations ({length(@module.module_declarations)})</h2>
+      <ul>
+        <li :for={md <- @module.module_declarations}>
+          <.declaration_link path={md.path} channel_revision={@channel_revision} />
+        </li>
+      </ul>
+    </section>
+
     <.back navigate={back_path(@channel, @rev)}>Back to modules</.back>
+    """
+  end
+
+  defp declaration_link(%{channel_revision: %{revision: revision}} = assigns) do
+    assigns =
+      assign(assigns, :url, "https://github.com/NixOS/nixpkgs/blob/#{revision}/#{assigns.path}")
+
+    ~H"""
+    <a href={@url} target="_blank" rel="noopener noreferrer"><code>{@path}</code></a>
+    """
+  end
+
+  defp declaration_link(assigns) do
+    ~H"""
+    <code>{@path}</code>
     """
   end
 
