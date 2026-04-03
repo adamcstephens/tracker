@@ -3,6 +3,34 @@ defmodule TrackerWeb.OptionLive.IndexTest do
 
   import Phoenix.LiveViewTest
 
+  alias Tracker.Nixpkgs.OptionsWorker
+
+  @sample_options %{
+    "services.nginx.enable" => %{
+      "declarations" => ["nixos/modules/services/web-servers/nginx/default.nix"],
+      "description" => "Whether to enable Nginx Web Server.",
+      "loc" => ["services", "nginx", "enable"],
+      "readOnly" => false,
+      "type" => "boolean",
+      "default" => %{"_type" => "literalExpression", "text" => "false"}
+    },
+    "services.openssh.enable" => %{
+      "declarations" => ["nixos/modules/services/networking/ssh/sshd.nix"],
+      "description" => "Whether to enable the OpenSSH secure shell daemon.",
+      "loc" => ["services", "openssh", "enable"],
+      "readOnly" => false,
+      "type" => "boolean",
+      "default" => %{"_type" => "literalExpression", "text" => "false"}
+    },
+    "programs.vim.enable" => %{
+      "declarations" => ["nixos/modules/programs/vim.nix"],
+      "description" => "Whether to enable vim.",
+      "loc" => ["programs", "vim", "enable"],
+      "readOnly" => false,
+      "type" => "boolean"
+    }
+  }
+
   setup do
     mod =
       Tracker.Nixpkgs.Module
@@ -39,5 +67,72 @@ defmodule TrackerWeb.OptionLive.IndexTest do
 
     assert html =~ "services.opttest.enable"
     refute html =~ "services.opttest.port"
+  end
+
+  describe "channel-scoped view" do
+    setup do
+      cr =
+        Tracker.Nixpkgs.ChannelRevision.create!(%{
+          channel: "nixos-unstable",
+          revision: "abc123def456789",
+          released_at: ~U[2026-03-01 10:00:00Z]
+        })
+
+      Tracker.Nixpkgs.ChannelRevision.record_result!(cr, %{result: :success})
+      cr = Tracker.Nixpkgs.ChannelRevision.record_options_result!(cr, %{options_result: :success})
+
+      OptionsWorker.write_to_database(@sample_options, cr)
+
+      %{channel_revision: cr}
+    end
+
+    test "shows channel dropdown", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/options")
+
+      assert html =~ "nixos-unstable"
+      assert html =~ ~s(select)
+    end
+
+    test "scoping to channel shows option revisions with details", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/options?channel=nixos-unstable")
+
+      assert html =~ "services.nginx.enable"
+      assert html =~ "Whether to enable Nginx Web Server."
+      assert html =~ "boolean"
+      assert html =~ "services.openssh.enable"
+      assert html =~ "programs.vim.enable"
+    end
+
+    test "scoping to channel does not show unscoped options", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/options?channel=nixos-unstable")
+
+      # These options exist in the flat list but have no revisions on this channel
+      refute html =~ "services.opttest.enable"
+      refute html =~ "services.opttest.port"
+    end
+
+    test "search works within channel scope", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/options?channel=nixos-unstable&search=nginx")
+
+      assert html =~ "services.nginx.enable"
+      refute html =~ "services.openssh.enable"
+      refute html =~ "programs.vim.enable"
+    end
+
+    test "scoping to specific revision by hash", %{conn: conn, channel_revision: cr} do
+      short_rev = String.slice(cr.revision, 0, 7)
+      {:ok, _view, html} = live(conn, ~p"/options?channel=nixos-unstable&rev=#{short_rev}")
+
+      assert html =~ "services.nginx.enable"
+      assert html =~ "Whether to enable Nginx Web Server."
+    end
+
+    test "revision filter only shown when channel is selected", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/options")
+      refute html =~ ~s(name="rev")
+
+      {:ok, _view, html} = live(conn, ~p"/options?channel=nixos-unstable")
+      assert html =~ ~s(name="rev")
+    end
   end
 end

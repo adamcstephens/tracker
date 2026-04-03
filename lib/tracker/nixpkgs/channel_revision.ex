@@ -17,6 +17,7 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
     define :distinct_channels
     define :find_by_hash, args: [:hash]
     define :find_by_channel_hash, args: [:channel, :hash]
+    define :latest_by_channel, args: [:channel]
     define :without_options, args: [:channel]
   end
 
@@ -90,6 +91,15 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
                  result == :success and
                  not exists(option_revisions, true)
              )
+    end
+
+    read :latest_by_channel do
+      get? true
+
+      argument :channel, :string, allow_nil?: false
+
+      prepare build(sort: [{:released_at, :desc}], limit: 1)
+      filter expr(channel == ^arg(:channel) and options_result == :success)
     end
 
     read :find_by_channel_hash do
