@@ -74,8 +74,6 @@ defmodule TrackerWeb.TeamLive.Show do
         &rarr;
       </.button>
     </nav>
-
-    <.back navigate={~p"/teams"}>Back to teams</.back>
     """
   end
 

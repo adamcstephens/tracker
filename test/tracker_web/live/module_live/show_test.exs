@@ -143,11 +143,5 @@ defmodule TrackerWeb.ModuleLive.ShowTest do
       assert html =~ "The port for modshow."
       refute html =~ "services.other.enable"
     end
-
-    test "back link carries channel context to options", %{conn: conn, module: mod} do
-      {:ok, _view, html} = live(conn, "/modules/#{mod.display_name}?channel=nixos-unstable")
-
-      assert html =~ "/options?channel=nixos-unstable"
-    end
   end
 end

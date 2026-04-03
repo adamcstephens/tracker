@@ -458,26 +458,6 @@ defmodule TrackerWeb.CoreComponents do
     """
   end
 
-  @doc """
-  Renders a back navigation link.
-
-  ## Examples
-
-      <.back navigate={~p"/posts"}>Back to posts</.back>
-  """
-  attr :navigate, :any, required: true
-  slot :inner_block, required: true
-
-  def back(assigns) do
-    ~H"""
-    <p>
-      <.link navigate={@navigate}>
-        &larr; {render_slot(@inner_block)}
-      </.link>
-    </p>
-    """
-  end
-
   ## JS Commands
 
   def show(js \\ %JS{}, selector) do

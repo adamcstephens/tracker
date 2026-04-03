@@ -102,8 +102,6 @@ defmodule TrackerWeb.ChannelLive.Show do
         &rarr;
       </.button>
     </nav>
-
-    <.back navigate={~p"/channels"}>Back to channels</.back>
     """
   end
 
