@@ -26,7 +26,7 @@ config :tracker, TrackerWeb.Endpoint,
     esbuild: {Esbuild, :install_and_run, [:tracker, ~w(--sourcemap=inline --watch)]}
   ]
 
-config :ash_authentication, debug_authentication_failures?: true
+config :ash_authentication, debug_authentication_failures?: false
 
 # ## SSL Support
 #
