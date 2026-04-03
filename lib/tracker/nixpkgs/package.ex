@@ -112,7 +112,7 @@ defmodule Tracker.Nixpkgs.Package do
 
       prepare build(sort: :attribute)
 
-      filter expr(exists(options, module_id == ^arg(:module_id)))
+      filter expr(exists(option_packages, module_id == ^arg(:module_id)))
     end
 
     read :by_change do
@@ -219,6 +219,8 @@ defmodule Tracker.Nixpkgs.Package do
       source_attribute_on_join_resource :package_id
       destination_attribute_on_join_resource :team_id
     end
+
+    has_many :option_packages, Tracker.Nixpkgs.OptionPackage
 
     many_to_many :options, Tracker.Nixpkgs.Option do
       through Tracker.Nixpkgs.OptionPackage

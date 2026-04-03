@@ -155,7 +155,14 @@ defmodule Tracker.Nixpkgs.OptionsWorker do
     |> Tracker.Nixpkgs.OptionRevision.bulk_insert_all()
 
     # Step 5: Link options to packages
-    link_options_to_packages(options_map, option_id_map)
+    option_module_map =
+      Map.new(options_map, fn {name, _} ->
+        display_name = Map.get(option_to_display_name, name)
+        module_id = if display_name, do: Map.get(module_id_map, display_name)
+        {name, module_id}
+      end)
+
+    link_options_to_packages(options_map, option_id_map, option_module_map)
 
     # Step 6: Detect option events if there's a previous revision
     if channel_revision.previous_channel_revision_id do
@@ -292,7 +299,7 @@ defmodule Tracker.Nixpkgs.OptionsWorker do
     Tracker.Nixpkgs.OptionEvent.bulk_create_all(events)
   end
 
-  defp link_options_to_packages(options_map, option_id_map) do
+  defp link_options_to_packages(options_map, option_id_map, option_module_map) do
     alias Tracker.Nixpkgs.OptionPackageLinker
 
     links = OptionPackageLinker.extract_links(options_map)
@@ -315,7 +322,13 @@ defmodule Tracker.Nixpkgs.OptionsWorker do
     |> Enum.flat_map(fn {option_name, attr_path} ->
       with {:ok, option_id} <- Map.fetch(option_id_map, option_name),
            {:ok, package_id} <- Map.fetch(package_id_map, attr_path) do
-        [%{option_id: option_id, package_id: package_id}]
+        [
+          %{
+            option_id: option_id,
+            package_id: package_id,
+            module_id: Map.get(option_module_map, option_name)
+          }
+        ]
       else
         _ -> []
       end

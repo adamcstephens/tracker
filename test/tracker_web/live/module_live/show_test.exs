@@ -26,7 +26,11 @@ defmodule TrackerWeb.ModuleLive.ShowTest do
       })
       |> Ash.create!()
 
-    Tracker.Nixpkgs.OptionPackage.load!(%{option_id: option.id, package_id: package.id})
+    Tracker.Nixpkgs.OptionPackage.load!(%{
+      option_id: option.id,
+      package_id: package.id,
+      module_id: mod.id
+    })
 
     %{module: mod, package: package, option: option}
   end

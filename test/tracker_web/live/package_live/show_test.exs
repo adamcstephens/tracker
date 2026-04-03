@@ -258,7 +258,11 @@ defmodule TrackerWeb.PackageLive.ShowTest do
         })
         |> Ash.create!()
 
-      Tracker.Nixpkgs.OptionPackage.load!(%{option_id: option.id, package_id: package.id})
+      Tracker.Nixpkgs.OptionPackage.load!(%{
+        option_id: option.id,
+        package_id: package.id,
+        module_id: mod.id
+      })
 
       Tracker.Nixpkgs.OptionRevision
       |> Ash.Changeset.for_create(:load, %{
