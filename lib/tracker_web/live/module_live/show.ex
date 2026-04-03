@@ -57,37 +57,39 @@ defmodule TrackerWeb.ModuleLive.Show do
 
     <h2>Options ({@option_count})</h2>
 
-    <div :for={{id, rev} <- @streams.options} id={id}>
-      <article id={"opt-#{option_name(rev)}"} style="margin-bottom: 1.5rem;">
-        <header>
-          <strong>{option_name(rev)}</strong>
-          <span :if={rev.type} style="margin-left: 0.5rem;">
-            <kbd>{rev.type}</kbd>
-          </span>
-          <kbd :if={rev.read_only} style="margin-left: 0.25rem;">
-            read-only
-          </kbd>
-        </header>
-
-        <p :if={rev.description}>{rev.description}</p>
-
-        <dl>
-          <dt :if={rev.default}>Default</dt>
-          <dd :if={rev.default}><.code_block code={rev.default} /></dd>
-
-          <dt :if={rev.example}>Example</dt>
-          <dd :if={rev.example}><.code_block code={rev.example} /></dd>
-        </dl>
-
-        <div :if={option_packages(rev) != []}>
-          <small>
-            Packages:
-            <span :for={pkg <- option_packages(rev)}>
-              <.link navigate={~p"/packages/#{pkg.attribute}"}>{pkg.attribute}</.link>
+    <div id="options-list">
+      <div :for={{id, rev} <- @streams.options} id={id}>
+        <article id={"opt-#{option_name(rev)}"} style="margin-bottom: 1.5rem;">
+          <header>
+            <strong>{option_name(rev)}</strong>
+            <span :if={rev.type} style="margin-left: 0.5rem;">
+              <kbd>{rev.type}</kbd>
             </span>
-          </small>
-        </div>
-      </article>
+            <kbd :if={rev.read_only} style="margin-left: 0.25rem;">
+              read-only
+            </kbd>
+          </header>
+
+          <p :if={rev.description}>{rev.description}</p>
+
+          <dl>
+            <dt :if={rev.default}>Default</dt>
+            <dd :if={rev.default}><.code_block code={rev.default} /></dd>
+
+            <dt :if={rev.example}>Example</dt>
+            <dd :if={rev.example}><.code_block code={rev.example} /></dd>
+          </dl>
+
+          <div :if={option_packages(rev) != []}>
+            <small>
+              Packages:
+              <span :for={pkg <- option_packages(rev)}>
+                <.link navigate={~p"/packages/#{pkg.attribute}"}>{pkg.attribute}</.link>
+              </span>
+            </small>
+          </div>
+        </article>
+      </div>
     </div>
 
     <nav
