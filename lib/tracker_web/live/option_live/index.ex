@@ -34,28 +34,12 @@ defmodule TrackerWeb.OptionLive.Index do
       </fieldset>
     </form>
 
-    <.table
-      id="options"
-      rows={@streams.options}
-    >
+    <.table id="options" rows={@streams.options}>
       <:col :let={{_id, row}} label="Option">
-        {option_name(row)}
+        <.option_link option={option_record(row)} channel={@channel} rev={@rev} />
       </:col>
-      <:col :let={{_id, row}} :if={!@scoped?} label="Module">
-        <.link :if={row.module} navigate={~p"/modules/#{row.module.display_name}"}>
-          {row.module.display_name}
-        </.link>
-      </:col>
-      <:col :let={{_id, row}} :if={@scoped?} label="Type">
-        {row.type}
-      </:col>
-      <:col :let={{_id, row}} :if={@scoped?} label="Description">
-        <span style="display: block; max-width: 40ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-          {row.description}
-        </span>
-      </:col>
-      <:col :let={{_id, row}} :if={@scoped?} label="Default">
-        {row.default}
+      <:col :let={{_id, row}} label="Module">
+        <.module_link module={option_module(row)} channel={@channel} rev={@rev} />
       </:col>
     </.table>
 
@@ -83,9 +67,54 @@ defmodule TrackerWeb.OptionLive.Index do
     """
   end
 
-  defp option_name(%Tracker.Nixpkgs.OptionRevision{option: %{name: name}}), do: name
-  defp option_name(%Tracker.Nixpkgs.Option{name: name}), do: name
-  defp option_name(%{name: name}), do: name
+  attr :option, :any, required: true
+  attr :channel, :string, required: true
+  attr :rev, :string, required: true
+
+  defp option_link(%{option: %{module: nil}} = assigns), do: ~H"<span>{@option.name}</span>"
+
+  defp option_link(assigns) do
+    ~H"""
+    <.link navigate={module_path(@option.module.display_name, @channel, @rev, @option.name)}>
+      {@option.name}
+    </.link>
+    """
+  end
+
+  attr :module, :any, required: true
+  attr :channel, :string, required: true
+  attr :rev, :string, required: true
+
+  defp module_link(%{module: nil} = assigns), do: ~H""
+
+  defp module_link(assigns) do
+    ~H"""
+    <.link navigate={module_path(@module.display_name, @channel, @rev)}>
+      {@module.display_name}
+    </.link>
+    """
+  end
+
+  defp option_record(%Tracker.Nixpkgs.OptionRevision{option: option}), do: option
+  defp option_record(%Tracker.Nixpkgs.Option{} = option), do: option
+
+  defp option_module(%Tracker.Nixpkgs.OptionRevision{option: %{module: mod}}), do: mod
+  defp option_module(%Tracker.Nixpkgs.Option{module: mod}), do: mod
+
+  defp module_path(name, channel, rev, anchor \\ nil) do
+    params =
+      %{}
+      |> then(fn p -> if channel != "", do: Map.put(p, :channel, channel), else: p end)
+      |> then(fn p -> if rev != "", do: Map.put(p, :rev, rev), else: p end)
+
+    path =
+      case URI.encode_query(params) do
+        "" -> "/modules/#{name}"
+        qs -> "/modules/#{name}?#{qs}"
+      end
+
+    if anchor, do: "#{path}#opt-#{anchor}", else: path
+  end
 
   @impl true
   def mount(_params, _session, socket) do
@@ -188,11 +217,8 @@ defmodule TrackerWeb.OptionLive.Index do
   end
 
   defp load_data(socket) do
-    channel = socket.assigns.channel
-    rev = socket.assigns.rev
-
-    if channel != "" do
-      load_scoped(socket, channel, rev)
+    if socket.assigns.channel != "" do
+      load_scoped(socket)
     else
       load_options(socket)
     end
@@ -209,15 +235,15 @@ defmodule TrackerWeb.OptionLive.Index do
 
     socket
     |> stream(:options, page.results, reset: true)
-    |> assign(:scoped?, false)
     |> assign(:has_prev_page?, socket.assigns.offset > 0)
     |> assign(:has_next_page?, page.more?)
     |> assign(:total_pages, total_pages)
     |> assign(:current_page, current_page)
   end
 
-  defp load_scoped(socket, channel, rev) do
-    channel_revision = resolve_channel_revision(channel, rev)
+  defp load_scoped(socket) do
+    channel_revision =
+      resolve_channel_revision(socket.assigns.channel, socket.assigns.rev)
 
     if channel_revision do
       page =
@@ -232,7 +258,6 @@ defmodule TrackerWeb.OptionLive.Index do
 
       socket
       |> stream(:options, page.results, reset: true)
-      |> assign(:scoped?, true)
       |> assign(:has_prev_page?, socket.assigns.offset > 0)
       |> assign(:has_next_page?, page.more?)
       |> assign(:total_pages, total_pages)
@@ -240,7 +265,6 @@ defmodule TrackerWeb.OptionLive.Index do
     else
       socket
       |> stream(:options, [], reset: true)
-      |> assign(:scoped?, true)
       |> assign(:has_prev_page?, false)
       |> assign(:has_next_page?, false)
       |> assign(:total_pages, 0)

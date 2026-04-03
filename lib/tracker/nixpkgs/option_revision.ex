@@ -11,6 +11,7 @@ defmodule Tracker.Nixpkgs.OptionRevision do
     define :load
     define :latest_by_option_ids, args: [:option_ids]
     define :list_by_channel_revision, args: [:channel_revision_id, {:optional, :search}]
+    define :list_by_channel_revision_and_module, args: [:channel_revision_id, :module_id]
   end
 
   actions do
@@ -26,7 +27,7 @@ defmodule Tracker.Nixpkgs.OptionRevision do
         default_limit 15
       end
 
-      prepare build(sort: [option_name: :asc], load: [:option])
+      prepare build(sort: [option_name: :asc], load: [option: [:module]])
 
       filter expr(channel_revision_id == ^arg(:channel_revision_id))
 
@@ -36,6 +37,24 @@ defmodule Tracker.Nixpkgs.OptionRevision do
                else
                  true
                end
+             )
+    end
+
+    read :list_by_channel_revision_and_module do
+      argument :channel_revision_id, :integer, allow_nil?: false
+      argument :module_id, :integer, allow_nil?: false
+
+      pagination do
+        offset? true
+        countable true
+        default_limit 15
+      end
+
+      prepare build(sort: [option_name: :asc], load: [option: [:packages]])
+
+      filter expr(
+               channel_revision_id == ^arg(:channel_revision_id) and
+                 option.module_id == ^arg(:module_id)
              )
     end
 
