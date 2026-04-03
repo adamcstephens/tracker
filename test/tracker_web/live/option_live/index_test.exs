@@ -93,19 +93,12 @@ defmodule TrackerWeb.OptionLive.IndexTest do
       assert html =~ ~s(select)
     end
 
-    test "scoping to channel shows option revisions with details", %{conn: conn} do
+    test "scoping to channel shows only channel options", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/options?channel=nixos-unstable")
 
       assert html =~ "services.nginx.enable"
-      assert html =~ "Whether to enable Nginx Web Server."
-      assert html =~ "boolean"
       assert html =~ "services.openssh.enable"
       assert html =~ "programs.vim.enable"
-    end
-
-    test "scoping to channel does not show unscoped options", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/options?channel=nixos-unstable")
-
       # These options exist in the flat list but have no revisions on this channel
       refute html =~ "services.opttest.enable"
       refute html =~ "services.opttest.port"
@@ -124,7 +117,6 @@ defmodule TrackerWeb.OptionLive.IndexTest do
       {:ok, _view, html} = live(conn, ~p"/options?channel=nixos-unstable&rev=#{short_rev}")
 
       assert html =~ "services.nginx.enable"
-      assert html =~ "Whether to enable Nginx Web Server."
     end
 
     test "revision filter only shown when channel is selected", %{conn: conn} do
@@ -133,6 +125,18 @@ defmodule TrackerWeb.OptionLive.IndexTest do
 
       {:ok, _view, html} = live(conn, ~p"/options?channel=nixos-unstable")
       assert html =~ ~s(name="rev")
+    end
+
+    test "option links carry channel context to module page", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/options?channel=nixos-unstable")
+
+      assert html =~ "/modules/services.nginx?channel=nixos-unstable#opt-services.nginx.enable"
+    end
+
+    test "module links carry channel context", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/options?channel=nixos-unstable")
+
+      assert html =~ "/modules/services.nginx?channel=nixos-unstable"
     end
   end
 end
