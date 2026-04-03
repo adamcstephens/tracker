@@ -31,11 +31,11 @@ defmodule Tracker.Nixpkgs.Maintainer do
         default_limit 15
       end
 
-      prepare build(sort: :name)
+      prepare build(sort: :github)
 
       filter expr(
                if not is_nil(^arg(:search)) and ^arg(:search) != "" do
-                 contains(name, ^arg(:search)) or contains(github, ^arg(:search))
+                 contains(github, ^arg(:search))
                else
                  true
                end
@@ -43,10 +43,10 @@ defmodule Tracker.Nixpkgs.Maintainer do
     end
 
     create :bulk_upsert do
-      accept [:github_id, :name, :email, :github, :matrix]
+      accept [:github_id, :github]
       upsert? true
       upsert_identity :unique_github_id
-      upsert_fields [:name, :email, :github, :matrix, :updated_at]
+      upsert_fields [:github, :updated_at]
     end
   end
 
@@ -58,10 +58,7 @@ defmodule Tracker.Nixpkgs.Maintainer do
       public? true
     end
 
-    attribute :name, :string, public?: true
-    attribute :email, :string, public?: true
     attribute :github, :string, public?: true
-    attribute :matrix, :string, public?: true
 
     timestamps()
   end
@@ -80,8 +77,8 @@ defmodule Tracker.Nixpkgs.Maintainer do
     end
   end
 
-  # 8 columns: id, github_id, name, email, github, matrix, inserted_at, updated_at
-  @ash_cols 8
+  # 5 columns: id, github_id, github, inserted_at, updated_at
+  @ash_cols 5
   @max_batch div(65_535, @ash_cols)
 
   def bulk_upsert_all(records) do

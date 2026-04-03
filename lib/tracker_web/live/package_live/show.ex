@@ -299,9 +299,9 @@ defmodule TrackerWeb.PackageLive.Show do
   defp maintainer_link(assigns) do
     ~H"""
     <.link :if={@maintainer.github} navigate={~p"/maintainers/#{@maintainer.github}"}>
-      {@maintainer.name || @maintainer.github}
+      {@maintainer.github}
     </.link>
-    <span :if={!@maintainer.github}>{@maintainer.name || "Unknown"}</span>
+    <span :if={!@maintainer.github}>Unknown</span>
     """
   end
 

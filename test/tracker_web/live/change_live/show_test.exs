@@ -8,7 +8,6 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
       Tracker.Nixpkgs.Maintainer
       |> Ash.Changeset.for_create(:bulk_upsert, %{
         github_id: 4001,
-        name: "Show Author",
         github: "showauthor"
       })
       |> Ash.create!()
@@ -17,7 +16,6 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
       Tracker.Nixpkgs.Maintainer
       |> Ash.Changeset.for_create(:bulk_upsert, %{
         github_id: 4002,
-        name: "Show Merger",
         github: "showmerger"
       })
       |> Ash.create!()
@@ -74,14 +72,14 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
   test "links author to maintainer page", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/changes/6001")
 
-    assert html =~ "Show Author"
+    assert html =~ "showauthor"
     assert html =~ "/maintainers/showauthor"
   end
 
   test "links merger to maintainer page", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/changes/6001")
 
-    assert html =~ "Show Merger"
+    assert html =~ "showmerger"
     assert html =~ "/maintainers/showmerger"
   end
 

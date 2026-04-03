@@ -25,7 +25,7 @@ defmodule TrackerWeb.TeamLive.Show do
       <h2>Members</h2>
       <ul>
         <li :for={m <- @team.members}>
-          <.link navigate={~p"/maintainers/#{m.github}"}>{m.name || m.github}</.link>
+          <.link navigate={~p"/maintainers/#{m.github}"}>{m.github}</.link>
         </li>
       </ul>
     </div>

@@ -22,10 +22,9 @@ defmodule TrackerWeb.MaintainerLive.Index do
       id="maintainers"
       rows={@streams.maintainers}
     >
-      <:col :let={{_id, m}} label="Name">
-        <.link navigate={~p"/maintainers/#{m.github}"}>{m.name || m.github}</.link>
+      <:col :let={{_id, m}} label="GitHub">
+        <.link navigate={~p"/maintainers/#{m.github}"}>{m.github}</.link>
       </:col>
-      <:col :let={{_id, m}} label="GitHub">{m.github}</:col>
     </.table>
 
     <nav style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-top: 1rem;">
