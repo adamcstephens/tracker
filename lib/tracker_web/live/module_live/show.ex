@@ -57,35 +57,32 @@ defmodule TrackerWeb.ModuleLive.Show do
 
     <h2>Options ({@option_count})</h2>
 
-    <div :for={{id, item} <- @streams.options} id={id}>
-      <% rev = resolve_rev(item, @revisions) %>
-      <article id={"opt-#{option_name(item)}"} style="margin-bottom: 1.5rem;">
+    <div :for={{id, rev} <- @streams.options} id={id}>
+      <article id={"opt-#{option_name(rev)}"} style="margin-bottom: 1.5rem;">
         <header>
-          <strong>{option_name(item)}</strong>
-          <span :if={rev} style="margin-left: 0.5rem;">
+          <strong>{option_name(rev)}</strong>
+          <span :if={rev.type} style="margin-left: 0.5rem;">
             <kbd>{rev.type}</kbd>
           </span>
-          <kbd :if={rev && rev.read_only} style="margin-left: 0.25rem;">
+          <kbd :if={rev.read_only} style="margin-left: 0.25rem;">
             read-only
           </kbd>
         </header>
 
-        <div :if={rev}>
-          <p :if={rev.description}>{rev.description}</p>
+        <p :if={rev.description}>{rev.description}</p>
 
-          <dl>
-            <dt :if={rev.default}>Default</dt>
-            <dd :if={rev.default}><.code_block code={rev.default} /></dd>
+        <dl>
+          <dt :if={rev.default}>Default</dt>
+          <dd :if={rev.default}><.code_block code={rev.default} /></dd>
 
-            <dt :if={rev.example}>Example</dt>
-            <dd :if={rev.example}><.code_block code={rev.example} /></dd>
-          </dl>
-        </div>
+          <dt :if={rev.example}>Example</dt>
+          <dd :if={rev.example}><.code_block code={rev.example} /></dd>
+        </dl>
 
-        <div :if={option_packages(item) != []}>
+        <div :if={option_packages(rev) != []}>
           <small>
             Packages:
-            <span :for={pkg <- option_packages(item)}>
+            <span :for={pkg <- option_packages(rev)}>
               <.link navigate={~p"/packages/#{pkg.attribute}"}>{pkg.attribute}</.link>
             </span>
           </small>
@@ -134,21 +131,10 @@ defmodule TrackerWeb.ModuleLive.Show do
     """
   end
 
-  # When scoped, each stream item is an OptionRevision with nested option
-  # When unscoped, each stream item is an Option with revisions looked up separately
-
   defp option_name(%Tracker.Nixpkgs.OptionRevision{option: %{name: name}}), do: name
-  defp option_name(%Tracker.Nixpkgs.Option{name: name}), do: name
-
-  defp resolve_rev(%Tracker.Nixpkgs.OptionRevision{} = rev, _revisions), do: rev
-  defp resolve_rev(%Tracker.Nixpkgs.Option{id: id}, revisions), do: Map.get(revisions, id)
 
   defp option_packages(%Tracker.Nixpkgs.OptionRevision{option: %{packages: packages}}),
     do: packages
-
-  defp option_packages(%Tracker.Nixpkgs.Option{packages: packages}), do: packages
-
-  defp back_path("", _rev), do: ~p"/modules"
 
   defp back_path(channel, rev) do
     params =
@@ -166,7 +152,7 @@ defmodule TrackerWeb.ModuleLive.Show do
   @impl true
   def handle_params(%{"name" => name} = params, _url, socket) do
     mod = Tracker.Nixpkgs.Module.get_by_name!(name)
-    channel = Map.get(params, "channel", "")
+    channel = Map.get(params, "channel", "nixos-unstable")
     rev = Map.get(params, "rev", "")
     page_num = params |> Map.get("page", "1") |> String.to_integer() |> max(1)
     offset = (page_num - 1) * 15
@@ -175,16 +161,13 @@ defmodule TrackerWeb.ModuleLive.Show do
     submodules = Tracker.Nixpkgs.Module.children!(mod.display_name)
     parent_module = find_parent_module(mod.display_name)
 
-    channel_revision =
-      if channel != "" do
-        resolve_channel_revision(channel, rev)
-      end
+    channel_revision = resolve_channel_revision(channel, rev)
 
-    {options_stream, option_count, revisions, has_more?} =
+    {options_stream, option_count, has_more?} =
       if channel_revision do
         load_scoped_options(channel_revision.id, mod.id, offset)
       else
-        load_unscoped_options(mod.id, offset)
+        {[], 0, false}
       end
 
     total_pages = ceil(option_count / 15)
@@ -200,7 +183,6 @@ defmodule TrackerWeb.ModuleLive.Show do
      |> assign(:rev, rev)
      |> assign(:channel_revision, channel_revision)
      |> assign(:option_count, option_count)
-     |> assign(:revisions, revisions)
      |> stream(:options, options_stream, reset: true)
      |> assign(:has_prev_page?, offset > 0)
      |> assign(:has_next_page?, has_more?)
@@ -216,23 +198,7 @@ defmodule TrackerWeb.ModuleLive.Show do
         page: [offset: offset, count: true]
       )
 
-    {page.results, page.count, %{}, page.more?}
-  end
-
-  defp load_unscoped_options(module_id, offset) do
-    options_page =
-      Tracker.Nixpkgs.Option.list_by_module!(module_id,
-        page: [offset: offset, count: true]
-      )
-
-    option_ids = Enum.map(options_page.results, & &1.id)
-
-    revisions =
-      option_ids
-      |> Tracker.Nixpkgs.OptionRevision.latest_by_option_ids!()
-      |> Map.new(&{&1.option_id, &1})
-
-    {options_page.results, options_page.count, revisions, options_page.more?}
+    {page.results, page.count, page.more?}
   end
 
   @impl true
