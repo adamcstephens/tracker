@@ -148,11 +148,4 @@ defmodule TrackerWeb.ChannelLive.DiffTest do
     assert html =~
              "https://github.com/NixOS/nixpkgs/compare/#{cr1.revision}...#{cr2.revision}"
   end
-
-  test "links back to channel page", %{conn: conn, cr1: cr1, cr2: cr2} do
-    {:ok, _view, html} =
-      live(conn, ~p"/channels/nixos-unstable/diff/#{cr1.revision}/#{cr2.revision}")
-
-    assert html =~ ~s|href="/channels/nixos-unstable"|
-  end
 end

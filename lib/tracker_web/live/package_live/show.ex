@@ -242,8 +242,6 @@ defmodule TrackerWeb.PackageLive.Show do
         &rarr;
       </.button>
     </nav>
-
-    <.back navigate={~p"/packages"}>Back to packages</.back>
     """
   end
 

@@ -107,8 +107,6 @@ defmodule TrackerWeb.MaintainerLive.Show do
         &rarr;
       </.button>
     </nav>
-
-    <.back navigate={~p"/maintainers"}>Back to maintainers</.back>
     """
   end
 

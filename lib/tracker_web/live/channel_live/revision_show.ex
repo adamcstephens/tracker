@@ -83,8 +83,6 @@ defmodule TrackerWeb.ChannelLive.RevisionShow do
     <p :if={!@previous_revision}>
       This is the first known revision for this channel.
     </p>
-
-    <.back navigate={~p"/channels/#{@channel}"}>Back to channel</.back>
     """
   end
 

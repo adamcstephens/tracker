@@ -74,8 +74,6 @@ defmodule TrackerWeb.ChannelLive.Diff do
     <p :if={@events == [] and @version_changes == []}>
       No changes between these revisions.
     </p>
-
-    <.back navigate={~p"/channels/#{@channel}"}>Back to channel</.back>
     """
   end
 

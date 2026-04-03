@@ -109,8 +109,6 @@ defmodule TrackerWeb.ChangeLive.Show do
         </.button>
       </nav>
     </section>
-
-    <.back navigate={~p"/changes"}>Back to changes</.back>
     """
   end
 

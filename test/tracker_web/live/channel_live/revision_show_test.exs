@@ -112,13 +112,6 @@ defmodule TrackerWeb.ChannelLive.RevisionShowTest do
     assert html =~ "https://github.com/NixOS/nixpkgs/commit/#{cr2.revision}"
   end
 
-  test "links back to channel page", %{conn: conn, cr2: cr2} do
-    {:ok, _view, html} =
-      live(conn, ~p"/channels/nixos-unstable/revisions/#{short(cr2)}")
-
-    assert html =~ ~s|href="/channels/nixos-unstable"|
-  end
-
   test "returns error for unknown revision", %{conn: conn} do
     assert_raise Ash.Error.Invalid, fn ->
       live(conn, ~p"/channels/nixos-unstable/revisions/fffffff")

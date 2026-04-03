@@ -115,8 +115,6 @@ defmodule TrackerWeb.ModuleLive.Show do
         </li>
       </ul>
     </section>
-
-    <.back navigate={back_path(@channel, @rev)}>Back to modules</.back>
     """
   end
 
@@ -151,14 +149,6 @@ defmodule TrackerWeb.ModuleLive.Show do
 
   defp option_packages(%Tracker.Nixpkgs.OptionRevision{option: %{packages: packages}}),
     do: packages
-
-  defp back_path(channel, rev) do
-    params =
-      %{channel: channel}
-      |> then(fn p -> if rev != "", do: Map.put(p, :rev, rev), else: p end)
-
-    "/options?#{URI.encode_query(params)}"
-  end
 
   @impl true
   def mount(_params, _session, socket) do
