@@ -67,7 +67,7 @@ defmodule Tracker.Nixpkgs.ChangePollWorkerTest do
     end
   end
 
-  defp pr_struct(overrides \\ []) do
+  defp pr_struct(overrides) do
     defaults = [
       number: 1,
       title: "test PR",
