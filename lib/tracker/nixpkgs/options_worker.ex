@@ -198,7 +198,7 @@ defmodule Tracker.Nixpkgs.OptionsWorker do
   end
 
   # Group options by declaration path and compute display names.
-  # Returns {module_records, option_to_declaration_map}.
+  # Returns {module_records, declaration_records, option_to_display_name}.
   defp derive_modules(options_map) do
     # Group option names by their declaration (first declaration, or synthetic prefix)
     options_by_declaration =
@@ -208,12 +208,20 @@ defmodule Tracker.Nixpkgs.OptionsWorker do
         Map.update(acc, declaration, [name], &[name | &1])
       end)
 
-    # Group declarations by their computed display_name to merge modules
-    by_display_name =
-      Enum.group_by(
-        options_by_declaration,
-        fn {_declaration, option_names} -> display_name_for_options(option_names) end
-      )
+    # Sub-group each declaration's options by first 2 segments so that one
+    # declaration file defining options under unrelated prefixes produces
+    # multiple modules instead of falling back to hd(option_names).
+    declaration_subgroups =
+      Enum.flat_map(options_by_declaration, fn {declaration, option_names} ->
+        option_names
+        |> Enum.group_by(&option_prefix/1)
+        |> Enum.map(fn {_prefix, names} ->
+          {declaration, names, display_name_for_options(names)}
+        end)
+      end)
+
+    # Group by display_name to merge modules across declarations
+    by_display_name = Enum.group_by(declaration_subgroups, fn {_, _, dn} -> dn end)
 
     module_records =
       Enum.map(by_display_name, fn {display_name, _groups} ->
@@ -222,20 +230,29 @@ defmodule Tracker.Nixpkgs.OptionsWorker do
 
     declaration_records =
       Enum.flat_map(by_display_name, fn {display_name, groups} ->
-        Enum.map(groups, fn {declaration, _option_names} ->
-          %{path: declaration, display_name: display_name}
-        end)
+        groups
+        |> Enum.map(fn {declaration, _, _} -> declaration end)
+        |> Enum.uniq()
+        |> Enum.map(&%{path: &1, display_name: display_name})
       end)
 
     option_to_display_name =
       Enum.flat_map(by_display_name, fn {display_name, groups} ->
-        Enum.flat_map(groups, fn {_declaration, option_names} ->
+        Enum.flat_map(groups, fn {_declaration, option_names, _} ->
           Enum.map(option_names, &{&1, display_name})
         end)
       end)
       |> Map.new()
 
     {module_records, declaration_records, option_to_display_name}
+  end
+
+  # Returns the first 2 dot-separated segments of an option name for sub-grouping.
+  defp option_prefix(name) do
+    case String.split(name, ".") do
+      [one] -> one
+      parts -> parts |> Enum.take(2) |> Enum.join(".")
+    end
   end
 
   # Use first declaration path, or derive a synthetic one from the option name prefix
