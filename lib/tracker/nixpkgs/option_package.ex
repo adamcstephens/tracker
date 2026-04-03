@@ -15,10 +15,10 @@ defmodule Tracker.Nixpkgs.OptionPackage do
     defaults [:read]
 
     create :load do
-      accept [:option_id, :package_id]
+      accept [:option_id, :package_id, :module_id]
       upsert? true
       upsert_identity :unique_option_package
-      upsert_fields [:updated_at]
+      upsert_fields [:module_id, :updated_at]
     end
   end
 
@@ -30,10 +30,11 @@ defmodule Tracker.Nixpkgs.OptionPackage do
   relationships do
     belongs_to :option, Tracker.Nixpkgs.Option, attribute_type: :integer, allow_nil?: false
     belongs_to :package, Tracker.Nixpkgs.Package, attribute_type: :integer, allow_nil?: false
+    belongs_to :module, Tracker.Nixpkgs.Module, attribute_type: :integer
   end
 
-  # 5 columns: id, option_id, package_id, inserted_at, updated_at
-  @ash_cols 5
+  # 6 columns: id, option_id, package_id, module_id, inserted_at, updated_at
+  @ash_cols 6
   @max_batch div(65_535, @ash_cols)
 
   def bulk_create_all(records) do
