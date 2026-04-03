@@ -22,7 +22,7 @@ defmodule TrackerWeb.ChangeLive.Show do
       </:item>
       <:item :if={@merger_maintainer} title="Merged by">
         <.link navigate={~p"/maintainers/#{@merger_maintainer.github}"}>
-          {@merger_maintainer.name || @merger_maintainer.github}
+          {@merger_maintainer.github}
         </.link>
       </:item>
       <:item title="Base branch">{@change.base_ref}</:item>
@@ -122,7 +122,7 @@ defmodule TrackerWeb.ChangeLive.Show do
 
     ~H"""
     <.link navigate={~p"/maintainers/#{@maintainer.github}"}>
-      {@maintainer.name || @maintainer.github}
+      {@maintainer.github}
     </.link>
     """
   end

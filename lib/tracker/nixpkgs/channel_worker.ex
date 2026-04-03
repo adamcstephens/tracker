@@ -401,10 +401,8 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
   end
 
   defp extract_maintainer(m) do
-    %{github_id: m["githubId"], name: m["name"]}
-    |> maybe_put(:email, m["email"])
+    %{github_id: m["githubId"]}
     |> maybe_put(:github, m["github"])
-    |> maybe_put(:matrix, m["matrix"])
   end
 
   defp extract_licenses(nil, _attr), do: nil

@@ -5,7 +5,7 @@ defmodule TrackerWeb.MaintainerLive.Show do
   def render(assigns) do
     ~H"""
     <.header>
-      {@maintainer.name || @maintainer.github}
+      {@maintainer.github}
       <:subtitle>Maintainer</:subtitle>
     </.header>
 
@@ -19,8 +19,6 @@ defmodule TrackerWeb.MaintainerLive.Show do
           {@maintainer.github}
         </a>
       </:item>
-      <:item :if={@maintainer.email} title="Email">{@maintainer.email}</:item>
-      <:item :if={@maintainer.matrix} title="Matrix">{@maintainer.matrix}</:item>
     </.list>
 
     <div :if={@maintainer.teams != []} style="margin-top: 1rem;">
@@ -139,7 +137,7 @@ defmodule TrackerWeb.MaintainerLive.Show do
 
     {:noreply,
      socket
-     |> assign(:page_title, maintainer.name || maintainer.github)
+     |> assign(:page_title, maintainer.github)
      |> assign(:maintainer, maintainer)
      |> assign(:recent_changes, recent_changes)
      |> assign(:search, search)

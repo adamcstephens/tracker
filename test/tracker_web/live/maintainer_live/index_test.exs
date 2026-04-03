@@ -4,15 +4,14 @@ defmodule TrackerWeb.MaintainerLive.IndexTest do
   import Phoenix.LiveViewTest
 
   setup do
-    for {github_id, name, github} <- [
-          {1001, "Alice", "alice"},
-          {1002, "Bob", "bob"},
-          {1003, "Charlie", "charlie"}
+    for {github_id, github} <- [
+          {1001, "alice"},
+          {1002, "bob"},
+          {1003, "charlie"}
         ] do
       Tracker.Nixpkgs.Maintainer
       |> Ash.Changeset.for_create(:bulk_upsert, %{
         github_id: github_id,
-        name: name,
         github: github
       })
       |> Ash.create!()
@@ -21,26 +20,17 @@ defmodule TrackerWeb.MaintainerLive.IndexTest do
     :ok
   end
 
-  test "renders maintainer list with names and github handles", %{conn: conn} do
+  test "renders maintainer list with github handles", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/maintainers")
 
-    assert html =~ "Alice"
-    assert html =~ "Bob"
     assert html =~ "alice"
     assert html =~ "bob"
-  end
-
-  test "search filters by name", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/maintainers?search=alice")
-
-    assert html =~ "Alice"
-    refute html =~ "Bob"
   end
 
   test "search filters by github handle", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/maintainers?search=charlie")
 
-    assert html =~ "Charlie"
-    refute html =~ "Alice"
+    assert html =~ "charlie"
+    refute html =~ "alice"
   end
 end

@@ -8,9 +8,7 @@ defmodule TrackerWeb.MaintainerLive.ShowTest do
       Tracker.Nixpkgs.Maintainer
       |> Ash.Changeset.for_create(:bulk_upsert, %{
         github_id: 2001,
-        name: "Test Maintainer",
-        github: "testmaint",
-        email: "test@example.com"
+        github: "testmaint"
       })
       |> Ash.create!()
 
@@ -35,9 +33,7 @@ defmodule TrackerWeb.MaintainerLive.ShowTest do
   test "renders maintainer details", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/maintainers/testmaint")
 
-    assert html =~ "Test Maintainer"
     assert html =~ "testmaint"
-    assert html =~ "test@example.com"
   end
 
   test "shows maintained packages", %{conn: conn} do

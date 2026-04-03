@@ -56,8 +56,8 @@ defmodule Tracker.Nixpkgs.ChannelWorkerTest do
       package = Ash.load!(package, [:maintainers, teams: [:members]])
 
       assert length(package.maintainers) == 2
-      maintainer_names = Enum.map(package.maintainers, & &1.name) |> Enum.sort()
-      assert maintainer_names == ["Alice", "Bob"]
+      maintainer_githubs = Enum.map(package.maintainers, & &1.github) |> Enum.sort()
+      assert maintainer_githubs == ["alice", "bob"]
       assert package.teams == []
     end
 
@@ -126,8 +126,8 @@ defmodule Tracker.Nixpkgs.ChannelWorkerTest do
       assert to_string(team.short_name) == "testlxc"
       assert team.scope == "LXC, Incus"
 
-      member_names = Enum.map(team.members, & &1.name) |> Enum.sort()
-      assert member_names == ["Carol", "Dave"]
+      member_githubs = Enum.map(team.members, & &1.github) |> Enum.sort()
+      assert member_githubs == ["carol", "dave"]
     end
 
     test "handles packages with multiple maintainers across batch boundaries" do

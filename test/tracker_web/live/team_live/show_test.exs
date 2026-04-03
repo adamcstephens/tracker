@@ -16,7 +16,6 @@ defmodule TrackerWeb.TeamLive.ShowTest do
       Tracker.Nixpkgs.Maintainer
       |> Ash.Changeset.for_create(:bulk_upsert, %{
         github_id: 3001,
-        name: "Team Member",
         github: "teammember"
       })
       |> Ash.create!()
@@ -46,7 +45,6 @@ defmodule TrackerWeb.TeamLive.ShowTest do
   test "shows team members", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/teams/teamshow")
 
-    assert html =~ "Team Member"
     assert html =~ "teammember"
   end
 
