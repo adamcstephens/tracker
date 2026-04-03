@@ -37,16 +37,34 @@ defmodule TrackerWeb.ModuleLive.ShowTest do
     assert html =~ "services.modshow"
   end
 
-  test "shows linked packages", %{conn: conn, module: mod} do
+  test "defaults to nixos-unstable channel when no params", %{conn: conn, module: mod} do
+    cr =
+      Tracker.Nixpkgs.ChannelRevision.create!(%{
+        channel: "nixos-unstable",
+        revision: "defaultabc123456",
+        released_at: ~U[2026-03-15 10:00:00Z]
+      })
+
+    Tracker.Nixpkgs.ChannelRevision.record_result!(cr, %{result: :success})
+    Tracker.Nixpkgs.ChannelRevision.record_options_result!(cr, %{options_result: :success})
+
+    OptionsWorker.write_to_database(
+      %{
+        "services.modshow.enable" => %{
+          "declarations" => ["services.modshow"],
+          "description" => "Enable the modshow service.",
+          "loc" => ["services", "modshow", "enable"],
+          "readOnly" => false,
+          "type" => "boolean"
+        }
+      },
+      cr
+    )
+
     {:ok, _view, html} = live(conn, ~p"/modules/#{mod.display_name}")
 
-    assert html =~ "modshow-pkg"
-  end
-
-  test "shows options", %{conn: conn, module: mod} do
-    {:ok, _view, html} = live(conn, ~p"/modules/#{mod.display_name}")
-
-    assert html =~ "services.modshow.enable"
+    assert html =~ "nixos-unstable"
+    assert html =~ "Enable the modshow service."
   end
 
   describe "channel-scoped view" do
