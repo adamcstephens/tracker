@@ -44,6 +44,93 @@ defmodule Tracker.Nixpkgs.PackageTest do
     end
   end
 
+  describe "variant_siblings/2" do
+    test "returns packages in the same variant group, excluding self" do
+      group =
+        Tracker.Nixpkgs.PackageVariantGroup
+        |> Ash.Changeset.for_create(:bulk_upsert, %{
+          position: "pkgs/development/libraries/ffmpeg/generic.nix:1054"
+        })
+        |> Ash.create!()
+
+      pkg1 =
+        Package
+        |> Ash.Changeset.for_create(:bulk_upsert, %{
+          attribute: "ffmpeg_7",
+          package_variant_group_id: group.id
+        })
+        |> Ash.create!()
+
+      _pkg2 =
+        Package
+        |> Ash.Changeset.for_create(:bulk_upsert, %{
+          attribute: "ffmpeg_8",
+          package_variant_group_id: group.id
+        })
+        |> Ash.create!()
+
+      _pkg3 =
+        Package
+        |> Ash.Changeset.for_create(:bulk_upsert, %{
+          attribute: "ffmpeg_4",
+          package_variant_group_id: group.id
+        })
+        |> Ash.create!()
+
+      siblings = Package.variant_siblings!(group.id, pkg1.id)
+
+      assert length(siblings) == 2
+      attrs = Enum.map(siblings, & &1.attribute)
+      assert "ffmpeg_8" in attrs
+      assert "ffmpeg_4" in attrs
+      refute "ffmpeg_7" in attrs
+    end
+
+    test "returns empty list when no variant group" do
+      pkg =
+        Package
+        |> Ash.Changeset.for_create(:create, %{attribute: "solo-pkg"})
+        |> Ash.create!()
+
+      assert Package.variant_siblings!(0, pkg.id) == []
+    end
+
+    test "results are sorted by attribute" do
+      group =
+        Tracker.Nixpkgs.PackageVariantGroup
+        |> Ash.Changeset.for_create(:bulk_upsert, %{
+          position: "pkgs/test/sort.nix:1"
+        })
+        |> Ash.create!()
+
+      pkg_c =
+        Package
+        |> Ash.Changeset.for_create(:bulk_upsert, %{
+          attribute: "zz-variant-c",
+          package_variant_group_id: group.id
+        })
+        |> Ash.create!()
+
+      Package
+      |> Ash.Changeset.for_create(:bulk_upsert, %{
+        attribute: "aa-variant-a",
+        package_variant_group_id: group.id
+      })
+      |> Ash.create!()
+
+      Package
+      |> Ash.Changeset.for_create(:bulk_upsert, %{
+        attribute: "mm-variant-b",
+        package_variant_group_id: group.id
+      })
+      |> Ash.create!()
+
+      siblings = Package.variant_siblings!(group.id, pkg_c.id)
+
+      assert Enum.map(siblings, & &1.attribute) == ["aa-variant-a", "mm-variant-b"]
+    end
+  end
+
   describe "by_module/1" do
     test "returns packages linked to options in the given module" do
       mod =

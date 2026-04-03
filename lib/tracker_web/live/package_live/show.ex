@@ -56,6 +56,15 @@ defmodule TrackerWeb.PackageLive.Show do
       </dd>
     </dl>
 
+    <dl :if={@variant_siblings != []}>
+      <dt><strong>Variants</strong></dt>
+      <dd :for={variant <- @variant_siblings}>
+        <.link navigate={~p"/packages/#{variant.attribute}"}>
+          {variant.attribute}
+        </.link>
+      </dd>
+    </dl>
+
     <section :if={@package.options != []}>
       <h2>NixOS Options</h2>
       <ul>
@@ -345,6 +354,7 @@ defmodule TrackerWeb.PackageLive.Show do
 
     recent_changes = load_recent_changes(package.id)
     family_siblings = load_family_siblings(package)
+    variant_siblings = load_variant_siblings(package)
     option_ids = Enum.map(package.options, & &1.id)
 
     option_revisions =
@@ -382,6 +392,7 @@ defmodule TrackerWeb.PackageLive.Show do
      |> assign(:package, package)
      |> assign(:recent_changes, recent_changes)
      |> assign(:family_siblings, family_siblings)
+     |> assign(:variant_siblings, variant_siblings)
      |> assign(:option_revisions, option_revisions)
      |> assign(:sort_by, sort_by)
      |> assign(:sort_dir, sort_dir)
@@ -571,6 +582,12 @@ defmodule TrackerWeb.PackageLive.Show do
 
   defp load_family_siblings(package) do
     Tracker.Nixpkgs.Package.family_siblings!(package.package_family_id, package.id)
+  end
+
+  defp load_variant_siblings(%{package_variant_group_id: nil}), do: []
+
+  defp load_variant_siblings(package) do
+    Tracker.Nixpkgs.Package.variant_siblings!(package.package_variant_group_id, package.id)
   end
 
   defp load_package_events(package_id) do

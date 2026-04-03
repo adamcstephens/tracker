@@ -15,6 +15,7 @@ defmodule Tracker.Nixpkgs.Package do
     define :by_maintainer, args: [:maintainer_id, {:optional, :search}]
     define :by_team, args: [:team_id, {:optional, :search}]
     define :family_siblings, args: [:package_family_id, :exclude_id]
+    define :variant_siblings, args: [:package_variant_group_id, :exclude_id]
     define :by_module, args: [:module_id]
     define :id_map, action: :id_map
     define :ids_by_attributes, args: [:attributes]
@@ -107,6 +108,23 @@ defmodule Tracker.Nixpkgs.Package do
       filter expr(package_family_id == ^arg(:package_family_id) and id != ^arg(:exclude_id))
     end
 
+    read :variant_siblings do
+      argument :package_variant_group_id, :integer do
+        allow_nil? false
+      end
+
+      argument :exclude_id, :integer do
+        allow_nil? false
+      end
+
+      prepare build(sort: :attribute)
+
+      filter expr(
+               package_variant_group_id == ^arg(:package_variant_group_id) and
+                 id != ^arg(:exclude_id)
+             )
+    end
+
     read :by_module do
       argument :module_id, :integer, allow_nil?: false
 
@@ -159,6 +177,7 @@ defmodule Tracker.Nixpkgs.Package do
         :position,
         :licenses,
         :package_family_id,
+        :package_variant_group_id,
         :package_set,
         :set_version
       ]
@@ -172,6 +191,7 @@ defmodule Tracker.Nixpkgs.Package do
         :position,
         :licenses,
         :package_family_id,
+        :package_variant_group_id,
         :package_set,
         :set_version,
         :updated_at
@@ -199,6 +219,11 @@ defmodule Tracker.Nixpkgs.Package do
 
   relationships do
     belongs_to :package_family, Tracker.Nixpkgs.PackageFamily do
+      attribute_type :integer
+      allow_nil? true
+    end
+
+    belongs_to :package_variant_group, Tracker.Nixpkgs.PackageVariantGroup do
       attribute_type :integer
       allow_nil? true
     end
@@ -241,9 +266,9 @@ defmodule Tracker.Nixpkgs.Package do
     identity :unique_attribute, [:attribute]
   end
 
-  # 10 columns: attribute, description, homepage, position, licenses,
-  # package_family_id, package_set, set_version, inserted_at, updated_at
-  @insert_cols 10
+  # 11 columns: attribute, description, homepage, position, licenses,
+  # package_family_id, package_variant_group_id, package_set, set_version, inserted_at, updated_at
+  @insert_cols 11
   @max_rows div(65_535, @insert_cols)
 
   @doc """
@@ -276,6 +301,7 @@ defmodule Tracker.Nixpkgs.Package do
                :position,
                :licenses,
                :package_family_id,
+               :package_variant_group_id,
                :package_set,
                :set_version,
                :updated_at

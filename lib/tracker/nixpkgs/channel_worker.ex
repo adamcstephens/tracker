@@ -299,6 +299,18 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
 
     family_id_map = Tracker.Nixpkgs.PackageFamily.bulk_upsert_all(families)
 
+    # Step 0.5: Compute and upsert variant groups for top-level packages sharing a position
+    variant_group_id_map =
+      packages
+      |> Enum.filter(fn {attribute, entry} ->
+        parsed = Map.fetch!(parsed_attrs, attribute)
+        is_nil(parsed.package_set) and entry[:position] not in [nil, ""]
+      end)
+      |> Enum.group_by(fn {_attr, entry} -> entry[:position] end)
+      |> Enum.filter(fn {_pos, members} -> length(members) >= 2 end)
+      |> Enum.map(fn {position, _} -> %{position: position} end)
+      |> Tracker.Nixpkgs.PackageVariantGroup.bulk_upsert_all()
+
     # Step 1: Bulk upsert packages
     id_map =
       packages
@@ -310,12 +322,18 @@ defmodule Tracker.Nixpkgs.ChannelWorker do
             do: Map.get(family_id_map, {parsed.family_name, parsed.ecosystem || ""}),
             else: nil
 
+        variant_group_id =
+          if is_nil(parsed.package_set) and entry[:position],
+            do: Map.get(variant_group_id_map, entry[:position]),
+            else: nil
+
         %{attribute: attribute}
         |> maybe_put(:description, entry[:description])
         |> maybe_put(:homepage, entry[:homepage])
         |> maybe_put(:position, entry[:position])
         |> maybe_put(:licenses, entry[:licenses])
         |> maybe_put(:package_family_id, family_id)
+        |> maybe_put(:package_variant_group_id, variant_group_id)
         |> maybe_put(:package_set, parsed.package_set)
         |> maybe_put(:set_version, parsed.set_version)
       end)

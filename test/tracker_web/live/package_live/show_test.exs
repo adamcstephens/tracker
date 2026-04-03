@@ -241,6 +241,43 @@ defmodule TrackerWeb.PackageLive.ShowTest do
     refute html =~ "Also available in"
   end
 
+  test "shows variant siblings when package has a variant group", %{conn: conn} do
+    group =
+      Tracker.Nixpkgs.PackageVariantGroup
+      |> Ash.Changeset.for_create(:bulk_upsert, %{
+        position: "pkgs/libraries/ffmpeg/generic.nix:100"
+      })
+      |> Ash.create!()
+
+    Tracker.Nixpkgs.Package
+    |> Ash.Changeset.for_create(:bulk_upsert, %{
+      attribute: "ffmpeg_7",
+      package_variant_group_id: group.id
+    })
+    |> Ash.create!()
+
+    Tracker.Nixpkgs.Package
+    |> Ash.Changeset.for_create(:bulk_upsert, %{
+      attribute: "ffmpeg_8",
+      package_variant_group_id: group.id
+    })
+    |> Ash.create!()
+
+    {:ok, _view, html} = live(conn, ~p"/packages/ffmpeg_7")
+
+    assert html =~ "Variants"
+    assert html =~ "ffmpeg_8"
+  end
+
+  test "does not show variants section for packages without a variant group", %{
+    conn: conn,
+    package: package
+  } do
+    {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}")
+
+    refute html =~ "Variants"
+  end
+
   describe "linked options" do
     setup %{package: package, cr1: cr1} do
       mod =

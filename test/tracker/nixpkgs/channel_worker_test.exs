@@ -885,4 +885,114 @@ defmodule Tracker.Nixpkgs.ChannelWorkerTest do
       assert py312.set_version == "3.12"
     end
   end
+
+  describe "write_to_database with package variant groups" do
+    test "groups top-level packages sharing the same position" do
+      data = %{
+        "version" => 2,
+        "revision" => "var001",
+        "channel" => "nixos-unstable-small",
+        "released_at" => "2026-04-01T10:00:00Z",
+        "packages" => %{
+          "ffmpeg_7" => %{
+            "version" => "7.1",
+            "meta" => %{"position" => "pkgs/libraries/ffmpeg/generic.nix:100"}
+          },
+          "ffmpeg_8" => %{
+            "version" => "8.0",
+            "meta" => %{"position" => "pkgs/libraries/ffmpeg/generic.nix:100"}
+          },
+          "ffmpeg_4" => %{
+            "version" => "4.4",
+            "meta" => %{"position" => "pkgs/libraries/ffmpeg/generic.nix:100"}
+          }
+        }
+      }
+
+      ChannelWorker.write_to_database(data)
+
+      ffmpeg_7 = Ash.get!(Tracker.Nixpkgs.Package, %{attribute: "ffmpeg_7"})
+      ffmpeg_8 = Ash.get!(Tracker.Nixpkgs.Package, %{attribute: "ffmpeg_8"})
+      ffmpeg_4 = Ash.get!(Tracker.Nixpkgs.Package, %{attribute: "ffmpeg_4"})
+
+      assert ffmpeg_7.package_variant_group_id != nil
+      assert ffmpeg_7.package_variant_group_id == ffmpeg_8.package_variant_group_id
+      assert ffmpeg_7.package_variant_group_id == ffmpeg_4.package_variant_group_id
+    end
+
+    test "does not group packages in a package set" do
+      data = %{
+        "version" => 2,
+        "revision" => "var002",
+        "channel" => "nixos-unstable-small",
+        "released_at" => "2026-04-01T10:00:00Z",
+        "packages" => %{
+          "linuxPackages.zfs" => %{
+            "version" => "2.2.4",
+            "meta" => %{"position" => "pkgs/os-specific/linux/zfs/generic.nix:50"}
+          },
+          "linuxPackages_zen.zfs" => %{
+            "version" => "2.2.4",
+            "meta" => %{"position" => "pkgs/os-specific/linux/zfs/generic.nix:50"}
+          }
+        }
+      }
+
+      ChannelWorker.write_to_database(data)
+
+      zfs1 = Ash.get!(Tracker.Nixpkgs.Package, %{attribute: "linuxPackages.zfs"})
+      zfs2 = Ash.get!(Tracker.Nixpkgs.Package, %{attribute: "linuxPackages_zen.zfs"})
+
+      assert zfs1.package_variant_group_id == nil
+      assert zfs2.package_variant_group_id == nil
+    end
+
+    test "does not group a single package with unique position" do
+      data = %{
+        "version" => 2,
+        "revision" => "var003",
+        "channel" => "nixos-unstable-small",
+        "released_at" => "2026-04-01T10:00:00Z",
+        "packages" => %{
+          "hello" => %{
+            "version" => "2.12.1",
+            "meta" => %{"position" => "pkgs/by-name/he/hello/package.nix:10"}
+          },
+          "curl" => %{
+            "version" => "8.7.1",
+            "meta" => %{"position" => "pkgs/by-name/cu/curl/package.nix:50"}
+          }
+        }
+      }
+
+      ChannelWorker.write_to_database(data)
+
+      hello = Ash.get!(Tracker.Nixpkgs.Package, %{attribute: "hello"})
+      curl = Ash.get!(Tracker.Nixpkgs.Package, %{attribute: "curl"})
+
+      assert hello.package_variant_group_id == nil
+      assert curl.package_variant_group_id == nil
+    end
+
+    test "does not group packages without a position" do
+      data = %{
+        "version" => 2,
+        "revision" => "var004",
+        "channel" => "nixos-unstable",
+        "released_at" => "2026-04-01T10:00:00Z",
+        "packages" => %{
+          "nopos-a" => %{"version" => "1.0"},
+          "nopos-b" => %{"version" => "2.0"}
+        }
+      }
+
+      ChannelWorker.write_to_database(data)
+
+      a = Ash.get!(Tracker.Nixpkgs.Package, %{attribute: "nopos-a"})
+      b = Ash.get!(Tracker.Nixpkgs.Package, %{attribute: "nopos-b"})
+
+      assert a.package_variant_group_id == nil
+      assert b.package_variant_group_id == nil
+    end
+  end
 end
