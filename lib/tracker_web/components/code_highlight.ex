@@ -27,8 +27,12 @@ defmodule TrackerWeb.CodeHighlight do
 
   defp highlight(code, language) do
     case Lumis.highlight(code, language: language) do
-      {:ok, html} -> html
-      {:error, _} -> "<pre><code>#{Phoenix.HTML.html_escape(code)}</code></pre>"
+      {:ok, html} ->
+        html
+
+      {:error, _} ->
+        {:safe, escaped} = Phoenix.HTML.html_escape(code)
+        "<pre><code>#{escaped}</code></pre>"
     end
   end
 end
