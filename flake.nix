@@ -33,6 +33,9 @@
               beamPackages.expert
               beamPackages.hex
 
+              pkgs.cargo
+              pkgs.rustc
+
               pkgs.postgresql
               pkgs.process-compose
 
