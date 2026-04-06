@@ -1,0 +1,357 @@
+-- allium: 3
+
+-- Streaming NIF for packages.json.br ingestion.
+-- Replaces in-memory decompress/parse with a Rust NIF that
+-- brotli-decompresses and SAX-parses packages.json.br, sending
+-- each package as a message to the calling BEAM process via
+-- enif_send. Reduces peak memory from ~5-6GB to proportional
+-- to batch size.
+
+use "./ingestion.allium" as ingestion
+
+------------------------------------------------------------
+-- Value Types
+------------------------------------------------------------
+
+value PackageEntry {
+    attribute: String
+    version: String
+    description: String?
+    homepage: List<String>?
+    position: String?
+    licenses: List<String>?
+    maintainers: List<MaintainerEntry>?
+    teams: List<TeamEntry>?
+}
+
+value MaintainerEntry {
+    github_id: Integer
+    github: String?
+}
+
+value TeamEntry {
+    short_name: String
+    scope: String?
+    github: String?
+    github_id: Integer?
+    members: List<MaintainerEntry>
+}
+
+value StreamMetadata {
+    version: Integer
+}
+
+
+------------------------------------------------------------
+-- Entities
+------------------------------------------------------------
+
+entity PackageStream {
+    source: ByteArray                    -- compressed .br body
+    caller: ProcessRef                   -- BEAM pid to receive messages
+    status: streaming | completed | failed
+
+    -- Derived
+    is_active: status = streaming
+
+    transitions status {
+        streaming -> completed
+        streaming -> failed
+        terminal: completed, failed
+    }
+}
+
+------------------------------------------------------------
+-- Config
+------------------------------------------------------------
+
+config {
+    batch_size: Integer = 1000
+    stream_timeout: Duration = 10.minutes
+}
+
+------------------------------------------------------------
+-- Contracts
+------------------------------------------------------------
+
+contract StreamingDecoder {
+    stream_packages: (source: ByteArray, caller: ProcessRef) -> :ok
+
+    @invariant VersionValidation
+        -- The top-level "version" field is parsed before streaming
+        -- begins. If it is not 2, an ErrorMessage is sent immediately
+        -- and no packages are streamed.
+
+    @invariant TypedDeserialization
+        -- Each package entry is deserialized into typed Rust structs
+        -- via serde. Malformed entries that do not match the expected
+        -- shape produce an ErrorMessage. Fields are encoded to BEAM
+        -- terms in Rust via Rustler's Encoder trait.
+
+    @invariant MessageOrdering
+        -- Packages are sent in the order they appear in the JSON.
+        -- The done message is always the last message sent.
+
+    @invariant Completeness
+        -- Every package entry in the source with a non-empty version
+        -- appears as exactly one PackageMessage to the caller.
+        -- Entries with null or empty-string versions are skipped.
+
+    @invariant ErrorTermination
+        -- If decompression or parsing fails at any point, an
+        -- ErrorMessage is sent and no further messages follow.
+
+    @invariant MemoryBound
+        -- Peak NIF memory usage is proportional to a single
+        -- package entry, not the total file size. The compressed
+        -- source binary is the only large allocation, held as
+        -- a BEAM reference (not copied into Rust heap).
+
+    @guidance
+        -- Runs on a dirty CPU scheduler via enif_send.
+        -- The NIF must not block normal schedulers.
+        -- The source binary should be accessed via
+        -- Rustler's Binary type (zero-copy from BEAM).
+        --
+        -- Rust structs mirror the value types in this spec:
+        --   PackageInfo { version, meta: Option<Meta> }
+        --   Meta { description, homepage, position, license,
+        --          non_team_maintainers, teams }
+        --   MaintainerEntry { github_id, github }
+        --   TeamEntry { short_name, scope, github, github_id, members }
+        -- serde #[serde(rename_all = "camelCase")] aligns with
+        -- the JSON field naming convention in packages.json.
+        --
+        -- Normalization happens in Rust via custom serde deserializers:
+        --   homepage: String | List<String> | null -> List<String>?
+        --     (bare string wrapped into single-element list)
+        --   license: String | Map | List<Map|String> | null -> List<String>?
+        --     (each entry resolved via spdxId -> shortName -> fullName
+        --      -> raw string fallback; output is flat list of identifiers)
+}
+
+------------------------------------------------------------
+-- Rules
+------------------------------------------------------------
+
+rule StartStream {
+    when: StartStream(source, caller)
+    ensures:
+        let stream = PackageStream.created(
+            source: source,
+            caller: caller,
+            status: streaming
+        )
+        StreamStarted(stream)
+
+    @guidance
+        -- Invoked from LoadPackages step. The source is the
+        -- raw .br body from S3Cache/Req. The caller is self().
+}
+
+rule ValidateVersion {
+    when: StreamStarted(stream)
+    requires: stream.status = streaming
+    let version = top_level_version(stream.source)
+    requires: version = 2
+    ensures:
+        PackagesStreamBegins(stream)
+
+    @guidance
+        -- The NIF parses the top-level JSON object to find the
+        -- "version" field. If absent or not 2, sends {:error, msg}
+        -- and returns. This check happens before any package
+        -- iteration begins.
+}
+
+rule StreamEmitsPackages {
+    when: PackagesStreamBegins(stream)
+    requires: stream.status = streaming
+    ensures:
+        for entry in stream.source where entry.version != null and entry.version != "":
+            PackageDelivered(stream.caller, entry)
+
+    @guidance
+        -- The NIF iterates the top-level "packages" object.
+        -- For each key-value pair, it deserializes into typed
+        -- Rust structs and encodes to BEAM terms via Rustler.
+        -- Entries with null or empty-string versions are skipped.
+        -- Sends {:package, attribute, fields_map} to caller.
+        -- The Elixir consumer decides which fields to use.
+}
+
+rule StreamCompletes {
+    when: stream: PackageStream where all packages emitted
+    requires: stream.status = streaming
+    ensures:
+        stream.status = completed
+        StreamDone(stream.caller, metadata)
+
+    @guidance
+        -- Sends {:done, %{version: version}} to caller after
+        -- the last package. The version is read from the
+        -- top-level "version" field encountered during parsing.
+}
+
+rule StreamFails {
+    when: stream: PackageStream where decompression or parse error
+    requires: stream.status = streaming
+    ensures:
+        stream.status = failed
+        StreamError(stream.caller, reason)
+
+    @guidance
+        -- Sends {:error, reason_string} to caller.
+        -- Reason includes byte offset where failure occurred
+        -- when available. No further messages are sent.
+}
+
+rule NifCrashPropagates {
+    when: NifProcessCrash(caller)
+    ensures:
+        StreamError(caller, "NIF process crashed")
+
+    @guidance
+        -- The Elixir caller monitors the NIF invocation.
+        -- If the dirty scheduler thread crashes (e.g., segfault
+        -- in Rust), no {:error, ...} message will be sent.
+        -- The consumer detects this via config.stream_timeout
+        -- expiring with no messages received, and raises an
+        -- error to trigger step retry logic.
+        -- Additionally, the NIF function is wrapped in
+        -- std::panic::catch_unwind on the Rust side to convert
+        -- Rust panics into {:error, reason} messages rather than
+        -- crashing the scheduler.
+}
+
+------------------------------------------------------------
+-- Consumer Rules (LoadPackages step changes)
+------------------------------------------------------------
+
+rule ConsumePackageStream {
+    when: LoadPackagesStep(pipeline)
+    let source = fetch_compressed_body(pipeline.base_url)
+    let include_metadata = pipeline.channel = ingestion/config.metadata_channel
+    ensures:
+        StartStream(source, self)
+        BatchesProcessed(pipeline)
+
+    @guidance
+        -- LoadPackages calls the NIF, then enters a receive loop.
+        -- Accumulates PackageEntry messages into a batch buffer.
+        -- The Elixir consumer filters fields based on include_metadata:
+        --   metadata channel: extracts description, homepage, position,
+        --     licenses, maintainers, teams
+        --   other channels: only version
+        -- When buffer reaches config.batch_size, flushes the batch:
+        --   1. extract_packages (transform fields, Elixir-side filtering)
+        --   2. upsert families, variant groups, packages
+        --   3. insert package revisions
+        --   4. if include_metadata, accumulate maintainer/team data
+        -- On {:done, metadata}, flush final partial batch, then
+        -- bulk-upsert accumulated maintainers/teams/joins.
+        -- On {:error, reason}, raise to let step retry logic handle it.
+}
+
+rule FlushBatch {
+    when: batch buffer reaches config.batch_size
+    ensures:
+        PackagesUpserted(batch)
+        RevisionsInserted(batch)
+
+    @guidance
+        -- Each batch is a self-contained DB transaction.
+        -- Families and variant groups are upserted per-batch
+        -- (idempotent, same as current bulk_upsert_all).
+        -- Maintainer/team data is accumulated across batches
+        -- and flushed once at stream end, since join tables
+        -- need the full package id_map.
+}
+
+rule FlushFinalBatch {
+    when: StreamDone(caller, metadata)
+    ensures:
+        PackagesUpserted(remaining_buffer)
+        RevisionsInserted(remaining_buffer)
+        MaintainersAndTeamsLoaded(accumulated_joins)
+
+    @guidance
+        -- Processes any remaining packages in the buffer.
+        -- Then performs the maintainer/team bulk operations
+        -- that were deferred during streaming.
+        -- The id_map is built incrementally: each batch's
+        -- upsert results are merged into the running id_map.
+}
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant AllPackagesProcessed {
+    -- The total packages upserted across all batches equals
+    -- the number of PackageDelivered messages received.
+    -- Verified by comparing the final id_map size against
+    -- a counter incremented per {:package, ...} message.
+}
+
+invariant BatchSizeRespected {
+    -- No single batch exceeds config.batch_size packages,
+    -- except the final flush which may be smaller.
+}
+
+invariant MetadataChannelHasMaintainers {
+    -- When the consumer is processing the metadata channel,
+    -- the accumulated maintainer and team data is non-empty
+    -- (packages.json for the metadata channel always includes
+    -- this data).
+}
+
+invariant StreamTimeoutEnforced {
+    -- If no message is received within config.stream_timeout,
+    -- the consumer raises, allowing step retry logic to handle it.
+}
+
+------------------------------------------------------------
+-- Decisions
+------------------------------------------------------------
+
+-- The NIF receives the compressed binary, not a URL or file path.
+-- S3Cache fetch remains in Elixir (Req pipeline with caching).
+-- This keeps the NIF pure: bytes in, messages out.
+
+-- Package entries are deserialized into typed Rust structs and
+-- encoded to BEAM terms in Rust. This validates structure at
+-- parse time and avoids a loosely-typed pass-through. The Rust
+-- structs use serde with camelCase renaming to match the JSON.
+-- Normalization of homepage and license fields happens in Rust
+-- via custom serde deserializers. The Elixir consumer receives
+-- clean, consistent types (always lists) with no further munging.
+
+-- Packages with null or empty-string versions are filtered out
+-- on the Rust side and never sent to the caller. This matches
+-- the existing Elixir-side filtering behaviour.
+
+-- Version validation (must be 2) happens at the top level before
+-- any package iteration. Unsupported versions fail fast.
+
+-- Rust panics are caught via std::panic::catch_unwind and converted
+-- to {:error, reason} messages. True crashes (segfaults) are handled
+-- by the consumer's stream timeout — no messages within the timeout
+-- window triggers a raise into the step retry logic.
+
+-- No backpressure between NIF and consumer. The NIF sends ~100k
+-- messages as fast as Rust can parse. The caller's mailbox may
+-- grow temporarily but messages are small maps and the consumer
+-- processes them in tight batch loops. Acceptable for this workload.
+
+-- Maintainer/team join data is accumulated in memory during
+-- streaming rather than flushed per-batch. The join maps are
+-- small (~50KB total) compared to package data, and the bulk
+-- operations need a complete attribute->id mapping.
+
+-- The batch_size of 1000 balances DB round-trips against memory.
+-- Each batch holds ~1-2MB of Elixir terms vs ~3GB for the full set.
+
+-- options.json.br is not included in this spec. It is significantly
+-- smaller than packages.json.br and does not cause memory issues.
+-- It can be converted to streaming later if needed.
