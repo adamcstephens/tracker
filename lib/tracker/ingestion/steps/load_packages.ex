@@ -1,7 +1,7 @@
 defmodule Tracker.Ingestion.Steps.LoadPackages do
   @moduledoc """
   Fetches packages.json.br and streams packages via a Rust NIF,
-  processing them in batches to avoid loading the full file into memory.
+  then bulk upserts packages, families, variant groups, and revisions.
 
   For the metadata channel, also loads maintainers, teams, and
   their join tables after all packages are processed.
@@ -14,7 +14,6 @@ defmodule Tracker.Ingestion.Steps.LoadPackages do
   alias Tracker.Ingestion.{Helpers, PackageStream, StepGraph}
   alias Tracker.Nixpkgs.Channel
 
-  @batch_size 1000
   @stream_timeout :timer.minutes(25)
 
   @impl true
@@ -27,43 +26,30 @@ defmodule Tracker.Ingestion.Steps.LoadPackages do
 
     :ok = PackageStream.stream_packages(compressed, self())
 
-    state = %{
-      batch: [],
-      batch_size: 0,
-      id_map: %{},
-      maintainer_data: %{},
-      team_data: %{},
-      package_joins: %{},
-      channel_revision: channel_revision,
-      include_metadata?: include_metadata?
-    }
+    packages = collect_all_packages()
 
-    final_state = receive_loop(state)
+    {extracted, maint_data, team_data, joins} =
+      extract_packages(packages, include_metadata?)
+
+    id_map = load_packages(extracted, channel_revision)
 
     if include_metadata? do
-      load_maintainers_and_teams(
-        final_state.id_map,
-        final_state.maintainer_data,
-        final_state.team_data,
-        final_state.package_joins
-      )
+      load_maintainers_and_teams(id_map, maint_data, team_data, joins)
     end
 
     :ok
   end
 
-  # -- Receive loop --
+  # -- Collect all packages from NIF stream --
 
-  defp receive_loop(state) do
+  defp collect_all_packages(acc \\ %{}) do
     receive do
       {:packages, entries} ->
-        state
-        |> add_entries_to_batch(entries)
-        |> maybe_flush_batch()
-        |> receive_loop()
+        acc = Enum.reduce(entries, acc, fn {attr, fields}, a -> Map.put(a, attr, fields) end)
+        collect_all_packages(acc)
 
       {:done, _meta} ->
-        flush_batch(state)
+        acc
 
       {:error, reason} ->
         raise "PackageStream NIF error: #{reason}"
@@ -71,41 +57,6 @@ defmodule Tracker.Ingestion.Steps.LoadPackages do
       @stream_timeout ->
         raise "PackageStream timed out waiting for messages"
     end
-  end
-
-  defp add_entries_to_batch(state, entries) do
-    %{
-      state
-      | batch: entries ++ state.batch,
-        batch_size: state.batch_size + length(entries)
-    }
-  end
-
-  defp maybe_flush_batch(%{batch_size: size} = state) when size >= @batch_size do
-    flush_batch(state)
-  end
-
-  defp maybe_flush_batch(state), do: state
-
-  defp flush_batch(%{batch: []} = state), do: state
-
-  defp flush_batch(state) do
-    packages_map = Map.new(state.batch)
-
-    {extracted, maint_data, team_data, joins} =
-      extract_packages(packages_map, state.include_metadata?)
-
-    batch_id_map = load_packages_batch(extracted, state.channel_revision)
-
-    %{
-      state
-      | batch: [],
-        batch_size: 0,
-        id_map: Map.merge(state.id_map, batch_id_map),
-        maintainer_data: Map.merge(state.maintainer_data, maint_data),
-        team_data: Map.merge(state.team_data, team_data),
-        package_joins: Map.merge(state.package_joins, joins)
-    }
   end
 
   # -- Package extraction --
@@ -178,9 +129,9 @@ defmodule Tracker.Ingestion.Steps.LoadPackages do
     |> Helpers.maybe_put(:github, m[:github])
   end
 
-  # -- Package loading (per-batch) --
+  # -- Package loading --
 
-  defp load_packages_batch(packages, channel_revision) do
+  defp load_packages(packages, channel_revision) do
     alias Tracker.Nixpkgs.PackageSetMapping
 
     parsed_attrs =
