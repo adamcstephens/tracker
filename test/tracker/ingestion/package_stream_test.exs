@@ -130,6 +130,24 @@ defmodule Tracker.Ingestion.PackageStreamTest do
       assert {:done, %{version: 2}} = done
     end
 
+    test "sends packages in batched messages" do
+      br = Tracker.PackageStreamFixtures.small_packages_br()
+      :ok = PackageStream.stream_packages(br, self())
+
+      messages = collect_all_messages()
+      batch_msgs = Enum.filter(messages, &match?({:packages, _}, &1))
+
+      # With 7 packages and batch size 500, should be 1 batch
+      assert length(batch_msgs) >= 1
+
+      # Each batch is a list of {attr, fields} tuples
+      {:packages, first_batch} = hd(batch_msgs)
+      assert is_list(first_batch)
+      assert {attr, fields} = hd(first_batch)
+      assert is_binary(attr)
+      assert is_map(fields)
+    end
+
     test "sends error on invalid brotli data" do
       :ok = PackageStream.stream_packages("not brotli data", self())
 
@@ -162,12 +180,17 @@ defmodule Tracker.Ingestion.PackageStreamTest do
     end
   end
 
-  # Collects {:package, attr, fields} messages until {:done, _}.
+  # Collects {:packages, [{attr, fields}, ...]} messages until {:done, _}.
   # Returns a map of %{attribute => fields}.
   defp collect_packages(acc \\ %{}) do
     receive do
-      {:package, attr, fields} ->
-        collect_packages(Map.put(acc, attr, fields))
+      {:packages, entries} ->
+        acc =
+          Enum.reduce(entries, acc, fn {attr, fields}, a ->
+            Map.put(a, attr, fields)
+          end)
+
+        collect_packages(acc)
 
       {:done, _meta} ->
         acc

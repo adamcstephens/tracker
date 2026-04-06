@@ -8,7 +8,7 @@ mod atoms {
     rustler::atoms! {
         ok,
         error,
-        package,
+        packages,
         done,
 
         // Map keys for package fields
@@ -156,7 +156,12 @@ where
 // BEAM term encoding
 // ---------------------------------------------------------------------------
 
-fn encode_package<'a>(env: Env<'a>, attr: &str, entry: &PackageEntry) -> Term<'a> {
+fn encode_package_tuple<'a>(env: Env<'a>, attr: &str, entry: &PackageEntry) -> Term<'a> {
+    let fields = encode_package_fields(env, entry);
+    (attr, fields).encode(env)
+}
+
+fn encode_package_fields<'a>(env: Env<'a>, entry: &PackageEntry) -> Term<'a> {
     let version_term = entry.version.as_deref().unwrap_or("").encode(env);
 
     let mut keys = vec![atoms::version().encode(env)];
@@ -189,8 +194,7 @@ fn encode_package<'a>(env: Env<'a>, attr: &str, entry: &PackageEntry) -> Term<'a
         }
     }
 
-    let fields = Term::map_from_arrays(env, &keys, &vals).expect("failed to build map");
-    (atoms::package(), attr, fields).encode(env)
+    Term::map_from_arrays(env, &keys, &vals).expect("failed to build map")
 }
 
 fn encode_string_list<'a>(env: Env<'a>, items: &[String]) -> Term<'a> {
@@ -252,7 +256,9 @@ fn encode_team<'a>(env: Env<'a>, t: &TeamInfo) -> Term<'a> {
 // Streaming JSON visitor
 // ---------------------------------------------------------------------------
 
-/// Seed for deserializing the "packages" object, sending each entry via enif_send.
+const SEND_BATCH_SIZE: usize = 500;
+
+/// Seed for deserializing the "packages" object, sending batched entries via enif_send.
 struct PackagesStreamSeed<'a> {
     pid: &'a LocalPid,
 }
@@ -280,6 +286,8 @@ impl<'de, 'a> Visitor<'de> for PackagesVisitor<'a> {
     }
 
     fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<(), A::Error> {
+        let mut batch: Vec<(String, PackageEntry)> = Vec::with_capacity(SEND_BATCH_SIZE);
+
         while let Some(attr) = map.next_key::<String>()? {
             let entry: PackageEntry = map.next_value()?;
 
@@ -287,17 +295,39 @@ impl<'de, 'a> Visitor<'de> for PackagesVisitor<'a> {
             let has_version = entry.version.as_ref().is_some_and(|v| !v.is_empty());
 
             if has_version {
-                let mut owned_env = OwnedEnv::new();
-                let pid = self.pid.clone();
-                let result =
-                    owned_env.send_and_clear(&pid, |env| encode_package(env, &attr, &entry));
-                if result.is_err() {
-                    return Err(de::Error::custom("caller process is dead"));
+                batch.push((attr, entry));
+
+                if batch.len() >= SEND_BATCH_SIZE {
+                    send_batch(self.pid, &batch)
+                        .map_err(|_| de::Error::custom("caller process is dead"))?;
+                    batch.clear();
                 }
             }
         }
+
+        // Flush remaining entries
+        if !batch.is_empty() {
+            send_batch(self.pid, &batch)
+                .map_err(|_| de::Error::custom("caller process is dead"))?;
+        }
+
         Ok(())
     }
+}
+
+fn send_batch(
+    pid: &LocalPid,
+    batch: &[(String, PackageEntry)],
+) -> Result<(), rustler::env::SendError> {
+    let mut owned_env = OwnedEnv::new();
+    let pid = pid.clone();
+    owned_env.send_and_clear(&pid, |env| {
+        let entries: Vec<Term> = batch
+            .iter()
+            .map(|(attr, entry)| encode_package_tuple(env, attr, entry))
+            .collect();
+        (atoms::packages(), entries).encode(env)
+    })
 }
 
 /// Visitor for the top-level JSON object {"version": N, "packages": {...}}.
@@ -359,7 +389,19 @@ impl<'de, 'a> Visitor<'de> for TopLevelVisitor<'a> {
 }
 
 fn stream_from_reader<R: Read>(reader: R, pid: &LocalPid) -> Result<u64, String> {
-    let mut deser = serde_json::Deserializer::from_reader(reader);
+    // Decompress fully into a Rust-owned buffer, then parse from memory.
+    // serde_json::from_reader reads byte-by-byte which is slow through
+    // the brotli streaming decoder. Decompressing first into a Vec<u8>
+    // lets serde_json::from_slice use SIMD-optimized parsing.
+    // The buffer lives on the Rust heap (not BEAM) and is freed when
+    // this function returns.
+    let mut decompressed = Vec::new();
+    let mut reader = reader;
+    reader
+        .read_to_end(&mut decompressed)
+        .map_err(|e| e.to_string())?;
+
+    let mut deser = serde_json::Deserializer::from_slice(&decompressed);
     deser
         .deserialize_map(TopLevelVisitor { pid })
         .map_err(|e| e.to_string())
