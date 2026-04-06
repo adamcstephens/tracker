@@ -45,3 +45,9 @@ data/
 *key.pem
 .s.PGSQL*
 .dev-*
+
+# Rust/Cargo build artifacts
+/native/*/target/
+
+# Compiled NIF binaries
+/priv/native/

@@ -35,6 +35,7 @@
 
               pkgs.cargo
               pkgs.rustc
+              pkgs.rustfmt
 
               pkgs.postgresql
               pkgs.process-compose

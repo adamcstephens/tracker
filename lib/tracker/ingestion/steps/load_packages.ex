@@ -1,102 +1,159 @@
 defmodule Tracker.Ingestion.Steps.LoadPackages do
   @moduledoc """
-  Fetches packages.json.br, parses, and bulk upserts packages,
-  families, variant groups, and revisions.
+  Fetches packages.json.br and streams packages via a Rust NIF,
+  processing them in batches to avoid loading the full file into memory.
 
   For the metadata channel, also loads maintainers, teams, and
-  their join tables in a single fetch+parse cycle.
+  their join tables after all packages are processed.
   """
 
   @behaviour Tracker.Ingestion.Step
 
   require Logger
 
-  alias Tracker.Ingestion.{Helpers, StepGraph}
+  alias Tracker.Ingestion.{Helpers, PackageStream, StepGraph}
   alias Tracker.Nixpkgs.Channel
+
+  @batch_size 1000
+  @stream_timeout :timer.minutes(25)
 
   @impl true
   def timeout, do: :timer.minutes(30)
 
   @impl true
   def run(%Tracker.Ingestion.StepContext{pipeline: pipeline, channel_revision: channel_revision}) do
-    data = Channel.fetch_packages(pipeline.channel, pipeline.revision, pipeline.base_url)
-
-    packages = data["packages"]
-
-    packages =
-      case Application.get_env(:tracker, :loader_limit) do
-        nil -> packages
-        limit -> Enum.take(packages, limit)
-      end
-
+    compressed = Channel.fetch_packages_compressed(pipeline.base_url)
     include_metadata? = pipeline.channel == StepGraph.metadata_channel()
 
-    {packages, maintainer_data, team_data, package_joins} =
-      packages
-      |> Map.reject(fn {_attr, info} -> info["version"] in ["", nil] end)
-      |> extract_packages(include_metadata?)
+    :ok = PackageStream.stream_packages(compressed, self())
 
-    id_map = load_packages(packages, channel_revision)
+    state = %{
+      batch: [],
+      batch_size: 0,
+      id_map: %{},
+      maintainer_data: %{},
+      team_data: %{},
+      package_joins: %{},
+      channel_revision: channel_revision,
+      include_metadata?: include_metadata?
+    }
+
+    final_state = receive_loop(state)
 
     if include_metadata? do
-      load_maintainers_and_teams(id_map, maintainer_data, team_data, package_joins)
+      load_maintainers_and_teams(
+        final_state.id_map,
+        final_state.maintainer_data,
+        final_state.team_data,
+        final_state.package_joins
+      )
     end
 
     :ok
   end
 
+  # -- Receive loop --
+
+  defp receive_loop(state) do
+    receive do
+      {:package, attr, fields} ->
+        state
+        |> add_to_batch(attr, fields)
+        |> maybe_flush_batch()
+        |> receive_loop()
+
+      {:done, _meta} ->
+        flush_batch(state)
+
+      {:error, reason} ->
+        raise "PackageStream NIF error: #{reason}"
+    after
+      @stream_timeout ->
+        raise "PackageStream timed out waiting for messages"
+    end
+  end
+
+  defp add_to_batch(state, attr, fields) do
+    %{state | batch: [{attr, fields} | state.batch], batch_size: state.batch_size + 1}
+  end
+
+  defp maybe_flush_batch(%{batch_size: size} = state) when size >= @batch_size do
+    flush_batch(state)
+  end
+
+  defp maybe_flush_batch(state), do: state
+
+  defp flush_batch(%{batch: []} = state), do: state
+
+  defp flush_batch(state) do
+    packages_map = Map.new(state.batch)
+
+    {extracted, maint_data, team_data, joins} =
+      extract_packages(packages_map, state.include_metadata?)
+
+    batch_id_map = load_packages_batch(extracted, state.channel_revision)
+
+    %{
+      state
+      | batch: [],
+        batch_size: 0,
+        id_map: Map.merge(state.id_map, batch_id_map),
+        maintainer_data: Map.merge(state.maintainer_data, maint_data),
+        team_data: Map.merge(state.team_data, team_data),
+        package_joins: Map.merge(state.package_joins, joins)
+    }
+  end
+
   # -- Package extraction --
 
   defp extract_packages(packages, false) do
-    pkgs = Map.new(packages, fn {attr, info} -> {attr, %{version: info["version"]}} end)
+    pkgs = Map.new(packages, fn {attr, fields} -> {attr, %{version: fields[:version]}} end)
     {pkgs, %{}, %{}, %{}}
   end
 
   defp extract_packages(packages, true) do
-    Enum.reduce(packages, {%{}, %{}, %{}, %{}}, fn {attr, info},
+    Enum.reduce(packages, {%{}, %{}, %{}, %{}}, fn {attr, fields},
                                                    {pkgs, maint_acc, team_acc, joins} ->
-      meta = info["meta"] || %{}
-
       entry =
-        %{version: info["version"]}
-        |> Helpers.maybe_put(:description, meta["description"])
-        |> Helpers.maybe_put(:homepage, normalize_homepage(meta["homepage"]))
-        |> Helpers.maybe_put(:position, meta["position"])
-        |> Helpers.maybe_put(:licenses, extract_licenses(meta["license"], attr))
+        %{version: fields[:version]}
+        |> Helpers.maybe_put(:description, fields[:description])
+        |> Helpers.maybe_put(:homepage, fields[:homepage])
+        |> Helpers.maybe_put(:position, fields[:position])
+        |> Helpers.maybe_put(:licenses, fields[:licenses])
 
       # Collect direct (non-team) maintainers
-      non_team = meta["nonTeamMaintainers"] || []
+      non_team = fields[:maintainers] || []
 
       maint_acc =
         Enum.reduce(non_team, maint_acc, fn m, acc ->
-          Map.put_new(acc, m["githubId"], extract_maintainer(m))
+          Map.put_new(acc, m[:github_id], extract_maintainer(m))
         end)
 
       # Collect teams and their members
-      teams = meta["teams"] || []
+      teams = fields[:teams] || []
 
       team_acc =
         Enum.reduce(teams, team_acc, fn t, acc ->
-          Map.put_new(acc, String.downcase(t["shortName"]), %{
-            short_name: String.downcase(t["shortName"]),
-            scope: t["scope"],
-            github: t["github"],
-            github_id: t["githubId"],
-            member_github_ids: Enum.map(t["members"] || [], & &1["githubId"])
+          Map.put_new(acc, String.downcase(t[:short_name]), %{
+            short_name: String.downcase(t[:short_name]),
+            scope: t[:scope],
+            github: t[:github],
+            github_id: t[:github_id],
+            member_github_ids: Enum.map(t[:members] || [], & &1[:github_id])
           })
         end)
 
       # Team members also need to exist in the maintainers table
       maint_acc =
         teams
-        |> Enum.flat_map(fn t -> t["members"] || [] end)
+        |> Enum.flat_map(fn t -> t[:members] || [] end)
         |> Enum.reduce(maint_acc, fn m, acc ->
-          Map.put_new(acc, m["githubId"], extract_maintainer(m))
+          Map.put_new(acc, m[:github_id], extract_maintainer(m))
         end)
 
       # Track per-package join info
-      maintainer_ids = Enum.map(non_team, & &1["githubId"])
-      team_names = Enum.map(teams, &String.downcase(&1["shortName"]))
+      maintainer_ids = Enum.map(non_team, & &1[:github_id])
+      team_names = Enum.map(teams, &String.downcase(&1[:short_name]))
 
       joins =
         if maintainer_ids != [] or team_names != [] do
@@ -113,46 +170,13 @@ defmodule Tracker.Ingestion.Steps.LoadPackages do
   end
 
   defp extract_maintainer(m) do
-    %{github_id: m["githubId"]}
-    |> Helpers.maybe_put(:github, m["github"])
+    %{github_id: m[:github_id]}
+    |> Helpers.maybe_put(:github, m[:github])
   end
 
-  defp normalize_homepage(nil), do: nil
-  defp normalize_homepage(urls) when is_list(urls), do: urls
-  defp normalize_homepage(url) when is_binary(url), do: [url]
+  # -- Package loading (per-batch) --
 
-  defp extract_licenses(nil, _attr), do: nil
-  defp extract_licenses(license, _attr) when is_binary(license), do: [license]
-  defp extract_licenses(license, attr) when is_map(license), do: extract_licenses([license], attr)
-
-  defp extract_licenses(licenses, attr) when is_list(licenses) do
-    Enum.map(licenses, fn
-      %{"spdxId" => id} ->
-        id
-
-      %{"shortName" => name} ->
-        name
-
-      %{"fullName" => name} ->
-        name
-
-      other when is_binary(other) ->
-        other
-
-      other ->
-        Logger.error(
-          msg: "Unrecognized license format",
-          package: attr,
-          license: inspect(other)
-        )
-
-        "unknown"
-    end)
-  end
-
-  # -- Package loading --
-
-  defp load_packages(packages, channel_revision) do
+  defp load_packages_batch(packages, channel_revision) do
     alias Tracker.Nixpkgs.PackageSetMapping
 
     parsed_attrs =
