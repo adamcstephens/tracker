@@ -3,11 +3,11 @@ defmodule Tracker.Ingestion.PackageStream do
   Rustler NIF for streaming packages.json.br ingestion.
 
   Brotli-decompresses and SAX-parses a compressed packages.json binary,
-  sending each package as a message to the caller process via enif_send.
+  sending packages in batches to the caller process via enif_send.
 
   ## Message protocol
 
-    * `{:package, attribute, fields_map}` — one per package
+    * `{:packages, [{attribute, fields_map}, ...]}` — batch of packages (up to 500)
     * `{:done, %{version: integer}}` — stream complete
     * `{:error, reason}` — failure during decompression or parsing
   """

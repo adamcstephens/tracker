@@ -56,9 +56,9 @@ defmodule Tracker.Ingestion.Steps.LoadPackages do
 
   defp receive_loop(state) do
     receive do
-      {:package, attr, fields} ->
+      {:packages, entries} ->
         state
-        |> add_to_batch(attr, fields)
+        |> add_entries_to_batch(entries)
         |> maybe_flush_batch()
         |> receive_loop()
 
@@ -73,8 +73,12 @@ defmodule Tracker.Ingestion.Steps.LoadPackages do
     end
   end
 
-  defp add_to_batch(state, attr, fields) do
-    %{state | batch: [{attr, fields} | state.batch], batch_size: state.batch_size + 1}
+  defp add_entries_to_batch(state, entries) do
+    %{
+      state
+      | batch: entries ++ state.batch,
+        batch_size: state.batch_size + length(entries)
+    }
   end
 
   defp maybe_flush_batch(%{batch_size: size} = state) when size >= @batch_size do
