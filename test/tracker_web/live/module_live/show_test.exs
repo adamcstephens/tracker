@@ -3,7 +3,7 @@ defmodule TrackerWeb.ModuleLive.ShowTest do
 
   import Phoenix.LiveViewTest
 
-  alias Tracker.Nixpkgs.OptionsWorker
+  alias Tracker.Fixtures
 
   setup do
     mod =
@@ -52,7 +52,7 @@ defmodule TrackerWeb.ModuleLive.ShowTest do
     Tracker.Nixpkgs.ChannelRevision.record_result!(cr, %{result: :success})
     Tracker.Nixpkgs.ChannelRevision.record_options_result!(cr, %{options_result: :success})
 
-    OptionsWorker.write_to_database(
+    Fixtures.load_options(
       %{
         "services.modshow.enable" => %{
           "declarations" => ["services.modshow"],
@@ -102,7 +102,7 @@ defmodule TrackerWeb.ModuleLive.ShowTest do
         }
       }
 
-      OptionsWorker.write_to_database(options, cr)
+      Fixtures.load_options(options, cr)
 
       # Also create an option on a different module to ensure filtering works
       other_mod =
@@ -122,7 +122,7 @@ defmodule TrackerWeb.ModuleLive.ShowTest do
         }
       }
 
-      OptionsWorker.write_to_database(other_options, cr)
+      Fixtures.load_options(other_options, cr)
 
       %{channel_revision: cr, module: mod, other_module: other_mod}
     end
