@@ -12,6 +12,7 @@ dev:
 
 format:
     mix format
+    cargo fmt --manifest-path native/package_stream/Cargo.toml
     biome format --write priv/static/css/app.css
 
 test:

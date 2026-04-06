@@ -23,18 +23,12 @@ defmodule Tracker.Nixpkgs.Channel do
   end
 
   @doc """
-  Fetches and decompresses packages.json.br for a channel release.
+  Fetches the raw brotli-compressed packages.json.br binary for a channel release.
 
-  Returns a map with "packages", "version", "revision", "channel",
-  and "base_url" keys.
+  Returns the compressed binary, suitable for streaming via `PackageStream`.
   """
-  def fetch_packages(channel, revision, base_url) do
+  def fetch_packages_compressed(base_url) do
     Req.get!(Tracker.Nixpkgs.S3Cache.new(), url: base_url <> "/packages.json.br", raw: true).body
-    |> ExBrotli.decompress!()
-    |> :json.decode()
-    |> Map.put("revision", revision)
-    |> Map.put("channel", channel)
-    |> Map.put("base_url", base_url)
   end
 
   @doc """

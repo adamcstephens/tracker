@@ -80,6 +80,7 @@ defmodule Tracker.MixProject do
       {:swoosh, "~> 1.5"},
       {:telemetry_metrics, "~> 1.0"},
       {:telemetry_poller, "~> 1.0"},
+      {:rustler, "~> 0.37.3", runtime: false},
       {:typedstruct, "~> 0.5.4"}
     ]
   end
