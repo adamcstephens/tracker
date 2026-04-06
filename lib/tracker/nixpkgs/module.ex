@@ -104,6 +104,79 @@ defmodule Tracker.Nixpkgs.Module do
     identity :unique_display_name, [:display_name]
   end
 
+  @doc """
+  Derives module records, declaration records, and an option-to-display-name
+  mapping from a raw options map (as from options.json).
+
+  Groups options by their declaration path, sub-groups by the first two
+  dot-separated segments, and computes display names from the longest
+  common prefix.
+
+  Returns `{module_records, declaration_records, option_to_display_name}`.
+  """
+  def derive_from_options(options_map) do
+    options_by_declaration =
+      Enum.reduce(options_map, %{}, fn {name, entry}, acc ->
+        declaration = resolve_declaration(name, entry["declarations"] || [])
+        Map.update(acc, declaration, [name], &[name | &1])
+      end)
+
+    declaration_subgroups =
+      Enum.flat_map(options_by_declaration, fn {declaration, option_names} ->
+        option_names
+        |> Enum.group_by(&option_prefix/1)
+        |> Enum.map(fn {_prefix, names} ->
+          {declaration, names, Tracker.Nixpkgs.Channel.display_name_for_options(names)}
+        end)
+      end)
+
+    by_display_name = Enum.group_by(declaration_subgroups, fn {_, _, dn} -> dn end)
+
+    module_records =
+      Enum.map(by_display_name, fn {display_name, _groups} ->
+        %{display_name: display_name}
+      end)
+
+    declaration_records =
+      Enum.flat_map(by_display_name, fn {display_name, groups} ->
+        groups
+        |> Enum.map(fn {declaration, _, _} -> declaration end)
+        |> Enum.uniq()
+        |> Enum.map(&%{path: &1, display_name: display_name})
+      end)
+
+    option_to_display_name =
+      Enum.flat_map(by_display_name, fn {display_name, groups} ->
+        Enum.flat_map(groups, fn {_declaration, option_names, _} ->
+          Enum.map(option_names, &{&1, display_name})
+        end)
+      end)
+      |> Map.new()
+
+    {module_records, declaration_records, option_to_display_name}
+  end
+
+  defp option_prefix(name) do
+    case String.split(name, ".") do
+      [one] -> one
+      parts -> parts |> Enum.take(2) |> Enum.join(".")
+    end
+  end
+
+  defp resolve_declaration(_name, [first | _rest]), do: normalize_declaration(first)
+
+  defp resolve_declaration(name, []) do
+    case String.split(name, ".") do
+      [one] -> one
+      parts -> parts |> Enum.take(2) |> Enum.join(".")
+    end
+  end
+
+  defp normalize_declaration("nixos/modules/nixos/modules/" <> rest),
+    do: "nixos/modules/" <> rest
+
+  defp normalize_declaration(declaration), do: declaration
+
   # 3 columns: display_name, inserted_at, updated_at
   @insert_cols 3
   @max_rows div(65_535, @insert_cols)

@@ -3,7 +3,7 @@ defmodule TrackerWeb.OptionLive.IndexTest do
 
   import Phoenix.LiveViewTest
 
-  alias Tracker.Nixpkgs.OptionsWorker
+  alias Tracker.Fixtures
 
   @sample_options %{
     "services.nginx.enable" => %{
@@ -80,7 +80,7 @@ defmodule TrackerWeb.OptionLive.IndexTest do
       Tracker.Nixpkgs.ChannelRevision.record_result!(cr, %{result: :success})
       cr = Tracker.Nixpkgs.ChannelRevision.record_options_result!(cr, %{options_result: :success})
 
-      OptionsWorker.write_to_database(@sample_options, cr)
+      Fixtures.load_options(@sample_options, cr)
 
       %{channel_revision: cr}
     end

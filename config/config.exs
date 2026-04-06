@@ -21,16 +21,17 @@ config :tracker,
 
 channel_crontab =
   Enum.map(channels, fn channel ->
-    {"0 */4 * * *", Tracker.Nixpkgs.ChannelWorker, args: %{"channel" => channel}}
+    {"0 */4 * * *", Tracker.Ingestion.CronWorker, args: %{"channel" => channel}}
   end)
 
 config :tracker, Oban,
   engine: Oban.Engines.Basic,
   notifier: Oban.Notifiers.Postgres,
-  queues: [channels: 1, changes: 4],
+  queues: [changes: 4, ingestion: 1],
   repo: Tracker.Repo,
   plugins: [
     Oban.Met,
+    {Oban.Plugins.Lifeline, rescue_after: :timer.minutes(30)},
     {Oban.Plugins.Cron,
      crontab:
        [
@@ -93,7 +94,7 @@ config :spark,
 config :tracker,
   ecto_repos: [Tracker.Repo],
   generators: [timestamp_type: :utc_datetime],
-  ash_domains: [Tracker.Nixpkgs, Tracker.Accounts]
+  ash_domains: [Tracker.Nixpkgs, Tracker.Accounts, Tracker.Ingestion]
 
 # Configures the endpoint
 config :tracker, TrackerWeb.Endpoint,

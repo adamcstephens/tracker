@@ -1,0 +1,162 @@
+defmodule Tracker.Ingestion.StepWorker do
+  @moduledoc """
+  Single Oban worker that dispatches ingestion pipeline steps.
+
+  Each job runs one step for one pipeline. On success, atomically
+  appends the step to `completed_steps`, computes newly ready
+  downstream steps, and enqueues them. On final failure, marks the
+  pipeline as failed.
+  """
+
+  use Oban.Worker,
+    queue: :ingestion,
+    max_attempts: 5,
+    unique: [keys: [:pipeline_id, :step]]
+
+  require Logger
+
+  alias Tracker.Ingestion.{Pipeline, StepContext, StepGraph}
+
+  @impl Oban.Worker
+  def timeout(%Oban.Job{args: %{"step" => step_name}}) do
+    step = String.to_existing_atom(step_name)
+    StepGraph.step_module(step).timeout()
+  end
+
+  @impl Oban.Worker
+  def perform(%Oban.Job{args: %{"pipeline_id" => pipeline_id, "step" => step_name}} = job) do
+    step = String.to_existing_atom(step_name)
+    step_module = StepGraph.step_module(step)
+
+    case Ash.get(Pipeline, pipeline_id) do
+      {:ok, pipeline} ->
+        if pipeline.status != :running do
+          Logger.info(
+            "Pipeline #{pipeline_id} not running (#{pipeline.status}), skipping #{step_name}"
+          )
+
+          :ok
+        else
+          ctx = build_context(pipeline)
+          execute_step(step_module, step, ctx, job)
+        end
+
+      {:error, _} ->
+        Logger.error("Pipeline #{pipeline_id} not found")
+        {:error, :pipeline_not_found}
+    end
+  end
+
+  defp build_context(pipeline) do
+    channel_revision =
+      if pipeline.channel_revision_id do
+        case Ash.get(Tracker.Nixpkgs.ChannelRevision, pipeline.channel_revision_id) do
+          {:ok, cr} -> cr
+          _ -> nil
+        end
+      end
+
+    %StepContext{pipeline: pipeline, channel_revision: channel_revision}
+  end
+
+  defp execute_step(step_module, step, ctx, job) do
+    case step_module.run(ctx) do
+      :ok ->
+        handle_step_success(ctx.pipeline, step)
+
+      {:error, reason} ->
+        handle_step_failure(ctx.pipeline, step, reason, job)
+    end
+  end
+
+  defp handle_step_success(pipeline, step) do
+    updated_pipeline = Pipeline.complete_step!(pipeline, step)
+
+    ready =
+      StepGraph.ready_steps(
+        atomize_list(updated_pipeline.active_steps),
+        atomize_list(updated_pipeline.completed_steps)
+      )
+
+    if ready == [] and all_complete?(updated_pipeline) do
+      Pipeline.mark_completed!(updated_pipeline)
+      start_next_pipeline(updated_pipeline)
+    else
+      Enum.each(ready, fn next_step ->
+        enqueue(updated_pipeline, next_step)
+      end)
+    end
+
+    :ok
+  end
+
+  defp handle_step_failure(pipeline, step, reason, job) do
+    if job.attempt >= job.max_attempts do
+      error_msg = inspect(reason, limit: 500)
+
+      Pipeline.mark_failed!(pipeline, step, error_msg)
+
+      Logger.error("Pipeline #{pipeline.id} failed at step #{step}: #{error_msg}")
+
+      {:error, reason}
+    else
+      {:error, reason}
+    end
+  end
+
+  defp all_complete?(pipeline) do
+    active = MapSet.new(atomize_list(pipeline.active_steps))
+    completed = MapSet.new(atomize_list(pipeline.completed_steps))
+    MapSet.equal?(active, completed)
+  end
+
+  defp start_next_pipeline(completed_pipeline) do
+    case Pipeline.next_pending_for_channel!(completed_pipeline.channel) do
+      [next | _] ->
+        Pipeline.start!(next)
+        enqueue(next, :create_revision)
+
+      [] ->
+        check_run_completion(completed_pipeline)
+    end
+  end
+
+  defp check_run_completion(pipeline) do
+    pipelines = Pipeline.for_run!(pipeline.ingestion_run_id)
+
+    all_done =
+      Enum.all?(pipelines, fn p ->
+        p.status in [:completed, :failed]
+      end)
+
+    if all_done do
+      run = Ash.get!(Tracker.Ingestion.IngestionRun, pipeline.ingestion_run_id)
+
+      has_failures = Enum.any?(pipelines, &(&1.status == :failed))
+
+      if has_failures do
+        Tracker.Ingestion.IngestionRun.mark_failed!(run)
+      else
+        Tracker.Ingestion.IngestionRun.mark_completed!(run)
+      end
+    end
+  end
+
+  @doc """
+  Enqueues a StepWorker job for the given pipeline and step.
+  """
+  def enqueue(pipeline, step) do
+    %{"pipeline_id" => pipeline.id, "step" => to_string(step)}
+    |> new(
+      meta: %{"channel" => pipeline.channel, "revision" => String.slice(pipeline.revision, 0, 7)}
+    )
+    |> Oban.insert!()
+  end
+
+  defp atomize_list(list) do
+    Enum.map(list, fn
+      item when is_atom(item) -> item
+      item when is_binary(item) -> String.to_existing_atom(item)
+    end)
+  end
+end
