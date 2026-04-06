@@ -21,7 +21,8 @@ config :tracker,
 
 channel_crontab =
   Enum.map(channels, fn channel ->
-    {"0 */4 * * *", Tracker.Ingestion.CronWorker, args: %{"channel" => channel}}
+    {"0 */4 * * *", Tracker.Ingestion.CronWorker,
+     args: %{"channel" => channel}, queue: :ingestion}
   end)
 
 config :tracker, Oban,
