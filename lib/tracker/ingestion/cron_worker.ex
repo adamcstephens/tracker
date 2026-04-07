@@ -12,13 +12,15 @@ defmodule Tracker.Ingestion.CronWorker do
   def timeout(_job), do: :timer.minutes(2)
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: %{"channel" => channel}}) do
+  def perform(%Oban.Job{args: %{"channel" => channel_name}}) do
+    {:ok, channel} = Tracker.Nixpkgs.Channel.by_name(channel_name)
+
     case Tracker.Ingestion.PipelineStarter.sync_channel(channel) do
       {:ok, count} ->
-        Logger.info("Synced #{channel}: created #{count} pipeline(s)")
+        Logger.info("Synced #{channel_name}: created #{count} pipeline(s)")
 
       :noop ->
-        Logger.debug("Synced #{channel}: no new revisions")
+        Logger.debug("Synced #{channel_name}: no new revisions")
     end
 
     :ok

@@ -1,7 +1,7 @@
 defmodule TrackerWeb.PackageLive.Show do
   use TrackerWeb, :live_view
 
-  @valid_sort_fields ~w(version channel revision_hash released_at)a
+  @valid_sort_fields ~w(version channel_name revision_hash released_at)a
   @default_sort_by :released_at
   @default_sort_dir :desc
 
@@ -130,11 +130,11 @@ defmodule TrackerWeb.PackageLive.Show do
                 <mark :if={event.type == :added}>added</mark>
                 <del :if={event.type == :removed}>removed</del>
               </td>
-              <td>{event.channel_revision.channel}</td>
+              <td>{event.channel_revision.channel.name}</td>
               <td>
                 <.revision_link
                   revision={event.channel_revision.revision}
-                  channel={event.channel_revision.channel}
+                  channel={event.channel_revision.channel.name}
                 />
               </td>
               <td>{format_released_at(event.channel_revision.released_at)}</td>
@@ -150,8 +150,8 @@ defmodule TrackerWeb.PackageLive.Show do
       <form phx-change="filter" phx-submit="filter" class="revision-filters">
         <select name="channel" aria-label="Filter by channel">
           <option value="">All channels</option>
-          <option :for={ch <- @channels} value={ch} selected={ch == @channel_filter}>
-            {ch}
+          <option :for={ch <- @channels} value={ch.name} selected={ch.name == @channel_filter}>
+            {ch.name}
           </option>
         </select>
         <input
@@ -186,7 +186,12 @@ defmodule TrackerWeb.PackageLive.Show do
         <thead>
           <tr>
             <.sort_header field={:version} label="Version" sort_by={@sort_by} sort_dir={@sort_dir} />
-            <.sort_header field={:channel} label="Channel" sort_by={@sort_by} sort_dir={@sort_dir} />
+            <.sort_header
+              field={:channel_name}
+              label="Channel"
+              sort_by={@sort_by}
+              sort_dir={@sort_dir}
+            />
             <.sort_header
               field={:revision_hash}
               label="Revision"
@@ -328,8 +333,8 @@ defmodule TrackerWeb.PackageLive.Show do
 
   alias Tracker.Nixpkgs.PackageRevision.VersionChange
 
-  defp rev_channel(%VersionChange{channel: channel}), do: channel
-  defp rev_channel(%{channel_revision: %{channel: channel}}), do: channel
+  defp rev_channel(%VersionChange{channel_name: channel_name}), do: channel_name
+  defp rev_channel(%{channel_revision: %{channel: %{name: name}}}), do: name
 
   defp rev_revision(%VersionChange{revision: revision}), do: revision
   defp rev_revision(%{channel_revision: %{revision: revision}}), do: revision
@@ -370,10 +375,11 @@ defmodule TrackerWeb.PackageLive.Show do
     page = params |> Map.get("page", "1") |> String.to_integer() |> max(1)
 
     channels = load_channels()
+    channel_names = Enum.map(channels, & &1.name)
 
     if connected?(socket) do
       old_channels = socket.assigns.subscribed_channels
-      new_channels = channels
+      new_channels = channel_names
 
       for ch <- old_channels -- new_channels do
         Phoenix.PubSub.unsubscribe(Tracker.PubSub, "channel_revisions:#{ch}")
@@ -400,7 +406,7 @@ defmodule TrackerWeb.PackageLive.Show do
      |> assign(:version_filter, version_filter)
      |> assign(:all_revisions?, all_revisions?)
      |> assign(:channels, channels)
-     |> assign(:subscribed_channels, channels)
+     |> assign(:subscribed_channels, channel_names)
      |> assign_package_data(
        package.id,
        sort_by,
@@ -455,16 +461,18 @@ defmodule TrackerWeb.PackageLive.Show do
     offset = (page - 1) * 15
     package_events = load_package_events(package_id)
 
+    channel_id = resolve_channel_id(channel_filter)
+
     {revisions, total_count, has_more?} =
       if all_revisions? do
         result =
-          load_revisions(package_id, sort_by, sort_dir, channel_filter, version_filter, offset)
+          load_revisions(package_id, sort_by, sort_dir, channel_id, version_filter, offset)
 
         {result.results, result.count, result.more?}
       else
         {results, count} =
           Tracker.Nixpkgs.PackageRevision.version_changes_by_package(package_id,
-            channel: channel_filter,
+            channel_id: channel_id,
             version: version_filter,
             sort_by: sort_by,
             sort_dir: sort_dir,
@@ -567,11 +575,15 @@ defmodule TrackerWeb.PackageLive.Show do
      )}
   end
 
-  defp load_revisions(package_id, sort_by, sort_dir, channel_filter, version_filter, offset) do
-    Tracker.Nixpkgs.PackageRevision.list_by_package!(package_id, channel_filter, version_filter,
-      query: [sort: [{sort_by, sort_dir}]],
-      page: [offset: offset, count: true]
-    )
+  defp load_revisions(package_id, sort_by, sort_dir, channel_id, version_filter, offset) do
+    result =
+      Tracker.Nixpkgs.PackageRevision.list_by_package!(package_id, channel_id, version_filter,
+        query: [sort: [{sort_by, sort_dir}]],
+        page: [offset: offset, count: true]
+      )
+
+    loaded_results = Ash.load!(result.results, channel_revision: [:channel])
+    %{result | results: loaded_results}
   end
 
   defp load_recent_changes(package_id) do
@@ -592,11 +604,21 @@ defmodule TrackerWeb.PackageLive.Show do
 
   defp load_package_events(package_id) do
     Tracker.Nixpkgs.PackageEvent.list_by_package!(package_id)
+    |> Ash.load!(channel_revision: [:channel])
   end
 
   defp load_channels do
-    Tracker.Nixpkgs.ChannelRevision.distinct_nixos_channels!()
-    |> Enum.map(& &1.channel)
+    Tracker.Nixpkgs.Channel.nixos_channels!()
+  end
+
+  defp resolve_channel_id(""), do: nil
+  defp resolve_channel_id(nil), do: nil
+
+  defp resolve_channel_id(channel_name) do
+    case Tracker.Nixpkgs.Channel.by_name(channel_name) do
+      {:ok, channel} -> channel.id
+      _ -> nil
+    end
   end
 
   defp parse_sort_by(nil), do: @default_sort_by

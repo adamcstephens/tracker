@@ -3,17 +3,37 @@ defmodule TrackerWeb.ChannelLive.RevisionShowTest do
 
   import Phoenix.LiveViewTest
 
+  alias Tracker.Nixpkgs.Channel
+
   setup do
+    channel_unstable =
+      Channel.create!(%{
+        name: "nixos-unstable",
+        display_name: "NixOS Unstable",
+        branch: "nixos-unstable",
+        status: :active,
+        is_stable: false
+      })
+
+    channel_stable =
+      Channel.create!(%{
+        name: "nixos-24.11",
+        display_name: "NixOS 24.11",
+        branch: "release-24.11",
+        status: :active,
+        is_stable: true
+      })
+
     cr1 =
       Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
-        channel: "nixos-unstable",
+        channel_id: channel_unstable.id,
         revision: "rev111aaa222333",
         released_at: ~U[2026-03-01 10:00:00Z]
       })
 
     cr2 =
       Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
-        channel: "nixos-unstable",
+        channel_id: channel_unstable.id,
         revision: "rev222bbb444555",
         released_at: ~U[2026-03-15 10:00:00Z],
         previous_channel_revision_id: cr1.id
@@ -21,7 +41,7 @@ defmodule TrackerWeb.ChannelLive.RevisionShowTest do
 
     cr_no_prev =
       Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
-        channel: "nixos-24.11",
+        channel_id: channel_stable.id,
         revision: "rev333fff666777",
         released_at: ~U[2026-03-20 10:00:00Z]
       })

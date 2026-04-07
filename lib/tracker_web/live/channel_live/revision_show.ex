@@ -114,8 +114,9 @@ defmodule TrackerWeb.ChannelLive.RevisionShow do
   end
 
   @impl true
-  def handle_params(%{"channel" => channel, "revision" => rev_hash}, _url, socket) do
-    revision = ChannelRevision.find_by_channel_hash!(channel, rev_hash)
+  def handle_params(%{"channel" => channel_name, "revision" => rev_hash}, _url, socket) do
+    channel = Tracker.Nixpkgs.Channel.by_name!(channel_name)
+    revision = ChannelRevision.find_by_channel_hash!(channel.id, rev_hash)
 
     previous_revision =
       if revision.previous_channel_revision_id do
@@ -126,7 +127,7 @@ defmodule TrackerWeb.ChannelLive.RevisionShow do
       if previous_revision do
         events =
           PackageEvent.list_between_revisions!(
-            channel,
+            channel.id,
             previous_revision.released_at,
             revision.released_at
           )
@@ -139,8 +140,8 @@ defmodule TrackerWeb.ChannelLive.RevisionShow do
 
     {:noreply,
      socket
-     |> assign(:page_title, "#{channel} — #{String.slice(revision.revision, 0, 7)}")
-     |> assign(:channel, channel)
+     |> assign(:page_title, "#{channel_name} — #{String.slice(revision.revision, 0, 7)}")
+     |> assign(:channel, channel_name)
      |> assign(:revision, revision)
      |> assign(:previous_revision, previous_revision)
      |> assign(:formatted_released_at, Calendar.strftime(revision.released_at, "%Y-%m-%d %H:%M"))

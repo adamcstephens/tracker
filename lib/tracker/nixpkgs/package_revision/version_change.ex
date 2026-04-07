@@ -11,7 +11,7 @@ defmodule Tracker.Nixpkgs.PackageRevision.VersionChange do
     field :version, String.t()
     field :package_id, integer()
     field :channel_revision_id, integer()
-    field :channel, String.t()
+    field :channel_name, String.t()
     field :revision, String.t()
     field :released_at, DateTime.t()
   end

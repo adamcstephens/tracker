@@ -8,7 +8,7 @@ defmodule Tracker.Nixpkgs.PackageRevision do
 
   code_interface do
     define :read
-    define :list_by_package, args: [:package_id, {:optional, :channel}, {:optional, :version}]
+    define :list_by_package, args: [:package_id, {:optional, :channel_id}, {:optional, :version}]
     define :load
   end
 
@@ -20,7 +20,7 @@ defmodule Tracker.Nixpkgs.PackageRevision do
         allow_nil? false
       end
 
-      argument :channel, :string
+      argument :channel_id, :integer
       argument :version, :string
 
       pagination do
@@ -33,8 +33,8 @@ defmodule Tracker.Nixpkgs.PackageRevision do
 
       filter expr(
                package_id == ^arg(:package_id) and
-                 if not is_nil(^arg(:channel)) and ^arg(:channel) != "" do
-                   channel_revision.channel == ^arg(:channel)
+                 if not is_nil(^arg(:channel_id)) do
+                   channel_revision.channel_id == ^arg(:channel_id)
                  else
                    true
                  end and
@@ -74,7 +74,7 @@ defmodule Tracker.Nixpkgs.PackageRevision do
   end
 
   calculations do
-    calculate :channel, :string, expr(channel_revision.channel)
+    calculate :channel_name, :string, expr(channel_revision.channel.name)
     calculate :revision_hash, :string, expr(channel_revision.revision)
     calculate :released_at, :utc_datetime, expr(channel_revision.released_at)
   end
@@ -86,7 +86,7 @@ defmodule Tracker.Nixpkgs.PackageRevision do
   @valid_sort_columns %{
     released_at: "released_at",
     version: "version",
-    channel: "channel",
+    channel_name: "channel_name",
     revision_hash: "revision"
   }
 
@@ -110,7 +110,7 @@ defmodule Tracker.Nixpkgs.PackageRevision do
     * `:offset` - offset for pagination (default: 0)
   """
   def version_changes_by_package(package_id, opts \\ []) do
-    channel = opts[:channel]
+    channel_id = opts[:channel_id]
     version = opts[:version]
     sort_col = Map.get(@valid_sort_columns, opts[:sort_by] || :released_at, "released_at")
     sort_dir = Map.get(@valid_sort_dirs, opts[:sort_dir] || :desc, "DESC")
@@ -120,15 +120,16 @@ defmodule Tracker.Nixpkgs.PackageRevision do
     sql = """
     WITH ranked AS (
       SELECT pr.id, pr.version, pr.package_id, pr.channel_revision_id,
-             cr.channel, cr.revision, cr.released_at,
-             LAG(pr.version) OVER (PARTITION BY cr.channel ORDER BY cr.released_at ASC) AS prev_version
+             c.name AS channel_name, cr.revision, cr.released_at,
+             LAG(pr.version) OVER (PARTITION BY cr.channel_id ORDER BY cr.released_at ASC) AS prev_version
       FROM package_revisions pr
       JOIN channel_revisions cr ON cr.id = pr.channel_revision_id
+      JOIN channels c ON c.id = cr.channel_id
       WHERE pr.package_id = $1
-        AND ($2::text IS NULL OR cr.channel = $2)
+        AND ($2::bigint IS NULL OR cr.channel_id = $2)
     ),
     version_changes AS (
-      SELECT id, version, package_id, channel_revision_id, channel, revision, released_at
+      SELECT id, version, package_id, channel_revision_id, channel_name, revision, released_at
       FROM ranked
       WHERE version != prev_version OR prev_version IS NULL
     )
@@ -139,10 +140,9 @@ defmodule Tracker.Nixpkgs.PackageRevision do
     LIMIT $4 OFFSET $5
     """
 
-    channel_param = if channel != nil and channel != "", do: channel, else: nil
     version_param = if version != nil and version != "", do: version, else: nil
 
-    case Tracker.Repo.query(sql, [package_id, channel_param, version_param, limit, offset]) do
+    case Tracker.Repo.query(sql, [package_id, channel_id, version_param, limit, offset]) do
       {:ok, %{rows: []}} ->
         {[], 0}
 
@@ -155,7 +155,7 @@ defmodule Tracker.Nixpkgs.PackageRevision do
                               version,
                               package_id,
                               channel_revision_id,
-                              channel,
+                              channel_name,
                               revision,
                               released_at,
                               _total_count
@@ -165,7 +165,7 @@ defmodule Tracker.Nixpkgs.PackageRevision do
               version: version,
               package_id: package_id,
               channel_revision_id: channel_revision_id,
-              channel: channel,
+              channel_name: channel_name,
               revision: revision,
               released_at: DateTime.from_naive!(released_at, "Etc/UTC")
             }

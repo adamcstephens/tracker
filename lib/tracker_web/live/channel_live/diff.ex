@@ -99,24 +99,25 @@ defmodule TrackerWeb.ChannelLive.Diff do
 
   @impl true
   def handle_params(
-        %{"channel" => channel, "rev_a" => rev_a_hash, "rev_b" => rev_b_hash},
+        %{"channel" => channel_name, "rev_a" => rev_a_hash, "rev_b" => rev_b_hash},
         _url,
         socket
       ) do
-    rev_a = ChannelRevision.find_by_channel_hash!(channel, rev_a_hash)
-    rev_b = ChannelRevision.find_by_channel_hash!(channel, rev_b_hash)
+    channel = Tracker.Nixpkgs.Channel.by_name!(channel_name)
+    rev_a = ChannelRevision.find_by_channel_hash!(channel.id, rev_a_hash)
+    rev_b = ChannelRevision.find_by_channel_hash!(channel.id, rev_b_hash)
 
     {older, newer} = order_revisions(rev_a, rev_b)
 
     events =
-      PackageEvent.list_between_revisions!(channel, older.released_at, newer.released_at)
+      PackageEvent.list_between_revisions!(channel.id, older.released_at, newer.released_at)
 
     version_changes = compute_version_changes(older.id, newer.id)
 
     {:noreply,
      socket
-     |> assign(:page_title, "#{channel} diff")
-     |> assign(:channel, channel)
+     |> assign(:page_title, "#{channel_name} diff")
+     |> assign(:channel, channel_name)
      |> assign(:rev_a, older)
      |> assign(:rev_b, newer)
      |> assign(:events, events)

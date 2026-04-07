@@ -21,10 +21,12 @@ defmodule Tracker.Ingestion.Steps.Finalize do
       })
     end
 
+    channel = Ash.get!(Tracker.Nixpkgs.Channel, pipeline.channel_id)
+
     Phoenix.PubSub.broadcast(
       Tracker.PubSub,
-      "channel_revisions:#{pipeline.channel}",
-      {:channel_revision_completed, %{channel: pipeline.channel, revision: pipeline.revision}}
+      "channel_revisions:#{channel.name}",
+      {:channel_revision_completed, %{channel_name: channel.name, revision: pipeline.revision}}
     )
 
     :ok

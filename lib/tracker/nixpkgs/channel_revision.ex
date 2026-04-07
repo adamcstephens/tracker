@@ -8,18 +8,16 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
 
   code_interface do
     define :read
-    define :find, args: [:channel, :revision]
+    define :find, args: [:channel_id, :revision]
     define :create
-    define :list_by_channel, args: [:channel]
+    define :list_by_channel, args: [:channel_id]
     define :record_result
     define :record_options_result
-    define :by_channel, args: [:channel]
-    define :distinct_channels
-    define :distinct_nixos_channels
+    define :by_channel, args: [:channel_id]
     define :find_by_hash, args: [:hash]
-    define :find_by_channel_hash, args: [:channel, :hash]
-    define :latest_by_channel, args: [:channel]
-    define :without_options, args: [:channel]
+    define :find_by_channel_hash, args: [:channel_id, :hash]
+    define :latest_by_channel, args: [:channel_id]
+    define :without_options, args: [:channel_id]
   end
 
   actions do
@@ -28,7 +26,7 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
     read :find do
       get? true
 
-      argument :channel, :string do
+      argument :channel_id, :integer do
         allow_nil? false
       end
 
@@ -36,19 +34,19 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
         allow_nil? false
       end
 
-      filter expr(channel == ^arg(:channel) and revision == ^arg(:revision))
+      filter expr(channel_id == ^arg(:channel_id) and revision == ^arg(:revision))
     end
 
     create :create do
       primary? true
-      accept [:channel, :revision, :released_at, :previous_channel_revision_id]
+      accept [:revision, :released_at, :previous_channel_revision_id, :channel_id]
       upsert? true
       upsert_identity :unique_channel_revision
       upsert_fields [:released_at, :previous_channel_revision_id, :updated_at]
     end
 
     read :list_by_channel do
-      argument :channel, :string do
+      argument :channel_id, :integer do
         allow_nil? false
       end
 
@@ -59,7 +57,7 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
       end
 
       prepare build(sort: [{:released_at, :desc}])
-      filter expr(channel == ^arg(:channel))
+      filter expr(channel_id == ^arg(:channel_id))
     end
 
     update :record_result do
@@ -71,29 +69,20 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
     end
 
     read :by_channel do
-      argument :channel, :string do
+      argument :channel_id, :integer do
         allow_nil? false
       end
 
-      filter expr(channel == ^arg(:channel))
-    end
-
-    read :distinct_channels do
-      prepare build(distinct: [:channel], sort: [:channel])
-    end
-
-    read :distinct_nixos_channels do
-      prepare build(distinct: [:channel], sort: [:channel])
-      filter expr(fragment("? LIKE 'nixos-%'", channel))
+      filter expr(channel_id == ^arg(:channel_id))
     end
 
     read :without_options do
-      argument :channel, :string, allow_nil?: false
+      argument :channel_id, :integer, allow_nil?: false
 
       prepare build(sort: [{:released_at, :asc}])
 
       filter expr(
-               channel == ^arg(:channel) and
+               channel_id == ^arg(:channel_id) and
                  result == :success and
                  not exists(option_revisions, true)
              )
@@ -102,16 +91,16 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
     read :latest_by_channel do
       get? true
 
-      argument :channel, :string, allow_nil?: false
+      argument :channel_id, :integer, allow_nil?: false
 
       prepare build(sort: [{:released_at, :desc}], limit: 1)
-      filter expr(channel == ^arg(:channel) and options_result == :success)
+      filter expr(channel_id == ^arg(:channel_id) and options_result == :success)
     end
 
     read :find_by_channel_hash do
       get? true
 
-      argument :channel, :string do
+      argument :channel_id, :integer do
         allow_nil? false
       end
 
@@ -120,7 +109,7 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
       end
 
       filter expr(
-               channel == ^arg(:channel) and
+               channel_id == ^arg(:channel_id) and
                  fragment("? LIKE ? || '%'", revision, ^arg(:hash))
              )
     end
@@ -139,11 +128,6 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
   attributes do
     integer_primary_key :id
 
-    attribute :channel, :string do
-      allow_nil? false
-      public? true
-    end
-
     attribute :revision, :string do
       allow_nil? false
       public? true
@@ -161,6 +145,11 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
   end
 
   relationships do
+    belongs_to :channel, Tracker.Nixpkgs.Channel do
+      attribute_type :integer
+      allow_nil? false
+    end
+
     belongs_to :previous_channel_revision, __MODULE__ do
       attribute_type :integer
       allow_nil? true
@@ -170,7 +159,7 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
   end
 
   identities do
-    identity :unique_channel_revision, [:channel, :revision]
+    identity :unique_channel_revision, [:channel_id, :revision]
   end
 
   @doc """

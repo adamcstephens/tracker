@@ -7,14 +7,14 @@ defmodule Tracker.Ingestion.Steps.LoadOptions do
   @behaviour Tracker.Ingestion.Step
 
   alias Tracker.Ingestion.Helpers
-  alias Tracker.Nixpkgs.Channel
+  alias Tracker.Nixpkgs.ChannelFetcher
 
   @impl true
   def timeout, do: :timer.minutes(15)
 
   @impl true
   def run(%Tracker.Ingestion.StepContext{pipeline: pipeline, channel_revision: channel_revision}) do
-    options_map = Channel.fetch_options(pipeline.base_url)
+    options_map = ChannelFetcher.fetch_options(pipeline.base_url)
 
     {module_records, declaration_records, option_to_display_name} =
       Tracker.Nixpkgs.Module.derive_from_options(options_map)

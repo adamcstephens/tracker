@@ -96,14 +96,14 @@ defmodule TrackerWeb.ChannelLive.Index do
   end
 
   defp load_channels(sort_by, sort_dir) do
-    Tracker.Nixpkgs.ChannelRevision.read!()
-    |> Enum.group_by(& &1.channel)
-    |> Enum.map(fn {name, revisions} ->
+    Tracker.Nixpkgs.Channel.read!()
+    |> Enum.map(fn channel ->
+      revisions = Tracker.Nixpkgs.ChannelRevision.by_channel!(channel.id)
       latest = revisions |> Enum.max_by(& &1.released_at, DateTime, fn -> nil end)
 
       %{
-        id: name,
-        name: name,
+        id: channel.name,
+        name: channel.name,
         count: length(revisions),
         latest_release: latest && latest.released_at
       }

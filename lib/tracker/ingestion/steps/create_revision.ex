@@ -16,12 +16,12 @@ defmodule Tracker.Ingestion.Steps.CreateRevision do
 
   @impl true
   def run(%Tracker.Ingestion.StepContext{pipeline: pipeline}) do
-    previous_revision = find_previous_revision(pipeline.channel, pipeline.revision)
+    previous_revision = find_previous_revision(pipeline.channel_id, pipeline.revision)
 
     create_attrs =
       %{
         revision: pipeline.revision,
-        channel: pipeline.channel,
+        channel_id: pipeline.channel_id,
         released_at: pipeline.released_at
       }
       |> Helpers.maybe_put(
@@ -36,13 +36,15 @@ defmodule Tracker.Ingestion.Steps.CreateRevision do
     :ok
   end
 
-  defp find_previous_revision(channel, revision) do
-    case ReleaseCache.find_previous_release(channel, revision) do
+  defp find_previous_revision(channel_id, revision) do
+    channel = Ash.get!(Tracker.Nixpkgs.Channel, channel_id)
+
+    case ReleaseCache.find_previous_release(channel.name, revision) do
       nil ->
         nil
 
       %ReleaseCache.Release{short_hash: prev_hash} ->
-        case ChannelRevision.find_by_channel_hash(channel, prev_hash) do
+        case ChannelRevision.find_by_channel_hash(channel_id, prev_hash) do
           {:ok, rev} -> rev
           _ -> nil
         end

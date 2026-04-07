@@ -3,9 +3,11 @@ defmodule TrackerWeb.FeedController do
 
   @base_url "https://tracker-dev.junco.dev"
 
-  def channel(conn, %{"channel" => channel}) do
+  def channel(conn, %{"channel" => channel_name}) do
+    channel = Tracker.Nixpkgs.Channel.by_name!(channel_name)
+
     revisions =
-      Tracker.Nixpkgs.ChannelRevision.list_by_channel!(channel,
+      Tracker.Nixpkgs.ChannelRevision.list_by_channel!(channel.id,
         page: [limit: 50]
       ).results
 
@@ -17,13 +19,13 @@ defmodule TrackerWeb.FeedController do
 
     feed =
       Atomex.Feed.new(
-        "#{@base_url}/channels/#{channel}",
+        "#{@base_url}/channels/#{channel_name}",
         latest_updated,
-        "#{channel} - Tracker"
+        "#{channel_name} - Tracker"
       )
-      |> Atomex.Feed.link("#{@base_url}/feeds/channels/#{channel}", rel: "self")
-      |> Atomex.Feed.link("#{@base_url}/channels/#{channel}", rel: "alternate")
-      |> Atomex.Feed.entries(Enum.map(revisions, &channel_entry(channel, &1)))
+      |> Atomex.Feed.link("#{@base_url}/feeds/channels/#{channel_name}", rel: "self")
+      |> Atomex.Feed.link("#{@base_url}/channels/#{channel_name}", rel: "alternate")
+      |> Atomex.Feed.entries(Enum.map(revisions, &channel_entry(channel_name, &1)))
       |> Atomex.Feed.build()
       |> Atomex.generate_document()
 
@@ -90,23 +92,31 @@ defmodule TrackerWeb.FeedController do
   end
 
   defp package_entry(name, rev) do
-    url = "#{@base_url}/channels/#{rev.channel}/revisions/#{rev.revision}"
+    url = "#{@base_url}/channels/#{rev.channel_name}/revisions/#{rev.revision}"
 
     Atomex.Entry.new(
       "#{url}##{name}",
       rev.released_at,
-      "#{name} #{rev.version} on #{rev.channel}"
+      "#{name} #{rev.version} on #{rev.channel_name}"
     )
     |> Atomex.Entry.link(url, rel: "alternate")
     |> Atomex.Entry.published(rev.released_at)
-    |> Atomex.Entry.summary("#{name} updated to #{rev.version} on #{rev.channel}")
+    |> Atomex.Entry.summary("#{name} updated to #{rev.version} on #{rev.channel_name}")
     |> Atomex.Entry.build()
   end
 
   defp load_package_version_changes(package_id, channel_filter) do
+    channel_id =
+      if channel_filter != "" do
+        case Tracker.Nixpkgs.Channel.by_name(channel_filter) do
+          {:ok, ch} -> ch.id
+          _ -> nil
+        end
+      end
+
     {results, _count} =
       Tracker.Nixpkgs.PackageRevision.version_changes_by_package(package_id,
-        channel: channel_filter,
+        channel_id: channel_id,
         sort_by: :released_at,
         sort_dir: :desc,
         limit: 50

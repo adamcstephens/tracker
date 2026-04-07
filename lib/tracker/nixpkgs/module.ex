@@ -126,7 +126,7 @@ defmodule Tracker.Nixpkgs.Module do
         option_names
         |> Enum.group_by(&option_prefix/1)
         |> Enum.map(fn {_prefix, names} ->
-          {declaration, names, Tracker.Nixpkgs.Channel.display_name_for_options(names)}
+          {declaration, names, Tracker.Nixpkgs.ChannelFetcher.display_name_for_options(names)}
         end)
       end)
 

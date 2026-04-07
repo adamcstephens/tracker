@@ -3,17 +3,28 @@ defmodule TrackerWeb.ChannelLive.DiffTest do
 
   import Phoenix.LiveViewTest
 
+  alias Tracker.Nixpkgs.Channel
+
   setup do
+    channel =
+      Channel.create!(%{
+        name: "nixos-unstable",
+        display_name: "NixOS Unstable",
+        branch: "nixos-unstable",
+        status: :active,
+        is_stable: false
+      })
+
     cr1 =
       Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
-        channel: "nixos-unstable",
+        channel_id: channel.id,
         revision: "dif111aaa222333",
         released_at: ~U[2026-03-01 10:00:00Z]
       })
 
     cr2 =
       Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
-        channel: "nixos-unstable",
+        channel_id: channel.id,
         revision: "dif222bbb444555",
         released_at: ~U[2026-03-15 10:00:00Z],
         previous_channel_revision_id: cr1.id
