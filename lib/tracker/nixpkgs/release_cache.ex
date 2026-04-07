@@ -214,8 +214,11 @@ defmodule Tracker.Nixpkgs.ReleaseCache do
   end
 
   defp do_refresh(current_releases) do
-    configured = Application.get_env(:tracker, :channels, [])
-    all_channels = Enum.uniq(configured ++ Map.keys(current_releases))
+    active_names =
+      Tracker.Nixpkgs.Channel.active!()
+      |> Enum.map(& &1.name)
+
+    all_channels = Enum.uniq(active_names ++ Map.keys(current_releases))
 
     Map.new(all_channels, fn channel ->
       releases =

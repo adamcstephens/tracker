@@ -19,12 +19,6 @@ config :tracker,
   # loader_limit: 20,
   channels: channels
 
-channel_crontab =
-  Enum.map(channels, fn channel ->
-    {"0 */4 * * *", Tracker.Ingestion.CronWorker,
-     args: %{"channel" => channel}, queue: :ingestion}
-  end)
-
 config :tracker, Oban,
   engine: Oban.Engines.Basic,
   notifier: Oban.Notifiers.Postgres,
@@ -34,10 +28,10 @@ config :tracker, Oban,
     Oban.Met,
     {Oban.Plugins.Lifeline, rescue_after: :timer.minutes(30)},
     {Oban.Plugins.Cron,
-     crontab:
-       [
-         {"*/5 * * * *", Tracker.Nixpkgs.ChangePollWorker}
-       ] ++ channel_crontab}
+     crontab: [
+       {"*/5 * * * *", Tracker.Nixpkgs.ChangePollWorker},
+       {"0 */4 * * *", Tracker.Ingestion.CronWorker, queue: :ingestion}
+     ]}
   ]
 
 config :mime,
