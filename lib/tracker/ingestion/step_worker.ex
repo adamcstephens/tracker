@@ -113,11 +113,28 @@ defmodule Tracker.Ingestion.StepWorker do
   defp start_next_pipeline(completed_pipeline) do
     case Pipeline.next_pending_for_channel!(completed_pipeline.channel) do
       [next | _] ->
-        Pipeline.start!(next)
-        enqueue(next, :create_revision)
+        if startable?(next) do
+          Pipeline.start!(next)
+          enqueue(next, :create_revision)
+        else
+          check_run_completion(completed_pipeline)
+        end
 
       [] ->
         check_run_completion(completed_pipeline)
+    end
+  end
+
+  defp startable?(pipeline) do
+    case pipeline.predecessor_id do
+      nil ->
+        true
+
+      predecessor_id ->
+        case Ash.get(Pipeline, predecessor_id) do
+          {:ok, %{status: :completed}} -> true
+          _ -> false
+        end
     end
   end
 

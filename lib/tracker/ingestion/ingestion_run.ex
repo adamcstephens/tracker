@@ -42,7 +42,7 @@ defmodule Tracker.Ingestion.IngestionRun do
 
     attribute :type, :atom do
       allow_nil? false
-      constraints one_of: [:reload, :cron_update, :backfill]
+      constraints one_of: [:cron_update, :backfill]
     end
 
     attribute :status, :atom do

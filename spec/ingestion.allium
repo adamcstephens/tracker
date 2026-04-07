@@ -1,0 +1,317 @@
+-- allium: 3
+
+-- Channel ingestion synchronisation.
+-- Ensures every revision in a channel's release history gets an
+-- ingestion pipeline, in order, with no gaps. Covers pipeline
+-- creation from the release cache, predecessor-based execution
+-- ordering, and the unified sync_channel entry point that
+-- replaces the former cron_update and backfill_channel split.
+
+-- Scope: Pipeline creation, ordering, and lifecycle guards.
+-- Includes: sync_channel, pipeline predecessor chain, cron trigger.
+-- Excludes:
+--   - Pipeline step execution (step graph, individual steps)
+--   - Release cache internals (S3 fetch, refresh)
+--   - Web/UI layer
+
+------------------------------------------------------------
+-- External Entities
+------------------------------------------------------------
+
+external entity Release {
+    short_hash: String
+    revision: String
+    base_url: String
+    released_at: Timestamp
+    channel: String
+}
+
+external entity ReleaseCache {
+    -- Authoritative source for channel release history.
+    -- Returns releases ordered by released_at ascending.
+    releases_for(channel: String): List<Release>
+    find_previous(channel: String, revision: String): Release?
+}
+
+------------------------------------------------------------
+-- Enumerations
+------------------------------------------------------------
+
+enum PipelineStatus { pending | running | completed | failed }
+
+enum RunType { cron_update | backfill }
+
+------------------------------------------------------------
+-- Entities
+------------------------------------------------------------
+
+entity IngestionRun {
+    type: RunType
+    status: running | completed | failed
+    started_at: Timestamp
+    completed_at: Timestamp?
+
+    pipelines: Pipeline with run = this
+
+    transitions status {
+        running -> completed
+        running -> failed
+        terminal: completed, failed
+    }
+}
+
+entity Pipeline {
+    channel: String
+    revision: String
+    base_url: String
+    released_at: Timestamp
+    status: PipelineStatus
+    sequence: Integer
+
+    run: IngestionRun
+    predecessor: Pipeline?
+
+    -- Derived
+    is_startable: status = pending
+        and (predecessor = null or predecessor.status = completed)
+
+    transitions status {
+        pending -> running
+        running -> completed
+        running -> failed
+        failed -> pending
+        terminal: completed
+    }
+}
+
+------------------------------------------------------------
+-- Config
+------------------------------------------------------------
+
+config {
+    cron_interval: Duration = 4.hours
+    channels: List<String>
+}
+
+------------------------------------------------------------
+-- Rules
+------------------------------------------------------------
+
+-- Cron trigger: periodically sync each configured channel.
+
+rule CronTick {
+    when: schedule: CronSchedule.next_run_at <= now
+    for channel in config.channels:
+        ensures: SyncChannel(channel: channel, bootstrap: false)
+}
+
+-- Unified sync entry point.
+
+rule SyncChannel {
+    when: SyncChannel(channel, bootstrap, after?)
+
+    let releases = ReleaseCache.releases_for(channel)
+    let existing_pipelines = Pipelines where channel = channel
+    let last_completed = existing_pipelines
+        where status = completed
+        -> released_at
+        |> max
+
+    -- If no completed pipelines and not bootstrapping, nothing to do.
+    requires: bootstrap or last_completed != null
+
+    -- Determine cutoff: last completed, or explicit after, or none.
+    let cutoff = if last_completed != null: last_completed
+        else if after != null: after
+        else: null
+
+    -- Filter to releases newer than cutoff (or all if no cutoff).
+    let target_releases = if cutoff != null:
+        releases where released_at > cutoff
+    else:
+        releases
+
+    -- Exclude releases that already have a non-failed pipeline.
+    let new_releases = target_releases
+        where not exists Pipeline{channel: channel, revision: revision}
+            or Pipeline{channel: channel, revision: revision}.status = failed
+
+    ensures:
+        if new_releases.count > 0:
+            let run = IngestionRun.created(
+                type: if bootstrap: backfill else: cron_update,
+                status: running,
+                started_at: now
+            )
+            CreatePipelinesForReleases(run, channel, new_releases)
+
+    @guidance
+        -- When filtering out existing pipelines, a release is
+        -- skipped if it has an existing pipeline with status other
+        -- than failed. Failed pipelines are left for operator
+        -- intervention; no new pipeline is created to replace them.
+        -- The failed pipeline blocks the chain (see StartPipeline).
+}
+
+rule CreatePipelinesForReleases {
+    when: CreatePipelinesForReleases(run, channel, releases)
+
+    -- releases is already oldest-first from ReleaseCache.
+    for release, index in releases:
+        let predecessor_release = ReleaseCache.find_previous(channel, release.revision)
+        let predecessor_pipeline = if predecessor_release != null:
+            Pipeline{channel: channel, revision: predecessor_release.revision}
+        else:
+            null
+
+        ensures:
+            Pipeline.created(
+                channel: channel,
+                revision: release.revision,
+                base_url: release.base_url,
+                released_at: release.released_at,
+                status: pending,
+                sequence: index,
+                run: run,
+                predecessor: predecessor_pipeline
+            )
+
+    ensures: StartNextPending(channel)
+
+    @guidance
+        -- The predecessor is resolved from the ReleaseCache, not
+        -- from the pipelines created in this batch. This means a
+        -- pipeline's predecessor may be from a prior sync run,
+        -- forming one continuous chain per channel.
+}
+
+-- Pipeline lifecycle.
+
+rule StartPipeline {
+    when: StartNextPending(channel)
+
+    let candidates = Pipelines where channel = channel and status = pending
+    let next = candidates where is_startable
+        |> min_by(sequence)
+
+    requires: next != null
+
+    ensures:
+        next.status = running
+
+    @guidance
+        -- The is_startable derived value enforces the predecessor
+        -- guard: a pipeline can only start if its predecessor is
+        -- completed (or absent). This is the single safety
+        -- mechanism that prevents revision leakage.
+}
+
+rule PipelineCompletes {
+    when: pipeline: Pipeline.status transitions_to completed
+    ensures: StartNextPending(channel: pipeline.channel)
+
+    @guidance
+        -- When a pipeline completes, kick the chain: look for
+        -- the next startable pending pipeline in the same channel.
+}
+
+rule AllPipelinesComplete {
+    when: run: IngestionRun where
+        run.pipelines.all(p => p.status = completed)
+    requires: run.status = running
+    ensures:
+        run.status = completed
+        run.completed_at = now
+}
+
+rule AnyPipelineFailed {
+    when: pipeline: Pipeline.status transitions_to failed
+    requires: pipeline.run.status = running
+    ensures:
+        pipeline.run.status = failed
+        pipeline.run.completed_at = now
+
+    @guidance
+        -- A failed pipeline also fails the run. Downstream
+        -- pipelines remain pending and are blocked by the
+        -- predecessor guard. Operator retries the failed
+        -- pipeline via Oban UI; on success the chain resumes
+        -- through PipelineCompletes -> StartNextPending.
+}
+
+-- Bootstrap entry point.
+
+rule BackfillChannel {
+    when: BackfillChannel(channel, after?)
+
+    -- Refuse if channel already has any pipelines.
+    let existing = Pipelines where channel = channel
+    requires: existing.count = 0
+
+    ensures: SyncChannel(channel: channel, bootstrap: true, after: after)
+
+    @guidance
+        -- BackfillChannel is the only path that sets bootstrap: true.
+        -- The after parameter allows starting from an arbitrary date
+        -- to avoid consuming the full history for large channels.
+        -- Fails up front if the channel already has pipelines.
+}
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant NoPredecessorGap {
+    -- For any running or completed pipeline with a predecessor,
+    -- the predecessor is completed. No pipeline can execute
+    -- while its predecessor is pending or failed.
+    for p in Pipelines where status in {running, completed}:
+        p.predecessor = null or p.predecessor.status = completed
+}
+
+invariant SingleRunningPerChannel {
+    -- At most one pipeline per channel is running at any time.
+    for channel in config.channels:
+        Pipelines where channel = channel and status = running
+        |> count <= 1
+}
+
+invariant ChainConnectsToCacheOrder {
+    -- The predecessor chain follows ReleaseCache chronological
+    -- order. If pipeline B's predecessor is A, then A.released_at
+    -- < B.released_at in the ReleaseCache.
+    for p in Pipelines where predecessor != null:
+        p.predecessor.released_at < p.released_at
+}
+
+------------------------------------------------------------
+-- Decisions
+------------------------------------------------------------
+
+-- ReleaseCache is the authoritative source for revision ordering.
+-- Predecessors are determined by querying the cache at pipeline
+-- creation time, not by storing an explicit ordering. This means
+-- if the cache is unavailable, no pipelines can be created, which
+-- is the safe default.
+
+-- The predecessor guard lives on the Pipeline entity (is_startable),
+-- not in the orchestration logic. This means even manual starts or
+-- bugs in the worker cannot cause out-of-order execution.
+
+-- Bootstrap (backfill) requires an empty channel to prevent
+-- conflicts with existing pipeline chains. This is enforced
+-- up front rather than being a soft check.
+
+-- Failed pipelines block the chain. There is no automatic retry
+-- or skip mechanism. Operator intervention via Oban Web UI is
+-- the recovery path. This is deliberately conservative to avoid
+-- silent data gaps.
+
+-- The cron_update / backfill distinction is preserved in the
+-- IngestionRun type for observability, but the pipeline creation
+-- and execution logic is identical.
+
+-- Retry of a failed pipeline resets it to pending (via Oban),
+-- and the chain resumes naturally through the existing
+-- PipelineCompletes -> StartNextPending flow.
+
