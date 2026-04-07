@@ -19,6 +19,8 @@ defmodule Tracker.Ingestion.Pipeline do
     define :mark_completed
     define :mark_failed, args: [:failed_step, :error]
     define :retry_from_step
+    define :last_completed_for_channel, args: [:channel]
+    define :for_channel, args: [:channel]
     define :next_pending_for_channel, args: [:channel]
     define :for_run, args: [:ingestion_run_id]
   end
@@ -36,7 +38,8 @@ defmodule Tracker.Ingestion.Pipeline do
         :released_at,
         :active_steps,
         :sequence,
-        :ingestion_run_id
+        :ingestion_run_id,
+        :predecessor_id
       ]
 
       change set_attribute(:status, :pending)
@@ -59,6 +62,19 @@ defmodule Tracker.Ingestion.Pipeline do
       filter expr(channel == ^arg(:channel) and status == :pending)
     end
 
+    read :last_completed_for_channel do
+      argument :channel, :string, allow_nil?: false
+
+      prepare build(sort: [{:released_at, :desc}], limit: 1)
+      filter expr(channel == ^arg(:channel) and status == :completed)
+    end
+
+    read :for_channel do
+      argument :channel, :string, allow_nil?: false
+
+      filter expr(channel == ^arg(:channel))
+    end
+
     read :for_run do
       argument :ingestion_run_id, :integer, allow_nil?: false
 
@@ -66,6 +82,7 @@ defmodule Tracker.Ingestion.Pipeline do
     end
 
     update :start do
+      validate Tracker.Ingestion.Pipeline.Validations.PredecessorCompleted
       change set_attribute(:status, :running)
     end
 
@@ -165,6 +182,12 @@ defmodule Tracker.Ingestion.Pipeline do
     belongs_to :ingestion_run, Tracker.Ingestion.IngestionRun do
       attribute_type :integer
       allow_nil? false
+    end
+
+    belongs_to :predecessor, Tracker.Ingestion.Pipeline do
+      attribute_type :integer
+      allow_nil? true
+      attribute_writable? true
     end
   end
 

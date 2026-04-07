@@ -93,6 +93,71 @@ defmodule Tracker.Ingestion.PipelineTest do
 
       assert updated.status == :running
     end
+
+    test "succeeds when predecessor is completed" do
+      run = create_run!()
+
+      predecessor =
+        create_pipeline!(run, %{revision: "pred1", sequence: 0})
+        |> Pipeline.start!()
+        |> Pipeline.mark_completed!()
+
+      pipeline =
+        create_pipeline!(run, %{
+          revision: "next1",
+          sequence: 1,
+          predecessor_id: predecessor.id
+        })
+
+      updated = Pipeline.start!(pipeline)
+
+      assert updated.status == :running
+    end
+
+    test "fails when predecessor is pending" do
+      run = create_run!()
+      predecessor = create_pipeline!(run, %{revision: "pred2", sequence: 0})
+
+      pipeline =
+        create_pipeline!(run, %{
+          revision: "next2",
+          sequence: 1,
+          predecessor_id: predecessor.id
+        })
+
+      assert_raise Ash.Error.Invalid, fn ->
+        Pipeline.start!(pipeline)
+      end
+    end
+
+    test "fails when predecessor is failed" do
+      run = create_run!()
+
+      predecessor =
+        create_pipeline!(run, %{revision: "pred3", sequence: 0})
+        |> Pipeline.start!()
+        |> Pipeline.mark_failed!(:create_revision, "error")
+
+      pipeline =
+        create_pipeline!(run, %{
+          revision: "next3",
+          sequence: 1,
+          predecessor_id: predecessor.id
+        })
+
+      assert_raise Ash.Error.Invalid, fn ->
+        Pipeline.start!(pipeline)
+      end
+    end
+
+    test "succeeds when no predecessor" do
+      run = create_run!()
+      pipeline = create_pipeline!(run, %{revision: "solo1", sequence: 0})
+
+      updated = Pipeline.start!(pipeline)
+
+      assert updated.status == :running
+    end
   end
 
   describe "mark_completed" do
@@ -184,6 +249,73 @@ defmodule Tracker.Ingestion.PipelineTest do
 
       assert length(results) == 1
       assert hd(results).revision == "rev2"
+    end
+  end
+
+  describe "last_completed_for_channel" do
+    test "returns the most recent completed pipeline by released_at" do
+      run = create_run!()
+
+      create_pipeline!(run, %{
+        revision: "old1",
+        sequence: 0,
+        released_at: ~U[2025-06-01 00:00:00Z]
+      })
+      |> Pipeline.start!()
+      |> Pipeline.mark_completed!()
+
+      create_pipeline!(run, %{
+        revision: "new1",
+        sequence: 1,
+        released_at: ~U[2025-06-15 00:00:00Z]
+      })
+      |> Pipeline.start!()
+      |> Pipeline.mark_completed!()
+
+      result = Pipeline.last_completed_for_channel!("nixos-unstable")
+
+      assert [pipeline] = result
+      assert pipeline.revision == "new1"
+    end
+
+    test "returns empty list when no completed pipelines exist" do
+      run = create_run!()
+      create_pipeline!(run, %{revision: "pending1", sequence: 0})
+
+      assert [] = Pipeline.last_completed_for_channel!("nixos-unstable")
+    end
+
+    test "ignores pipelines from other channels" do
+      run = create_run!()
+
+      create_pipeline!(run, %{
+        channel: "nixos-25.11",
+        revision: "other1",
+        sequence: 0,
+        released_at: ~U[2025-06-01 00:00:00Z]
+      })
+      |> Pipeline.start!()
+      |> Pipeline.mark_completed!()
+
+      assert [] = Pipeline.last_completed_for_channel!("nixos-unstable")
+    end
+  end
+
+  describe "for_channel" do
+    test "returns all pipelines for a channel" do
+      run = create_run!()
+      create_pipeline!(run, %{revision: "r1", sequence: 0})
+      create_pipeline!(run, %{revision: "r2", sequence: 1})
+      create_pipeline!(run, %{channel: "nixos-25.11", revision: "r3", sequence: 0})
+
+      result = Pipeline.for_channel!("nixos-unstable")
+
+      assert length(result) == 2
+      assert Enum.all?(result, &(&1.channel == "nixos-unstable"))
+    end
+
+    test "returns empty list when no pipelines exist" do
+      assert [] = Pipeline.for_channel!("nixos-unstable")
     end
   end
 

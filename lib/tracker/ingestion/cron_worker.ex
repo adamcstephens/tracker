@@ -1,9 +1,7 @@
 defmodule Tracker.Ingestion.CronWorker do
   @moduledoc """
-  Thin Oban cron worker that triggers ingestion pipeline updates
+  Thin Oban cron worker that triggers channel synchronisation
   for configured channels.
-
-  Replaces ChannelWorker's cron entries with pipeline-based execution.
   """
 
   use Oban.Worker, queue: :ingestion, max_attempts: 3
@@ -15,14 +13,12 @@ defmodule Tracker.Ingestion.CronWorker do
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"channel" => channel}}) do
-    result = Tracker.Ingestion.PipelineStarter.start_cron_update(channel)
+    case Tracker.Ingestion.PipelineStarter.sync_channel(channel) do
+      {:ok, count} ->
+        Logger.info("Synced #{channel}: created #{count} pipeline(s)")
 
-    case result do
-      :ok ->
-        Logger.info("Started ingestion pipeline for #{channel}")
-
-      :already_exists ->
-        :ok
+      :noop ->
+        Logger.debug("Synced #{channel}: no new revisions")
     end
 
     :ok
