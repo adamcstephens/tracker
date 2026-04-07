@@ -1,9 +1,7 @@
 defmodule Tracker.Nixpkgs.ChangeChannelTest do
   use Tracker.DataCase, async: true
 
-  alias Tracker.Nixpkgs.Change
-  alias Tracker.Nixpkgs.ChangeChannel
-  alias Tracker.Nixpkgs.ChannelRevision
+  alias Tracker.Nixpkgs.{Change, Channel, ChangeChannel, ChannelRevision}
 
   defp create_change!(attrs \\ %{}) do
     defaults = %{
@@ -20,9 +18,19 @@ defmodule Tracker.Nixpkgs.ChangeChannelTest do
     Ash.get!(Change, id)
   end
 
+  defp create_channel!(name) do
+    Channel.create!(%{
+      name: name,
+      display_name: name,
+      branch: name,
+      status: :active,
+      is_stable: false
+    })
+  end
+
   defp create_channel_revision!(channel, revision) do
     ChannelRevision.create!(%{
-      channel: channel,
+      channel_id: channel.id,
       revision: revision,
       released_at: DateTime.utc_now()
     })
@@ -31,28 +39,30 @@ defmodule Tracker.Nixpkgs.ChangeChannelTest do
   describe "create/1" do
     test "creates a change_channel linking a change to a channel" do
       change = create_change!()
+      channel = create_channel!("nixos-unstable")
 
       {:ok, cc} =
         ChangeChannel.create(%{
           change_id: change.id,
-          channel: "nixos-unstable",
+          channel_id: channel.id,
           landed_at: ~U[2026-04-01 12:00:00Z]
         })
 
       assert cc.change_id == change.id
-      assert cc.channel == "nixos-unstable"
+      assert cc.channel_id == channel.id
       assert cc.landed_at == ~U[2026-04-01 12:00:00Z]
       assert is_nil(cc.channel_revision_id)
     end
 
     test "can optionally link to a channel_revision" do
       change = create_change!()
-      rev = create_channel_revision!("nixos-unstable", "abc123def456")
+      channel = create_channel!("nixos-unstable")
+      rev = create_channel_revision!(channel, "abc123def456")
 
       {:ok, cc} =
         ChangeChannel.create(%{
           change_id: change.id,
-          channel: "nixos-unstable",
+          channel_id: channel.id,
           landed_at: ~U[2026-04-01 12:00:00Z],
           channel_revision_id: rev.id
         })
@@ -60,21 +70,22 @@ defmodule Tracker.Nixpkgs.ChangeChannelTest do
       assert cc.channel_revision_id == rev.id
     end
 
-    test "upserts on change_id + channel" do
+    test "upserts on change_id + channel_id" do
       change = create_change!()
-      rev = create_channel_revision!("nixos-unstable", "abc123def456")
+      channel = create_channel!("nixos-unstable")
+      rev = create_channel_revision!(channel, "abc123def456")
 
       {:ok, cc1} =
         ChangeChannel.create(%{
           change_id: change.id,
-          channel: "nixos-unstable",
+          channel_id: channel.id,
           landed_at: ~U[2026-04-01 12:00:00Z]
         })
 
       {:ok, cc2} =
         ChangeChannel.create(%{
           change_id: change.id,
-          channel: "nixos-unstable",
+          channel_id: channel.id,
           landed_at: ~U[2026-04-01 14:00:00Z],
           channel_revision_id: rev.id
         })
@@ -88,16 +99,18 @@ defmodule Tracker.Nixpkgs.ChangeChannelTest do
   describe "relationships" do
     test "change has_many change_channels" do
       change = create_change!()
+      ch1 = create_channel!("nixos-unstable")
+      ch2 = create_channel!("nixos-25.11")
 
       ChangeChannel.create!(%{
         change_id: change.id,
-        channel: "nixos-unstable",
+        channel_id: ch1.id,
         landed_at: ~U[2026-04-01 12:00:00Z]
       })
 
       ChangeChannel.create!(%{
         change_id: change.id,
-        channel: "nixos-25.11",
+        channel_id: ch2.id,
         landed_at: ~U[2026-04-02 12:00:00Z]
       })
 

@@ -4,8 +4,18 @@ defmodule TrackerWeb.ModuleLive.ShowTest do
   import Phoenix.LiveViewTest
 
   alias Tracker.Fixtures
+  alias Tracker.Nixpkgs.Channel
 
   setup do
+    channel =
+      Channel.create!(%{
+        name: "nixos-unstable",
+        display_name: "NixOS Unstable",
+        branch: "nixos-unstable",
+        status: :active,
+        is_stable: false
+      })
+
     mod =
       Tracker.Nixpkgs.Module
       |> Ash.Changeset.for_create(:bulk_upsert, %{
@@ -32,7 +42,7 @@ defmodule TrackerWeb.ModuleLive.ShowTest do
       module_id: mod.id
     })
 
-    %{module: mod, package: package, option: option}
+    %{module: mod, package: package, option: option, channel: channel}
   end
 
   test "renders module details", %{conn: conn, module: mod} do
@@ -41,10 +51,14 @@ defmodule TrackerWeb.ModuleLive.ShowTest do
     assert html =~ "services.modshow"
   end
 
-  test "defaults to nixos-unstable channel when no params", %{conn: conn, module: mod} do
+  test "defaults to nixos-unstable channel when no params", %{
+    conn: conn,
+    module: mod,
+    channel: channel
+  } do
     cr =
       Tracker.Nixpkgs.ChannelRevision.create!(%{
-        channel: "nixos-unstable",
+        channel_id: channel.id,
         revision: "defaultabc123456",
         released_at: ~U[2026-03-15 10:00:00Z]
       })
@@ -72,10 +86,10 @@ defmodule TrackerWeb.ModuleLive.ShowTest do
   end
 
   describe "channel-scoped view" do
-    setup %{module: mod} do
+    setup %{module: mod, channel: channel} do
       cr =
         Tracker.Nixpkgs.ChannelRevision.create!(%{
-          channel: "nixos-unstable",
+          channel_id: channel.id,
           revision: "mod123def456789",
           released_at: ~U[2026-03-01 10:00:00Z]
         })
@@ -131,8 +145,17 @@ defmodule TrackerWeb.ModuleLive.ShowTest do
       conn: conn,
       module: mod
     } do
+      nixpkgs_channel =
+        Channel.create!(%{
+          name: "nixpkgs-unstable",
+          display_name: "Nixpkgs Unstable",
+          branch: "nixpkgs-unstable",
+          status: :active,
+          is_stable: false
+        })
+
       Tracker.Nixpkgs.ChannelRevision.create!(%{
-        channel: "nixpkgs-unstable",
+        channel_id: nixpkgs_channel.id,
         revision: "nixpkgsmodrev1234",
         released_at: ~U[2026-03-01 10:00:00Z]
       })

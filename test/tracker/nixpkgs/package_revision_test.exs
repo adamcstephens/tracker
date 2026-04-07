@@ -1,12 +1,22 @@
 defmodule Tracker.Nixpkgs.PackageRevisionTest do
   use Tracker.DataCase, async: true
 
-  alias Tracker.Nixpkgs.{ChannelRevision, Package, PackageRevision}
+  alias Tracker.Nixpkgs.{Channel, ChannelRevision, Package, PackageRevision}
 
-  defp create_channel_revision!(channel, revision, released_at) do
+  defp create_channel!(name) do
+    Channel.create!(%{
+      name: name,
+      display_name: name,
+      branch: name,
+      status: :active,
+      is_stable: false
+    })
+  end
+
+  defp create_channel_revision!(channel_id, revision, released_at) do
     ChannelRevision
     |> Ash.Changeset.for_create(:create, %{
-      channel: channel,
+      channel_id: channel_id,
       revision: revision,
       released_at: released_at
     })
@@ -31,12 +41,13 @@ defmodule Tracker.Nixpkgs.PackageRevisionTest do
 
   describe "version_changes_by_package/1" do
     setup do
+      channel = create_channel!("unstable")
       pkg = create_package!("test-pkg")
 
-      cr1 = create_channel_revision!("unstable", "aaa1111", ~U[2025-01-01 00:00:00Z])
-      cr2 = create_channel_revision!("unstable", "bbb2222", ~U[2025-01-02 00:00:00Z])
-      cr3 = create_channel_revision!("unstable", "ccc3333", ~U[2025-01-03 00:00:00Z])
-      cr4 = create_channel_revision!("unstable", "ddd4444", ~U[2025-01-04 00:00:00Z])
+      cr1 = create_channel_revision!(channel.id, "aaa1111", ~U[2025-01-01 00:00:00Z])
+      cr2 = create_channel_revision!(channel.id, "bbb2222", ~U[2025-01-02 00:00:00Z])
+      cr3 = create_channel_revision!(channel.id, "ccc3333", ~U[2025-01-03 00:00:00Z])
+      cr4 = create_channel_revision!(channel.id, "ddd4444", ~U[2025-01-04 00:00:00Z])
 
       # Version changes: 1.0 -> 1.0 (same) -> 1.1 -> 1.1 (same)
       create_revision!(pkg, cr1, "1.0")
@@ -67,28 +78,32 @@ defmodule Tracker.Nixpkgs.PackageRevisionTest do
     end
 
     test "filters by channel" do
+      unstable_ch = create_channel!("unstable-multi")
+      stable_ch = create_channel!("stable-multi")
       pkg = create_package!("multi-channel-pkg")
 
-      cr_u1 = create_channel_revision!("unstable", "uuu1111", ~U[2025-02-01 00:00:00Z])
-      cr_u2 = create_channel_revision!("unstable", "uuu2222", ~U[2025-02-02 00:00:00Z])
-      cr_s1 = create_channel_revision!("stable", "sss1111", ~U[2025-02-01 00:00:00Z])
+      cr_u1 = create_channel_revision!(unstable_ch.id, "uuu1111", ~U[2025-02-01 00:00:00Z])
+      cr_u2 = create_channel_revision!(unstable_ch.id, "uuu2222", ~U[2025-02-02 00:00:00Z])
+      cr_s1 = create_channel_revision!(stable_ch.id, "sss1111", ~U[2025-02-01 00:00:00Z])
 
       create_revision!(pkg, cr_u1, "1.0")
       create_revision!(pkg, cr_u2, "1.1")
       create_revision!(pkg, cr_s1, "1.0")
 
-      {results, count} = PackageRevision.version_changes_by_package(pkg.id, channel: "unstable")
+      {results, count} =
+        PackageRevision.version_changes_by_package(pkg.id, channel_id: unstable_ch.id)
 
       assert count == 2
-      channels = results |> Enum.map(& &1.channel) |> Enum.uniq()
-      assert channels == ["unstable"]
+      channels = results |> Enum.map(& &1.channel_name) |> Enum.uniq()
+      assert channels == ["unstable-multi"]
     end
 
     test "filters by version substring" do
+      ver_channel = create_channel!("unstable-ver")
       pkg = create_package!("version-filter-pkg")
 
-      cr1 = create_channel_revision!("unstable", "vvv1111", ~U[2025-03-01 00:00:00Z])
-      cr2 = create_channel_revision!("unstable", "vvv2222", ~U[2025-03-02 00:00:00Z])
+      cr1 = create_channel_revision!(ver_channel.id, "vvv1111", ~U[2025-03-01 00:00:00Z])
+      cr2 = create_channel_revision!(ver_channel.id, "vvv2222", ~U[2025-03-02 00:00:00Z])
 
       create_revision!(pkg, cr1, "1.0.0")
       create_revision!(pkg, cr2, "2.0.0")
@@ -100,12 +115,13 @@ defmodule Tracker.Nixpkgs.PackageRevisionTest do
     end
 
     test "paginates with limit and offset" do
+      pag_channel = create_channel!("unstable-pag")
       pkg = create_package!("paginated-pkg")
 
       for i <- 1..5 do
         cr =
           create_channel_revision!(
-            "unstable",
+            pag_channel.id,
             "pag#{String.pad_leading(to_string(i), 4, "0")}",
             DateTime.add(~U[2025-04-01 00:00:00Z], i, :day)
           )
@@ -128,10 +144,11 @@ defmodule Tracker.Nixpkgs.PackageRevisionTest do
     end
 
     test "supports sorting by version asc" do
+      sort_channel = create_channel!("unstable-sort")
       pkg = create_package!("sort-pkg")
 
-      cr1 = create_channel_revision!("unstable", "sort1111", ~U[2025-05-01 00:00:00Z])
-      cr2 = create_channel_revision!("unstable", "sort2222", ~U[2025-05-02 00:00:00Z])
+      cr1 = create_channel_revision!(sort_channel.id, "sort1111", ~U[2025-05-01 00:00:00Z])
+      cr2 = create_channel_revision!(sort_channel.id, "sort2222", ~U[2025-05-02 00:00:00Z])
 
       create_revision!(pkg, cr1, "beta")
       create_revision!(pkg, cr2, "alpha")
@@ -145,12 +162,14 @@ defmodule Tracker.Nixpkgs.PackageRevisionTest do
     end
 
     test "detects version changes per channel independently" do
+      unstable_ic = create_channel!("unstable-ic")
+      stable_ic = create_channel!("stable-ic")
       pkg = create_package!("independent-channels-pkg")
 
-      cr_u1 = create_channel_revision!("unstable", "ic_u1", ~U[2025-06-01 00:00:00Z])
-      cr_u2 = create_channel_revision!("unstable", "ic_u2", ~U[2025-06-02 00:00:00Z])
-      cr_s1 = create_channel_revision!("stable", "ic_s1", ~U[2025-06-01 00:00:00Z])
-      cr_s2 = create_channel_revision!("stable", "ic_s2", ~U[2025-06-02 00:00:00Z])
+      cr_u1 = create_channel_revision!(unstable_ic.id, "ic_u1", ~U[2025-06-01 00:00:00Z])
+      cr_u2 = create_channel_revision!(unstable_ic.id, "ic_u2", ~U[2025-06-02 00:00:00Z])
+      cr_s1 = create_channel_revision!(stable_ic.id, "ic_s1", ~U[2025-06-01 00:00:00Z])
+      cr_s2 = create_channel_revision!(stable_ic.id, "ic_s2", ~U[2025-06-02 00:00:00Z])
 
       # unstable: 1.0 -> 1.0 (no change)
       create_revision!(pkg, cr_u1, "1.0")
@@ -166,10 +185,10 @@ defmodule Tracker.Nixpkgs.PackageRevisionTest do
       # stable: first appearance of 1.0, then change to 2.0
       assert count == 3
 
-      stable_results = Enum.filter(results, &(&1.channel == "stable"))
+      stable_results = Enum.filter(results, &(&1.channel_name == "stable-ic"))
       assert length(stable_results) == 2
 
-      unstable_results = Enum.filter(results, &(&1.channel == "unstable"))
+      unstable_results = Enum.filter(results, &(&1.channel_name == "unstable-ic"))
       assert length(unstable_results) == 1
     end
 

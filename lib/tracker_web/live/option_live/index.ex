@@ -19,8 +19,8 @@ defmodule TrackerWeb.OptionLive.Index do
         />
         <select name="channel" aria-label="Filter by channel">
           <option value="">All channels</option>
-          <option :for={ch <- @channels} value={ch} selected={ch == @channel}>
-            {ch}
+          <option :for={ch <- @channels} value={ch.name} selected={ch.name == @channel}>
+            {ch.name}
           </option>
         </select>
         <input
@@ -122,9 +122,7 @@ defmodule TrackerWeb.OptionLive.Index do
 
   @impl true
   def mount(_params, _session, socket) do
-    channels =
-      Tracker.Nixpkgs.ChannelRevision.distinct_nixos_channels!()
-      |> Enum.map(& &1.channel)
+    channels = Tracker.Nixpkgs.Channel.nixos_channels!()
 
     {:ok,
      socket
@@ -280,17 +278,29 @@ defmodule TrackerWeb.OptionLive.Index do
     end
   end
 
-  defp resolve_channel_revision(channel, "") do
-    case Tracker.Nixpkgs.ChannelRevision.latest_by_channel(channel) do
-      {:ok, cr} -> cr
-      _ -> nil
+  defp resolve_channel_revision(channel_name, "") do
+    case Tracker.Nixpkgs.Channel.by_name(channel_name) do
+      {:ok, channel} ->
+        case Tracker.Nixpkgs.ChannelRevision.latest_by_channel(channel.id) do
+          {:ok, cr} -> cr
+          _ -> nil
+        end
+
+      _ ->
+        nil
     end
   end
 
-  defp resolve_channel_revision(channel, rev) do
-    case Tracker.Nixpkgs.ChannelRevision.find_by_channel_hash(channel, rev) do
-      {:ok, cr} -> cr
-      _ -> nil
+  defp resolve_channel_revision(channel_name, rev) do
+    case Tracker.Nixpkgs.Channel.by_name(channel_name) do
+      {:ok, channel} ->
+        case Tracker.Nixpkgs.ChannelRevision.find_by_channel_hash(channel.id, rev) do
+          {:ok, cr} -> cr
+          _ -> nil
+        end
+
+      _ ->
+        nil
     end
   end
 end

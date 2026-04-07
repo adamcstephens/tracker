@@ -1,77 +1,92 @@
 defmodule Tracker.Nixpkgs.Channel do
-  @moduledoc """
-  Utility functions for fetching nixpkgs channel data from S3.
-  """
+  use Ash.Resource, otp_app: :tracker, domain: Tracker.Nixpkgs, data_layer: AshPostgres.DataLayer
 
-  @doc """
-  Resolves the latest revision and base URL for a channel.
-
-  Follows the redirect from channels.nixos.org to get the stable
-  base URL, then fetches the git revision from that release.
-  """
-  def get_channel_revision(channel) do
-    [base_url] =
-      Req.get!(Tracker.Nixpkgs.S3Cache.new(),
-        url: "https://channels.nixos.org/#{channel}",
-        redirect: false,
-        cache: false
-      ).headers["location"]
-
-    revision = Req.get!(Tracker.Nixpkgs.S3Cache.new(), url: base_url <> "/git-revision").body
-
-    {revision, base_url}
+  postgres do
+    table "channels"
+    repo Tracker.Repo
   end
 
-  @doc """
-  Fetches the raw brotli-compressed packages.json.br binary for a channel release.
-
-  Returns the compressed binary, suitable for streaming via `PackageStream`.
-  """
-  def fetch_packages_compressed(base_url) do
-    Req.get!(Tracker.Nixpkgs.S3Cache.new(), url: base_url <> "/packages.json.br", raw: true).body
+  code_interface do
+    define :create
+    define :read
+    define :by_name, args: [:name]
+    define :active
+    define :nixos_channels
   end
 
-  @doc """
-  Fetches and decompresses options.json.br for a channel release.
+  actions do
+    defaults [:read]
 
-  Returns a map of option name to option data.
-  """
-  def fetch_options(base_url) do
-    Req.get!(Tracker.Nixpkgs.S3Cache.new(), url: base_url <> "/options.json.br", raw: true).body
-    |> ExBrotli.decompress!()
-    |> :json.decode()
-  end
+    create :create do
+      primary? true
+      accept [:name, :display_name, :branch, :status, :is_stable, :options_source]
+      upsert? true
+      upsert_identity :unique_name
+      upsert_fields [:display_name, :branch, :status, :is_stable, :options_source, :updated_at]
+    end
 
-  @doc """
-  Computes the longest common dot-separated prefix for a list of option names.
+    read :by_name do
+      get? true
 
-  For a single option name, returns all but the last segment
-  (or the name itself if single-segment).
-  """
-  def display_name_for_options([single]) do
-    case String.split(single, ".") do
-      [one] -> one
-      parts -> parts |> Enum.drop(-1) |> Enum.join(".")
+      argument :name, :string, allow_nil?: false
+
+      filter expr(name == ^arg(:name))
+    end
+
+    read :active do
+      filter expr(status == :active)
+      prepare build(sort: [:name])
+    end
+
+    read :nixos_channels do
+      filter expr(fragment("? LIKE 'nixos-%'", name))
+      prepare build(sort: [:name])
     end
   end
 
-  def display_name_for_options(option_names) do
-    split_names = Enum.map(option_names, &String.split(&1, "."))
+  attributes do
+    integer_primary_key :id
 
-    split_names
-    |> Enum.zip_reduce([], fn segments, acc ->
-      segment = hd(segments)
-
-      if Enum.all?(segments, &(&1 == segment)) do
-        [segment | acc]
-      else
-        acc
-      end
-    end)
-    |> Enum.reverse()
-    |> case do
-      [] -> hd(option_names)
-      parts -> Enum.join(parts, ".")
+    attribute :name, :string do
+      allow_nil? false
+      public? true
     end
+
+    attribute :display_name, :string do
+      allow_nil? false
+      public? true
+    end
+
+    attribute :branch, :string do
+      allow_nil? false
+      public? true
+    end
+
+    attribute :status, :atom do
+      allow_nil? false
+      public? true
+      constraints one_of: [:active, :retired, :pre_release]
+    end
+
+    attribute :is_stable, :boolean do
+      allow_nil? false
+      public? true
+      default false
+    end
+
+    attribute :options_source, :string do
+      public? true
+    end
+
+    timestamps()
+  end
+
+  relationships do
+    has_many :channel_revisions, Tracker.Nixpkgs.ChannelRevision
+    has_many :change_channels, Tracker.Nixpkgs.ChangeChannel
+  end
+
+  identities do
+    identity :unique_name, [:name]
   end
 end

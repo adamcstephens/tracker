@@ -111,7 +111,7 @@ defmodule Tracker.Ingestion.StepWorker do
   end
 
   defp start_next_pipeline(completed_pipeline) do
-    case Pipeline.next_pending_for_channel!(completed_pipeline.channel) do
+    case Pipeline.next_pending_for_channel!(completed_pipeline.channel_id) do
       [next | _] ->
         if startable?(next) do
           Pipeline.start!(next)
@@ -165,7 +165,10 @@ defmodule Tracker.Ingestion.StepWorker do
   def enqueue(pipeline, step) do
     %{"pipeline_id" => pipeline.id, "step" => to_string(step)}
     |> new(
-      meta: %{"channel" => pipeline.channel, "revision" => String.slice(pipeline.revision, 0, 7)}
+      meta: %{
+        "channel_id" => pipeline.channel_id,
+        "revision" => String.slice(pipeline.revision, 0, 7)
+      }
     )
     |> Oban.insert!()
   end

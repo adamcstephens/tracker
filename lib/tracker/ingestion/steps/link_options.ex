@@ -10,14 +10,14 @@ defmodule Tracker.Ingestion.Steps.LinkOptions do
 
   import Ecto.Query
 
-  alias Tracker.Nixpkgs.{Channel, OptionPackageLinker}
+  alias Tracker.Nixpkgs.{ChannelFetcher, OptionPackageLinker}
 
   @impl true
   def timeout, do: :timer.minutes(5)
 
   @impl true
   def run(%Tracker.Ingestion.StepContext{pipeline: pipeline}) do
-    options_map = Channel.fetch_options(pipeline.base_url)
+    options_map = ChannelFetcher.fetch_options(pipeline.base_url)
 
     links = OptionPackageLinker.extract_links(options_map)
 

@@ -2,14 +2,28 @@ defmodule Tracker.Ingestion.PipelineTest do
   use Tracker.DataCase, async: true
 
   alias Tracker.Ingestion.{IngestionRun, Pipeline}
+  alias Tracker.Nixpkgs.Channel
+
+  setup do
+    channel =
+      Channel.create!(%{
+        name: "nixos-unstable",
+        display_name: "NixOS Unstable",
+        branch: "nixos-unstable",
+        status: :active,
+        is_stable: false
+      })
+
+    {:ok, channel: channel}
+  end
 
   defp create_run! do
     IngestionRun.create!(%{type: :cron_update, started_at: DateTime.utc_now()})
   end
 
-  defp create_pipeline!(run, attrs \\ %{}) do
+  defp create_pipeline!(run, channel, attrs \\ %{}) do
     defaults = %{
-      channel: "nixos-unstable",
+      channel_id: channel.id,
       revision: "abc123",
       base_url: "https://releases.nixos.org/nixos/unstable/nixos-25.05pre123",
       released_at: DateTime.utc_now(),
@@ -22,9 +36,9 @@ defmodule Tracker.Ingestion.PipelineTest do
   end
 
   describe "create" do
-    test "creates a pipeline with pending status and empty completed_steps" do
+    test "creates a pipeline with pending status and empty completed_steps", %{channel: channel} do
       run = create_run!()
-      pipeline = create_pipeline!(run)
+      pipeline = create_pipeline!(run, channel)
 
       assert pipeline.status == :pending
       assert pipeline.completed_steps == []
@@ -33,9 +47,9 @@ defmodule Tracker.Ingestion.PipelineTest do
   end
 
   describe "complete_step" do
-    test "atomically appends a step to completed_steps" do
+    test "atomically appends a step to completed_steps", %{channel: channel} do
       run = create_run!()
-      pipeline = create_pipeline!(run)
+      pipeline = create_pipeline!(run, channel)
       Pipeline.start!(pipeline)
 
       updated = Pipeline.complete_step!(pipeline, :create_revision)
@@ -43,9 +57,9 @@ defmodule Tracker.Ingestion.PipelineTest do
       assert :create_revision in updated.completed_steps
     end
 
-    test "appends multiple steps sequentially" do
+    test "appends multiple steps sequentially", %{channel: channel} do
       run = create_run!()
-      pipeline = create_pipeline!(run)
+      pipeline = create_pipeline!(run, channel)
       Pipeline.start!(pipeline)
 
       pipeline = Pipeline.complete_step!(pipeline, :create_revision)
@@ -56,9 +70,9 @@ defmodule Tracker.Ingestion.PipelineTest do
       assert length(pipeline.completed_steps) == 2
     end
 
-    test "completed_steps preserves existing entries on append" do
+    test "completed_steps preserves existing entries on append", %{channel: channel} do
       run = create_run!()
-      pipeline = create_pipeline!(run)
+      pipeline = create_pipeline!(run, channel)
       Pipeline.start!(pipeline)
 
       pipeline = Pipeline.complete_step!(pipeline, :create_revision)
@@ -72,9 +86,9 @@ defmodule Tracker.Ingestion.PipelineTest do
              ]
     end
 
-    test "does not duplicate already completed steps" do
+    test "does not duplicate already completed steps", %{channel: channel} do
       run = create_run!()
-      pipeline = create_pipeline!(run)
+      pipeline = create_pipeline!(run, channel)
       Pipeline.start!(pipeline)
 
       pipeline = Pipeline.complete_step!(pipeline, :create_revision)
@@ -85,25 +99,25 @@ defmodule Tracker.Ingestion.PipelineTest do
   end
 
   describe "start" do
-    test "transitions from pending to running" do
+    test "transitions from pending to running", %{channel: channel} do
       run = create_run!()
-      pipeline = create_pipeline!(run)
+      pipeline = create_pipeline!(run, channel)
 
       updated = Pipeline.start!(pipeline)
 
       assert updated.status == :running
     end
 
-    test "succeeds when predecessor is completed" do
+    test "succeeds when predecessor is completed", %{channel: channel} do
       run = create_run!()
 
       predecessor =
-        create_pipeline!(run, %{revision: "pred1", sequence: 0})
+        create_pipeline!(run, channel, %{revision: "pred1", sequence: 0})
         |> Pipeline.start!()
         |> Pipeline.mark_completed!()
 
       pipeline =
-        create_pipeline!(run, %{
+        create_pipeline!(run, channel, %{
           revision: "next1",
           sequence: 1,
           predecessor_id: predecessor.id
@@ -114,12 +128,12 @@ defmodule Tracker.Ingestion.PipelineTest do
       assert updated.status == :running
     end
 
-    test "fails when predecessor is pending" do
+    test "fails when predecessor is pending", %{channel: channel} do
       run = create_run!()
-      predecessor = create_pipeline!(run, %{revision: "pred2", sequence: 0})
+      predecessor = create_pipeline!(run, channel, %{revision: "pred2", sequence: 0})
 
       pipeline =
-        create_pipeline!(run, %{
+        create_pipeline!(run, channel, %{
           revision: "next2",
           sequence: 1,
           predecessor_id: predecessor.id
@@ -130,16 +144,16 @@ defmodule Tracker.Ingestion.PipelineTest do
       end
     end
 
-    test "fails when predecessor is failed" do
+    test "fails when predecessor is failed", %{channel: channel} do
       run = create_run!()
 
       predecessor =
-        create_pipeline!(run, %{revision: "pred3", sequence: 0})
+        create_pipeline!(run, channel, %{revision: "pred3", sequence: 0})
         |> Pipeline.start!()
         |> Pipeline.mark_failed!(:create_revision, "error")
 
       pipeline =
-        create_pipeline!(run, %{
+        create_pipeline!(run, channel, %{
           revision: "next3",
           sequence: 1,
           predecessor_id: predecessor.id
@@ -150,9 +164,9 @@ defmodule Tracker.Ingestion.PipelineTest do
       end
     end
 
-    test "succeeds when no predecessor" do
+    test "succeeds when no predecessor", %{channel: channel} do
       run = create_run!()
-      pipeline = create_pipeline!(run, %{revision: "solo1", sequence: 0})
+      pipeline = create_pipeline!(run, channel, %{revision: "solo1", sequence: 0})
 
       updated = Pipeline.start!(pipeline)
 
@@ -161,9 +175,9 @@ defmodule Tracker.Ingestion.PipelineTest do
   end
 
   describe "mark_completed" do
-    test "transitions to completed" do
+    test "transitions to completed", %{channel: channel} do
       run = create_run!()
-      pipeline = create_pipeline!(run) |> Pipeline.start!()
+      pipeline = create_pipeline!(run, channel) |> Pipeline.start!()
 
       updated = Pipeline.mark_completed!(pipeline)
 
@@ -172,9 +186,9 @@ defmodule Tracker.Ingestion.PipelineTest do
   end
 
   describe "mark_failed" do
-    test "records failed step and error" do
+    test "records failed step and error", %{channel: channel} do
       run = create_run!()
-      pipeline = create_pipeline!(run) |> Pipeline.start!()
+      pipeline = create_pipeline!(run, channel) |> Pipeline.start!()
 
       updated = Pipeline.mark_failed!(pipeline, :load_packages, "something broke")
 
@@ -185,11 +199,11 @@ defmodule Tracker.Ingestion.PipelineTest do
   end
 
   describe "retry_from_step" do
-    test "clears failure state and sets status to running" do
+    test "clears failure state and sets status to running", %{channel: channel} do
       run = create_run!()
 
       pipeline =
-        create_pipeline!(run)
+        create_pipeline!(run, channel)
         |> Pipeline.start!()
         |> Pipeline.mark_failed!(:load_packages, "timeout")
 
@@ -202,9 +216,9 @@ defmodule Tracker.Ingestion.PipelineTest do
   end
 
   describe "set_channel_revision_id" do
-    test "sets the channel_revision_id" do
+    test "sets the channel_revision_id", %{channel: channel} do
       run = create_run!()
-      pipeline = create_pipeline!(run)
+      pipeline = create_pipeline!(run, channel)
 
       updated = Pipeline.set_channel_revision_id!(pipeline, 42)
 
@@ -213,39 +227,39 @@ defmodule Tracker.Ingestion.PipelineTest do
   end
 
   describe "find" do
-    test "finds by channel and revision" do
+    test "finds by channel_id and revision", %{channel: channel} do
       run = create_run!()
-      create_pipeline!(run, %{channel: "nixos-unstable", revision: "abc123"})
+      create_pipeline!(run, channel, %{revision: "abc123"})
 
-      assert {:ok, pipeline} = Pipeline.find("nixos-unstable", "abc123")
-      assert pipeline.channel == "nixos-unstable"
+      assert {:ok, pipeline} = Pipeline.find(channel.id, "abc123")
+      assert pipeline.channel_id == channel.id
       assert pipeline.revision == "abc123"
     end
 
-    test "returns error for non-existent" do
-      assert {:error, _} = Pipeline.find("nonexistent", "nonexistent")
+    test "returns error for non-existent", %{channel: channel} do
+      assert {:error, _} = Pipeline.find(channel.id, "nonexistent")
     end
   end
 
   describe "next_pending_for_channel" do
-    test "returns pending pipelines ordered by sequence" do
+    test "returns pending pipelines ordered by sequence", %{channel: channel} do
       run = create_run!()
-      create_pipeline!(run, %{revision: "rev3", sequence: 2})
-      create_pipeline!(run, %{revision: "rev1", sequence: 0})
-      create_pipeline!(run, %{revision: "rev2", sequence: 1})
+      create_pipeline!(run, channel, %{revision: "rev3", sequence: 2})
+      create_pipeline!(run, channel, %{revision: "rev1", sequence: 0})
+      create_pipeline!(run, channel, %{revision: "rev2", sequence: 1})
 
-      [first | _] = Pipeline.next_pending_for_channel!("nixos-unstable")
+      [first | _] = Pipeline.next_pending_for_channel!(channel.id)
 
       assert first.revision == "rev1"
       assert first.sequence == 0
     end
 
-    test "excludes non-pending pipelines" do
+    test "excludes non-pending pipelines", %{channel: channel} do
       run = create_run!()
-      create_pipeline!(run, %{revision: "rev1", sequence: 0}) |> Pipeline.start!()
-      create_pipeline!(run, %{revision: "rev2", sequence: 1})
+      create_pipeline!(run, channel, %{revision: "rev1", sequence: 0}) |> Pipeline.start!()
+      create_pipeline!(run, channel, %{revision: "rev2", sequence: 1})
 
-      results = Pipeline.next_pending_for_channel!("nixos-unstable")
+      results = Pipeline.next_pending_for_channel!(channel.id)
 
       assert length(results) == 1
       assert hd(results).revision == "rev2"
@@ -253,10 +267,10 @@ defmodule Tracker.Ingestion.PipelineTest do
   end
 
   describe "last_completed_for_channel" do
-    test "returns the most recent completed pipeline by released_at" do
+    test "returns the most recent completed pipeline by released_at", %{channel: channel} do
       run = create_run!()
 
-      create_pipeline!(run, %{
+      create_pipeline!(run, channel, %{
         revision: "old1",
         sequence: 0,
         released_at: ~U[2025-06-01 00:00:00Z]
@@ -264,7 +278,7 @@ defmodule Tracker.Ingestion.PipelineTest do
       |> Pipeline.start!()
       |> Pipeline.mark_completed!()
 
-      create_pipeline!(run, %{
+      create_pipeline!(run, channel, %{
         revision: "new1",
         sequence: 1,
         released_at: ~U[2025-06-15 00:00:00Z]
@@ -272,24 +286,32 @@ defmodule Tracker.Ingestion.PipelineTest do
       |> Pipeline.start!()
       |> Pipeline.mark_completed!()
 
-      result = Pipeline.last_completed_for_channel!("nixos-unstable")
+      result = Pipeline.last_completed_for_channel!(channel.id)
 
       assert [pipeline] = result
       assert pipeline.revision == "new1"
     end
 
-    test "returns empty list when no completed pipelines exist" do
+    test "returns empty list when no completed pipelines exist", %{channel: channel} do
       run = create_run!()
-      create_pipeline!(run, %{revision: "pending1", sequence: 0})
+      create_pipeline!(run, channel, %{revision: "pending1", sequence: 0})
 
-      assert [] = Pipeline.last_completed_for_channel!("nixos-unstable")
+      assert [] = Pipeline.last_completed_for_channel!(channel.id)
     end
 
-    test "ignores pipelines from other channels" do
+    test "ignores pipelines from other channels", %{channel: channel} do
+      other_channel =
+        Channel.create!(%{
+          name: "nixos-25.11",
+          display_name: "NixOS 25.11",
+          branch: "release-25.11",
+          status: :active,
+          is_stable: true
+        })
+
       run = create_run!()
 
-      create_pipeline!(run, %{
-        channel: "nixos-25.11",
+      create_pipeline!(run, other_channel, %{
         revision: "other1",
         sequence: 0,
         released_at: ~U[2025-06-01 00:00:00Z]
@@ -297,35 +319,44 @@ defmodule Tracker.Ingestion.PipelineTest do
       |> Pipeline.start!()
       |> Pipeline.mark_completed!()
 
-      assert [] = Pipeline.last_completed_for_channel!("nixos-unstable")
+      assert [] = Pipeline.last_completed_for_channel!(channel.id)
     end
   end
 
   describe "for_channel" do
-    test "returns all pipelines for a channel" do
-      run = create_run!()
-      create_pipeline!(run, %{revision: "r1", sequence: 0})
-      create_pipeline!(run, %{revision: "r2", sequence: 1})
-      create_pipeline!(run, %{channel: "nixos-25.11", revision: "r3", sequence: 0})
+    test "returns all pipelines for a channel", %{channel: channel} do
+      other_channel =
+        Channel.create!(%{
+          name: "nixos-25.11",
+          display_name: "NixOS 25.11",
+          branch: "release-25.11",
+          status: :active,
+          is_stable: true
+        })
 
-      result = Pipeline.for_channel!("nixos-unstable")
+      run = create_run!()
+      create_pipeline!(run, channel, %{revision: "r1", sequence: 0})
+      create_pipeline!(run, channel, %{revision: "r2", sequence: 1})
+      create_pipeline!(run, other_channel, %{revision: "r3", sequence: 0})
+
+      result = Pipeline.for_channel!(channel.id)
 
       assert length(result) == 2
-      assert Enum.all?(result, &(&1.channel == "nixos-unstable"))
+      assert Enum.all?(result, &(&1.channel_id == channel.id))
     end
 
-    test "returns empty list when no pipelines exist" do
-      assert [] = Pipeline.for_channel!("nixos-unstable")
+    test "returns empty list when no pipelines exist", %{channel: channel} do
+      assert [] = Pipeline.for_channel!(channel.id)
     end
   end
 
   describe "identity" do
-    test "enforces unique channel+revision" do
+    test "enforces unique channel_id+revision", %{channel: channel} do
       run = create_run!()
-      create_pipeline!(run, %{channel: "nixos-unstable", revision: "abc123"})
+      create_pipeline!(run, channel, %{revision: "abc123"})
 
       assert_raise Ash.Error.Invalid, fn ->
-        create_pipeline!(run, %{channel: "nixos-unstable", revision: "abc123"})
+        create_pipeline!(run, channel, %{revision: "abc123"})
       end
     end
   end

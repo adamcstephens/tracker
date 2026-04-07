@@ -270,17 +270,29 @@ defmodule TrackerWeb.ModuleLive.Show do
     end
   end
 
-  defp resolve_channel_revision(channel, "") do
-    case Tracker.Nixpkgs.ChannelRevision.latest_by_channel(channel) do
-      {:ok, cr} -> cr
-      _ -> nil
+  defp resolve_channel_revision(channel_name, "") do
+    case Tracker.Nixpkgs.Channel.by_name(channel_name) do
+      {:ok, channel} ->
+        case Tracker.Nixpkgs.ChannelRevision.latest_by_channel(channel.id) do
+          {:ok, cr} -> cr
+          _ -> nil
+        end
+
+      _ ->
+        nil
     end
   end
 
-  defp resolve_channel_revision(channel, rev) do
-    case Tracker.Nixpkgs.ChannelRevision.find_by_channel_hash(channel, rev) do
-      {:ok, cr} -> cr
-      _ -> nil
+  defp resolve_channel_revision(channel_name, rev) do
+    case Tracker.Nixpkgs.Channel.by_name(channel_name) do
+      {:ok, channel} ->
+        case Tracker.Nixpkgs.ChannelRevision.find_by_channel_hash(channel.id, rev) do
+          {:ok, cr} -> cr
+          _ -> nil
+        end
+
+      _ ->
+        nil
     end
   end
 end

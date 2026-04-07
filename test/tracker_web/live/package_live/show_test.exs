@@ -3,17 +3,37 @@ defmodule TrackerWeb.PackageLive.ShowTest do
 
   import Phoenix.LiveViewTest
 
+  alias Tracker.Nixpkgs.Channel
+
   setup do
+    channel_unstable =
+      Channel.create!(%{
+        name: "nixos-unstable",
+        display_name: "NixOS Unstable",
+        branch: "nixos-unstable",
+        status: :active,
+        is_stable: false
+      })
+
+    channel_stable =
+      Channel.create!(%{
+        name: "nixos-24.11",
+        display_name: "NixOS 24.11",
+        branch: "release-24.11",
+        status: :active,
+        is_stable: true
+      })
+
     cr1 =
       Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
-        channel: "nixos-unstable",
+        channel_id: channel_unstable.id,
         revision: "abc123def456789",
         released_at: ~U[2026-03-01 10:00:00Z]
       })
 
     cr2 =
       Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
-        channel: "nixos-24.11",
+        channel_id: channel_stable.id,
         revision: "def456abc789012",
         released_at: ~U[2026-03-15 10:00:00Z]
       })
@@ -39,17 +59,27 @@ defmodule TrackerWeb.PackageLive.ShowTest do
     })
     |> Ash.create!()
 
-    %{package: package, cr1: cr1, cr2: cr2}
+    %{
+      package: package,
+      cr1: cr1,
+      cr2: cr2,
+      channel_unstable: channel_unstable,
+      channel_stable: channel_stable
+    }
   end
 
-  test "updates when a new revision is broadcast", %{conn: conn, package: package} do
+  test "updates when a new revision is broadcast", %{
+    conn: conn,
+    package: package,
+    channel_unstable: channel_unstable
+  } do
     {:ok, view, html} = live(conn, ~p"/packages/#{package.attribute}")
 
     refute html =~ "3.0.0"
 
     cr3 =
       Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
-        channel: "nixos-unstable",
+        channel_id: channel_unstable.id,
         revision: "new111aaa222333",
         released_at: ~U[2026-03-20 10:00:00Z]
       })
@@ -65,7 +95,8 @@ defmodule TrackerWeb.PackageLive.ShowTest do
     Phoenix.PubSub.broadcast(
       Tracker.PubSub,
       "channel_revisions:nixos-unstable",
-      {:channel_revision_completed, %{channel: "nixos-unstable", revision: "new111aaa222333"}}
+      {:channel_revision_completed,
+       %{channel_name: "nixos-unstable", revision: "new111aaa222333"}}
     )
 
     html = render(view)
@@ -120,7 +151,10 @@ defmodule TrackerWeb.PackageLive.ShowTest do
     assert version_order(html) == ["2.13.0", "2.12.1"]
   end
 
-  test "released_at descending sorts by temporal order across months", %{conn: conn} do
+  test "released_at descending sorts by temporal order across months", %{
+    conn: conn,
+    channel_unstable: channel_unstable
+  } do
     # Regression: DateTime structs compared with >= use term ordering
     # (day before month), so Aug 30 > Sep 29 in broken comparison
     pkg =
@@ -130,14 +164,14 @@ defmodule TrackerWeb.PackageLive.ShowTest do
 
     cr_aug =
       Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
-        channel: "nixos-unstable",
+        channel_id: channel_unstable.id,
         revision: "aug30aaa111222",
         released_at: ~U[2025-08-30 17:40:00Z]
       })
 
     cr_sep =
       Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
-        channel: "nixos-unstable",
+        channel_id: channel_unstable.id,
         revision: "sep29bbb333444",
         released_at: ~U[2025-09-29 10:56:00Z]
       })
@@ -335,11 +369,11 @@ defmodule TrackerWeb.PackageLive.ShowTest do
   end
 
   describe "changes only toggle" do
-    setup %{package: package} do
+    setup %{package: package, channel_unstable: channel_unstable} do
       # Add a third unstable revision with same version (noop bump)
       cr3 =
         Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
-          channel: "nixos-unstable",
+          channel_id: channel_unstable.id,
           revision: "noop111bbb222333",
           released_at: ~U[2026-03-10 10:00:00Z]
         })
@@ -355,7 +389,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
       # Add a fourth unstable revision with a new version (real change)
       cr4 =
         Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
-          channel: "nixos-unstable",
+          channel_id: channel_unstable.id,
           revision: "chg333ddd444555",
           released_at: ~U[2026-03-20 10:00:00Z]
         })

@@ -10,7 +10,7 @@ defmodule Tracker.Ingestion.PipelineStarter do
   require Logger
 
   alias Tracker.Ingestion.{IngestionRun, Pipeline, StepGraph, StepWorker}
-  alias Tracker.Nixpkgs.ReleaseCache
+  alias Tracker.Nixpkgs.{Channel, ReleaseCache}
 
   @doc """
   Synchronises a channel by creating pipelines for any releases in the
@@ -25,18 +25,19 @@ defmodule Tracker.Ingestion.PipelineStarter do
     - `revision_resolver` - function to resolve full revision from release.
       Default: fetches from S3.
   """
-  def sync_channel(channel, opts \\ []) do
+  def sync_channel(%Channel{} = channel, opts \\ []) do
     bootstrap = Keyword.get(opts, :bootstrap, false)
     after_date = Keyword.get(opts, :after)
     cache = Keyword.get(opts, :cache, ReleaseCache)
     resolver = Keyword.get(opts, :revision_resolver, &resolve_revision/1)
 
     # Get releases oldest-first
-    releases = ReleaseCache.get_releases(cache, channel) |> Enum.sort_by(& &1.released_at, :asc)
+    releases =
+      ReleaseCache.get_releases(cache, channel.name) |> Enum.sort_by(& &1.released_at, :asc)
 
     # Find last completed pipeline's released_at
     last_completed =
-      case Pipeline.last_completed_for_channel!(channel) do
+      case Pipeline.last_completed_for_channel!(channel.id) do
         [pipeline] -> pipeline
         [] -> nil
       end
@@ -63,7 +64,7 @@ defmodule Tracker.Ingestion.PipelineStarter do
         end
 
       # Exclude releases with existing non-failed pipelines
-      new_releases = filter_missing_releases(target_releases, channel)
+      new_releases = filter_missing_releases(target_releases, channel.id)
 
       if new_releases == [] do
         :noop
@@ -73,7 +74,7 @@ defmodule Tracker.Ingestion.PipelineStarter do
 
         create_pipelines_with_predecessors(run, channel, new_releases, cache, resolver)
 
-        start_first_startable(channel)
+        start_first_startable(channel.id)
 
         {:ok, length(new_releases)}
       end
@@ -88,12 +89,12 @@ defmodule Tracker.Ingestion.PipelineStarter do
     - `cache` - ReleaseCache server name.
     - `revision_resolver` - function to resolve full revision from release.
   """
-  def backfill_channel(channel, opts \\ []) do
-    existing = Pipeline.for_channel!(channel)
+  def backfill_channel(%Channel{} = channel, opts \\ []) do
+    existing = Pipeline.for_channel!(channel.id)
 
     if existing != [] do
       raise ArgumentError,
-            "Cannot backfill channel #{channel}: #{length(existing)} pipelines already exist"
+            "Cannot backfill channel #{channel.name}: #{length(existing)} pipelines already exist"
     end
 
     sync_channel(channel, Keyword.put(opts, :bootstrap, true))
@@ -105,7 +106,7 @@ defmodule Tracker.Ingestion.PipelineStarter do
   Returns the created pipeline.
   """
   def start_pipeline(run, attrs) do
-    active_steps = StepGraph.steps_for(attrs.channel)
+    active_steps = StepGraph.steps_for(attrs.channel_name)
 
     pipeline =
       Pipeline.create!(
@@ -141,7 +142,7 @@ defmodule Tracker.Ingestion.PipelineStarter do
   # -- Private --
 
   defp create_pipelines_with_predecessors(run, channel, releases, cache, resolver) do
-    active_steps = StepGraph.steps_for(channel)
+    active_steps = StepGraph.steps_for(channel.name)
 
     # Track created pipelines by short_hash for intra-batch predecessor lookup
     releases
@@ -150,11 +151,12 @@ defmodule Tracker.Ingestion.PipelineStarter do
       revision = resolver.(release)
 
       # Find predecessor: look in ReleaseCache for the previous release
-      predecessor_id = resolve_predecessor_id(channel, release.short_hash, cache, created_map)
+      predecessor_id =
+        resolve_predecessor_id(channel, release.short_hash, cache, created_map)
 
       pipeline =
         Pipeline.create!(%{
-          channel: channel,
+          channel_id: channel.id,
           revision: revision,
           base_url: release.base_url,
           released_at: parse_released_at(release.released_at),
@@ -169,7 +171,7 @@ defmodule Tracker.Ingestion.PipelineStarter do
   end
 
   defp resolve_predecessor_id(channel, short_hash, cache, created_map) do
-    case ReleaseCache.find_previous_release(cache, channel, short_hash) do
+    case ReleaseCache.find_previous_release(cache, channel.name, short_hash) do
       nil ->
         nil
 
@@ -181,13 +183,13 @@ defmodule Tracker.Ingestion.PipelineStarter do
 
           nil ->
             # Look up in DB by short_hash prefix
-            find_pipeline_by_short_hash(channel, prev_release.short_hash)
+            find_pipeline_by_short_hash(channel.id, prev_release.short_hash)
         end
     end
   end
 
-  defp find_pipeline_by_short_hash(channel, short_hash) do
-    case Pipeline.for_channel!(channel) do
+  defp find_pipeline_by_short_hash(channel_id, short_hash) do
+    case Pipeline.for_channel!(channel_id) do
       pipelines ->
         case Enum.find(pipelines, fn p -> String.starts_with?(p.revision, short_hash) end) do
           %Pipeline{id: id} -> id
@@ -196,9 +198,9 @@ defmodule Tracker.Ingestion.PipelineStarter do
     end
   end
 
-  defp filter_missing_releases(releases, channel) do
+  defp filter_missing_releases(releases, channel_id) do
     existing =
-      Pipeline.for_channel!(channel)
+      Pipeline.for_channel!(channel_id)
       |> Enum.filter(&(&1.status != :failed))
       |> MapSet.new(& &1.revision)
 
@@ -207,8 +209,8 @@ defmodule Tracker.Ingestion.PipelineStarter do
     end)
   end
 
-  defp start_first_startable(channel) do
-    case Pipeline.next_pending_for_channel!(channel) do
+  defp start_first_startable(channel_id) do
+    case Pipeline.next_pending_for_channel!(channel_id) do
       [next | _] ->
         if startable?(next) do
           Pipeline.start!(next)

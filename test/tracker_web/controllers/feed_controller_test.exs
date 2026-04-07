@@ -1,16 +1,27 @@
 defmodule TrackerWeb.FeedControllerTest do
   use TrackerWeb.ConnCase, async: true
 
+  alias Tracker.Nixpkgs.Channel
+
   describe "channel feed" do
     setup do
+      channel =
+        Channel.create!(%{
+          name: "nixos-feed-test",
+          display_name: "NixOS Feed Test",
+          branch: "nixos-feed-test",
+          status: :active,
+          is_stable: false
+        })
+
       Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
-        channel: "nixos-feed-test",
+        channel_id: channel.id,
         revision: "feed111aaa222333",
         released_at: ~U[2026-03-01 10:00:00Z]
       })
 
       Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
-        channel: "nixos-feed-test",
+        channel_id: channel.id,
         revision: "feed222bbb333444",
         released_at: ~U[2026-03-15 10:00:00Z]
       })
@@ -39,16 +50,25 @@ defmodule TrackerWeb.FeedControllerTest do
 
   describe "package feed" do
     setup do
+      pkg_channel =
+        Channel.create!(%{
+          name: "nixos-feed-pkg",
+          display_name: "NixOS Feed Pkg",
+          branch: "nixos-feed-pkg",
+          status: :active,
+          is_stable: false
+        })
+
       cr1 =
         Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
-          channel: "nixos-feed-pkg",
+          channel_id: pkg_channel.id,
           revision: "pkgfeed111aaa222",
           released_at: ~U[2026-03-01 10:00:00Z]
         })
 
       cr2 =
         Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
-          channel: "nixos-feed-pkg",
+          channel_id: pkg_channel.id,
           revision: "pkgfeed222bbb333",
           released_at: ~U[2026-03-15 10:00:00Z]
         })

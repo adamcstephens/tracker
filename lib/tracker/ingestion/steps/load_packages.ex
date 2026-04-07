@@ -12,7 +12,7 @@ defmodule Tracker.Ingestion.Steps.LoadPackages do
   require Logger
 
   alias Tracker.Ingestion.{Helpers, PackageStream, StepGraph}
-  alias Tracker.Nixpkgs.Channel
+  alias Tracker.Nixpkgs.ChannelFetcher
 
   @stream_timeout :timer.minutes(25)
 
@@ -21,8 +21,9 @@ defmodule Tracker.Ingestion.Steps.LoadPackages do
 
   @impl true
   def run(%Tracker.Ingestion.StepContext{pipeline: pipeline, channel_revision: channel_revision}) do
-    compressed = Channel.fetch_packages_compressed(pipeline.base_url)
-    include_metadata? = pipeline.channel == StepGraph.metadata_channel()
+    compressed = ChannelFetcher.fetch_packages_compressed(pipeline.base_url)
+    channel = Ash.get!(Tracker.Nixpkgs.Channel, pipeline.channel_id)
+    include_metadata? = channel.name == StepGraph.metadata_channel()
 
     :ok = PackageStream.stream_packages(compressed, self())
 

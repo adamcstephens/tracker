@@ -147,8 +147,10 @@ defmodule TrackerWeb.ChannelLive.Show do
   end
 
   @impl true
-  def handle_params(%{"channel" => channel} = params, _url, socket) do
-    if connected?(socket) && socket.assigns.subscribed_channel != channel do
+  def handle_params(%{"channel" => channel_name} = params, _url, socket) do
+    channel = Tracker.Nixpkgs.Channel.by_name!(channel_name)
+
+    if connected?(socket) && socket.assigns.subscribed_channel != channel_name do
       if socket.assigns.subscribed_channel do
         Phoenix.PubSub.unsubscribe(
           Tracker.PubSub,
@@ -156,7 +158,7 @@ defmodule TrackerWeb.ChannelLive.Show do
         )
       end
 
-      Phoenix.PubSub.subscribe(Tracker.PubSub, "channel_revisions:#{channel}")
+      Phoenix.PubSub.subscribe(Tracker.PubSub, "channel_revisions:#{channel_name}")
     end
 
     sort_by = parse_sort_by(params["sort_by"])
@@ -165,25 +167,26 @@ defmodule TrackerWeb.ChannelLive.Show do
 
     {:noreply,
      socket
-     |> assign(:page_title, channel)
-     |> assign(:channel, channel)
+     |> assign(:page_title, channel_name)
+     |> assign(:channel, channel_name)
+     |> assign(:channel_resource, channel)
      |> assign(:sort_by, sort_by)
      |> assign(:sort_dir, sort_dir)
-     |> assign(:subscribed_channel, channel)
-     |> assign_revisions(channel, sort_by, sort_dir, page)}
+     |> assign(:subscribed_channel, channel_name)
+     |> assign_revisions(channel.id, sort_by, sort_dir, page)}
   end
 
   @impl true
   def handle_info({:channel_revision_completed, _payload}, socket) do
-    %{channel: channel, sort_by: sort_by, sort_dir: sort_dir, current_page: page} =
+    %{channel_resource: channel, sort_by: sort_by, sort_dir: sort_dir, current_page: page} =
       socket.assigns
 
-    {:noreply, assign_revisions(socket, channel, sort_by, sort_dir, page)}
+    {:noreply, assign_revisions(socket, channel.id, sort_by, sort_dir, page)}
   end
 
-  defp assign_revisions(socket, channel, sort_by, sort_dir, page) do
+  defp assign_revisions(socket, channel_id, sort_by, sort_dir, page) do
     offset = (page - 1) * 15
-    revisions = load_revisions(channel, sort_by, sort_dir, offset)
+    revisions = load_revisions(channel_id, sort_by, sort_dir, offset)
     total_pages = ceil(revisions.count / 15)
 
     socket
@@ -257,8 +260,8 @@ defmodule TrackerWeb.ChannelLive.Show do
     {:noreply, assign(socket, :selected_revisions, selected)}
   end
 
-  defp load_revisions(channel, sort_by, sort_dir, offset) do
-    Tracker.Nixpkgs.ChannelRevision.list_by_channel!(channel,
+  defp load_revisions(channel_id, sort_by, sort_dir, offset) do
+    Tracker.Nixpkgs.ChannelRevision.list_by_channel!(channel_id,
       query: [sort: [{sort_by, sort_dir}]],
       page: [offset: offset, count: true]
     )

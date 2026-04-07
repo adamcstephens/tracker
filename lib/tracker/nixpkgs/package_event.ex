@@ -9,7 +9,7 @@ defmodule Tracker.Nixpkgs.PackageEvent do
   code_interface do
     define :list
     define :list_by_package, args: [:package_id]
-    define :list_between_revisions, args: [:channel, :from_date, :to_date]
+    define :list_between_revisions, args: [:channel_id, :from_date, :to_date]
   end
 
   actions do
@@ -33,7 +33,7 @@ defmodule Tracker.Nixpkgs.PackageEvent do
     end
 
     read :list_between_revisions do
-      argument :channel, :string do
+      argument :channel_id, :integer do
         allow_nil? false
       end
 
@@ -48,7 +48,7 @@ defmodule Tracker.Nixpkgs.PackageEvent do
       prepare build(load: [:package, :channel_revision], sort: [{:inserted_at, :asc}])
 
       filter expr(
-               channel_revision.channel == ^arg(:channel) and
+               channel_revision.channel_id == ^arg(:channel_id) and
                  channel_revision.released_at > ^arg(:from_date) and
                  channel_revision.released_at <= ^arg(:to_date)
              )

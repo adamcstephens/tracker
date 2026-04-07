@@ -12,16 +12,16 @@ defmodule Tracker.Ingestion.Pipeline do
   code_interface do
     define :create
     define :read
-    define :find, args: [:channel, :revision]
+    define :find, args: [:channel_id, :revision]
     define :start
     define :complete_step, args: [:step]
     define :set_channel_revision_id, args: [:channel_revision_id]
     define :mark_completed
     define :mark_failed, args: [:failed_step, :error]
     define :retry_from_step
-    define :last_completed_for_channel, args: [:channel]
-    define :for_channel, args: [:channel]
-    define :next_pending_for_channel, args: [:channel]
+    define :last_completed_for_channel, args: [:channel_id]
+    define :for_channel, args: [:channel_id]
+    define :next_pending_for_channel, args: [:channel_id]
     define :for_run, args: [:ingestion_run_id]
   end
 
@@ -32,7 +32,7 @@ defmodule Tracker.Ingestion.Pipeline do
       primary? true
 
       accept [
-        :channel,
+        :channel_id,
         :revision,
         :base_url,
         :released_at,
@@ -49,30 +49,30 @@ defmodule Tracker.Ingestion.Pipeline do
     read :find do
       get? true
 
-      argument :channel, :string, allow_nil?: false
+      argument :channel_id, :integer, allow_nil?: false
       argument :revision, :string, allow_nil?: false
 
-      filter expr(channel == ^arg(:channel) and revision == ^arg(:revision))
+      filter expr(channel_id == ^arg(:channel_id) and revision == ^arg(:revision))
     end
 
     read :next_pending_for_channel do
-      argument :channel, :string, allow_nil?: false
+      argument :channel_id, :integer, allow_nil?: false
 
       prepare build(sort: [{:sequence, :asc}], limit: 1)
-      filter expr(channel == ^arg(:channel) and status == :pending)
+      filter expr(channel_id == ^arg(:channel_id) and status == :pending)
     end
 
     read :last_completed_for_channel do
-      argument :channel, :string, allow_nil?: false
+      argument :channel_id, :integer, allow_nil?: false
 
       prepare build(sort: [{:released_at, :desc}], limit: 1)
-      filter expr(channel == ^arg(:channel) and status == :completed)
+      filter expr(channel_id == ^arg(:channel_id) and status == :completed)
     end
 
     read :for_channel do
-      argument :channel, :string, allow_nil?: false
+      argument :channel_id, :integer, allow_nil?: false
 
-      filter expr(channel == ^arg(:channel))
+      filter expr(channel_id == ^arg(:channel_id))
     end
 
     read :for_run do
@@ -120,11 +120,6 @@ defmodule Tracker.Ingestion.Pipeline do
 
   attributes do
     integer_primary_key :id
-
-    attribute :channel, :string do
-      allow_nil? false
-      public? true
-    end
 
     attribute :revision, :string do
       allow_nil? false
@@ -179,6 +174,11 @@ defmodule Tracker.Ingestion.Pipeline do
   end
 
   relationships do
+    belongs_to :channel, Tracker.Nixpkgs.Channel do
+      attribute_type :integer
+      allow_nil? false
+    end
+
     belongs_to :ingestion_run, Tracker.Ingestion.IngestionRun do
       attribute_type :integer
       allow_nil? false
@@ -192,6 +192,6 @@ defmodule Tracker.Ingestion.Pipeline do
   end
 
   identities do
-    identity :unique_pipeline_channel_revision, [:channel, :revision]
+    identity :unique_pipeline_channel_revision, [:channel_id, :revision]
   end
 end

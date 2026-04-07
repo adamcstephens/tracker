@@ -3,21 +3,41 @@ defmodule TrackerWeb.ChannelLive.IndexTest do
 
   import Phoenix.LiveViewTest
 
+  alias Tracker.Nixpkgs.Channel
+
   setup do
+    channel_unstable =
+      Channel.create!(%{
+        name: "nixos-unstable",
+        display_name: "NixOS Unstable",
+        branch: "nixos-unstable",
+        status: :active,
+        is_stable: false
+      })
+
+    channel_stable =
+      Channel.create!(%{
+        name: "nixos-24.11",
+        display_name: "NixOS 24.11",
+        branch: "release-24.11",
+        status: :active,
+        is_stable: true
+      })
+
     Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
-      channel: "nixos-unstable",
+      channel_id: channel_unstable.id,
       revision: "aaa111bbb222ccc",
       released_at: ~U[2026-03-01 10:00:00Z]
     })
 
     Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
-      channel: "nixos-unstable",
+      channel_id: channel_unstable.id,
       revision: "ddd333eee444fff",
       released_at: ~U[2026-03-15 10:00:00Z]
     })
 
     Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
-      channel: "nixos-24.11",
+      channel_id: channel_stable.id,
       revision: "ggg555hhh666iii",
       released_at: ~U[2026-03-10 10:00:00Z]
     })
