@@ -16,7 +16,6 @@ channels = [
 ]
 
 config :tracker,
-  # loader_limit: 20,
   channels: channels
 
 config :tracker, Oban,

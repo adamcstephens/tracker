@@ -19,7 +19,6 @@
 ------------------------------------------------------------
 
 external entity Release {
-    short_hash: String
     revision: String
     base_url: String
     released_at: Timestamp
