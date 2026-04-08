@@ -12,6 +12,7 @@ defmodule Tracker.Nixpkgs.Channel do
     define :by_name, args: [:name]
     define :active
     define :nixos_channels
+    define :default_stable
   end
 
   actions do
@@ -41,6 +42,13 @@ defmodule Tracker.Nixpkgs.Channel do
     read :nixos_channels do
       filter expr(fragment("? LIKE 'nixos-%'", name))
       prepare build(sort: [:name])
+    end
+
+    read :default_stable do
+      get? true
+
+      filter expr(is_stable == true and status == :active)
+      prepare build(sort: [{:name, :desc}], limit: 1)
     end
   end
 

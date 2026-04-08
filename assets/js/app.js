@@ -32,6 +32,14 @@ Hooks.UpdateURL = {
   }
 }
 
+Hooks.LensCookie = {
+  mounted() {
+    this.handleEvent("set_lens_cookie", ({value, max_age}) => {
+      document.cookie = `_tracker_lens=${encodeURIComponent(value)}; path=/; max-age=${max_age}; samesite=lax`
+    })
+  }
+}
+
 let csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 let liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,

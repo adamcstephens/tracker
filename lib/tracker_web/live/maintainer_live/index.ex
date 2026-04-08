@@ -133,4 +133,9 @@ defmodule TrackerWeb.MaintainerLive.Index do
     |> assign(:total_pages, total_pages)
     |> assign(:current_page, current_page)
   end
+
+  @impl true
+  def handle_info({:set_lens, channel_name, rev}, socket) do
+    {:noreply, TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)}
+  end
 end

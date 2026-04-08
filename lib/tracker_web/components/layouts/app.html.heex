@@ -10,6 +10,9 @@
       <li><.link navigate={~p"/teams"}>Teams</.link></li>
     </ul>
     <ul>
+      <li :if={assigns[:lens]}>
+        <.live_component module={TrackerWeb.LensComponent} id="lens" lens={@lens} />
+      </li>
       <%= if @current_user do %>
         <li>Hello, {@current_user.github_username}!</li>
       <% else %>

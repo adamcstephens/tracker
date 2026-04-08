@@ -123,6 +123,10 @@ defmodule TrackerWeb.MaintainerLive.Show do
      assign(socket, :recent_changes, load_recent_changes(socket.assigns.maintainer.github_id))}
   end
 
+  def handle_info({:set_lens, channel_name, rev}, socket) do
+    {:noreply, TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)}
+  end
+
   @impl true
   def handle_params(%{"github" => github} = params, _url, socket) do
     maintainer = Tracker.Nixpkgs.Maintainer.get_by_github!(github, load: [:teams])

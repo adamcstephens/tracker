@@ -165,6 +165,8 @@ defmodule TrackerWeb.ChannelLive.Show do
     sort_dir = parse_sort_dir(params["sort_dir"])
     page = params |> Map.get("page", "1") |> String.to_integer() |> max(1)
 
+    lens = socket.assigns.lens && %{socket.assigns.lens | disabled?: true}
+
     {:noreply,
      socket
      |> assign(:page_title, channel_name)
@@ -173,6 +175,7 @@ defmodule TrackerWeb.ChannelLive.Show do
      |> assign(:sort_by, sort_by)
      |> assign(:sort_dir, sort_dir)
      |> assign(:subscribed_channel, channel_name)
+     |> assign(:lens, lens)
      |> assign_revisions(channel.id, sort_by, sort_dir, page)}
   end
 
@@ -183,6 +186,10 @@ defmodule TrackerWeb.ChannelLive.Show do
       socket.assigns
 
     {:noreply, assign_revisions(socket, channel.id, sort_by, sort_dir, page)}
+  end
+
+  def handle_info({:set_lens, channel_name, rev}, socket) do
+    {:noreply, TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)}
   end
 
   defp assign_revisions(socket, channel_id, sort_by, sort_dir, page) do

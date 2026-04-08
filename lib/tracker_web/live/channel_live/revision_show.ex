@@ -133,11 +133,14 @@ defmodule TrackerWeb.ChannelLive.RevisionShow do
 
     revision = ChannelRevision.find_by_channel_hash!(channel.id, rev_hash)
 
+    lens = socket.assigns.lens && %{socket.assigns.lens | disabled?: true}
+
     {:noreply,
      socket
      |> assign(:channel, channel_name)
      |> assign(:channel_id, channel.id)
      |> assign(:subscribed_channel, channel_name)
+     |> assign(:lens, lens)
      |> assign_revision_data(revision)}
   end
 
@@ -150,6 +153,10 @@ defmodule TrackerWeb.ChannelLive.RevisionShow do
       )
 
     {:noreply, assign_revision_data(socket, revision)}
+  end
+
+  def handle_info({:set_lens, channel_name, rev}, socket) do
+    {:noreply, TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)}
   end
 
   defp assign_revision_data(socket, revision) do

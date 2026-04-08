@@ -130,6 +130,10 @@ defmodule TrackerWeb.ChangeLive.Index do
     {:noreply, socket |> assign(:base_refs, load_base_refs()) |> load_changes()}
   end
 
+  def handle_info({:set_lens, channel_name, rev}, socket) do
+    {:noreply, TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)}
+  end
+
   @impl true
   def handle_params(params, _url, socket) do
     search = Map.get(params, "search", "")
@@ -139,6 +143,8 @@ defmodule TrackerWeb.ChangeLive.Index do
     page = params |> Map.get("page", "1") |> String.to_integer() |> max(1)
     offset = (page - 1) * 15
 
+    lens = socket.assigns.lens && %{socket.assigns.lens | disabled?: true}
+
     socket =
       socket
       |> assign(:page_title, "Changes")
@@ -147,6 +153,7 @@ defmodule TrackerWeb.ChangeLive.Index do
       |> assign(:sort_by, sort_by)
       |> assign(:sort_dir, sort_dir)
       |> assign(:offset, offset)
+      |> assign(:lens, lens)
       |> load_changes()
 
     {:noreply, socket}
