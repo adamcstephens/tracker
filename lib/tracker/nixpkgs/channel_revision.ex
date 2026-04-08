@@ -162,9 +162,19 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
     identity :unique_channel_revision, [:channel_id, :revision]
   end
 
+  defmodule VersionDiff do
+    use TypedStruct
+
+    typedstruct enforce: true do
+      field :attribute, String.t()
+      field :old_version, String.t() | nil
+      field :new_version, String.t() | nil
+    end
+  end
+
   @doc """
-  Returns version changes between two channel revisions as a list of maps
-  with `:attribute`, `:old_version`, and `:new_version` keys.
+  Returns version changes between two channel revisions as a list of
+  `VersionDiff` structs.
 
   Only includes packages where the version differs (including added/removed).
   """
@@ -189,7 +199,7 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
       )
 
     Enum.map(rows, fn [attribute, old_version, new_version] ->
-      %{attribute: attribute, old_version: old_version, new_version: new_version}
+      %VersionDiff{attribute: attribute, old_version: old_version, new_version: new_version}
     end)
   end
 end

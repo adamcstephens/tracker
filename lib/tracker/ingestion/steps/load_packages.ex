@@ -63,7 +63,9 @@ defmodule Tracker.Ingestion.Steps.LoadPackages do
   # -- Package extraction --
 
   defp extract_packages(packages, false) do
-    pkgs = Map.new(packages, fn {attr, fields} -> {attr, %{version: fields[:version]}} end)
+    pkgs =
+      Map.new(packages, fn {attr, fields} -> {attr, %{version: fields[:version]}} end)
+
     {pkgs, %{}, %{}, %{}}
   end
 
@@ -204,6 +206,7 @@ defmodule Tracker.Ingestion.Steps.LoadPackages do
     maintainer_task =
       Task.async(fn ->
         maintainer_data |> Map.values() |> Tracker.Nixpkgs.Maintainer.bulk_upsert_all()
+
         maintainer_id_map()
       end)
 
