@@ -17,7 +17,7 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCache do
   ## Examples
 
       iex> ChangeArtifactCache.cache_key(12345, "comparison")
-      "artifacts/nixpkgs/runs/12345/comparison.zip"
+      "artifacts/nixpkgs/pull_requests/12345/comparison.zip"
   """
   def cache_key(pr_number, artifact_name) do
     "artifacts/nixpkgs/pull_requests/#{pr_number}/#{artifact_name}.zip"
