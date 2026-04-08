@@ -20,15 +20,15 @@ defmodule Tracker.Nixpkgs.ReleaseCache do
   # Oldest release date we'll ingest. packages.json.br was introduced around
   # 2020-03-27 02:16:34 (first seen on nixos-unstable-small), but we default
   # to 2025-01-01 for now.
-  @release_cutoff_date "2025-01-01T00:00:00"
+  @release_cutoff_date ~U[2025-01-01T00:00:00Z]
 
   defmodule Release do
     use TypedStruct
 
-    typedstruct enforce: true do
-      field :short_hash, String.t()
-      field :base_url, String.t()
-      field :released_at, String.t()
+    typedstruct do
+      field :base_url, String.t(), enforce: true
+      field :released_at, DateTime.t(), enforce: true
+      field :revision, String.t()
     end
   end
 
@@ -46,6 +46,7 @@ defmodule Tracker.Nixpkgs.ReleaseCache do
           channel
           |> fetch_releases()
           |> parse_releases()
+          |> merge_revisions([])
 
         GenServer.call(server, {:put_releases, channel, releases})
         releases
@@ -55,8 +56,8 @@ defmodule Tracker.Nixpkgs.ReleaseCache do
     end
   end
 
-  def find_previous_release(server \\ __MODULE__, channel, short_hash) do
-    GenServer.call(server, {:find_previous_release, channel, short_hash})
+  def find_previous_release(server \\ __MODULE__, channel, revision) do
+    GenServer.call(server, {:find_previous_release, channel, revision})
   end
 
   def find_by_base_url(server \\ __MODULE__, channel, base_url) do
@@ -89,16 +90,17 @@ defmodule Tracker.Nixpkgs.ReleaseCache do
     contents
     |> List.wrap()
     |> Enum.map(fn %{"Key" => key, "LastModified" => last_modified} ->
-      short_hash = key |> String.split(".") |> List.last()
+      {:ok, released_at, _offset} = DateTime.from_iso8601(last_modified)
 
       %Release{
-        short_hash: short_hash,
         base_url: "#{@releases_base_url}/#{key}",
-        released_at: last_modified
+        released_at: released_at
       }
     end)
-    |> Enum.reject(fn release -> release.released_at < @release_cutoff_date end)
-    |> Enum.sort_by(& &1.released_at, :desc)
+    |> Enum.reject(fn release ->
+      DateTime.before?(release.released_at, @release_cutoff_date)
+    end)
+    |> Enum.sort_by(& &1.released_at, {:desc, DateTime})
   end
 
   defp channel_to_s3_prefix("nixos-" <> rest), do: "nixos/#{rest}/"
@@ -165,7 +167,7 @@ defmodule Tracker.Nixpkgs.ReleaseCache do
     releases = Map.get(state.releases, channel, [])
 
     result =
-      case Enum.find_index(releases, &String.starts_with?(revision, &1.short_hash)) do
+      case Enum.find_index(releases, &(&1.revision == revision)) do
         nil -> nil
         index -> Enum.at(releases, index + 1)
       end
@@ -177,7 +179,7 @@ defmodule Tracker.Nixpkgs.ReleaseCache do
     release =
       state.releases
       |> Map.get(channel, [])
-      |> Enum.find(&String.starts_with?(revision, &1.short_hash))
+      |> Enum.find(&(&1.revision == revision))
 
     {:reply, release, state}
   end
@@ -226,8 +228,38 @@ defmodule Tracker.Nixpkgs.ReleaseCache do
         |> fetch_releases()
         |> parse_releases()
 
+      existing = Map.get(current_releases, channel, [])
+      releases = merge_revisions(releases, existing)
+
       {channel, releases}
     end)
+  end
+
+  defp merge_revisions(fresh_releases, existing_releases) do
+    existing_by_url =
+      Map.new(existing_releases, fn r -> {r.base_url, r.revision} end)
+
+    req = Tracker.Nixpkgs.S3Cache.new()
+
+    Enum.map(fresh_releases, fn %Release{} = release ->
+      revision =
+        case Map.get(existing_by_url, release.base_url) do
+          nil -> fetch_revision(req, release.base_url)
+          rev -> rev
+        end
+
+      %Release{release | revision: revision}
+    end)
+  end
+
+  defp fetch_revision(req, base_url) do
+    case Req.get(req, url: base_url <> "/git-revision") do
+      {:ok, %{status: 200, body: body}} when is_binary(body) ->
+        String.trim(body)
+
+      _ ->
+        nil
+    end
   end
 
   defp fetch_releases(req_s3, channel, marker, acc) do

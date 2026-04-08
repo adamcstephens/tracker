@@ -13,14 +13,14 @@ defmodule Tracker.Nixpkgs.ReleaseCacheTest do
     test "put_releases and get_releases", %{pid: pid} do
       releases = [
         %Release{
-          short_hash: "abc1234",
           base_url: "https://example.com/abc",
-          released_at: "2025-03-02T10:00:00Z"
+          released_at: ~U[2025-03-02 10:00:00Z],
+          revision: "abc1234" <> String.duplicate("0", 33)
         },
         %Release{
-          short_hash: "def5678",
           base_url: "https://example.com/def",
-          released_at: "2025-03-01T10:00:00Z"
+          released_at: ~U[2025-03-01 10:00:00Z],
+          revision: "def5678" <> String.duplicate("0", 33)
         }
       ]
 
@@ -31,85 +31,103 @@ defmodule Tracker.Nixpkgs.ReleaseCacheTest do
     test "find_previous_release returns the chronologically previous release", %{pid: pid} do
       releases = [
         %Release{
-          short_hash: "ccc",
           base_url: "https://example.com/c",
-          released_at: "2025-03-03T10:00:00Z"
+          released_at: ~U[2025-03-03 10:00:00Z],
+          revision: "ccc" <> String.duplicate("0", 37)
         },
         %Release{
-          short_hash: "bbb",
           base_url: "https://example.com/b",
-          released_at: "2025-03-02T10:00:00Z"
+          released_at: ~U[2025-03-02 10:00:00Z],
+          revision: "bbb" <> String.duplicate("0", 37)
         },
         %Release{
-          short_hash: "aaa",
           base_url: "https://example.com/a",
-          released_at: "2025-03-01T10:00:00Z"
+          released_at: ~U[2025-03-01 10:00:00Z],
+          revision: "aaa" <> String.duplicate("0", 37)
         }
       ]
 
       ReleaseCache.put_releases(pid, "nixos-unstable", releases)
 
+      ccc_rev = "ccc" <> String.duplicate("0", 37)
+      bbb_rev = "bbb" <> String.duplicate("0", 37)
+      aaa_rev = "aaa" <> String.duplicate("0", 37)
+
       # Previous of newest (ccc) is bbb
-      assert %Release{short_hash: "bbb"} =
-               ReleaseCache.find_previous_release(pid, "nixos-unstable", "ccc")
+      assert %Release{revision: ^bbb_rev} =
+               ReleaseCache.find_previous_release(pid, "nixos-unstable", ccc_rev)
 
       # Previous of middle (bbb) is aaa
-      assert %Release{short_hash: "aaa"} =
-               ReleaseCache.find_previous_release(pid, "nixos-unstable", "bbb")
+      assert %Release{revision: ^aaa_rev} =
+               ReleaseCache.find_previous_release(pid, "nixos-unstable", bbb_rev)
     end
 
     test "find_previous_release returns nil for the oldest release", %{pid: pid} do
+      bbb_rev = "bbb" <> String.duplicate("0", 37)
+      aaa_rev = "aaa" <> String.duplicate("0", 37)
+
       releases = [
         %Release{
-          short_hash: "bbb",
           base_url: "https://example.com/b",
-          released_at: "2025-03-02T10:00:00Z"
+          released_at: ~U[2025-03-02 10:00:00Z],
+          revision: bbb_rev
         },
         %Release{
-          short_hash: "aaa",
           base_url: "https://example.com/a",
-          released_at: "2025-03-01T10:00:00Z"
+          released_at: ~U[2025-03-01 10:00:00Z],
+          revision: aaa_rev
         }
       ]
 
       ReleaseCache.put_releases(pid, "nixos-unstable", releases)
-      assert ReleaseCache.find_previous_release(pid, "nixos-unstable", "aaa") == nil
+      assert ReleaseCache.find_previous_release(pid, "nixos-unstable", aaa_rev) == nil
     end
 
-    test "find_previous_release returns nil for unknown short_hash", %{pid: pid} do
+    test "find_previous_release returns nil for unknown revision", %{pid: pid} do
       releases = [
         %Release{
-          short_hash: "aaa",
           base_url: "https://example.com/a",
-          released_at: "2025-03-01T10:00:00Z"
+          released_at: ~U[2025-03-01 10:00:00Z],
+          revision: "aaa" <> String.duplicate("0", 37)
         }
       ]
 
       ReleaseCache.put_releases(pid, "nixos-unstable", releases)
-      assert ReleaseCache.find_previous_release(pid, "nixos-unstable", "zzz") == nil
+
+      assert ReleaseCache.find_previous_release(
+               pid,
+               "nixos-unstable",
+               "zzz" <> String.duplicate("0", 37)
+             ) == nil
     end
 
     test "find_previous_release returns nil for unknown channel", %{pid: pid} do
-      assert ReleaseCache.find_previous_release(pid, "nonexistent", "aaa") == nil
+      assert ReleaseCache.find_previous_release(
+               pid,
+               "nonexistent",
+               "aaa" <> String.duplicate("0", 37)
+             ) == nil
     end
 
     test "find_by_base_url returns matching release", %{pid: pid} do
+      abc_rev = "abc1234" <> String.duplicate("0", 33)
+
       releases = [
         %Release{
-          short_hash: "abc1234",
           base_url: "https://releases.nixos.org/nixos/unstable/abc1234",
-          released_at: "2025-03-02T10:00:00Z"
+          released_at: ~U[2025-03-02 10:00:00Z],
+          revision: abc_rev
         },
         %Release{
-          short_hash: "def5678",
           base_url: "https://releases.nixos.org/nixos/unstable/def5678",
-          released_at: "2025-03-01T10:00:00Z"
+          released_at: ~U[2025-03-01 10:00:00Z],
+          revision: "def5678" <> String.duplicate("0", 33)
         }
       ]
 
       ReleaseCache.put_releases(pid, "nixos-unstable", releases)
 
-      assert %Release{short_hash: "abc1234"} =
+      assert %Release{revision: ^abc_rev} =
                ReleaseCache.find_by_base_url(
                  pid,
                  "nixos-unstable",
@@ -120,9 +138,9 @@ defmodule Tracker.Nixpkgs.ReleaseCacheTest do
     test "find_by_base_url returns nil when no match", %{pid: pid} do
       releases = [
         %Release{
-          short_hash: "abc1234",
           base_url: "https://releases.nixos.org/nixos/unstable/abc1234",
-          released_at: "2025-03-02T10:00:00Z"
+          released_at: ~U[2025-03-02 10:00:00Z],
+          revision: "abc1234" <> String.duplicate("0", 33)
         }
       ]
 
@@ -139,38 +157,60 @@ defmodule Tracker.Nixpkgs.ReleaseCacheTest do
       assert ReleaseCache.find_by_base_url(pid, "nonexistent", "https://example.com/foo") == nil
     end
 
-    test "find_by_revision returns release matching full revision prefix", %{pid: pid} do
+    test "find_by_revision returns release matching exact revision", %{pid: pid} do
+      abc_rev = "abc1234" <> String.duplicate("0", 33)
+
       releases = [
         %Release{
-          short_hash: "abc1234",
           base_url: "https://releases.nixos.org/nixos/unstable/abc1234",
-          released_at: "2025-03-02T10:00:00Z"
+          released_at: ~U[2025-03-02 10:00:00Z],
+          revision: abc_rev
         },
         %Release{
-          short_hash: "def5678",
           base_url: "https://releases.nixos.org/nixos/unstable/def5678",
-          released_at: "2025-03-01T10:00:00Z"
+          released_at: ~U[2025-03-01 10:00:00Z],
+          revision: "def5678" <> String.duplicate("0", 33)
         }
       ]
 
       ReleaseCache.put_releases(pid, "nixos-unstable", releases)
 
-      assert %Release{short_hash: "abc1234"} =
-               ReleaseCache.find_by_revision(pid, "nixos-unstable", "abc1234full9999999")
+      assert %Release{revision: ^abc_rev} =
+               ReleaseCache.find_by_revision(pid, "nixos-unstable", abc_rev)
     end
 
     test "find_by_revision returns nil when no match", %{pid: pid} do
       releases = [
         %Release{
-          short_hash: "abc1234",
           base_url: "https://releases.nixos.org/nixos/unstable/abc1234",
-          released_at: "2025-03-02T10:00:00Z"
+          released_at: ~U[2025-03-02 10:00:00Z],
+          revision: "abc1234" <> String.duplicate("0", 33)
         }
       ]
 
       ReleaseCache.put_releases(pid, "nixos-unstable", releases)
 
-      assert ReleaseCache.find_by_revision(pid, "nixos-unstable", "zzz999full") == nil
+      assert ReleaseCache.find_by_revision(
+               pid,
+               "nixos-unstable",
+               "zzz999" <> String.duplicate("0", 34)
+             ) == nil
+    end
+  end
+
+  describe "parse_releases/1" do
+    test "parses released_at to DateTime" do
+      contents = [
+        %{
+          "Key" => "nixos/unstable/nixos-unstable-new.abc1234",
+          "LastModified" => "2025-06-15T10:00:00Z"
+        }
+      ]
+
+      [release] = ReleaseCache.parse_releases(contents)
+
+      assert %DateTime{} = release.released_at
+      assert release.released_at == ~U[2025-06-15 10:00:00Z]
     end
   end
 
@@ -192,7 +232,7 @@ defmodule Tracker.Nixpkgs.ReleaseCacheTest do
         ReleaseCache.parse_releases(contents)
 
       assert length(releases) == 1
-      assert hd(releases).short_hash == "abc1234"
+      assert hd(releases).base_url =~ "abc1234"
     end
   end
 end

@@ -33,7 +33,8 @@ defmodule Tracker.Ingestion.PipelineStarter do
 
     # Get releases oldest-first
     releases =
-      ReleaseCache.get_releases(cache, channel.name) |> Enum.sort_by(& &1.released_at, :asc)
+      ReleaseCache.get_releases(cache, channel.name)
+      |> Enum.sort_by(& &1.released_at, {:asc, DateTime})
 
     # Find last completed pipeline's released_at
     last_completed =
@@ -57,8 +58,7 @@ defmodule Tracker.Ingestion.PipelineStarter do
       # Filter releases newer than cutoff
       target_releases =
         if cutoff do
-          cutoff_str = DateTime.to_iso8601(cutoff)
-          Enum.filter(releases, fn r -> r.released_at > cutoff_str end)
+          Enum.filter(releases, fn r -> DateTime.after?(r.released_at, cutoff) end)
         else
           releases
         end
@@ -144,57 +144,56 @@ defmodule Tracker.Ingestion.PipelineStarter do
   defp create_pipelines_with_predecessors(run, channel, releases, cache, resolver) do
     active_steps = StepGraph.steps_for(channel.name)
 
-    # Track created pipelines by short_hash for intra-batch predecessor lookup
+    # Track created pipelines by revision for intra-batch predecessor lookup
     releases
     |> Enum.with_index()
     |> Enum.reduce(%{}, fn {release, index}, created_map ->
-      revision = resolver.(release)
+      revision = release.revision || resolver.(release)
 
       # Find predecessor: look in ReleaseCache for the previous release
       predecessor_id =
-        resolve_predecessor_id(channel, release.short_hash, cache, created_map)
+        resolve_predecessor_id(channel, revision, cache, created_map)
 
       pipeline =
         Pipeline.create!(%{
           channel_id: channel.id,
           revision: revision,
           base_url: release.base_url,
-          released_at: parse_released_at(release.released_at),
+          released_at: release.released_at,
           active_steps: active_steps,
           sequence: index,
           ingestion_run_id: run.id,
           predecessor_id: predecessor_id
         })
 
-      Map.put(created_map, release.short_hash, pipeline)
+      Map.put(created_map, revision, pipeline)
     end)
   end
 
-  defp resolve_predecessor_id(channel, short_hash, cache, created_map) do
-    case ReleaseCache.find_previous_release(cache, channel.name, short_hash) do
+  defp resolve_predecessor_id(channel, revision, cache, created_map) do
+    case ReleaseCache.find_previous_release(cache, channel.name, revision) do
       nil ->
         nil
 
       prev_release ->
         # Check if we just created it in this batch
-        case Map.get(created_map, prev_release.short_hash) do
+        case Map.get(created_map, prev_release.revision) do
           %Pipeline{id: id} ->
             id
 
           nil ->
-            # Look up in DB by short_hash prefix
-            find_pipeline_by_short_hash(channel.id, prev_release.short_hash)
+            # Look up in DB by exact revision
+            find_pipeline_by_revision(channel.id, prev_release.revision)
         end
     end
   end
 
-  defp find_pipeline_by_short_hash(channel_id, short_hash) do
-    case Pipeline.for_channel!(channel_id) do
-      pipelines ->
-        case Enum.find(pipelines, fn p -> String.starts_with?(p.revision, short_hash) end) do
-          %Pipeline{id: id} -> id
-          nil -> nil
-        end
+  defp find_pipeline_by_revision(_channel_id, nil), do: nil
+
+  defp find_pipeline_by_revision(channel_id, revision) do
+    case Pipeline.find(channel_id, revision) do
+      {:ok, %Pipeline{id: id}} -> id
+      _ -> nil
     end
   end
 
@@ -205,7 +204,9 @@ defmodule Tracker.Ingestion.PipelineStarter do
       |> MapSet.new(& &1.revision)
 
     Enum.reject(releases, fn release ->
-      Enum.any?(existing, &String.starts_with?(&1, release.short_hash))
+      revision = release.revision
+
+      revision != nil and MapSet.member?(existing, revision)
     end)
   end
 
@@ -238,13 +239,4 @@ defmodule Tracker.Ingestion.PipelineStarter do
   defp resolve_revision(release) do
     Req.get!(Tracker.Nixpkgs.S3Cache.new(), url: release.base_url <> "/git-revision").body
   end
-
-  defp parse_released_at(released_at) when is_binary(released_at) do
-    case DateTime.from_iso8601(released_at) do
-      {:ok, dt, _offset} -> dt
-      _ -> DateTime.utc_now()
-    end
-  end
-
-  defp parse_released_at(%DateTime{} = dt), do: dt
 end

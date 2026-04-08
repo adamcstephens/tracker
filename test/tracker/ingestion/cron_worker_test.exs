@@ -36,14 +36,14 @@ defmodule Tracker.Ingestion.CronWorkerTest do
 
     releases = [
       %Release{
-        short_hash: "bbb2222",
         base_url: "https://releases.nixos.org/nixos/unstable/nixos-25.05pre-bbb2222",
-        released_at: "2025-06-10T00:00:00Z"
+        released_at: ~U[2025-06-10 00:00:00Z],
+        revision: "bbb2222" <> String.duplicate("0", 33)
       },
       %Release{
-        short_hash: "aaa1111",
         base_url: "https://releases.nixos.org/nixos/unstable/nixos-25.05pre-aaa1111",
-        released_at: "2025-06-01T00:00:00Z"
+        released_at: ~U[2025-06-01 00:00:00Z],
+        revision: "aaa1111" <> String.duplicate("0", 33)
       }
     ]
 

@@ -40,14 +40,14 @@ defmodule Tracker.Ingestion.Steps.CreateRevision do
     channel = Ash.get!(Tracker.Nixpkgs.Channel, channel_id)
 
     case ReleaseCache.find_previous_release(channel.name, revision) do
-      nil ->
-        nil
-
-      %ReleaseCache.Release{short_hash: prev_hash} ->
-        case ChannelRevision.find_by_channel_hash(channel_id, prev_hash) do
+      %ReleaseCache.Release{revision: prev_revision} when is_binary(prev_revision) ->
+        case ChannelRevision.find(channel_id, prev_revision) do
           {:ok, rev} -> rev
           _ -> nil
         end
+
+      _ ->
+        nil
     end
   end
 end
