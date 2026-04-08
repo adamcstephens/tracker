@@ -7,9 +7,20 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCache do
   storage past GitHub's 90-day artifact expiry.
   """
 
+  use TypedStruct
+
   require Logger
 
   alias Tracker.Nixpkgs.S3Cache
+
+  defmodule Meta do
+    use TypedStruct
+
+    typedstruct enforce: true do
+      field :version, integer(), default: 1
+      field :run_id, integer()
+    end
+  end
 
   @doc """
   Builds the S3 key for an artifact.
@@ -24,14 +35,27 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCache do
   end
 
   @doc """
+  Builds the S3 key for artifact metadata.
+
+  ## Examples
+
+      iex> ChangeArtifactCache.meta_key(12345)
+      "artifacts/nixpkgs/pull_requests/12345/meta.etf"
+  """
+  def meta_key(pr_number) do
+    "artifacts/nixpkgs/pull_requests/#{pr_number}/meta.etf"
+  end
+
+  @doc """
   Fetches a comparison artifact's attrdiff, using S3 as a pull-through cache.
 
   Returns `{:ok, attrdiff}` or `{:error, reason}`.
   """
-  def fetch_comparison(pr_number, archive_download_url, token, opts \\ []) do
-    key = cache_key(pr_number, "comparison")
+  def fetch_comparison(pr_number, run_id, archive_download_url, token, opts \\ []) do
+    zip_key = cache_key(pr_number, "comparison")
+    m_key = meta_key(pr_number)
 
-    case try_cache(key) do
+    case try_cache_with_meta(zip_key, m_key, run_id) do
       {:ok, zip_body} ->
         Logger.debug("Artifact cache hit for PR ##{pr_number}")
         extract_attrdiff(zip_body)
@@ -40,7 +64,8 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCache do
         Logger.debug("Artifact cache miss for PR ##{pr_number}, downloading")
 
         with {:ok, zip_body} <- download_artifact(archive_download_url, token, opts) do
-          store_in_cache(key, zip_body)
+          store_in_cache(zip_key, zip_body)
+          store_meta(m_key, %Meta{run_id: run_id})
           extract_attrdiff(zip_body)
         end
     end
@@ -74,10 +99,25 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCache do
     end
   end
 
-  defp try_cache(key) do
+  defp try_cache_with_meta(zip_key, meta_key, run_id) do
     case S3Cache.config() do
-      nil -> :miss
-      config -> S3Cache.get_object(config, key)
+      nil ->
+        :miss
+
+      config ->
+        case S3Cache.get_object(config, meta_key) do
+          {:ok, meta_binary} ->
+            %Meta{run_id: cached_run_id} = :erlang.binary_to_term(meta_binary)
+
+            if cached_run_id == run_id do
+              S3Cache.get_object(config, zip_key)
+            else
+              :miss
+            end
+
+          :miss ->
+            :miss
+        end
     end
   end
 
@@ -85,6 +125,13 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCache do
     case S3Cache.config() do
       nil -> :ok
       config -> S3Cache.put_object(config, key, body)
+    end
+  end
+
+  defp store_meta(key, %Meta{} = meta) do
+    case S3Cache.config() do
+      nil -> :ok
+      config -> S3Cache.put_object(config, key, :erlang.term_to_binary(meta))
     end
   end
 

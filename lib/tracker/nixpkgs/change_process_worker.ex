@@ -249,6 +249,7 @@ defmodule Tracker.Nixpkgs.ChangeProcessWorker do
           artifact ->
             Tracker.Nixpkgs.ChangeArtifactCache.fetch_comparison(
               pr_number,
+              run_id,
               artifact.archive_download_url,
               token
             )
