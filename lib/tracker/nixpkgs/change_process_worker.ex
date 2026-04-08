@@ -242,17 +242,18 @@ defmodule Tracker.Nixpkgs.ChangeProcessWorker do
   defp download_changed_paths(owner, repo, pr_number, run_id, token) do
     case GitHub.Actions.list_workflow_run_artifacts(owner, repo, run_id, auth: token) do
       {:ok, %{artifacts: artifacts}} ->
-        case Enum.find(artifacts, &(&1.name == "comparison")) do
-          nil ->
-            {:error, :no_comparison_artifact}
-
-          artifact ->
-            Tracker.Nixpkgs.ChangeArtifactCache.fetch_comparison(
-              pr_number,
-              run_id,
-              artifact.archive_download_url,
-              token
-            )
+        if Enum.empty?(artifacts) do
+          {:error, :no_comparison_artifact}
+        else
+          with :ok <-
+                 Tracker.Nixpkgs.ChangeArtifactCache.cache_run_artifacts(
+                   pr_number,
+                   run_id,
+                   artifacts,
+                   token
+                 ) do
+            Tracker.Nixpkgs.ChangeArtifactCache.fetch_comparison(pr_number)
+          end
         end
 
       {:error, reason} ->
