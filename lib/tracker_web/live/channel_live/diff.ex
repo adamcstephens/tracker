@@ -114,6 +114,8 @@ defmodule TrackerWeb.ChannelLive.Diff do
 
     version_changes = compute_version_changes(older.id, newer.id)
 
+    lens = socket.assigns.lens && %{socket.assigns.lens | disabled?: true}
+
     {:noreply,
      socket
      |> assign(:page_title, "#{channel_name} diff")
@@ -121,7 +123,8 @@ defmodule TrackerWeb.ChannelLive.Diff do
      |> assign(:rev_a, older)
      |> assign(:rev_b, newer)
      |> assign(:events, events)
-     |> assign(:version_changes, version_changes)}
+     |> assign(:version_changes, version_changes)
+     |> assign(:lens, lens)}
   end
 
   defp order_revisions(a, b) do
@@ -130,5 +133,10 @@ defmodule TrackerWeb.ChannelLive.Diff do
 
   defp compute_version_changes(old_rev_id, new_rev_id) do
     ChannelRevision.version_diff(old_rev_id, new_rev_id)
+  end
+
+  @impl true
+  def handle_info({:set_lens, channel_name, rev}, socket) do
+    {:noreply, TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)}
   end
 end

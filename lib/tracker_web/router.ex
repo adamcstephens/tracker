@@ -12,6 +12,7 @@ defmodule TrackerWeb.Router do
     plug :protect_from_forgery
     plug :put_secure_browser_headers
     plug :load_from_session
+    plug TrackerWeb.Plug.Lens
   end
 
   pipeline :api do
@@ -25,9 +26,13 @@ defmodule TrackerWeb.Router do
 
     get "/feeds/channels/:channel", FeedController, :channel
     get "/feeds/packages/:name", FeedController, :package
+    post "/lens", LensController, :update
 
     ash_authentication_live_session :authenticated_routes,
-      on_mount: {TrackerWeb.LiveUserAuth, :live_user_optional} do
+      on_mount: [
+        {TrackerWeb.LiveUserAuth, :live_user_optional},
+        {TrackerWeb.LensHook, :default}
+      ] do
       live "/", PackageLive.Index, :index
       live "/packages", PackageLive.Index, :index
       live "/packages/:name", PackageLive.Show, :show

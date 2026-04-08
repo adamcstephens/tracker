@@ -145,6 +145,80 @@ defmodule Tracker.Nixpkgs.ChannelTest do
     end
   end
 
+  describe "default_stable/0" do
+    test "returns the highest-versioned active stable channel" do
+      s = System.unique_integer([:positive])
+
+      Channel.create!(%{
+        name: "nixos-24.#{s}",
+        display_name: "NixOS 24.#{s}",
+        branch: "release-24.#{s}",
+        status: :active,
+        is_stable: true
+      })
+
+      Channel.create!(%{
+        name: "nixos-25.#{s}",
+        display_name: "NixOS 25.#{s}",
+        branch: "release-25.#{s}",
+        status: :active,
+        is_stable: true
+      })
+
+      {:ok, channel} = Channel.default_stable()
+      assert channel.name == "nixos-25.#{s}"
+    end
+
+    test "ignores retired and pre_release channels" do
+      s = System.unique_integer([:positive])
+
+      Channel.create!(%{
+        name: "nixos-25.#{s}",
+        display_name: "NixOS 25.#{s}",
+        branch: "release-25.#{s}",
+        status: :retired,
+        is_stable: true
+      })
+
+      Channel.create!(%{
+        name: "nixos-24.#{s}",
+        display_name: "NixOS 24.#{s}",
+        branch: "release-24.#{s}",
+        status: :active,
+        is_stable: true
+      })
+
+      Channel.create!(%{
+        name: "nixos-26.#{s}",
+        display_name: "NixOS 26.#{s}",
+        branch: "release-26.#{s}",
+        status: :pre_release,
+        is_stable: true
+      })
+
+      {:ok, channel} = Channel.default_stable()
+      assert channel.name == "nixos-24.#{s}"
+    end
+
+    test "ignores non-stable channels" do
+      s = System.unique_integer([:positive])
+
+      Channel.create!(%{
+        name: "nixos-unstable-#{s}",
+        display_name: "NixOS Unstable #{s}",
+        branch: "nixos-unstable-#{s}",
+        status: :active,
+        is_stable: false
+      })
+
+      assert {:error, _} = Channel.default_stable()
+    end
+
+    test "returns error when no stable active channels exist" do
+      assert {:error, _} = Channel.default_stable()
+    end
+  end
+
   describe "seed!/0" do
     @test_channels ["nixos-25.11", "nixos-unstable", "nixos-unstable-small", "nixpkgs-unstable"]
 

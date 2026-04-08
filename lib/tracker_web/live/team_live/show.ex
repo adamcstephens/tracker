@@ -156,4 +156,9 @@ defmodule TrackerWeb.TeamLive.Show do
       qs -> "/teams/#{short_name}?#{qs}"
     end
   end
+
+  @impl true
+  def handle_info({:set_lens, channel_name, rev}, socket) do
+    {:noreply, TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)}
+  end
 end
