@@ -177,7 +177,8 @@ defmodule TrackerWeb.ChannelLive.Show do
   end
 
   @impl true
-  def handle_info({:channel_revision_completed, _payload}, socket) do
+  def handle_info({event, _payload}, socket)
+      when event in [:channel_revision_created, :channel_revision_completed] do
     %{channel_resource: channel, sort_by: sort_by, sort_dir: sort_dir, current_page: page} =
       socket.assigns
 

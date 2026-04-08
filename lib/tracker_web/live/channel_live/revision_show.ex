@@ -110,13 +110,50 @@ defmodule TrackerWeb.ChannelLive.RevisionShow do
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, assign_new(socket, :current_user, fn -> nil end)}
+    {:ok,
+     socket
+     |> assign_new(:current_user, fn -> nil end)
+     |> assign(:subscribed_channel, nil)}
   end
 
   @impl true
   def handle_params(%{"channel" => channel_name, "revision" => rev_hash}, _url, socket) do
     channel = Tracker.Nixpkgs.Channel.by_name!(channel_name)
+
+    if connected?(socket) && socket.assigns.subscribed_channel != channel_name do
+      if socket.assigns.subscribed_channel do
+        Phoenix.PubSub.unsubscribe(
+          Tracker.PubSub,
+          "channel_revisions:#{socket.assigns.subscribed_channel}"
+        )
+      end
+
+      Phoenix.PubSub.subscribe(Tracker.PubSub, "channel_revisions:#{channel_name}")
+    end
+
     revision = ChannelRevision.find_by_channel_hash!(channel.id, rev_hash)
+
+    {:noreply,
+     socket
+     |> assign(:channel, channel_name)
+     |> assign(:channel_id, channel.id)
+     |> assign(:subscribed_channel, channel_name)
+     |> assign_revision_data(revision)}
+  end
+
+  @impl true
+  def handle_info({:channel_revision_completed, _payload}, socket) do
+    revision =
+      ChannelRevision.find_by_channel_hash!(
+        socket.assigns.channel_id,
+        socket.assigns.revision.revision
+      )
+
+    {:noreply, assign_revision_data(socket, revision)}
+  end
+
+  defp assign_revision_data(socket, revision) do
+    channel_name = socket.assigns[:channel] || ""
 
     previous_revision =
       if revision.previous_channel_revision_id do
@@ -127,7 +164,7 @@ defmodule TrackerWeb.ChannelLive.RevisionShow do
       if previous_revision do
         events =
           PackageEvent.list_between_revisions!(
-            channel.id,
+            revision.channel_id,
             previous_revision.released_at,
             revision.released_at
           )
@@ -138,14 +175,12 @@ defmodule TrackerWeb.ChannelLive.RevisionShow do
         {[], []}
       end
 
-    {:noreply,
-     socket
-     |> assign(:page_title, "#{channel_name} — #{String.slice(revision.revision, 0, 7)}")
-     |> assign(:channel, channel_name)
-     |> assign(:revision, revision)
-     |> assign(:previous_revision, previous_revision)
-     |> assign(:formatted_released_at, Calendar.strftime(revision.released_at, "%Y-%m-%d %H:%M"))
-     |> assign(:events, events)
-     |> assign(:version_changes, version_changes)}
+    socket
+    |> assign(:page_title, "#{channel_name} — #{String.slice(revision.revision, 0, 7)}")
+    |> assign(:revision, revision)
+    |> assign(:previous_revision, previous_revision)
+    |> assign(:formatted_released_at, Calendar.strftime(revision.released_at, "%Y-%m-%d %H:%M"))
+    |> assign(:events, events)
+    |> assign(:version_changes, version_changes)
   end
 end
