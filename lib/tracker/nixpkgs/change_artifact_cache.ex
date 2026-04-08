@@ -28,7 +28,7 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCache do
 
   Returns `{:ok, attrdiff}` or `{:error, reason}`.
   """
-  def fetch_comparison(pr_number, archive_download_url, token) do
+  def fetch_comparison(pr_number, archive_download_url, token, opts \\ []) do
     key = cache_key(pr_number, "comparison")
 
     case try_cache(key) do
@@ -39,7 +39,7 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCache do
       :miss ->
         Logger.debug("Artifact cache miss for PR ##{pr_number}, downloading")
 
-        with {:ok, zip_body} <- download_artifact(archive_download_url, token) do
+        with {:ok, zip_body} <- download_artifact(archive_download_url, token, opts) do
           store_in_cache(key, zip_body)
           extract_attrdiff(zip_body)
         end
@@ -88,11 +88,17 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCache do
     end
   end
 
-  defp download_artifact(archive_url, token) do
-    case Req.get(archive_url,
-           headers: %{"authorization" => "bearer #{token}", "user-agent" => "Tracker"},
-           redirect: true,
-           decode_body: false
+  defp download_artifact(archive_url, token, opts) do
+    req_options = Keyword.get(opts, :req_options, [])
+
+    case Req.get(
+           archive_url,
+           [
+             {:headers, %{"authorization" => "bearer #{token}", "user-agent" => "Tracker"}},
+             {:redirect, true},
+             {:decode_body, false}
+             | req_options
+           ]
          ) do
       {:ok, %{status: 200, body: body}} -> {:ok, body}
       {:ok, %{status: 410}} -> {:error, :artifact_expired}
