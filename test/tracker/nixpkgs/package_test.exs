@@ -33,6 +33,33 @@ defmodule Tracker.Nixpkgs.PackageTest do
       assert package.description == "new"
     end
 
+    test "upsert without metadata fields preserves existing metadata" do
+      Package.bulk_upsert_all([
+        %{
+          attribute: "curl",
+          description: "A command line tool",
+          homepage: ["https://curl.se"],
+          position: "pkgs/tools/networking/curl/default.nix",
+          licenses: ["MIT"]
+        }
+      ])
+
+      # Upsert a batch without metadata fields (simulates non-metadata channel).
+      # The batch must contain multiple records so Ecto unions the keys across
+      # the chunk, causing missing keys to be inserted as NULL.
+      Package.bulk_upsert_all([
+        %{attribute: "curl", package_set: "top-level"},
+        %{attribute: "wget"}
+      ])
+
+      package = Ash.get!(Package, %{attribute: "curl"})
+      assert package.description == "A command line tool"
+      assert package.homepage == ["https://curl.se"]
+      assert package.position == "pkgs/tools/networking/curl/default.nix"
+      assert package.licenses == ["MIT"]
+      assert package.package_set == "top-level"
+    end
+
     test "accumulates ids across chunks" do
       # Generate enough records to span multiple chunks
       records = for i <- 1..7000, do: %{attribute: "chunk-pkg-#{i}"}
