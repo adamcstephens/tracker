@@ -12,19 +12,23 @@ defmodule Tracker.Nixpkgs.ChangeProcessWorker do
   @doc """
   Re-enqueues processing for the given PR number(s).
   """
-  def reprocess(numbers) when is_list(numbers) do
-    Enum.map(numbers, &reprocess/1)
+  def reprocess(items) when is_list(items) do
+    Enum.map(items, &reprocess/1)
+  end
+
+  def reprocess(%Tracker.Nixpkgs.Change{} = change) do
+    set_processing_status(change, :pending)
+
+    %{number: change.number}
+    |> __MODULE__.new()
+    |> Oban.insert()
   end
 
   def reprocess(number) when is_integer(number) do
     case Tracker.Nixpkgs.Change.get_by_number(number) do
-      {:ok, change} -> set_processing_status(change, :pending)
-      _ -> :ok
+      {:ok, change} -> reprocess(change)
+      _ -> {:ok, :not_found}
     end
-
-    %{number: number}
-    |> __MODULE__.new()
-    |> Oban.insert()
   end
 
   @impl Oban.Worker
@@ -166,12 +170,11 @@ defmodule Tracker.Nixpkgs.ChangeProcessWorker do
 
       _ ->
         all_attrs = Enum.map(typed_attrs, &elem(&1, 1))
+        ensure_packages_exist(all_attrs)
         package_id_map = find_package_id_map(all_attrs)
 
         records =
-          typed_attrs
-          |> Enum.filter(fn {_type, attr} -> Map.has_key?(package_id_map, attr) end)
-          |> Enum.map(fn {type, attr} ->
+          Enum.map(typed_attrs, fn {type, attr} ->
             %{change_id: change.id, package_id: package_id_map[attr], type: type}
           end)
 
@@ -182,6 +185,13 @@ defmodule Tracker.Nixpkgs.ChangeProcessWorker do
 
         {:ok, count}
     end
+  end
+
+  defp ensure_packages_exist(attributes) do
+    attributes
+    |> Enum.uniq()
+    |> Enum.map(&%{attribute: &1})
+    |> Tracker.Nixpkgs.Package.bulk_upsert_all()
   end
 
   defp find_package_id_map(attributes) do
