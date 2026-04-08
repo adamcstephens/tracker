@@ -22,7 +22,7 @@ config :tracker,
 config :tracker, Oban,
   engine: Oban.Engines.Basic,
   notifier: Oban.Notifiers.Postgres,
-  queues: [changes: 4, ingestion: 1],
+  queues: [changes: 10, ingestion: 10],
   repo: Tracker.Repo,
   plugins: [
     Oban.Met,
