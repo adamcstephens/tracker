@@ -47,27 +47,60 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCache do
   end
 
   @doc """
-  Fetches a comparison artifact's attrdiff, using S3 as a pull-through cache.
+  Caches all artifacts from a workflow run in S3.
+
+  Checks the meta.etf sidecar first — if the cached run_id matches,
+  all artifacts are assumed present and no downloads occur. On a miss
+  or run_id mismatch, downloads and stores every artifact, then writes
+  updated metadata.
+
+  Each artifact map must have `:name` and `:archive_download_url` keys.
+
+  Returns `:ok` or `{:error, reason}` (stops on first download failure).
+  """
+  def cache_run_artifacts(pr_number, run_id, artifacts, token, opts \\ []) do
+    m_key = meta_key(pr_number)
+
+    if run_cached?(m_key, run_id) do
+      Logger.debug("All artifacts cached for PR ##{pr_number}, run #{run_id}")
+      :ok
+    else
+      Logger.debug("Caching #{length(artifacts)} artifacts for PR ##{pr_number}, run #{run_id}")
+
+      case download_and_store_all(pr_number, artifacts, token, opts) do
+        :ok ->
+          store_meta(m_key, %Meta{run_id: run_id})
+          :ok
+
+        {:error, _} = error ->
+          error
+      end
+    end
+  end
+
+  @doc """
+  Reads a single cached artifact zip from S3.
+
+  Returns `{:ok, zip_body}` or `:miss`.
+  """
+  def read_artifact(pr_number, artifact_name) do
+    key = cache_key(pr_number, artifact_name)
+
+    case S3Cache.config() do
+      nil -> :miss
+      config -> S3Cache.get_object(config, key)
+    end
+  end
+
+  @doc """
+  Reads the cached comparison artifact and extracts its attrdiff.
 
   Returns `{:ok, attrdiff}` or `{:error, reason}`.
   """
-  def fetch_comparison(pr_number, run_id, archive_download_url, token, opts \\ []) do
-    zip_key = cache_key(pr_number, "comparison")
-    m_key = meta_key(pr_number)
-
-    case try_cache_with_meta(zip_key, m_key, run_id) do
-      {:ok, zip_body} ->
-        Logger.debug("Artifact cache hit for PR ##{pr_number}")
-        extract_attrdiff(zip_body)
-
-      :miss ->
-        Logger.debug("Artifact cache miss for PR ##{pr_number}, downloading")
-
-        with {:ok, zip_body} <- download_artifact(archive_download_url, token, opts) do
-          store_in_cache(zip_key, zip_body)
-          store_meta(m_key, %Meta{run_id: run_id})
-          extract_attrdiff(zip_body)
-        end
+  def fetch_comparison(pr_number) do
+    case read_artifact(pr_number, "comparison") do
+      {:ok, zip_body} -> extract_attrdiff(zip_body)
+      :miss -> {:error, :not_cached}
     end
   end
 
@@ -99,26 +132,36 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCache do
     end
   end
 
-  defp try_cache_with_meta(zip_key, meta_key, run_id) do
+  defp run_cached?(meta_key, run_id) do
     case S3Cache.config() do
       nil ->
-        :miss
+        false
 
       config ->
         case S3Cache.get_object(config, meta_key) do
           {:ok, meta_binary} ->
             %Meta{run_id: cached_run_id} = :erlang.binary_to_term(meta_binary)
-
-            if cached_run_id == run_id do
-              S3Cache.get_object(config, zip_key)
-            else
-              :miss
-            end
+            cached_run_id == run_id
 
           :miss ->
-            :miss
+            false
         end
     end
+  end
+
+  defp download_and_store_all(pr_number, artifacts, token, opts) do
+    Enum.reduce_while(artifacts, :ok, fn artifact, :ok ->
+      key = cache_key(pr_number, artifact.name)
+
+      case download_artifact(artifact.archive_download_url, token, opts) do
+        {:ok, zip_body} ->
+          store_in_cache(key, zip_body)
+          {:cont, :ok}
+
+        {:error, _} = error ->
+          {:halt, error}
+      end
+    end)
   end
 
   defp store_in_cache(key, body) do
