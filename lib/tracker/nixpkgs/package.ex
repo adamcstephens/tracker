@@ -278,6 +278,18 @@ defmodule Tracker.Nixpkgs.Package do
   Expects an enumerable of maps with keys: :attribute, and optionally :description,
   :homepage, :position, :licenses, :package_family_id, :package_set, :set_version.
   """
+  @upsert_fields [
+    :description,
+    :homepage,
+    :position,
+    :licenses,
+    :package_family_id,
+    :package_variant_group_id,
+    :package_set,
+    :set_version,
+    :updated_at
+  ]
+
   def bulk_upsert_all(records) do
     now = DateTime.utc_now(:second)
 
@@ -289,23 +301,14 @@ defmodule Tracker.Nixpkgs.Package do
     end)
     |> Stream.chunk_every(@max_rows)
     |> Enum.reduce(%{}, fn chunk, acc ->
+      chunk_keys = chunk |> Enum.flat_map(&Map.keys/1) |> MapSet.new()
+      replace_fields = Enum.filter(@upsert_fields, &MapSet.member?(chunk_keys, &1))
+
       {_count, rows} =
         Tracker.Repo.insert_all(
           "packages",
           chunk,
-          on_conflict:
-            {:replace,
-             [
-               :description,
-               :homepage,
-               :position,
-               :licenses,
-               :package_family_id,
-               :package_variant_group_id,
-               :package_set,
-               :set_version,
-               :updated_at
-             ]},
+          on_conflict: {:replace, replace_fields},
           conflict_target: :attribute,
           returning: [:id, :attribute]
         )
