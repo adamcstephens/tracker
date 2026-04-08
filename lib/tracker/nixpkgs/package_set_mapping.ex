@@ -5,24 +5,33 @@ defmodule Tracker.Nixpkgs.PackageSetMapping do
   Given an attribute like `python313Packages.numpy`, returns:
     %{package_set: "python313Packages", set_version: "3.13", family_name: "numpy", ecosystem: "python"}
   """
+  defmodule Result do
+    @moduledoc """
+    Parsed components of a nixpkgs attribute path.
+    """
 
-  @no_family %{package_set: nil, set_version: nil, family_name: nil, ecosystem: nil}
+    use TypedStruct
+
+    typedstruct do
+      field :package_set, String.t()
+      field :set_version, String.t()
+      field :family_name, String.t()
+      field :ecosystem, String.t()
+    end
+  end
+
+  alias __MODULE__.Result
 
   @doc """
   Parses a nixpkgs attribute into its package set components.
 
-  Returns a map with:
+  Returns a `Result` struct with:
   - `package_set` - the full set prefix (e.g., "python313Packages"), nil for top-level
   - `set_version` - parsed version string, nil if not versioned
   - `family_name` - the package name within the set, nil if no family
   - `ecosystem` - the ecosystem name (e.g., "python"), nil if no family
   """
-  @spec parse(String.t()) :: %{
-          package_set: String.t() | nil,
-          set_version: String.t() | nil,
-          family_name: String.t() | nil,
-          ecosystem: String.t() | nil
-        }
+  @spec parse(String.t()) :: Result.t()
   def parse(attribute) do
     case String.split(attribute, ".", parts: 2) do
       [prefix, name] -> parse_dotted(prefix, name)
@@ -33,10 +42,15 @@ defmodule Tracker.Nixpkgs.PackageSetMapping do
   defp parse_dotted(prefix, name) do
     case match_set_pattern(prefix) do
       {:ok, ecosystem, version} ->
-        %{package_set: prefix, set_version: version, family_name: name, ecosystem: ecosystem}
+        %Result{
+          package_set: prefix,
+          set_version: version,
+          family_name: name,
+          ecosystem: ecosystem
+        }
 
       :no_match ->
-        %{package_set: prefix, set_version: nil, family_name: name, ecosystem: ""}
+        %Result{package_set: prefix, set_version: nil, family_name: name, ecosystem: ""}
     end
   end
 
@@ -211,8 +225,7 @@ defmodule Tracker.Nixpkgs.PackageSetMapping do
       match = Regex.run(~r/^python(\d)(\d+)$/, attribute) ->
         [_, maj, min] = match
 
-        %{
-          package_set: nil,
+        %Result{
           set_version: "#{maj}.#{min}",
           family_name: "python",
           ecosystem: "python"
@@ -221,8 +234,7 @@ defmodule Tracker.Nixpkgs.PackageSetMapping do
       match = Regex.run(~r/^elixir_(\d+)_(\d+)$/, attribute) ->
         [_, maj, min] = match
 
-        %{
-          package_set: nil,
+        %Result{
           set_version: "#{maj}.#{min}",
           family_name: "elixir",
           ecosystem: "beam"
@@ -230,10 +242,10 @@ defmodule Tracker.Nixpkgs.PackageSetMapping do
 
       match = Regex.run(~r/^erlang_(\d+)$/, attribute) ->
         [_, v] = match
-        %{package_set: nil, set_version: v, family_name: "erlang", ecosystem: "beam"}
+        %Result{set_version: v, family_name: "erlang", ecosystem: "beam"}
 
       true ->
-        @no_family
+        %Result{}
     end
   end
 end

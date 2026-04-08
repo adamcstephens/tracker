@@ -2,11 +2,16 @@ defmodule Tracker.Nixpkgs.PackageSetMappingTest do
   use ExUnit.Case, async: true
 
   alias Tracker.Nixpkgs.PackageSetMapping
+  alias Tracker.Nixpkgs.PackageSetMapping.Result
 
   describe "parse/1" do
+    test "returns a Result struct" do
+      assert %Result{} = PackageSetMapping.parse("python313Packages.numpy")
+    end
+
     # Python: python311Packages.numpy → python 3.11
     test "python versioned package set" do
-      assert PackageSetMapping.parse("python313Packages.numpy") == %{
+      assert PackageSetMapping.parse("python313Packages.numpy") == %Result{
                package_set: "python313Packages",
                set_version: "3.13",
                family_name: "numpy",
@@ -29,7 +34,7 @@ defmodule Tracker.Nixpkgs.PackageSetMappingTest do
 
     # Perl: perlPackages.DBI, perl540Packages.DBI
     test "perl versioned package set" do
-      assert PackageSetMapping.parse("perl540Packages.DBI") == %{
+      assert PackageSetMapping.parse("perl540Packages.DBI") == %Result{
                package_set: "perl540Packages",
                set_version: "5.40",
                family_name: "DBI",
@@ -38,7 +43,7 @@ defmodule Tracker.Nixpkgs.PackageSetMappingTest do
     end
 
     test "perl unversioned package set" do
-      assert PackageSetMapping.parse("perlPackages.DBI") == %{
+      assert PackageSetMapping.parse("perlPackages.DBI") == %Result{
                package_set: "perlPackages",
                set_version: nil,
                family_name: "DBI",
@@ -54,7 +59,7 @@ defmodule Tracker.Nixpkgs.PackageSetMappingTest do
 
     # Ruby: rubyPackages.rake, rubyPackages_3_4.rake
     test "ruby versioned package set" do
-      assert PackageSetMapping.parse("rubyPackages_3_4.rake") == %{
+      assert PackageSetMapping.parse("rubyPackages_3_4.rake") == %Result{
                package_set: "rubyPackages_3_4",
                set_version: "3.4",
                family_name: "rake",
@@ -63,7 +68,7 @@ defmodule Tracker.Nixpkgs.PackageSetMappingTest do
     end
 
     test "ruby unversioned package set" do
-      assert PackageSetMapping.parse("rubyPackages.rake") == %{
+      assert PackageSetMapping.parse("rubyPackages.rake") == %Result{
                package_set: "rubyPackages",
                set_version: nil,
                family_name: "rake",
@@ -73,7 +78,7 @@ defmodule Tracker.Nixpkgs.PackageSetMappingTest do
 
     # OCaml: ocamlPackages.dune, ocamlPackages_latest.dune
     test "ocaml package set" do
-      assert PackageSetMapping.parse("ocamlPackages.dune") == %{
+      assert PackageSetMapping.parse("ocamlPackages.dune") == %Result{
                package_set: "ocamlPackages",
                set_version: nil,
                family_name: "dune",
@@ -82,7 +87,7 @@ defmodule Tracker.Nixpkgs.PackageSetMappingTest do
     end
 
     test "ocaml latest package set" do
-      assert PackageSetMapping.parse("ocamlPackages_latest.dune") == %{
+      assert PackageSetMapping.parse("ocamlPackages_latest.dune") == %Result{
                package_set: "ocamlPackages_latest",
                set_version: "latest",
                family_name: "dune",
@@ -92,7 +97,7 @@ defmodule Tracker.Nixpkgs.PackageSetMappingTest do
 
     # Beam: beam27Packages.elixir, beamMinimal26Packages.elixir
     test "beam package set" do
-      assert PackageSetMapping.parse("beam27Packages.elixir") == %{
+      assert PackageSetMapping.parse("beam27Packages.elixir") == %Result{
                package_set: "beam27Packages",
                set_version: "27",
                family_name: "elixir",
@@ -101,7 +106,7 @@ defmodule Tracker.Nixpkgs.PackageSetMappingTest do
     end
 
     test "beam minimal package set maps to same ecosystem" do
-      assert PackageSetMapping.parse("beamMinimal26Packages.elixir") == %{
+      assert PackageSetMapping.parse("beamMinimal26Packages.elixir") == %Result{
                package_set: "beamMinimal26Packages",
                set_version: "26-minimal",
                family_name: "elixir",
@@ -111,7 +116,7 @@ defmodule Tracker.Nixpkgs.PackageSetMappingTest do
 
     # Linux: linuxPackages.bcc, linuxPackages_zen.bcc
     test "linux default package set" do
-      assert PackageSetMapping.parse("linuxPackages.bcc") == %{
+      assert PackageSetMapping.parse("linuxPackages.bcc") == %Result{
                package_set: "linuxPackages",
                set_version: nil,
                family_name: "bcc",
@@ -120,7 +125,7 @@ defmodule Tracker.Nixpkgs.PackageSetMappingTest do
     end
 
     test "linux variant package set" do
-      assert PackageSetMapping.parse("linuxPackages_zen.bcc") == %{
+      assert PackageSetMapping.parse("linuxPackages_zen.bcc") == %Result{
                package_set: "linuxPackages_zen",
                set_version: "zen",
                family_name: "bcc",
@@ -136,7 +141,7 @@ defmodule Tracker.Nixpkgs.PackageSetMappingTest do
 
     # LLVM: llvmPackages_18.clang
     test "llvm package set" do
-      assert PackageSetMapping.parse("llvmPackages_18.clang") == %{
+      assert PackageSetMapping.parse("llvmPackages_18.clang") == %Result{
                package_set: "llvmPackages_18",
                set_version: "18",
                family_name: "clang",
@@ -146,7 +151,7 @@ defmodule Tracker.Nixpkgs.PackageSetMappingTest do
 
     # CUDA: cudaPackages_11.cudnn
     test "cuda versioned package set" do
-      assert PackageSetMapping.parse("cudaPackages_11.cudnn") == %{
+      assert PackageSetMapping.parse("cudaPackages_11.cudnn") == %Result{
                package_set: "cudaPackages_11",
                set_version: "11",
                family_name: "cudnn",
@@ -155,7 +160,7 @@ defmodule Tracker.Nixpkgs.PackageSetMappingTest do
     end
 
     test "cuda unversioned package set" do
-      assert PackageSetMapping.parse("cudaPackages.cudnn") == %{
+      assert PackageSetMapping.parse("cudaPackages.cudnn") == %Result{
                package_set: "cudaPackages",
                set_version: nil,
                family_name: "cudnn",
@@ -165,7 +170,7 @@ defmodule Tracker.Nixpkgs.PackageSetMappingTest do
 
     # Godot: godotPackages_4_4.godot
     test "godot package set" do
-      assert PackageSetMapping.parse("godotPackages_4_4.godot") == %{
+      assert PackageSetMapping.parse("godotPackages_4_4.godot") == %Result{
                package_set: "godotPackages_4_4",
                set_version: "4.4",
                family_name: "godot",
@@ -175,7 +180,7 @@ defmodule Tracker.Nixpkgs.PackageSetMappingTest do
 
     # Zabbix: zabbix72.server
     test "zabbix package set" do
-      assert PackageSetMapping.parse("zabbix72.server") == %{
+      assert PackageSetMapping.parse("zabbix72.server") == %Result{
                package_set: "zabbix72",
                set_version: "72",
                family_name: "server",
@@ -185,7 +190,7 @@ defmodule Tracker.Nixpkgs.PackageSetMappingTest do
 
     # Qt: qt5.qtbase, qt6.qtbase
     test "qt package set" do
-      assert PackageSetMapping.parse("qt6.qtbase") == %{
+      assert PackageSetMapping.parse("qt6.qtbase") == %Result{
                package_set: "qt6",
                set_version: "6",
                family_name: "qtbase",
@@ -195,7 +200,7 @@ defmodule Tracker.Nixpkgs.PackageSetMappingTest do
 
     # Chicken: chickenPackages_5.egg
     test "chicken package set" do
-      assert PackageSetMapping.parse("chickenPackages_5.egg") == %{
+      assert PackageSetMapping.parse("chickenPackages_5.egg") == %Result{
                package_set: "chickenPackages_5",
                set_version: "5",
                family_name: "egg",
@@ -205,7 +210,7 @@ defmodule Tracker.Nixpkgs.PackageSetMappingTest do
 
     # Factor: factorPackages-0_99.foo
     test "factor package set" do
-      assert PackageSetMapping.parse("factorPackages-0_99.foo") == %{
+      assert PackageSetMapping.parse("factorPackages-0_99.foo") == %Result{
                package_set: "factorPackages-0_99",
                set_version: "0.99",
                family_name: "foo",
@@ -215,7 +220,7 @@ defmodule Tracker.Nixpkgs.PackageSetMappingTest do
 
     # PHP: php83Packages vs php83Extensions are separate ecosystems
     test "php packages" do
-      assert PackageSetMapping.parse("php83Packages.composer") == %{
+      assert PackageSetMapping.parse("php83Packages.composer") == %Result{
                package_set: "php83Packages",
                set_version: "8.3",
                family_name: "composer",
@@ -224,7 +229,7 @@ defmodule Tracker.Nixpkgs.PackageSetMappingTest do
     end
 
     test "php extensions are separate ecosystem" do
-      assert PackageSetMapping.parse("php83Extensions.redis") == %{
+      assert PackageSetMapping.parse("php83Extensions.redis") == %Result{
                package_set: "php83Extensions",
                set_version: "8.3",
                family_name: "redis",
@@ -240,7 +245,7 @@ defmodule Tracker.Nixpkgs.PackageSetMappingTest do
 
     # Single-set ecosystems (no version variants)
     test "haskell single-set ecosystem" do
-      assert PackageSetMapping.parse("haskellPackages.aeson") == %{
+      assert PackageSetMapping.parse("haskellPackages.aeson") == %Result{
                package_set: "haskellPackages",
                set_version: nil,
                family_name: "aeson",
@@ -283,7 +288,7 @@ defmodule Tracker.Nixpkgs.PackageSetMappingTest do
 
     # Top-level runtime packages
     test "top-level python interpreter" do
-      assert PackageSetMapping.parse("python311") == %{
+      assert PackageSetMapping.parse("python311") == %Result{
                package_set: nil,
                set_version: "3.11",
                family_name: "python",
@@ -292,7 +297,7 @@ defmodule Tracker.Nixpkgs.PackageSetMappingTest do
     end
 
     test "top-level elixir" do
-      assert PackageSetMapping.parse("elixir_1_18") == %{
+      assert PackageSetMapping.parse("elixir_1_18") == %Result{
                package_set: nil,
                set_version: "1.18",
                family_name: "elixir",
@@ -301,7 +306,7 @@ defmodule Tracker.Nixpkgs.PackageSetMappingTest do
     end
 
     test "top-level erlang" do
-      assert PackageSetMapping.parse("erlang_27") == %{
+      assert PackageSetMapping.parse("erlang_27") == %Result{
                package_set: nil,
                set_version: "27",
                family_name: "erlang",
@@ -311,7 +316,7 @@ defmodule Tracker.Nixpkgs.PackageSetMappingTest do
 
     # Fallback: unknown dotted attribute
     test "unknown dotted attribute gets family with no ecosystem" do
-      assert PackageSetMapping.parse("xorg.libX11") == %{
+      assert PackageSetMapping.parse("xorg.libX11") == %Result{
                package_set: "xorg",
                set_version: nil,
                family_name: "libX11",
@@ -321,7 +326,7 @@ defmodule Tracker.Nixpkgs.PackageSetMappingTest do
 
     # Undotted non-matching: no family
     test "undotted non-matching returns all nils" do
-      assert PackageSetMapping.parse("vim") == %{
+      assert PackageSetMapping.parse("vim") == %Result{
                package_set: nil,
                set_version: nil,
                family_name: nil,
@@ -330,7 +335,7 @@ defmodule Tracker.Nixpkgs.PackageSetMappingTest do
     end
 
     test "undotted non-matching complex name" do
-      assert PackageSetMapping.parse("firefox") == %{
+      assert PackageSetMapping.parse("firefox") == %Result{
                package_set: nil,
                set_version: nil,
                family_name: nil,
