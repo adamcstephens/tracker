@@ -63,20 +63,24 @@ defmodule Tracker.Nixpkgs.ChangeProcessWorkerTest do
       assert :changed in types
     end
 
-    test "skips attributes not found in packages table" do
+    test "creates packages for unknown attributes in attrdiff" do
       Package.bulk_upsert_all([%{attribute: "curl"}])
 
       {:ok, change} = ChangeProcessWorker.upsert_change(pr_struct())
 
       attrdiff = %{
-        "added" => [],
-        "changed" => ["curl", "nonexistent-package"],
-        "removed" => []
+        "added" => ["brand-new-package"],
+        "changed" => ["curl", "also-unknown"],
+        "removed" => ["removed-unknown"]
       }
 
       {:ok, linked} = ChangeProcessWorker.link_packages(change, attrdiff)
 
-      assert linked == 1
+      assert linked == 4
+
+      assert {:ok, _} = Package.get_by_attribute("brand-new-package")
+      assert {:ok, _} = Package.get_by_attribute("also-unknown")
+      assert {:ok, _} = Package.get_by_attribute("removed-unknown")
     end
 
     test "handles empty attrdiff" do
@@ -127,6 +131,28 @@ defmodule Tracker.Nixpkgs.ChangeProcessWorkerTest do
       {:ok, linked} = ChangeProcessWorker.link_packages(change, attrdiff)
 
       assert linked == 1
+    end
+  end
+
+  describe "reprocess/1" do
+    test "enqueues a job and resets status when given a Change struct" do
+      {:ok, change} = ChangeProcessWorker.upsert_change(pr_struct())
+      ChangeProcessWorker.set_processing_status(change, :processed)
+
+      {:ok, _job} = ChangeProcessWorker.reprocess(change)
+
+      updated = Ash.get!(Tracker.Nixpkgs.Change, change.id)
+      assert updated.processing_status == :pending
+      assert_enqueued(worker: ChangeProcessWorker, args: %{number: 504_403})
+    end
+
+    test "enqueues a job and resets status when given a list of Change structs" do
+      {:ok, change} = ChangeProcessWorker.upsert_change(pr_struct())
+      ChangeProcessWorker.set_processing_status(change, :processed)
+
+      [{:ok, _job}] = ChangeProcessWorker.reprocess([change])
+
+      assert_enqueued(worker: ChangeProcessWorker, args: %{number: 504_403})
     end
   end
 
