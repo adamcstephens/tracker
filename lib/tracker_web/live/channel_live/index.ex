@@ -73,11 +73,14 @@ defmodule TrackerWeb.ChannelLive.Index do
 
     channels = load_channels(sort_by, sort_dir)
 
+    lens = socket.assigns.lens && %{socket.assigns.lens | disabled?: true}
+
     {:noreply,
      socket
      |> assign(:page_title, "Channels")
      |> assign(:sort_by, sort_by)
      |> assign(:sort_dir, sort_dir)
+     |> assign(:lens, lens)
      |> stream(:channels, channels, reset: true)}
   end
 
