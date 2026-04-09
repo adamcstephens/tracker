@@ -306,6 +306,11 @@ defmodule TrackerWeb.OptionLive.Index do
 
   @impl true
   def handle_info({:set_lens, channel_name, rev}, socket) do
-    {:noreply, TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)}
+    socket = TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)
+
+    {:noreply,
+     push_patch(socket,
+       to: options_path(socket.assigns.search, channel_name, rev, 1)
+     )}
   end
 end

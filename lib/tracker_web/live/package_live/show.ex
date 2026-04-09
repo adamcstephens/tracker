@@ -448,8 +448,22 @@ defmodule TrackerWeb.PackageLive.Show do
      )}
   end
 
-  def handle_info({:set_lens, channel_name, rev}, socket) do
-    {:noreply, TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)}
+  def handle_info({:set_lens, channel_name, _rev}, socket) do
+    socket = TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, "")
+
+    {:noreply,
+     push_patch(socket,
+       to:
+         revisions_path(
+           socket.assigns.package.attribute,
+           socket.assigns.sort_by,
+           socket.assigns.sort_dir,
+           channel_name,
+           socket.assigns.version_filter,
+           socket.assigns.all_revisions?,
+           1
+         )
+     )}
   end
 
   defp assign_package_data(

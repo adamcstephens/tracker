@@ -47,7 +47,11 @@ defmodule Tracker.Nixpkgs.Channel do
     read :default_stable do
       get? true
 
-      filter expr(is_stable == true and status == :active)
+      filter expr(
+               is_stable == true and status == :active and
+                 fragment("? ~ '^nixos-\\d+\\.\\d+$'", name)
+             )
+
       prepare build(sort: [{:name, :desc}], limit: 1)
     end
   end

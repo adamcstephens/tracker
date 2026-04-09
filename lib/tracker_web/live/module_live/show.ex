@@ -162,8 +162,11 @@ defmodule TrackerWeb.ModuleLive.Show do
   @impl true
   def handle_params(%{"name" => name} = params, _url, socket) do
     mod = Tracker.Nixpkgs.Module.get_by_name!(name)
-    channel = Map.get(params, "channel", "nixos-unstable")
-    rev = Map.get(params, "rev", "")
+    lens = socket.assigns.lens
+    default_channel = if lens, do: lens.channel.name, else: ""
+    default_rev = if lens && lens.revision, do: lens.revision.revision, else: ""
+    channel = Map.get(params, "channel", default_channel)
+    rev = Map.get(params, "rev", default_rev)
     page_num = params |> Map.get("page", "1") |> String.to_integer() |> max(1)
     offset = (page_num - 1) * 15
 
@@ -298,6 +301,17 @@ defmodule TrackerWeb.ModuleLive.Show do
 
   @impl true
   def handle_info({:set_lens, channel_name, rev}, socket) do
-    {:noreply, TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)}
+    socket = TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)
+
+    {:noreply,
+     push_patch(socket,
+       to:
+         show_path(
+           socket.assigns.module.display_name,
+           channel_name,
+           rev,
+           1
+         )
+     )}
   end
 end
