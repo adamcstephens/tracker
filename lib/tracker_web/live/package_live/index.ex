@@ -1,6 +1,8 @@
 defmodule TrackerWeb.PackageLive.Index do
   use TrackerWeb, :live_view
 
+  alias TrackerWeb.TableParams
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -12,7 +14,7 @@ defmodule TrackerWeb.PackageLive.Index do
       <input
         type="search"
         name="search"
-        value={@search}
+        value={@table_params.search}
         placeholder="Search packages..."
         phx-debounce="300"
       />
@@ -63,20 +65,15 @@ defmodule TrackerWeb.PackageLive.Index do
 
   @impl true
   def handle_params(params, _url, socket) do
-    search = Map.get(params, "search", "")
-    page = params |> Map.get("page", "1") |> String.to_integer() |> max(1)
-    offset = (page - 1) * 15
+    tp = TableParams.from_params(params)
 
     socket = assign(socket, :page_title, "Listing Packages")
 
     socket =
-      if socket.assigns[:search] == search and socket.assigns[:offset] == offset do
-        socket
+      if TableParams.changed?(socket.assigns[:table_params], tp) do
+        socket |> assign(:table_params, tp) |> load_packages()
       else
         socket
-        |> assign(:search, search)
-        |> assign(:offset, offset)
-        |> load_packages()
       end
 
     {:noreply, socket}
@@ -84,58 +81,50 @@ defmodule TrackerWeb.PackageLive.Index do
 
   @impl true
   def handle_event("search", %{"search" => search}, socket) do
+    tp = %{socket.assigns.table_params | search: search, page: 1, offset: 0}
+
     socket =
       socket
-      |> assign(:search, search)
-      |> assign(:offset, 0)
+      |> assign(:table_params, tp)
       |> load_packages()
-      |> push_event("update-url", %{path: packages_path(search, 1)})
+      |> push_event("update-url", %{path: TableParams.to_path(tp, "/packages")})
 
     {:noreply, socket}
   end
 
   @impl true
   def handle_event("next-page", _params, socket) do
+    tp = socket.assigns.table_params
+
     {:noreply,
-     push_patch(socket, to: packages_path(socket.assigns.search, socket.assigns.current_page + 1))}
+     push_patch(socket, to: TableParams.to_path(%{tp | page: tp.page + 1}, "/packages"))}
   end
 
   @impl true
   def handle_event("prev-page", _params, socket) do
+    tp = socket.assigns.table_params
+
     {:noreply,
-     push_patch(socket,
-       to: packages_path(socket.assigns.search, max(socket.assigns.current_page - 1, 1))
-     )}
-  end
-
-  defp packages_path(search, page) do
-    params =
-      %{}
-      |> then(fn p -> if search != "", do: Map.put(p, :search, search), else: p end)
-      |> then(fn p -> if page > 1, do: Map.put(p, :page, page), else: p end)
-
-    case URI.encode_query(params) do
-      "" -> "/packages"
-      qs -> "/packages?#{qs}"
-    end
+     push_patch(socket, to: TableParams.to_path(%{tp | page: max(tp.page - 1, 1)}, "/packages"))}
   end
 
   defp load_packages(socket) do
+    tp = socket.assigns.table_params
+
     page =
-      Tracker.Nixpkgs.Package.list!(socket.assigns.search,
+      Tracker.Nixpkgs.Package.list!(tp.search,
         actor: socket.assigns[:current_user],
-        page: [offset: socket.assigns.offset, count: true]
+        page: [offset: tp.offset, count: true]
       )
 
-    total_pages = ceil(page.count / 15)
-    current_page = div(socket.assigns.offset, 15) + 1
+    pagination = TableParams.apply_pagination(tp, page, :packages)
 
     socket
-    |> stream(:packages, page.results, reset: true)
-    |> assign(:has_prev_page?, socket.assigns.offset > 0)
-    |> assign(:has_next_page?, page.more?)
-    |> assign(:total_pages, total_pages)
-    |> assign(:current_page, current_page)
+    |> stream(:packages, pagination.stream_results, reset: true)
+    |> assign(:has_prev_page?, pagination.has_prev_page?)
+    |> assign(:has_next_page?, pagination.has_next_page?)
+    |> assign(:total_pages, pagination.total_pages)
+    |> assign(:current_page, pagination.current_page)
   end
 
   @impl true

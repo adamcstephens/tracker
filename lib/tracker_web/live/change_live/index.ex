@@ -1,9 +1,13 @@
 defmodule TrackerWeb.ChangeLive.Index do
   use TrackerWeb, :live_view
 
-  @valid_sort_fields ~w(number title author base_ref merged_at)a
-  @default_sort_by :number
-  @default_sort_dir :desc
+  alias TrackerWeb.TableParams
+
+  @table_opts [
+    allowed_sorts: ~w(number title author base_ref merged_at)a,
+    default_sort: :number,
+    default_sort_dir: :desc
+  ]
 
   @impl true
   def render(assigns) do
@@ -22,7 +26,7 @@ defmodule TrackerWeb.ChangeLive.Index do
       <input
         type="search"
         name="search"
-        value={@search}
+        value={@table_params.search}
         placeholder="Search title or author..."
         phx-debounce="300"
         style="flex: 3;"
@@ -39,21 +43,11 @@ defmodule TrackerWeb.ChangeLive.Index do
       <table role="grid">
         <thead>
           <tr>
-            <.sort_header field={:number} label="#" sort_by={@sort_by} sort_dir={@sort_dir} />
-            <.sort_header field={:title} label="Title" sort_by={@sort_by} sort_dir={@sort_dir} />
-            <.sort_header field={:author} label="Author" sort_by={@sort_by} sort_dir={@sort_dir} />
-            <.sort_header
-              field={:base_ref}
-              label="Base"
-              sort_by={@sort_by}
-              sort_dir={@sort_dir}
-            />
-            <.sort_header
-              field={:merged_at}
-              label="Merged"
-              sort_by={@sort_by}
-              sort_dir={@sort_dir}
-            />
+            <.sort_header field={:number} label="#" table_params={@table_params} />
+            <.sort_header field={:title} label="Title" table_params={@table_params} />
+            <.sort_header field={:author} label="Author" table_params={@table_params} />
+            <.sort_header field={:base_ref} label="Base" table_params={@table_params} />
+            <.sort_header field={:merged_at} label="Merged" table_params={@table_params} />
           </tr>
         </thead>
         <tbody id="changes" phx-update="stream">
@@ -103,14 +97,10 @@ defmodule TrackerWeb.ChangeLive.Index do
   defp sort_header(assigns) do
     ~H"""
     <th phx-click="sort" phx-value-field={@field} style="cursor: pointer">
-      {@label} {sort_indicator(@sort_by, @sort_dir, @field)}
+      {@label} {TableParams.sort_indicator(@table_params, @field)}
     </th>
     """
   end
-
-  defp sort_indicator(sort_by, :asc, field) when sort_by == field, do: "↑"
-  defp sort_indicator(sort_by, :desc, field) when sort_by == field, do: "↓"
-  defp sort_indicator(_, _, _), do: ""
 
   defp format_datetime(nil), do: "-"
   defp format_datetime(dt), do: Calendar.strftime(dt, "%Y-%m-%d %H:%M")
@@ -136,23 +126,16 @@ defmodule TrackerWeb.ChangeLive.Index do
 
   @impl true
   def handle_params(params, _url, socket) do
-    search = Map.get(params, "search", "")
+    tp = TableParams.from_params(params, @table_opts)
     base_ref_filter = Map.get(params, "base_ref", "")
-    sort_by = parse_sort_by(params["sort_by"])
-    sort_dir = parse_sort_dir(params["sort_dir"])
-    page = params |> Map.get("page", "1") |> String.to_integer() |> max(1)
-    offset = (page - 1) * 15
 
     lens = socket.assigns.lens && %{socket.assigns.lens | disabled?: true}
 
     socket =
       socket
       |> assign(:page_title, "Changes")
-      |> assign(:search, search)
+      |> assign(:table_params, tp)
       |> assign(:base_ref_filter, base_ref_filter)
-      |> assign(:sort_by, sort_by)
-      |> assign(:sort_dir, sort_dir)
-      |> assign(:offset, offset)
       |> assign(:lens, lens)
       |> load_changes()
 
@@ -163,15 +146,15 @@ defmodule TrackerWeb.ChangeLive.Index do
   def handle_event("filter", params, socket) do
     search = Map.get(params, "search", "")
     base_ref = Map.get(params, "base_ref", "")
+    tp = %{socket.assigns.table_params | search: search, page: 1, offset: 0}
 
     socket =
       socket
-      |> assign(:search, search)
+      |> assign(:table_params, tp)
       |> assign(:base_ref_filter, base_ref)
-      |> assign(:offset, 0)
       |> load_changes()
       |> push_event("update-url", %{
-        path: changes_path(socket.assigns, search: search, base_ref: base_ref, page: 1)
+        path: TableParams.to_path(tp, "/changes", %{base_ref: base_ref})
       })
 
     {:noreply, socket}
@@ -179,87 +162,64 @@ defmodule TrackerWeb.ChangeLive.Index do
 
   @impl true
   def handle_event("sort", %{"field" => field}, socket) do
-    new_sort_by = parse_sort_by(field)
+    tp = socket.assigns.table_params
+    new_sort_by = TableParams.from_params(%{"sort_by" => field}, @table_opts).sort_by
 
     new_sort_dir =
-      if socket.assigns.sort_by == new_sort_by do
-        toggle_dir(socket.assigns.sort_dir)
-      else
-        :asc
-      end
+      if tp.sort_by == new_sort_by, do: TableParams.toggle_dir(tp.sort_dir), else: :asc
+
+    new_tp = %{tp | sort_by: new_sort_by, sort_dir: new_sort_dir, page: 1, offset: 0}
 
     {:noreply,
      push_patch(socket,
-       to: changes_path(socket.assigns, sort_by: new_sort_by, sort_dir: new_sort_dir, page: 1)
+       to: TableParams.to_path(new_tp, "/changes", %{base_ref: socket.assigns.base_ref_filter})
      )}
   end
 
   @impl true
   def handle_event("next-page", _params, socket) do
+    tp = socket.assigns.table_params
+
     {:noreply,
      push_patch(socket,
-       to: changes_path(socket.assigns, page: socket.assigns.current_page + 1)
+       to:
+         TableParams.to_path(%{tp | page: tp.page + 1}, "/changes", %{
+           base_ref: socket.assigns.base_ref_filter
+         })
      )}
   end
 
   @impl true
   def handle_event("prev-page", _params, socket) do
+    tp = socket.assigns.table_params
+
     {:noreply,
      push_patch(socket,
-       to: changes_path(socket.assigns, page: max(socket.assigns.current_page - 1, 1))
+       to:
+         TableParams.to_path(%{tp | page: max(tp.page - 1, 1)}, "/changes", %{
+           base_ref: socket.assigns.base_ref_filter
+         })
      )}
   end
 
-  defp changes_path(assigns, overrides) do
-    search = Keyword.get(overrides, :search, assigns.search)
-    base_ref = Keyword.get(overrides, :base_ref, assigns.base_ref_filter)
-    sort_by = Keyword.get(overrides, :sort_by, assigns.sort_by)
-    sort_dir = Keyword.get(overrides, :sort_dir, assigns.sort_dir)
-    page = Keyword.get(overrides, :page, assigns.current_page)
-
-    params =
-      %{}
-      |> then(fn p -> if search != "", do: Map.put(p, :search, search), else: p end)
-      |> then(fn p -> if base_ref != "", do: Map.put(p, :base_ref, base_ref), else: p end)
-      |> then(fn p ->
-        if sort_by != @default_sort_by, do: Map.put(p, :sort_by, sort_by), else: p
-      end)
-      |> then(fn p ->
-        if sort_dir != @default_sort_dir, do: Map.put(p, :sort_dir, sort_dir), else: p
-      end)
-      |> then(fn p -> if page > 1, do: Map.put(p, :page, page), else: p end)
-
-    case URI.encode_query(params) do
-      "" -> "/changes"
-      qs -> "/changes?#{qs}"
-    end
-  end
-
   defp load_changes(socket) do
-    %{
-      search: search,
-      base_ref_filter: base_ref,
-      sort_by: sort_by,
-      sort_dir: sort_dir,
-      offset: offset
-    } = socket.assigns
+    tp = socket.assigns.table_params
 
     page =
-      Tracker.Nixpkgs.Change.list!(search, base_ref,
+      Tracker.Nixpkgs.Change.list!(tp.search, socket.assigns.base_ref_filter,
         actor: socket.assigns[:current_user],
-        query: [sort: [{sort_by, sort_dir}]],
-        page: [offset: offset, count: true]
+        query: [sort: [{tp.sort_by, tp.sort_dir}]],
+        page: [offset: tp.offset, count: true]
       )
 
-    total_pages = if page.count > 0, do: ceil(page.count / 15), else: 0
-    current_page = div(offset, 15) + 1
+    pagination = TableParams.apply_pagination(tp, page, :changes)
 
     socket
-    |> stream(:changes, page.results, reset: true)
-    |> assign(:has_prev_page?, offset > 0)
-    |> assign(:has_next_page?, page.more?)
-    |> assign(:total_pages, total_pages)
-    |> assign(:current_page, current_page)
+    |> stream(:changes, pagination.stream_results, reset: true)
+    |> assign(:has_prev_page?, pagination.has_prev_page?)
+    |> assign(:has_next_page?, pagination.has_next_page?)
+    |> assign(:total_pages, pagination.total_pages)
+    |> assign(:current_page, pagination.current_page)
   end
 
   defp load_base_refs do
@@ -267,19 +227,4 @@ defmodule TrackerWeb.ChangeLive.Index do
     |> Enum.map(& &1.base_ref)
     |> Enum.reject(&is_nil/1)
   end
-
-  defp parse_sort_by(nil), do: @default_sort_by
-
-  defp parse_sort_by(field) do
-    atom = String.to_existing_atom(field)
-    if atom in @valid_sort_fields, do: atom, else: @default_sort_by
-  rescue
-    ArgumentError -> @default_sort_by
-  end
-
-  defp parse_sort_dir("asc"), do: :asc
-  defp parse_sort_dir(_), do: @default_sort_dir
-
-  defp toggle_dir(:asc), do: :desc
-  defp toggle_dir(:desc), do: :asc
 end

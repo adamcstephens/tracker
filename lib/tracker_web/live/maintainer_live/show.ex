@@ -1,6 +1,8 @@
 defmodule TrackerWeb.MaintainerLive.Show do
   use TrackerWeb, :live_view
 
+  alias TrackerWeb.TableParams
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -67,7 +69,7 @@ defmodule TrackerWeb.MaintainerLive.Show do
       <input
         type="search"
         name="search"
-        value={@search}
+        value={@table_params.search}
         placeholder="Filter packages..."
         phx-debounce="300"
       />
@@ -132,57 +134,58 @@ defmodule TrackerWeb.MaintainerLive.Show do
     maintainer = Tracker.Nixpkgs.Maintainer.get_by_github!(github, load: [:teams])
     recent_changes = load_recent_changes(maintainer.github_id)
 
-    search = Map.get(params, "search", "")
-    page = params |> Map.get("page", "1") |> String.to_integer() |> max(1)
-    offset = (page - 1) * 15
-
-    packages = load_packages(maintainer.id, search, offset)
-    total_pages = ceil(packages.count / 15)
+    tp = TableParams.from_params(params)
+    packages = load_packages(maintainer.id, tp.search, tp.offset)
+    pagination = TableParams.apply_pagination(tp, packages, :packages)
 
     {:noreply,
      socket
      |> assign(:page_title, maintainer.github)
      |> assign(:maintainer, maintainer)
      |> assign(:recent_changes, recent_changes)
-     |> assign(:search, search)
-     |> stream(:packages, packages.results, reset: true)
-     |> assign(:has_prev_page?, offset > 0)
-     |> assign(:has_next_page?, packages.more?)
-     |> assign(:total_pages, total_pages)
-     |> assign(:current_page, div(offset, 15) + 1)
+     |> assign(:table_params, tp)
+     |> stream(:packages, pagination.stream_results, reset: true)
+     |> assign(:has_prev_page?, pagination.has_prev_page?)
+     |> assign(:has_next_page?, pagination.has_next_page?)
+     |> assign(:total_pages, pagination.total_pages)
+     |> assign(:current_page, pagination.current_page)
      |> assign(:package_count, packages.count)}
   end
 
   @impl true
   def handle_event("search", %{"search" => search}, socket) do
+    tp = %{socket.assigns.table_params | search: search, page: 1, offset: 0}
+
     {:noreply,
      push_patch(socket,
-       to: show_path(socket.assigns.maintainer.github, search, 1)
+       to: TableParams.to_path(tp, "/maintainers/#{socket.assigns.maintainer.github}")
      )}
   end
 
   @impl true
   def handle_event("next-page", _params, socket) do
+    tp = socket.assigns.table_params
+
     {:noreply,
      push_patch(socket,
        to:
-         show_path(
-           socket.assigns.maintainer.github,
-           socket.assigns.search,
-           socket.assigns.current_page + 1
+         TableParams.to_path(
+           %{tp | page: tp.page + 1},
+           "/maintainers/#{socket.assigns.maintainer.github}"
          )
      )}
   end
 
   @impl true
   def handle_event("prev-page", _params, socket) do
+    tp = socket.assigns.table_params
+
     {:noreply,
      push_patch(socket,
        to:
-         show_path(
-           socket.assigns.maintainer.github,
-           socket.assigns.search,
-           max(socket.assigns.current_page - 1, 1)
+         TableParams.to_path(
+           %{tp | page: max(tp.page - 1, 1)},
+           "/maintainers/#{socket.assigns.maintainer.github}"
          )
      )}
   end
@@ -214,17 +217,5 @@ defmodule TrackerWeb.MaintainerLive.Show do
     Tracker.Nixpkgs.Package.by_maintainer!(maintainer_id, search,
       page: [offset: offset, limit: 15, count: true]
     )
-  end
-
-  defp show_path(github, search, page) do
-    params =
-      %{}
-      |> then(fn p -> if search != "", do: Map.put(p, :search, search), else: p end)
-      |> then(fn p -> if page > 1, do: Map.put(p, :page, page), else: p end)
-
-    case URI.encode_query(params) do
-      "" -> "/maintainers/#{github}"
-      qs -> "/maintainers/#{github}?#{qs}"
-    end
   end
 end

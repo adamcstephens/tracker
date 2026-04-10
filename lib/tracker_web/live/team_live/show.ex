@@ -1,6 +1,8 @@
 defmodule TrackerWeb.TeamLive.Show do
   use TrackerWeb, :live_view
 
+  alias TrackerWeb.TableParams
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -36,7 +38,7 @@ defmodule TrackerWeb.TeamLive.Show do
       <input
         type="search"
         name="search"
-        value={@search}
+        value={@table_params.search}
         placeholder="Filter packages..."
         phx-debounce="300"
       />
@@ -86,55 +88,56 @@ defmodule TrackerWeb.TeamLive.Show do
   def handle_params(%{"short_name" => short_name} = params, _url, socket) do
     team = Tracker.Nixpkgs.Team.get_by_short_name!(short_name, load: [:members])
 
-    search = Map.get(params, "search", "")
-    page = params |> Map.get("page", "1") |> String.to_integer() |> max(1)
-    offset = (page - 1) * 15
-
-    packages = load_packages(team.id, search, offset)
-    total_pages = ceil(packages.count / 15)
+    tp = TableParams.from_params(params)
+    packages = load_packages(team.id, tp.search, tp.offset)
+    pagination = TableParams.apply_pagination(tp, packages, :packages)
 
     {:noreply,
      socket
      |> assign(:page_title, team.short_name)
      |> assign(:team, team)
-     |> assign(:search, search)
-     |> stream(:packages, packages.results, reset: true)
-     |> assign(:has_prev_page?, offset > 0)
-     |> assign(:has_next_page?, packages.more?)
-     |> assign(:total_pages, total_pages)
-     |> assign(:current_page, div(offset, 15) + 1)}
+     |> assign(:table_params, tp)
+     |> stream(:packages, pagination.stream_results, reset: true)
+     |> assign(:has_prev_page?, pagination.has_prev_page?)
+     |> assign(:has_next_page?, pagination.has_next_page?)
+     |> assign(:total_pages, pagination.total_pages)
+     |> assign(:current_page, pagination.current_page)}
   end
 
   @impl true
   def handle_event("search", %{"search" => search}, socket) do
+    tp = %{socket.assigns.table_params | search: search, page: 1, offset: 0}
+
     {:noreply,
      push_patch(socket,
-       to: show_path(socket.assigns.team.short_name, search, 1)
+       to: TableParams.to_path(tp, "/teams/#{socket.assigns.team.short_name}")
      )}
   end
 
   @impl true
   def handle_event("next-page", _params, socket) do
+    tp = socket.assigns.table_params
+
     {:noreply,
      push_patch(socket,
        to:
-         show_path(
-           socket.assigns.team.short_name,
-           socket.assigns.search,
-           socket.assigns.current_page + 1
+         TableParams.to_path(
+           %{tp | page: tp.page + 1},
+           "/teams/#{socket.assigns.team.short_name}"
          )
      )}
   end
 
   @impl true
   def handle_event("prev-page", _params, socket) do
+    tp = socket.assigns.table_params
+
     {:noreply,
      push_patch(socket,
        to:
-         show_path(
-           socket.assigns.team.short_name,
-           socket.assigns.search,
-           max(socket.assigns.current_page - 1, 1)
+         TableParams.to_path(
+           %{tp | page: max(tp.page - 1, 1)},
+           "/teams/#{socket.assigns.team.short_name}"
          )
      )}
   end
@@ -143,18 +146,6 @@ defmodule TrackerWeb.TeamLive.Show do
     Tracker.Nixpkgs.Package.by_team!(team_id, search,
       page: [offset: offset, limit: 15, count: true]
     )
-  end
-
-  defp show_path(short_name, search, page) do
-    params =
-      %{}
-      |> then(fn p -> if search != "", do: Map.put(p, :search, search), else: p end)
-      |> then(fn p -> if page > 1, do: Map.put(p, :page, page), else: p end)
-
-    case URI.encode_query(params) do
-      "" -> "/teams/#{short_name}"
-      qs -> "/teams/#{short_name}?#{qs}"
-    end
   end
 
   @impl true
