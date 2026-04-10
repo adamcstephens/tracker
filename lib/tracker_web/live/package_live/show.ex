@@ -1,9 +1,13 @@
 defmodule TrackerWeb.PackageLive.Show do
   use TrackerWeb, :live_view
 
-  @valid_sort_fields ~w(version channel_name revision_hash released_at)a
-  @default_sort_by :released_at
-  @default_sort_dir :desc
+  alias TrackerWeb.TableParams
+
+  @table_opts [
+    allowed_sorts: ~w(version channel_name revision_hash released_at)a,
+    default_sort: :released_at,
+    default_sort_dir: :desc
+  ]
 
   @impl true
   def render(assigns) do
@@ -185,24 +189,25 @@ defmodule TrackerWeb.PackageLive.Show do
       <table role="grid">
         <thead>
           <tr>
-            <.sort_header field={:version} label="Version" sort_by={@sort_by} sort_dir={@sort_dir} />
+            <.sort_header
+              field={:version}
+              label="Version"
+              table_params={@table_params}
+            />
             <.sort_header
               field={:channel_name}
               label="Channel"
-              sort_by={@sort_by}
-              sort_dir={@sort_dir}
+              table_params={@table_params}
             />
             <.sort_header
               field={:revision_hash}
               label="Revision"
-              sort_by={@sort_by}
-              sort_dir={@sort_dir}
+              table_params={@table_params}
             />
             <.sort_header
               field={:released_at}
               label="Released"
-              sort_by={@sort_by}
-              sort_dir={@sort_dir}
+              table_params={@table_params}
             />
           </tr>
         </thead>
@@ -262,14 +267,10 @@ defmodule TrackerWeb.PackageLive.Show do
   defp sort_header(assigns) do
     ~H"""
     <th phx-click="sort" phx-value-field={@field} style="cursor: pointer">
-      {@label} {sort_indicator(@sort_by, @sort_dir, @field)}
+      {@label} {TableParams.sort_indicator(@table_params, @field)}
     </th>
     """
   end
-
-  defp sort_indicator(sort_by, :asc, field) when sort_by == field, do: "↑"
-  defp sort_indicator(sort_by, :desc, field) when sort_by == field, do: "↓"
-  defp sort_indicator(_, _, _), do: ""
 
   defp github_version_link(%{position: nil} = assigns) do
     ~H"{@version}"
@@ -367,12 +368,10 @@ defmodule TrackerWeb.PackageLive.Show do
       |> Tracker.Nixpkgs.OptionRevision.latest_by_option_ids!()
       |> Map.new(&{&1.option_id, &1})
 
-    sort_by = parse_sort_by(params["sort_by"])
-    sort_dir = parse_sort_dir(params["sort_dir"])
+    tp = TableParams.from_params(params, @table_opts)
     channel_filter = params["channel"] || ""
     version_filter = params["version"] || ""
     all_revisions? = params["all_revisions"] == "true"
-    page = params |> Map.get("page", "1") |> String.to_integer() |> max(1)
 
     channels = load_channels()
     channel_names = Enum.map(channels, & &1.name)
@@ -400,22 +399,13 @@ defmodule TrackerWeb.PackageLive.Show do
      |> assign(:family_siblings, family_siblings)
      |> assign(:variant_siblings, variant_siblings)
      |> assign(:option_revisions, option_revisions)
-     |> assign(:sort_by, sort_by)
-     |> assign(:sort_dir, sort_dir)
+     |> assign(:table_params, tp)
      |> assign(:channel_filter, channel_filter)
      |> assign(:version_filter, version_filter)
      |> assign(:all_revisions?, all_revisions?)
      |> assign(:channels, channels)
      |> assign(:subscribed_channels, channel_names)
-     |> assign_package_data(
-       package.id,
-       sort_by,
-       sort_dir,
-       channel_filter,
-       version_filter,
-       all_revisions?,
-       page
-     )}
+     |> assign_package_data(package.id, channel_filter, version_filter, all_revisions?)}
   end
 
   @impl true
@@ -426,57 +416,52 @@ defmodule TrackerWeb.PackageLive.Show do
   @impl true
   def handle_info({:channel_revision_completed, _payload}, socket) do
     %{
-      package: package,
-      sort_by: sort_by,
-      sort_dir: sort_dir,
       channel_filter: channel_filter,
       version_filter: version_filter,
-      all_revisions?: all_revisions?,
-      current_page: current_page
+      all_revisions?: all_revisions?
     } = socket.assigns
 
     {:noreply,
      assign_package_data(
        socket,
-       package.id,
-       sort_by,
-       sort_dir,
+       socket.assigns.package.id,
        channel_filter,
        version_filter,
-       all_revisions?,
-       current_page
+       all_revisions?
      )}
   end
 
   def handle_info({:set_lens, channel_name, _rev}, socket) do
     socket = TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, "")
+    tp = %{socket.assigns.table_params | page: 1, offset: 0}
 
     {:noreply,
      push_patch(socket,
-       to:
-         revisions_path(
-           socket.assigns.package.attribute,
-           socket.assigns.sort_by,
-           socket.assigns.sort_dir,
-           channel_name,
-           socket.assigns.version_filter,
-           socket.assigns.all_revisions?,
-           1
-         )
+       to: revisions_path(socket.assigns.package.attribute, tp, %{channel: channel_name})
      )}
   end
 
-  defp assign_package_data(
-         socket,
-         package_id,
-         sort_by,
-         sort_dir,
-         channel_filter,
-         version_filter,
-         all_revisions?,
-         page
-       ) do
-    offset = (page - 1) * 15
+  defp extra_params(socket, overrides \\ %{}) do
+    %{
+      channel: Map.get(overrides, :channel, socket.assigns.channel_filter),
+      version: Map.get(overrides, :version, socket.assigns.version_filter),
+      all_revisions: Map.get(overrides, :all_revisions, socket.assigns.all_revisions?)
+    }
+  end
+
+  defp revisions_path(package_name, tp, extra_overrides) do
+    extras =
+      %{
+        channel: Map.get(extra_overrides, :channel, ""),
+        version: Map.get(extra_overrides, :version, ""),
+        all_revisions: Map.get(extra_overrides, :all_revisions, false)
+      }
+
+    TableParams.to_path(tp, "/packages/#{package_name}", extras)
+  end
+
+  defp assign_package_data(socket, package_id, channel_filter, version_filter, all_revisions?) do
+    tp = socket.assigns.table_params
     package_events = load_package_events(package_id)
 
     channel_id = resolve_channel_id(channel_filter)
@@ -484,7 +469,14 @@ defmodule TrackerWeb.PackageLive.Show do
     {revisions, total_count, has_more?} =
       if all_revisions? do
         result =
-          load_revisions(package_id, sort_by, sort_dir, channel_id, version_filter, offset)
+          load_revisions(
+            package_id,
+            tp.sort_by,
+            tp.sort_dir,
+            channel_id,
+            version_filter,
+            tp.offset
+          )
 
         {result.results, result.count, result.more?}
       else
@@ -492,49 +484,39 @@ defmodule TrackerWeb.PackageLive.Show do
           Tracker.Nixpkgs.PackageRevision.version_changes_by_package(package_id,
             channel_id: channel_id,
             version: version_filter,
-            sort_by: sort_by,
-            sort_dir: sort_dir,
-            limit: 15,
-            offset: offset
+            sort_by: tp.sort_by,
+            sort_dir: tp.sort_dir,
+            limit: tp.page_size,
+            offset: tp.offset
           )
 
-        {results, count, count > offset + 15}
+        {results, count, count > tp.offset + tp.page_size}
       end
 
-    total_pages = ceil(total_count / 15)
+    total_pages = ceil(total_count / tp.page_size)
 
     socket
     |> assign(:package_events, package_events)
     |> assign(:revisions, revisions)
-    |> assign(:has_prev_page?, offset > 0)
+    |> assign(:has_prev_page?, tp.offset > 0)
     |> assign(:has_next_page?, has_more?)
     |> assign(:total_pages, total_pages)
-    |> assign(:current_page, page)
+    |> assign(:current_page, tp.page)
   end
 
   @impl true
   def handle_event("sort", %{"field" => field}, socket) do
-    new_sort_by = parse_sort_by(field)
+    tp = socket.assigns.table_params
+    new_sort_by = TableParams.from_params(%{"sort_by" => field}, @table_opts).sort_by
 
     new_sort_dir =
-      if socket.assigns.sort_by == new_sort_by do
-        toggle_dir(socket.assigns.sort_dir)
-      else
-        :asc
-      end
+      if tp.sort_by == new_sort_by, do: TableParams.toggle_dir(tp.sort_dir), else: :asc
+
+    new_tp = %{tp | sort_by: new_sort_by, sort_dir: new_sort_dir, page: 1, offset: 0}
 
     {:noreply,
      push_patch(socket,
-       to:
-         revisions_path(
-           socket.assigns.package.attribute,
-           new_sort_by,
-           new_sort_dir,
-           socket.assigns.channel_filter,
-           socket.assigns.version_filter,
-           socket.assigns.all_revisions?,
-           1
-         )
+       to: revisions_path(socket.assigns.package.attribute, new_tp, extra_params(socket))
      )}
   end
 
@@ -543,52 +525,45 @@ defmodule TrackerWeb.PackageLive.Show do
     channel = Map.get(params, "channel", "")
     version = Map.get(params, "version", "")
     all_revisions? = Map.get(params, "all_revisions", "false") == "true"
+    tp = %{socket.assigns.table_params | page: 1, offset: 0}
 
     {:noreply,
      push_patch(socket,
        to:
-         revisions_path(
-           socket.assigns.package.attribute,
-           socket.assigns.sort_by,
-           socket.assigns.sort_dir,
-           channel,
-           version,
-           all_revisions?,
-           1
-         )
+         revisions_path(socket.assigns.package.attribute, tp, %{
+           channel: channel,
+           version: version,
+           all_revisions: all_revisions?
+         })
      )}
   end
 
   @impl true
   def handle_event("next-page", _params, socket) do
+    tp = socket.assigns.table_params
+
     {:noreply,
      push_patch(socket,
        to:
          revisions_path(
            socket.assigns.package.attribute,
-           socket.assigns.sort_by,
-           socket.assigns.sort_dir,
-           socket.assigns.channel_filter,
-           socket.assigns.version_filter,
-           socket.assigns.all_revisions?,
-           socket.assigns.current_page + 1
+           %{tp | page: tp.page + 1},
+           extra_params(socket)
          )
      )}
   end
 
   @impl true
   def handle_event("prev-page", _params, socket) do
+    tp = socket.assigns.table_params
+
     {:noreply,
      push_patch(socket,
        to:
          revisions_path(
            socket.assigns.package.attribute,
-           socket.assigns.sort_by,
-           socket.assigns.sort_dir,
-           socket.assigns.channel_filter,
-           socket.assigns.version_filter,
-           socket.assigns.all_revisions?,
-           max(socket.assigns.current_page - 1, 1)
+           %{tp | page: max(tp.page - 1, 1)},
+           extra_params(socket)
          )
      )}
   end
@@ -636,41 +611,6 @@ defmodule TrackerWeb.PackageLive.Show do
     case Tracker.Nixpkgs.Channel.by_name(channel_name) do
       {:ok, channel} -> channel.id
       _ -> nil
-    end
-  end
-
-  defp parse_sort_by(nil), do: @default_sort_by
-
-  defp parse_sort_by(field) do
-    atom = String.to_existing_atom(field)
-    if atom in @valid_sort_fields, do: atom, else: @default_sort_by
-  rescue
-    ArgumentError -> @default_sort_by
-  end
-
-  defp parse_sort_dir("asc"), do: :asc
-  defp parse_sort_dir(_), do: @default_sort_dir
-
-  defp toggle_dir(:asc), do: :desc
-  defp toggle_dir(:desc), do: :asc
-
-  defp revisions_path(package_name, sort_by, sort_dir, channel, version, all_revisions?, page) do
-    params =
-      %{}
-      |> then(fn p ->
-        if sort_by != @default_sort_by, do: Map.put(p, :sort_by, sort_by), else: p
-      end)
-      |> then(fn p ->
-        if sort_dir != @default_sort_dir, do: Map.put(p, :sort_dir, sort_dir), else: p
-      end)
-      |> then(fn p -> if channel != "", do: Map.put(p, :channel, channel), else: p end)
-      |> then(fn p -> if version != "", do: Map.put(p, :version, version), else: p end)
-      |> then(fn p -> if all_revisions?, do: Map.put(p, :all_revisions, true), else: p end)
-      |> then(fn p -> if page > 1, do: Map.put(p, :page, page), else: p end)
-
-    case URI.encode_query(params) do
-      "" -> "/packages/#{package_name}"
-      qs -> "/packages/#{package_name}?#{qs}"
     end
   end
 end

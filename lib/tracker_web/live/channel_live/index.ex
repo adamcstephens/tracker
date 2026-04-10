@@ -1,9 +1,13 @@
 defmodule TrackerWeb.ChannelLive.Index do
   use TrackerWeb, :live_view
 
-  @valid_sort_fields ~w(name count latest_release)a
-  @default_sort_by :latest_release
-  @default_sort_dir :desc
+  alias TrackerWeb.TableParams
+
+  @table_opts [
+    allowed_sorts: ~w(name count latest_release)a,
+    default_sort: :latest_release,
+    default_sort_dir: :desc
+  ]
 
   @impl true
   def render(assigns) do
@@ -16,18 +20,12 @@ defmodule TrackerWeb.ChannelLive.Index do
       <table role="grid">
         <thead>
           <tr>
-            <.sort_header field={:name} label="Channel" sort_by={@sort_by} sort_dir={@sort_dir} />
-            <.sort_header
-              field={:count}
-              label="Revisions"
-              sort_by={@sort_by}
-              sort_dir={@sort_dir}
-            />
+            <.sort_header field={:name} label="Channel" table_params={@table_params} />
+            <.sort_header field={:count} label="Revisions" table_params={@table_params} />
             <.sort_header
               field={:latest_release}
               label="Latest Release"
-              sort_by={@sort_by}
-              sort_dir={@sort_dir}
+              table_params={@table_params}
             />
           </tr>
         </thead>
@@ -49,14 +47,10 @@ defmodule TrackerWeb.ChannelLive.Index do
   defp sort_header(assigns) do
     ~H"""
     <th phx-click="sort" phx-value-field={@field} style="cursor: pointer">
-      {@label} {sort_indicator(@sort_by, @sort_dir, @field)}
+      {@label} {TableParams.sort_indicator(@table_params, @field)}
     </th>
     """
   end
-
-  defp sort_indicator(sort_by, :asc, field) when sort_by == field, do: "↑"
-  defp sort_indicator(sort_by, :desc, field) when sort_by == field, do: "↓"
-  defp sort_indicator(_, _, _), do: ""
 
   defp format_date(nil), do: "-"
   defp format_date(dt), do: Calendar.strftime(dt, "%Y-%m-%d %H:%M")
@@ -68,34 +62,31 @@ defmodule TrackerWeb.ChannelLive.Index do
 
   @impl true
   def handle_params(params, _url, socket) do
-    sort_by = parse_sort_by(params["sort_by"])
-    sort_dir = parse_sort_dir(params["sort_dir"])
+    tp = TableParams.from_params(params, @table_opts)
 
-    channels = load_channels(sort_by, sort_dir)
+    channels = load_channels(tp.sort_by, tp.sort_dir)
 
     lens = socket.assigns.lens && %{socket.assigns.lens | disabled?: true}
 
     {:noreply,
      socket
      |> assign(:page_title, "Channels")
-     |> assign(:sort_by, sort_by)
-     |> assign(:sort_dir, sort_dir)
+     |> assign(:table_params, tp)
      |> assign(:lens, lens)
      |> stream(:channels, channels, reset: true)}
   end
 
   @impl true
   def handle_event("sort", %{"field" => field}, socket) do
-    new_sort_by = parse_sort_by(field)
+    tp = socket.assigns.table_params
+    new_sort_by = TableParams.from_params(%{"sort_by" => field}, @table_opts).sort_by
 
     new_sort_dir =
-      if socket.assigns.sort_by == new_sort_by do
-        toggle_dir(socket.assigns.sort_dir)
-      else
-        :asc
-      end
+      if tp.sort_by == new_sort_by, do: TableParams.toggle_dir(tp.sort_dir), else: :asc
 
-    {:noreply, push_patch(socket, to: channels_path(new_sort_by, new_sort_dir))}
+    new_tp = %{tp | sort_by: new_sort_by, sort_dir: new_sort_dir}
+
+    {:noreply, push_patch(socket, to: TableParams.to_path(new_tp, "/channels"))}
   end
 
   defp load_channels(sort_by, sort_dir) do
@@ -122,37 +113,6 @@ defmodule TrackerWeb.ChannelLive.Index do
 
   defp sort_by_field(channels, fun, :asc), do: Enum.sort_by(channels, fun, &<=/2)
   defp sort_by_field(channels, fun, :desc), do: Enum.sort_by(channels, fun, &>=/2)
-
-  defp parse_sort_by(nil), do: @default_sort_by
-
-  defp parse_sort_by(field) do
-    atom = String.to_existing_atom(field)
-    if atom in @valid_sort_fields, do: atom, else: @default_sort_by
-  rescue
-    ArgumentError -> @default_sort_by
-  end
-
-  defp parse_sort_dir("asc"), do: :asc
-  defp parse_sort_dir(_), do: @default_sort_dir
-
-  defp toggle_dir(:asc), do: :desc
-  defp toggle_dir(:desc), do: :asc
-
-  defp channels_path(sort_by, sort_dir) do
-    params =
-      %{}
-      |> then(fn p ->
-        if sort_by != @default_sort_by, do: Map.put(p, :sort_by, sort_by), else: p
-      end)
-      |> then(fn p ->
-        if sort_dir != @default_sort_dir, do: Map.put(p, :sort_dir, sort_dir), else: p
-      end)
-
-    case URI.encode_query(params) do
-      "" -> "/channels"
-      qs -> "/channels?#{qs}"
-    end
-  end
 
   @impl true
   def handle_info({:set_lens, channel_name, rev}, socket) do

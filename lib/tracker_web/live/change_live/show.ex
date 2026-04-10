@@ -1,6 +1,8 @@
 defmodule TrackerWeb.ChangeLive.Show do
   use TrackerWeb, :live_view
 
+  alias TrackerWeb.TableParams
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -65,7 +67,7 @@ defmodule TrackerWeb.ChangeLive.Show do
         <input
           type="search"
           name="search"
-          value={@pkg_search}
+          value={@table_params.search}
           placeholder="Filter packages..."
           phx-debounce="300"
         />
@@ -140,9 +142,7 @@ defmodule TrackerWeb.ChangeLive.Show do
     author_maintainer = find_maintainer(change.author_github_id)
     merger_maintainer = find_maintainer(change.merged_by_github_id)
 
-    pkg_search = Map.get(params, "search", "")
-    page = params |> Map.get("page", "1") |> String.to_integer() |> max(1)
-    offset = (page - 1) * 15
+    tp = TableParams.from_params(params)
 
     {:noreply,
      socket
@@ -150,77 +150,69 @@ defmodule TrackerWeb.ChangeLive.Show do
      |> assign(:change, change)
      |> assign(:author_maintainer, author_maintainer)
      |> assign(:merger_maintainer, merger_maintainer)
-     |> assign(:pkg_search, pkg_search)
-     |> assign(:pkg_offset, offset)
-     |> load_packages(change.id, pkg_search, offset)}
+     |> assign(:table_params, tp)
+     |> load_packages(change.id)}
   end
 
   @impl true
   def handle_event("search-packages", %{"search" => search}, socket) do
+    tp = %{socket.assigns.table_params | search: search, page: 1, offset: 0}
+
     socket =
       socket
-      |> assign(:pkg_search, search)
-      |> assign(:pkg_offset, 0)
-      |> load_packages(socket.assigns.change.id, search, 0)
-      |> push_event("update-url", %{path: show_path(socket.assigns.change.number, search, 1)})
+      |> assign(:table_params, tp)
+      |> load_packages(socket.assigns.change.id)
+      |> push_event("update-url", %{
+        path: TableParams.to_path(tp, "/changes/#{socket.assigns.change.number}")
+      })
 
     {:noreply, socket}
   end
 
   @impl true
   def handle_event("next-page", _params, socket) do
+    tp = socket.assigns.table_params
+
     {:noreply,
      push_patch(socket,
        to:
-         show_path(
-           socket.assigns.change.number,
-           socket.assigns.pkg_search,
-           socket.assigns.pkg_current_page + 1
+         TableParams.to_path(
+           %{tp | page: tp.page + 1},
+           "/changes/#{socket.assigns.change.number}"
          )
      )}
   end
 
   @impl true
   def handle_event("prev-page", _params, socket) do
+    tp = socket.assigns.table_params
+
     {:noreply,
      push_patch(socket,
        to:
-         show_path(
-           socket.assigns.change.number,
-           socket.assigns.pkg_search,
-           max(socket.assigns.pkg_current_page - 1, 1)
+         TableParams.to_path(
+           %{tp | page: max(tp.page - 1, 1)},
+           "/changes/#{socket.assigns.change.number}"
          )
      )}
   end
 
-  defp load_packages(socket, change_id, search, offset) do
+  defp load_packages(socket, change_id) do
+    tp = socket.assigns.table_params
     package_count = socket.assigns.change.package_count || 0
 
     page =
-      Tracker.Nixpkgs.Package.by_change!(change_id, search, page: [offset: offset])
+      Tracker.Nixpkgs.Package.by_change!(change_id, tp.search, page: [offset: tp.offset])
 
-    total_pages = if package_count > 0, do: ceil(package_count / 15), else: 0
-    current_page = div(offset, 15) + 1
+    total_pages = if package_count > 0, do: ceil(package_count / tp.page_size), else: 0
 
     socket
     |> stream(:packages, page.results, reset: true)
     |> assign(:package_count, package_count)
-    |> assign(:pkg_has_prev?, offset > 0)
+    |> assign(:pkg_has_prev?, tp.offset > 0)
     |> assign(:pkg_has_next?, page.more?)
     |> assign(:pkg_total_pages, total_pages)
-    |> assign(:pkg_current_page, current_page)
-  end
-
-  defp show_path(number, search, page) do
-    params =
-      %{}
-      |> then(fn p -> if search != "", do: Map.put(p, :search, search), else: p end)
-      |> then(fn p -> if page > 1, do: Map.put(p, :page, page), else: p end)
-
-    case URI.encode_query(params) do
-      "" -> "/changes/#{number}"
-      qs -> "/changes/#{number}?#{qs}"
-    end
+    |> assign(:pkg_current_page, tp.page)
   end
 
   defp find_maintainer(nil), do: nil
