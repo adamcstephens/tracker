@@ -72,19 +72,13 @@ defmodule TrackerWeb.TeamLive.Show do
     team = Tracker.Nixpkgs.Team.get_by_short_name!(short_name, load: [:members])
 
     tp = TableParams.from_params(params)
-    packages = load_packages(team.id, tp.search, tp.offset)
-    pagination = TableParams.apply_pagination(tp, packages, :packages)
 
     {:noreply,
      socket
      |> assign(:page_title, team.short_name)
      |> assign(:team, team)
      |> assign(:table_params, tp)
-     |> stream(:packages, pagination.stream_results, reset: true)
-     |> assign(:has_prev_page?, pagination.has_prev_page?)
-     |> assign(:has_next_page?, pagination.has_next_page?)
-     |> assign(:total_pages, pagination.total_pages)
-     |> assign(:current_page, pagination.current_page)}
+     |> reload_packages()}
   end
 
   @impl true
@@ -125,14 +119,28 @@ defmodule TrackerWeb.TeamLive.Show do
      )}
   end
 
-  defp load_packages(team_id, search, offset) do
-    Tracker.Nixpkgs.Package.by_team!(team_id, search,
-      page: [offset: offset, limit: 15, count: true]
-    )
+  defp reload_packages(socket) do
+    tp = socket.assigns.table_params
+    channel_id = socket.assigns.lens && socket.assigns.lens.channel.id
+
+    packages =
+      Tracker.Nixpkgs.Package.by_team!(socket.assigns.team.id, tp.search, channel_id,
+        page: [offset: tp.offset, limit: 15, count: true]
+      )
+
+    pagination = TableParams.apply_pagination(tp, packages, :packages)
+
+    socket
+    |> stream(:packages, pagination.stream_results, reset: true)
+    |> assign(:has_prev_page?, pagination.has_prev_page?)
+    |> assign(:has_next_page?, pagination.has_next_page?)
+    |> assign(:total_pages, pagination.total_pages)
+    |> assign(:current_page, pagination.current_page)
   end
 
   @impl true
   def handle_info({:set_lens, channel_name, rev}, socket) do
-    {:noreply, TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)}
+    socket = TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)
+    {:noreply, reload_packages(socket)}
   end
 end

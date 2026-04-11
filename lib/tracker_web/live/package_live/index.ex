@@ -96,9 +96,10 @@ defmodule TrackerWeb.PackageLive.Index do
 
   defp load_packages(socket) do
     tp = socket.assigns.table_params
+    channel_id = socket.assigns.lens && socket.assigns.lens.channel.id
 
     page =
-      Tracker.Nixpkgs.Package.list!(tp.search,
+      Tracker.Nixpkgs.Package.list!(tp.search, channel_id,
         actor: socket.assigns[:current_user],
         page: [offset: tp.offset, count: true]
       )
@@ -115,6 +116,7 @@ defmodule TrackerWeb.PackageLive.Index do
 
   @impl true
   def handle_info({:set_lens, channel_name, rev}, socket) do
-    {:noreply, TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)}
+    socket = TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)
+    {:noreply, load_packages(socket)}
   end
 end

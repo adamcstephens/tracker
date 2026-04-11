@@ -1,7 +1,43 @@
 defmodule Tracker.Nixpkgs.PackageTest do
   use Tracker.DataCase, async: true
 
-  alias Tracker.Nixpkgs.Package
+  alias Tracker.Nixpkgs.{Channel, ChannelRevision, Package, PackageRevision}
+
+  defp create_channel!(name) do
+    Channel.create!(%{
+      name: name,
+      display_name: name,
+      branch: name,
+      status: :active,
+      is_stable: false
+    })
+  end
+
+  defp create_channel_revision!(channel_id, revision, released_at) do
+    ChannelRevision
+    |> Ash.Changeset.for_create(:create, %{
+      channel_id: channel_id,
+      revision: revision,
+      released_at: released_at
+    })
+    |> Ash.create!()
+  end
+
+  defp create_package!(attribute) do
+    Package.bulk_upsert_all([%{attribute: attribute}])
+    |> Map.fetch!(attribute)
+    |> then(&Ash.get!(Package, &1))
+  end
+
+  defp create_revision!(package, channel_revision, version) do
+    PackageRevision
+    |> Ash.Changeset.for_create(:load, %{
+      version: version,
+      package_id: package.id,
+      channel_revision_id: channel_revision.id
+    })
+    |> Ash.create!()
+  end
 
   describe "bulk_upsert_all/1" do
     test "returns a map of attribute to id" do
@@ -155,6 +191,142 @@ defmodule Tracker.Nixpkgs.PackageTest do
       siblings = Package.variant_siblings!(group.id, pkg_c.id)
 
       assert Enum.map(siblings, & &1.attribute) == ["aa-variant-a", "mm-variant-b"]
+    end
+  end
+
+  describe "list/2 channel filtering" do
+    setup do
+      channel = create_channel!("nixos-unstable")
+      cr = create_channel_revision!(channel.id, "aaa1111", ~U[2025-01-01 00:00:00Z])
+
+      pkg_in = create_package!("in-channel-pkg")
+      pkg_out = create_package!("out-channel-pkg")
+
+      create_revision!(pkg_in, cr, "1.0")
+
+      %{channel: channel, pkg_in: pkg_in, pkg_out: pkg_out}
+    end
+
+    test "without channel_id returns all packages", %{pkg_in: pkg_in, pkg_out: pkg_out} do
+      page = Package.list!(nil, nil, page: [count: true])
+
+      attrs = Enum.map(page.results, & &1.attribute)
+      assert pkg_in.attribute in attrs
+      assert pkg_out.attribute in attrs
+    end
+
+    test "with channel_id returns only packages in that channel", %{
+      channel: channel,
+      pkg_in: pkg_in,
+      pkg_out: pkg_out
+    } do
+      page = Package.list!(nil, channel.id, page: [count: true])
+
+      attrs = Enum.map(page.results, & &1.attribute)
+      assert pkg_in.attribute in attrs
+      refute pkg_out.attribute in attrs
+    end
+  end
+
+  describe "by_maintainer/3 channel filtering" do
+    setup do
+      channel = create_channel!("nixos-unstable")
+      cr = create_channel_revision!(channel.id, "bbb2222", ~U[2025-01-01 00:00:00Z])
+
+      maintainer =
+        Tracker.Nixpkgs.Maintainer
+        |> Ash.Changeset.for_create(:bulk_upsert, %{github_id: 12345, github: "testmaint"})
+        |> Ash.create!()
+
+      pkg_in = create_package!("maint-in-pkg")
+      pkg_out = create_package!("maint-out-pkg")
+
+      create_revision!(pkg_in, cr, "1.0")
+
+      for pkg <- [pkg_in, pkg_out] do
+        Tracker.Nixpkgs.PackageMaintainer.load!(%{
+          package_id: pkg.id,
+          maintainer_id: maintainer.id
+        })
+      end
+
+      %{channel: channel, maintainer: maintainer, pkg_in: pkg_in, pkg_out: pkg_out}
+    end
+
+    test "without channel_id returns all maintainer packages", %{
+      maintainer: maintainer,
+      pkg_in: pkg_in,
+      pkg_out: pkg_out
+    } do
+      page = Package.by_maintainer!(maintainer.id, nil, nil, page: [count: true])
+
+      attrs = Enum.map(page.results, & &1.attribute)
+      assert pkg_in.attribute in attrs
+      assert pkg_out.attribute in attrs
+    end
+
+    test "with channel_id returns only maintainer packages in that channel", %{
+      channel: channel,
+      maintainer: maintainer,
+      pkg_in: pkg_in,
+      pkg_out: pkg_out
+    } do
+      page = Package.by_maintainer!(maintainer.id, nil, channel.id, page: [count: true])
+
+      attrs = Enum.map(page.results, & &1.attribute)
+      assert pkg_in.attribute in attrs
+      refute pkg_out.attribute in attrs
+    end
+  end
+
+  describe "by_team/3 channel filtering" do
+    setup do
+      channel = create_channel!("nixos-unstable")
+      cr = create_channel_revision!(channel.id, "ccc3333", ~U[2025-01-01 00:00:00Z])
+
+      team =
+        Tracker.Nixpkgs.Team
+        |> Ash.Changeset.for_create(:bulk_upsert, %{short_name: "testteam"})
+        |> Ash.create!()
+
+      pkg_in = create_package!("team-in-pkg")
+      pkg_out = create_package!("team-out-pkg")
+
+      create_revision!(pkg_in, cr, "1.0")
+
+      for pkg <- [pkg_in, pkg_out] do
+        Tracker.Nixpkgs.PackageTeam.load!(%{
+          package_id: pkg.id,
+          team_id: team.id
+        })
+      end
+
+      %{channel: channel, team: team, pkg_in: pkg_in, pkg_out: pkg_out}
+    end
+
+    test "without channel_id returns all team packages", %{
+      team: team,
+      pkg_in: pkg_in,
+      pkg_out: pkg_out
+    } do
+      page = Package.by_team!(team.id, nil, nil, page: [count: true])
+
+      attrs = Enum.map(page.results, & &1.attribute)
+      assert pkg_in.attribute in attrs
+      assert pkg_out.attribute in attrs
+    end
+
+    test "with channel_id returns only team packages in that channel", %{
+      channel: channel,
+      team: team,
+      pkg_in: pkg_in,
+      pkg_out: pkg_out
+    } do
+      page = Package.by_team!(team.id, nil, channel.id, page: [count: true])
+
+      attrs = Enum.map(page.results, & &1.attribute)
+      assert pkg_in.attribute in attrs
+      refute pkg_out.attribute in attrs
     end
   end
 

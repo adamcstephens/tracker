@@ -49,43 +49,21 @@ defmodule TrackerWeb.TeamLive.Index do
   def handle_params(params, _url, socket) do
     tp = TableParams.from_params(params)
 
-    result =
-      Tracker.Nixpkgs.Team.list!(tp.search,
-        page: [offset: tp.offset, count: true, limit: tp.page_size]
-      )
-
-    pagination = TableParams.apply_pagination(tp, result, :teams)
-
     {:noreply,
      socket
      |> assign(:page_title, "Teams")
      |> assign(:table_params, tp)
-     |> stream(:teams, pagination.stream_results, reset: true)
-     |> assign(:has_prev_page?, pagination.has_prev_page?)
-     |> assign(:has_next_page?, pagination.has_next_page?)
-     |> assign(:total_pages, pagination.total_pages)
-     |> assign(:current_page, pagination.current_page)}
+     |> load_teams()}
   end
 
   @impl true
   def handle_event("search", %{"search" => search}, socket) do
     tp = %{socket.assigns.table_params | search: search, page: 1, offset: 0}
 
-    result =
-      Tracker.Nixpkgs.Team.list!(tp.search,
-        page: [offset: tp.offset, count: true, limit: tp.page_size]
-      )
-
-    pagination = TableParams.apply_pagination(tp, result, :teams)
-
     socket =
       socket
       |> assign(:table_params, tp)
-      |> stream(:teams, pagination.stream_results, reset: true)
-      |> assign(:has_prev_page?, pagination.has_prev_page?)
-      |> assign(:has_next_page?, pagination.has_next_page?)
-      |> assign(:total_pages, pagination.total_pages)
-      |> assign(:current_page, pagination.current_page)
+      |> load_teams()
       |> push_event("update-url", %{path: TableParams.to_path(tp, "/teams")})
 
     {:noreply, socket}
@@ -107,6 +85,26 @@ defmodule TrackerWeb.TeamLive.Index do
 
   @impl true
   def handle_info({:set_lens, channel_name, rev}, socket) do
-    {:noreply, TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)}
+    socket = TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)
+    {:noreply, load_teams(socket)}
+  end
+
+  defp load_teams(socket) do
+    tp = socket.assigns.table_params
+    channel_id = socket.assigns.lens && socket.assigns.lens.channel.id
+
+    result =
+      Tracker.Nixpkgs.Team.list!(tp.search, channel_id,
+        page: [offset: tp.offset, count: true, limit: tp.page_size]
+      )
+
+    pagination = TableParams.apply_pagination(tp, result, :teams)
+
+    socket
+    |> stream(:teams, pagination.stream_results, reset: true)
+    |> assign(:has_prev_page?, pagination.has_prev_page?)
+    |> assign(:has_next_page?, pagination.has_next_page?)
+    |> assign(:total_pages, pagination.total_pages)
+    |> assign(:current_page, pagination.current_page)
   end
 end

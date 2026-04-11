@@ -93,9 +93,10 @@ defmodule TrackerWeb.MaintainerLive.Index do
 
   defp load_maintainers(socket) do
     tp = socket.assigns.table_params
+    channel_id = socket.assigns.lens && socket.assigns.lens.channel.id
 
     page =
-      Tracker.Nixpkgs.Maintainer.list!(tp.search,
+      Tracker.Nixpkgs.Maintainer.list!(tp.search, channel_id,
         page: [offset: tp.offset, count: true]
       )
 
@@ -111,6 +112,7 @@ defmodule TrackerWeb.MaintainerLive.Index do
 
   @impl true
   def handle_info({:set_lens, channel_name, rev}, socket) do
-    {:noreply, TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)}
+    socket = TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)
+    {:noreply, load_maintainers(socket)}
   end
 end

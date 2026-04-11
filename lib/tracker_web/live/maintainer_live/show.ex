@@ -104,35 +104,26 @@ defmodule TrackerWeb.MaintainerLive.Show do
 
   @impl true
   def handle_info({:change_processed, _payload}, socket) do
-    {:noreply,
-     assign(socket, :recent_changes, load_recent_changes(socket.assigns.maintainer.github_id))}
+    {:noreply, reload_page_data(socket)}
   end
 
   def handle_info({:set_lens, channel_name, rev}, socket) do
-    {:noreply, TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)}
+    socket = TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)
+    {:noreply, reload_page_data(socket)}
   end
 
   @impl true
   def handle_params(%{"github" => github} = params, _url, socket) do
     maintainer = Tracker.Nixpkgs.Maintainer.get_by_github!(github, load: [:teams])
-    recent_changes = load_recent_changes(maintainer.github_id)
 
     tp = TableParams.from_params(params)
-    packages = load_packages(maintainer.id, tp.search, tp.offset)
-    pagination = TableParams.apply_pagination(tp, packages, :packages)
 
     {:noreply,
      socket
      |> assign(:page_title, maintainer.github)
      |> assign(:maintainer, maintainer)
-     |> assign(:recent_changes, recent_changes)
      |> assign(:table_params, tp)
-     |> stream(:packages, pagination.stream_results, reset: true)
-     |> assign(:has_prev_page?, pagination.has_prev_page?)
-     |> assign(:has_next_page?, pagination.has_next_page?)
-     |> assign(:total_pages, pagination.total_pages)
-     |> assign(:current_page, pagination.current_page)
-     |> assign(:package_count, packages.count)}
+     |> reload_page_data()}
   end
 
   @impl true
@@ -192,13 +183,30 @@ defmodule TrackerWeb.MaintainerLive.Show do
     end
   end
 
-  defp load_recent_changes(github_id) do
-    Tracker.Nixpkgs.Change.by_maintainer_github_id!(github_id, page: [limit: 10]).results
-  end
+  defp reload_page_data(socket) do
+    maintainer = socket.assigns.maintainer
+    tp = socket.assigns.table_params
+    channel_id = socket.assigns.lens && socket.assigns.lens.channel.id
 
-  defp load_packages(maintainer_id, search, offset) do
-    Tracker.Nixpkgs.Package.by_maintainer!(maintainer_id, search,
-      page: [offset: offset, limit: 15, count: true]
-    )
+    recent_changes =
+      Tracker.Nixpkgs.Change.by_maintainer_github_id!(maintainer.github_id, channel_id,
+        page: [limit: 10]
+      ).results
+
+    packages =
+      Tracker.Nixpkgs.Package.by_maintainer!(maintainer.id, tp.search, channel_id,
+        page: [offset: tp.offset, limit: 15, count: true]
+      )
+
+    pagination = TableParams.apply_pagination(tp, packages, :packages)
+
+    socket
+    |> assign(:recent_changes, recent_changes)
+    |> stream(:packages, pagination.stream_results, reset: true)
+    |> assign(:has_prev_page?, pagination.has_prev_page?)
+    |> assign(:has_next_page?, pagination.has_next_page?)
+    |> assign(:total_pages, pagination.total_pages)
+    |> assign(:current_page, pagination.current_page)
+    |> assign(:package_count, packages.count)
   end
 end

@@ -8,7 +8,7 @@ defmodule Tracker.Nixpkgs.Team do
 
   code_interface do
     define :read
-    define :list, args: [{:optional, :search}]
+    define :list, args: [{:optional, :search}, {:optional, :channel_id}]
     define :bulk_upsert
     define :get_by_short_name, action: :read, get_by: [:short_name]
     define :id_map, action: :id_map
@@ -23,6 +23,7 @@ defmodule Tracker.Nixpkgs.Team do
 
     read :list do
       argument :search, :ci_string
+      argument :channel_id, :integer
 
       pagination do
         offset? true
@@ -37,7 +38,15 @@ defmodule Tracker.Nixpkgs.Team do
                  contains(short_name, ^arg(:search)) or contains(scope, ^arg(:search))
                else
                  true
-               end
+               end and
+                 if not is_nil(^arg(:channel_id)) do
+                   exists(
+                     packages,
+                     exists(revisions, channel_revision.channel_id == ^arg(:channel_id))
+                   )
+                 else
+                   true
+                 end
              )
     end
 

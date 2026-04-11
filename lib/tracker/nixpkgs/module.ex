@@ -8,7 +8,7 @@ defmodule Tracker.Nixpkgs.Module do
 
   code_interface do
     define :read
-    define :list, args: [{:optional, :search}]
+    define :list, args: [{:optional, :search}, {:optional, :channel_id}]
     define :get_by_name, args: [:name]
     define :children, args: [:parent_name]
     define :bulk_upsert, args: [:display_name]
@@ -20,6 +20,7 @@ defmodule Tracker.Nixpkgs.Module do
 
     read :list do
       argument :search, :ci_string
+      argument :channel_id, :integer
 
       pagination do
         offset? true
@@ -34,7 +35,15 @@ defmodule Tracker.Nixpkgs.Module do
                  contains(display_name, ^arg(:search))
                else
                  true
-               end
+               end and
+                 if not is_nil(^arg(:channel_id)) do
+                   exists(
+                     options,
+                     exists(option_revisions, channel_revision.channel_id == ^arg(:channel_id))
+                   )
+                 else
+                   true
+                 end
              )
     end
 

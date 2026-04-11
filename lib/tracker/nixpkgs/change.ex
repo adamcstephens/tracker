@@ -8,10 +8,10 @@ defmodule Tracker.Nixpkgs.Change do
 
   code_interface do
     define :read
-    define :list, args: [{:optional, :search}, {:optional, :base_ref}]
+    define :list, args: [{:optional, :search}, {:optional, :base_ref}, {:optional, :channel_id}]
     define :get_by_number, action: :read, get_by: [:number]
     define :by_package, args: [:package_id]
-    define :by_maintainer_github_id, args: [:github_id]
+    define :by_maintainer_github_id, args: [:github_id, {:optional, :channel_id}]
     define :update_package_count
     define :update_processing_status
     define :bulk_upsert, args: [:number]
@@ -25,6 +25,7 @@ defmodule Tracker.Nixpkgs.Change do
     read :list do
       argument :search, :ci_string
       argument :base_ref, :string
+      argument :channel_id, :integer
 
       pagination do
         offset? true
@@ -40,6 +41,11 @@ defmodule Tracker.Nixpkgs.Change do
                end and
                  if not is_nil(^arg(:base_ref)) and ^arg(:base_ref) != "" do
                    base_ref == ^arg(:base_ref)
+                 else
+                   true
+                 end and
+                 if not is_nil(^arg(:channel_id)) do
+                   exists(change_channels, channel_id == ^arg(:channel_id))
                  else
                    true
                  end
@@ -61,6 +67,7 @@ defmodule Tracker.Nixpkgs.Change do
 
     read :by_maintainer_github_id do
       argument :github_id, :integer, allow_nil?: false
+      argument :channel_id, :integer
 
       pagination do
         offset? true
@@ -69,7 +76,15 @@ defmodule Tracker.Nixpkgs.Change do
       end
 
       prepare build(sort: [number: :desc])
-      filter expr(author_github_id == ^arg(:github_id) or merged_by_github_id == ^arg(:github_id))
+
+      filter expr(
+               (author_github_id == ^arg(:github_id) or merged_by_github_id == ^arg(:github_id)) and
+                 if not is_nil(^arg(:channel_id)) do
+                   exists(change_channels, channel_id == ^arg(:channel_id))
+                 else
+                   true
+                 end
+             )
     end
 
     update :update_package_count do
