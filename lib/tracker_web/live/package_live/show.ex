@@ -186,72 +186,41 @@ defmodule TrackerWeb.PackageLive.Show do
       </form>
     </div>
 
-    <figure :if={@revisions != []}>
-      <table role="grid">
-        <thead>
-          <tr>
-            <.sort_header
-              field={:version}
-              label="Version"
-              table_params={@table_params}
-            />
-            <.sort_header
-              field={:channel_name}
-              label="Channel"
-              table_params={@table_params}
-            />
-            <.sort_header
-              field={:revision_hash}
-              label="Revision"
-              table_params={@table_params}
-            />
-            <.sort_header
-              field={:released_at}
-              label="Released"
-              table_params={@table_params}
-            />
-          </tr>
-        </thead>
-        <tbody id="revisions">
-          <tr :for={rev <- @revisions}>
-            <td>
-              <.github_version_link
-                version={rev.version}
-                position={@package.position}
-                revision={rev_revision(rev)}
-              />
-            </td>
-            <td>{rev_channel(rev)}</td>
-            <td>
-              <.revision_link
-                revision={rev_revision(rev)}
-                channel={rev_channel(rev)}
-              />
-            </td>
-            <td>{format_released_at(rev_released_at(rev))}</td>
-          </tr>
-        </tbody>
-      </table>
-    </figure>
-
-    <p :if={@revisions == []}>
-      No revisions found.
-    </p>
-
-    <DataTable.pagination
+    <DataTable.data_table
+      :if={@revisions != []}
+      id="revisions"
+      rows={@revisions}
+      table_params={@table_params}
+      base_path={"/packages/#{@package.attribute}"}
       total_pages={@total_pages}
       current_page={@current_page}
       has_prev_page?={@has_prev_page?}
       has_next_page?={@has_next_page?}
-    />
-    """
-  end
+    >
+      <:col :let={rev} field={:version} label="Version" sortable>
+        <.github_version_link
+          version={rev.version}
+          position={@package.position}
+          revision={rev_revision(rev)}
+        />
+      </:col>
+      <:col :let={rev} field={:channel_name} label="Channel" sortable>
+        {rev_channel(rev)}
+      </:col>
+      <:col :let={rev} field={:revision_hash} label="Revision" sortable>
+        <.revision_link
+          revision={rev_revision(rev)}
+          channel={rev_channel(rev)}
+        />
+      </:col>
+      <:col :let={rev} field={:released_at} label="Released" sortable>
+        {format_released_at(rev_released_at(rev))}
+      </:col>
+    </DataTable.data_table>
 
-  defp sort_header(assigns) do
-    ~H"""
-    <th phx-click="sort" phx-value-field={@field} style="cursor: pointer">
-      {@label} {TableParams.sort_indicator(@table_params, @field)}
-    </th>
+    <p :if={@revisions == []}>
+      No revisions found.
+    </p>
     """
   end
 
