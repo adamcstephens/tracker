@@ -28,6 +28,7 @@ defmodule TrackerWeb.ChannelLive.Show do
         id="revisions"
         rows={@revisions}
         table_params={@table_params}
+        base_path={"/channels/#{@channel}"}
         total_pages={@total_pages}
         current_page={@current_page}
         has_prev_page?={@has_prev_page?}
