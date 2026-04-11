@@ -38,7 +38,7 @@ defmodule Tracker.Nixpkgs.ChangeProcessWorkerTest do
   describe "link_packages/2" do
     test "links change to existing packages from attrdiff with types" do
       Package.bulk_upsert_all([
-        %{attribute: "nixos-install-tools"},
+        %{attribute: "firefox"},
         %{attribute: "curl"}
       ])
 
@@ -46,7 +46,7 @@ defmodule Tracker.Nixpkgs.ChangeProcessWorkerTest do
 
       attrdiff = %{
         "added" => ["curl"],
-        "changed" => ["nixos-install-tools"],
+        "changed" => ["firefox"],
         "removed" => []
       }
 
@@ -56,11 +56,31 @@ defmodule Tracker.Nixpkgs.ChangeProcessWorkerTest do
 
       change = Ash.load!(change, [:packages, :change_packages])
       attrs = Enum.map(change.packages, & &1.attribute) |> Enum.sort()
-      assert attrs == ["curl", "nixos-install-tools"]
+      assert attrs == ["curl", "firefox"]
 
       types = change.change_packages |> Enum.sort_by(& &1.package_id) |> Enum.map(& &1.type)
       assert :added in types
       assert :changed in types
+    end
+
+    test "filters out ignored packages from attrdiff" do
+      Package.bulk_upsert_all([%{attribute: "curl"}])
+
+      {:ok, change} = ChangeProcessWorker.upsert_change(pr_struct())
+
+      attrdiff = %{
+        "added" => ["curl"],
+        "changed" => ["nixos-install-tools", "tests.nixos-functions.nixos-test"],
+        "removed" => []
+      }
+
+      {:ok, linked} = ChangeProcessWorker.link_packages(change, attrdiff)
+
+      assert linked == 1
+
+      change = Ash.load!(change, [:packages])
+      attrs = Enum.map(change.packages, & &1.attribute)
+      assert attrs == ["curl"]
     end
 
     test "creates packages for unknown attributes in attrdiff" do

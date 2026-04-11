@@ -9,6 +9,11 @@ defmodule Tracker.Nixpkgs.ChangeProcessWorker do
 
   @repo "NixOS/nixpkgs"
 
+  @ignored_packages [
+    "nixos-install-tools",
+    "tests.nixos-functions.nixos-test"
+  ]
+
   @doc """
   Re-enqueues processing for the given PR number(s).
   """
@@ -161,7 +166,10 @@ defmodule Tracker.Nixpkgs.ChangeProcessWorker do
   defp do_link_packages(change, attrdiff) do
     typed_attrs =
       Enum.flat_map(~w(added changed removed), fn type ->
-        Enum.map(attrdiff[type] || [], &{String.to_existing_atom(type), &1})
+        attrdiff[type]
+        |> List.wrap()
+        |> Enum.reject(&(&1 in @ignored_packages))
+        |> Enum.map(&{String.to_existing_atom(type), &1})
       end)
 
     case typed_attrs do
