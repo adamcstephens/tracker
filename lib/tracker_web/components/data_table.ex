@@ -106,6 +106,36 @@ defmodule TrackerWeb.DataTable do
       </table>
     </figure>
 
+    <.pagination
+      total_pages={@total_pages}
+      current_page={@current_page}
+      has_prev_page?={@has_prev_page?}
+      has_next_page?={@has_next_page?}
+    />
+    """
+  end
+
+  @doc """
+  Renders pagination controls with prev/next buttons and page indicator.
+
+  Emits `prev-page` and `next-page` events for the parent LiveView to handle.
+
+  ## Examples
+
+      <DataTable.pagination
+        total_pages={@total_pages}
+        current_page={@current_page}
+        has_prev_page?={@has_prev_page?}
+        has_next_page?={@has_next_page?}
+      />
+  """
+  attr :total_pages, :integer, required: true
+  attr :current_page, :integer, required: true
+  attr :has_prev_page?, :boolean, default: false
+  attr :has_next_page?, :boolean, default: false
+
+  def pagination(assigns) do
+    ~H"""
     <nav
       :if={@total_pages > 1}
       style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-top: 1rem;"
