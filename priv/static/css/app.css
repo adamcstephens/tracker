@@ -301,6 +301,12 @@
 	display: inline-block;
 }
 
+/* Sort header links - inherit header styling for no-JS fallback */
+th a {
+	color: inherit;
+	text-decoration: none;
+}
+
 /* Revision link styling */
 a.revision-link {
 	font-family: var(--pico-font-family-monospace);

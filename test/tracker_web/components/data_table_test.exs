@@ -110,6 +110,44 @@ defmodule TrackerWeb.DataTableTest do
       assert html =~ "name"
     end
 
+    test "sortable columns render link when base_path is set" do
+      assigns = %{
+        tp: table_params(),
+        rows: []
+      }
+
+      html =
+        rendered_to_string(~H"""
+        <DataTable.data_table id="test" rows={@rows} table_params={@tp} base_path="/items">
+          <:col :let={row} field={:name} label="Name" sortable>{row.name}</:col>
+          <:col :let={row} field={:age} label="Age" sortable>{row.age}</:col>
+        </DataTable.data_table>
+        """)
+
+      # Active sort column (name, asc) links to toggled direction (desc)
+      # sort_by=name is omitted because it's the default
+      assert html =~ "href=\"/items?sort_dir=desc\""
+      # Non-active sort column links to asc
+      assert html =~ "href=\"/items?sort_by=age\""
+    end
+
+    test "sortable columns without base_path render as plain text" do
+      assigns = %{
+        tp: table_params(),
+        rows: []
+      }
+
+      html =
+        rendered_to_string(~H"""
+        <DataTable.data_table id="test" rows={@rows} table_params={@tp}>
+          <:col :let={row} field={:name} label="Name" sortable>{row.name}</:col>
+        </DataTable.data_table>
+        """)
+
+      refute html =~ "<a"
+      refute html =~ "href"
+    end
+
     test "renders pagination when total_pages > 1" do
       assigns = %{
         tp: table_params(),

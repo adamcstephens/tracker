@@ -17,7 +17,12 @@ defmodule TrackerWeb.ChannelLive.Index do
       Channels
     </.header>
 
-    <DataTable.data_table id="channels" rows={@streams.channels} table_params={@table_params}>
+    <DataTable.data_table
+      id="channels"
+      rows={@streams.channels}
+      table_params={@table_params}
+      base_path="/channels"
+    >
       <:col :let={{_id, channel}} field={:name} label="Channel" sortable>
         <.link navigate={~p"/channels/#{channel.name}"}>{channel.name}</.link>
       </:col>

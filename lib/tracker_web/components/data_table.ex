@@ -36,6 +36,10 @@ defmodule TrackerWeb.DataTable do
   attr :has_prev_page?, :boolean, default: false
   attr :has_next_page?, :boolean, default: false
 
+  attr :base_path, :string,
+    default: nil,
+    doc: "base URL path for sort link hrefs (no-JS fallback)"
+
   slot :col, required: true do
     attr :field, :atom
     attr :label, :string
@@ -61,9 +65,17 @@ defmodule TrackerWeb.DataTable do
               phx-value-field={col[:sortable] && col[:field]}
               style={col[:sortable] && "cursor: pointer"}
             >
-              {col[:label]}
-              <span :if={col[:sortable]}>
-                {TableParams.sort_indicator(@table_params, col[:field])}
+              <a
+                :if={col[:sortable] && @base_path}
+                href={sort_href(@table_params, col[:field], @base_path)}
+              >
+                {col[:label]} {TableParams.sort_indicator(@table_params, col[:field])}
+              </a>
+              <span :if={!col[:sortable] || !@base_path}>
+                {col[:label]}
+                <span :if={col[:sortable]}>
+                  {TableParams.sort_indicator(@table_params, col[:field])}
+                </span>
               </span>
             </th>
             <th :if={@action != []}>
@@ -119,5 +131,11 @@ defmodule TrackerWeb.DataTable do
       </button>
     </nav>
     """
+  end
+
+  defp sort_href(%TableParams{} = tp, field, base_path) do
+    dir = if tp.sort_by == field, do: TableParams.toggle_dir(tp.sort_dir), else: :asc
+    new_tp = %{tp | sort_by: field, sort_dir: dir, page: 1, offset: 0}
+    TableParams.to_path(new_tp, base_path)
   end
 end
