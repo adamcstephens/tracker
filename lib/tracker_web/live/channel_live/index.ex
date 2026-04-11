@@ -1,6 +1,7 @@
 defmodule TrackerWeb.ChannelLive.Index do
   use TrackerWeb, :live_view
 
+  alias TrackerWeb.DataTable
   alias TrackerWeb.TableParams
 
   @table_opts [
@@ -16,39 +17,17 @@ defmodule TrackerWeb.ChannelLive.Index do
       Channels
     </.header>
 
-    <figure>
-      <table role="grid">
-        <thead>
-          <tr>
-            <.sort_header field={:name} label="Channel" table_params={@table_params} />
-            <.sort_header field={:count} label="Revisions" table_params={@table_params} />
-            <.sort_header
-              field={:latest_release}
-              label="Latest Release"
-              table_params={@table_params}
-            />
-          </tr>
-        </thead>
-        <tbody id="channels" phx-update="stream">
-          <tr
-            :for={{dom_id, channel} <- @streams.channels}
-            id={dom_id}
-          >
-            <td><.link navigate={~p"/channels/#{channel.name}"}>{channel.name}</.link></td>
-            <td>{channel.count}</td>
-            <td>{format_date(channel.latest_release)}</td>
-          </tr>
-        </tbody>
-      </table>
-    </figure>
-    """
-  end
-
-  defp sort_header(assigns) do
-    ~H"""
-    <th phx-click="sort" phx-value-field={@field} style="cursor: pointer">
-      {@label} {TableParams.sort_indicator(@table_params, @field)}
-    </th>
+    <DataTable.data_table id="channels" rows={@streams.channels} table_params={@table_params}>
+      <:col :let={{_id, channel}} field={:name} label="Channel" sortable>
+        <.link navigate={~p"/channels/#{channel.name}"}>{channel.name}</.link>
+      </:col>
+      <:col :let={{_id, channel}} field={:count} label="Revisions" sortable>
+        {channel.count}
+      </:col>
+      <:col :let={{_id, channel}} field={:latest_release} label="Latest Release" sortable>
+        {format_date(channel.latest_release)}
+      </:col>
+    </DataTable.data_table>
     """
   end
 
