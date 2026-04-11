@@ -8,7 +8,7 @@ defmodule Tracker.Nixpkgs.Maintainer do
 
   code_interface do
     define :read
-    define :list, args: [{:optional, :search}]
+    define :list, args: [{:optional, :search}, {:optional, :channel_id}]
     define :bulk_upsert
     define :get_by_github, action: :read, get_by: [:github]
     define :get_by_github_id, action: :read, get_by: [:github_id]
@@ -24,6 +24,7 @@ defmodule Tracker.Nixpkgs.Maintainer do
 
     read :list do
       argument :search, :ci_string
+      argument :channel_id, :integer
 
       pagination do
         offset? true
@@ -38,7 +39,15 @@ defmodule Tracker.Nixpkgs.Maintainer do
                  contains(github, ^arg(:search))
                else
                  true
-               end
+               end and
+                 if not is_nil(^arg(:channel_id)) do
+                   exists(
+                     packages,
+                     exists(revisions, channel_revision.channel_id == ^arg(:channel_id))
+                   )
+                 else
+                   true
+                 end
              )
     end
 

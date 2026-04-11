@@ -153,12 +153,6 @@ defmodule TrackerWeb.PackageLive.Show do
       <h2>Revisions</h2>
 
       <form phx-change="filter" phx-submit="filter" class="revision-filters">
-        <select name="channel" aria-label="Filter by channel">
-          <option value="">All channels</option>
-          <option :for={ch <- @channels} value={ch.name} selected={ch.name == @channel_filter}>
-            {ch.name}
-          </option>
-        </select>
         <input
           type="text"
           name="version"
@@ -300,7 +294,7 @@ defmodule TrackerWeb.PackageLive.Show do
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, assign(socket, :subscribed_channels, [])}
+    {:ok, socket}
   end
 
   @impl true
@@ -321,26 +315,18 @@ defmodule TrackerWeb.PackageLive.Show do
       |> Map.new(&{&1.option_id, &1})
 
     tp = TableParams.from_params(params, @table_opts)
-    channel_filter = params["channel"] || ""
     version_filter = params["version"] || ""
     all_revisions? = params["all_revisions"] == "true"
 
-    channels = load_channels()
-    channel_names = Enum.map(channels, & &1.name)
-
     if connected?(socket) do
-      old_channels = socket.assigns.subscribed_channels
-      new_channels = channel_names
-
-      for ch <- old_channels -- new_channels do
-        Phoenix.PubSub.unsubscribe(Tracker.PubSub, "channel_revisions:#{ch}")
-      end
-
-      for ch <- new_channels -- old_channels do
-        Phoenix.PubSub.subscribe(Tracker.PubSub, "channel_revisions:#{ch}")
-      end
-
       Phoenix.PubSub.subscribe(Tracker.PubSub, "changes")
+
+      if socket.assigns.lens do
+        Phoenix.PubSub.subscribe(
+          Tracker.PubSub,
+          "channel_revisions:#{socket.assigns.lens.channel.name}"
+        )
+      end
     end
 
     {:noreply,
@@ -352,12 +338,9 @@ defmodule TrackerWeb.PackageLive.Show do
      |> assign(:variant_siblings, variant_siblings)
      |> assign(:option_revisions, option_revisions)
      |> assign(:table_params, tp)
-     |> assign(:channel_filter, channel_filter)
      |> assign(:version_filter, version_filter)
      |> assign(:all_revisions?, all_revisions?)
-     |> assign(:channels, channels)
-     |> assign(:subscribed_channels, channel_names)
-     |> assign_package_data(package.id, channel_filter, version_filter, all_revisions?)}
+     |> load_revision_data()}
   end
 
   @impl true
@@ -367,35 +350,16 @@ defmodule TrackerWeb.PackageLive.Show do
 
   @impl true
   def handle_info({:channel_revision_completed, _payload}, socket) do
-    %{
-      channel_filter: channel_filter,
-      version_filter: version_filter,
-      all_revisions?: all_revisions?
-    } = socket.assigns
-
-    {:noreply,
-     assign_package_data(
-       socket,
-       socket.assigns.package.id,
-       channel_filter,
-       version_filter,
-       all_revisions?
-     )}
+    {:noreply, load_revision_data(socket)}
   end
 
-  def handle_info({:set_lens, channel_name, _rev}, socket) do
-    socket = TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, "")
-    tp = %{socket.assigns.table_params | page: 1, offset: 0}
-
-    {:noreply,
-     push_patch(socket,
-       to: revisions_path(socket.assigns.package.attribute, tp, %{channel: channel_name})
-     )}
+  def handle_info({:set_lens, channel_name, rev}, socket) do
+    socket = TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)
+    {:noreply, load_revision_data(socket)}
   end
 
   defp extra_params(socket, overrides \\ %{}) do
     %{
-      channel: Map.get(overrides, :channel, socket.assigns.channel_filter),
       version: Map.get(overrides, :version, socket.assigns.version_filter),
       all_revisions: Map.get(overrides, :all_revisions, socket.assigns.all_revisions?)
     }
@@ -404,7 +368,6 @@ defmodule TrackerWeb.PackageLive.Show do
   defp revisions_path(package_name, tp, extra_overrides) do
     extras =
       %{
-        channel: Map.get(extra_overrides, :channel, ""),
         version: Map.get(extra_overrides, :version, ""),
         all_revisions: Map.get(extra_overrides, :all_revisions, false)
       }
@@ -412,11 +375,14 @@ defmodule TrackerWeb.PackageLive.Show do
     TableParams.to_path(tp, "/packages/#{package_name}", extras)
   end
 
-  defp assign_package_data(socket, package_id, channel_filter, version_filter, all_revisions?) do
+  defp load_revision_data(socket) do
+    package_id = socket.assigns.package.id
     tp = socket.assigns.table_params
-    package_events = load_package_events(package_id)
+    version_filter = socket.assigns.version_filter
+    all_revisions? = socket.assigns.all_revisions?
+    channel_id = socket.assigns.lens && socket.assigns.lens.channel.id
 
-    channel_id = resolve_channel_id(channel_filter)
+    package_events = load_package_events(package_id)
 
     {revisions, total_count, has_more?} =
       if all_revisions? do
@@ -474,7 +440,6 @@ defmodule TrackerWeb.PackageLive.Show do
 
   @impl true
   def handle_event("filter", params, socket) do
-    channel = Map.get(params, "channel", "")
     version = Map.get(params, "version", "")
     all_revisions? = Map.get(params, "all_revisions", "false") == "true"
     tp = %{socket.assigns.table_params | page: 1, offset: 0}
@@ -483,7 +448,6 @@ defmodule TrackerWeb.PackageLive.Show do
      push_patch(socket,
        to:
          revisions_path(socket.assigns.package.attribute, tp, %{
-           channel: channel,
            version: version,
            all_revisions: all_revisions?
          })
@@ -550,19 +514,5 @@ defmodule TrackerWeb.PackageLive.Show do
   defp load_package_events(package_id) do
     Tracker.Nixpkgs.PackageEvent.list_by_package!(package_id)
     |> Ash.load!(channel_revision: [:channel])
-  end
-
-  defp load_channels do
-    Tracker.Nixpkgs.Channel.nixos_channels!()
-  end
-
-  defp resolve_channel_id(""), do: nil
-  defp resolve_channel_id(nil), do: nil
-
-  defp resolve_channel_id(channel_name) do
-    case Tracker.Nixpkgs.Channel.by_name(channel_name) do
-      {:ok, channel} -> channel.id
-      _ -> nil
-    end
   end
 end

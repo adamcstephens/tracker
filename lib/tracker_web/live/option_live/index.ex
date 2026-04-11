@@ -11,41 +11,25 @@ defmodule TrackerWeb.OptionLive.Index do
     </.header>
 
     <form phx-change="filter" phx-submit="filter" id="option-filter" phx-hook="UpdateURL">
-      <fieldset role="group">
-        <input
-          type="search"
-          name="search"
-          value={@search}
-          placeholder="Search options..."
-          phx-debounce="300"
-        />
-        <select name="channel" aria-label="Filter by channel">
-          <option value="">All channels</option>
-          <option :for={ch <- @channels} value={ch.name} selected={ch.name == @channel}>
-            {ch.name}
-          </option>
-        </select>
-        <input
-          :if={@channel != ""}
-          type="text"
-          name="rev"
-          value={@rev}
-          placeholder="Revision hash..."
-          phx-debounce="300"
-        />
-      </fieldset>
+      <input
+        type="search"
+        name="search"
+        value={@search}
+        placeholder="Search options..."
+        phx-debounce="300"
+      />
     </form>
 
     <p :if={@channel_unavailable?}>
-      The {@channel} channel doesn't have options data.
+      The {@lens.channel.name} channel doesn't have options data.
     </p>
 
     <.table id="options" rows={@streams.options}>
       <:col :let={{_id, row}} label="Option">
-        <.option_link option={option_record(row)} channel={@channel} rev={@rev} />
+        <.option_link option={option_record(row)} />
       </:col>
       <:col :let={{_id, row}} label="Module">
-        <.module_link module={option_module(row)} channel={@channel} rev={@rev} />
+        <.module_link module={option_module(row)} />
       </:col>
     </.table>
 
@@ -59,28 +43,24 @@ defmodule TrackerWeb.OptionLive.Index do
   end
 
   attr :option, :any, required: true
-  attr :channel, :string, required: true
-  attr :rev, :string, required: true
 
   defp option_link(%{option: %{module: nil}} = assigns), do: ~H"<span>{@option.name}</span>"
 
   defp option_link(assigns) do
     ~H"""
-    <.link navigate={module_path(@option.module.display_name, @channel, @rev, @option.name)}>
+    <.link navigate={module_path(@option.module.display_name, @option.name)}>
       {@option.name}
     </.link>
     """
   end
 
   attr :module, :any, required: true
-  attr :channel, :string, required: true
-  attr :rev, :string, required: true
 
   defp module_link(%{module: nil} = assigns), do: ~H""
 
   defp module_link(assigns) do
     ~H"""
-    <.link navigate={module_path(@module.display_name, @channel, @rev)}>
+    <.link navigate={module_path(@module.display_name)}>
       {@module.display_name}
     </.link>
     """
@@ -92,37 +72,22 @@ defmodule TrackerWeb.OptionLive.Index do
   defp option_module(%Tracker.Nixpkgs.OptionRevision{option: %{module: mod}}), do: mod
   defp option_module(%Tracker.Nixpkgs.Option{module: mod}), do: mod
 
-  defp module_path(name, channel, rev, anchor \\ nil) do
-    params =
-      %{}
-      |> then(fn p -> if channel != "", do: Map.put(p, :channel, channel), else: p end)
-      |> then(fn p -> if rev != "", do: Map.put(p, :rev, rev), else: p end)
-
-    path =
-      case URI.encode_query(params) do
-        "" -> "/modules/#{name}"
-        qs -> "/modules/#{name}?#{qs}"
-      end
-
+  defp module_path(name, anchor \\ nil) do
+    path = "/modules/#{name}"
     if anchor, do: "#{path}#opt-#{anchor}", else: path
   end
 
   @impl true
   def mount(_params, _session, socket) do
-    channels = Tracker.Nixpkgs.Channel.nixos_channels!()
-
     {:ok,
      socket
      |> assign_new(:current_user, fn -> nil end)
-     |> assign(:channels, channels)
      |> assign(:channel_unavailable?, false)}
   end
 
   @impl true
   def handle_params(params, _url, socket) do
     search = Map.get(params, "search", "")
-    channel = Map.get(params, "channel", "")
-    rev = Map.get(params, "rev", "")
     page = params |> Map.get("page", "1") |> String.to_integer() |> max(1)
     offset = (page - 1) * 15
 
@@ -130,15 +95,11 @@ defmodule TrackerWeb.OptionLive.Index do
 
     socket =
       if socket.assigns[:search] == search and
-           socket.assigns[:channel] == channel and
-           socket.assigns[:rev] == rev and
            socket.assigns[:offset] == offset do
         socket
       else
         socket
         |> assign(:search, search)
-        |> assign(:channel, channel)
-        |> assign(:rev, rev)
         |> assign(:offset, offset)
         |> load_data()
       end
@@ -149,17 +110,13 @@ defmodule TrackerWeb.OptionLive.Index do
   @impl true
   def handle_event("filter", params, socket) do
     search = Map.get(params, "search", "")
-    channel = Map.get(params, "channel", "")
-    rev = if channel == "", do: "", else: Map.get(params, "rev", "")
 
     socket =
       socket
       |> assign(:search, search)
-      |> assign(:channel, channel)
-      |> assign(:rev, rev)
       |> assign(:offset, 0)
       |> load_data()
-      |> push_event("update-url", %{path: options_path(search, channel, rev, 1)})
+      |> push_event("update-url", %{path: options_path(search, 1)})
 
     {:noreply, socket}
   end
@@ -168,13 +125,7 @@ defmodule TrackerWeb.OptionLive.Index do
   def handle_event("next-page", _params, socket) do
     {:noreply,
      push_patch(socket,
-       to:
-         options_path(
-           socket.assigns.search,
-           socket.assigns.channel,
-           socket.assigns.rev,
-           socket.assigns.current_page + 1
-         )
+       to: options_path(socket.assigns.search, socket.assigns.current_page + 1)
      )}
   end
 
@@ -182,22 +133,14 @@ defmodule TrackerWeb.OptionLive.Index do
   def handle_event("prev-page", _params, socket) do
     {:noreply,
      push_patch(socket,
-       to:
-         options_path(
-           socket.assigns.search,
-           socket.assigns.channel,
-           socket.assigns.rev,
-           max(socket.assigns.current_page - 1, 1)
-         )
+       to: options_path(socket.assigns.search, max(socket.assigns.current_page - 1, 1))
      )}
   end
 
-  defp options_path(search, channel, rev, page) do
+  defp options_path(search, page) do
     params =
       %{}
       |> then(fn p -> if search != "", do: Map.put(p, :search, search), else: p end)
-      |> then(fn p -> if channel != "", do: Map.put(p, :channel, channel), else: p end)
-      |> then(fn p -> if rev != "", do: Map.put(p, :rev, rev), else: p end)
       |> then(fn p -> if page > 1, do: Map.put(p, :page, page), else: p end)
 
     case URI.encode_query(params) do
@@ -207,34 +150,14 @@ defmodule TrackerWeb.OptionLive.Index do
   end
 
   defp load_data(socket) do
-    if socket.assigns.channel != "" do
-      load_scoped(socket)
-    else
-      load_options(socket)
-    end
-  end
+    lens = socket.assigns.lens
 
-  defp load_options(socket) do
-    page =
-      Tracker.Nixpkgs.Option.list!(socket.assigns.search,
-        page: [offset: socket.assigns.offset, count: true]
-      )
-
-    total_pages = ceil(page.count / 15)
-    current_page = div(socket.assigns.offset, 15) + 1
-
-    socket
-    |> assign(:channel_unavailable?, false)
-    |> stream(:options, page.results, reset: true)
-    |> assign(:has_prev_page?, socket.assigns.offset > 0)
-    |> assign(:has_next_page?, page.more?)
-    |> assign(:total_pages, total_pages)
-    |> assign(:current_page, current_page)
-  end
-
-  defp load_scoped(socket) do
     channel_revision =
-      resolve_channel_revision(socket.assigns.channel, socket.assigns.rev)
+      if lens && lens.revision do
+        lens.revision
+      else
+        resolve_latest_revision(lens)
+      end
 
     if channel_revision do
       page =
@@ -265,39 +188,18 @@ defmodule TrackerWeb.OptionLive.Index do
     end
   end
 
-  defp resolve_channel_revision(channel_name, "") do
-    case Tracker.Nixpkgs.Channel.by_name(channel_name) do
-      {:ok, channel} ->
-        case Tracker.Nixpkgs.ChannelRevision.latest_by_channel(channel.id) do
-          {:ok, cr} -> cr
-          _ -> nil
-        end
+  defp resolve_latest_revision(nil), do: nil
 
-      _ ->
-        nil
-    end
-  end
-
-  defp resolve_channel_revision(channel_name, rev) do
-    case Tracker.Nixpkgs.Channel.by_name(channel_name) do
-      {:ok, channel} ->
-        case Tracker.Nixpkgs.ChannelRevision.find_by_channel_hash(channel.id, rev) do
-          {:ok, cr} -> cr
-          _ -> nil
-        end
-
-      _ ->
-        nil
+  defp resolve_latest_revision(lens) do
+    case Tracker.Nixpkgs.ChannelRevision.latest_by_channel(lens.channel.id) do
+      {:ok, cr} -> cr
+      _ -> nil
     end
   end
 
   @impl true
   def handle_info({:set_lens, channel_name, rev}, socket) do
     socket = TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)
-
-    {:noreply,
-     push_patch(socket,
-       to: options_path(socket.assigns.search, channel_name, rev, 1)
-     )}
+    {:noreply, load_data(socket)}
   end
 end

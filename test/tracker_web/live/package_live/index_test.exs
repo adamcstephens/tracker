@@ -20,6 +20,101 @@ defmodule TrackerWeb.PackageLive.IndexTest do
     :ok
   end
 
+  describe "channel lens filtering" do
+    setup do
+      channel =
+        Tracker.Nixpkgs.Channel.create!(%{
+          name: "nixos-unstable",
+          display_name: "nixos-unstable",
+          branch: "nixos-unstable",
+          status: :active,
+          is_stable: true
+        })
+
+      cr =
+        Tracker.Nixpkgs.ChannelRevision
+        |> Ash.Changeset.for_create(:create, %{
+          channel_id: channel.id,
+          revision: "aaa1111",
+          released_at: ~U[2025-01-01 00:00:00Z]
+        })
+        |> Ash.create!()
+
+      pkg_in =
+        Tracker.Nixpkgs.Package
+        |> Ash.Changeset.for_create(:create, %{attribute: "lens-in-pkg"})
+        |> Ash.create!()
+
+      pkg_out =
+        Tracker.Nixpkgs.Package
+        |> Ash.Changeset.for_create(:create, %{attribute: "lens-out-pkg"})
+        |> Ash.create!()
+
+      Tracker.Nixpkgs.PackageRevision
+      |> Ash.Changeset.for_create(:load, %{
+        version: "1.0",
+        package_id: pkg_in.id,
+        channel_revision_id: cr.id
+      })
+      |> Ash.create!()
+
+      %{channel: channel, pkg_in: pkg_in, pkg_out: pkg_out}
+    end
+
+    test "initial mount filters packages by default lens channel", %{
+      conn: conn,
+      pkg_in: pkg_in,
+      pkg_out: pkg_out
+    } do
+      # Default lens resolves to the stable channel (nixos-unstable in this test)
+      {:ok, _view, html} = live(conn, ~p"/packages")
+
+      assert html =~ pkg_in.attribute
+      refute html =~ pkg_out.attribute
+    end
+
+    test "lens change reloads data filtered by new channel", %{
+      conn: conn,
+      pkg_in: _pkg_in,
+      pkg_out: pkg_out
+    } do
+      # Create a second channel with pkg_out in it
+      channel2 =
+        Tracker.Nixpkgs.Channel.create!(%{
+          name: "nixos-24.11",
+          display_name: "nixos-24.11",
+          branch: "nixos-24.11",
+          status: :active,
+          is_stable: false
+        })
+
+      cr2 =
+        Tracker.Nixpkgs.ChannelRevision
+        |> Ash.Changeset.for_create(:create, %{
+          channel_id: channel2.id,
+          revision: "bbb2222",
+          released_at: ~U[2025-01-02 00:00:00Z]
+        })
+        |> Ash.create!()
+
+      Tracker.Nixpkgs.PackageRevision
+      |> Ash.Changeset.for_create(:load, %{
+        version: "2.0",
+        package_id: pkg_out.id,
+        channel_revision_id: cr2.id
+      })
+      |> Ash.create!()
+
+      {:ok, view, _html} = live(conn, ~p"/packages")
+
+      # Switch lens to channel2
+      send(view.pid, {:set_lens, channel2.name, ""})
+      html = render(view)
+
+      assert html =~ pkg_out.attribute
+    end
+  end
+
   test "search is case insensitive", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/packages?search=Firefox")
 

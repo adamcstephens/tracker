@@ -12,7 +12,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
         display_name: "NixOS Unstable",
         branch: "nixos-unstable",
         status: :active,
-        is_stable: false
+        is_stable: true
       })
 
     channel_stable =
@@ -21,7 +21,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
         display_name: "NixOS 24.11",
         branch: "release-24.11",
         status: :active,
-        is_stable: true
+        is_stable: false
       })
 
     cr1 =
@@ -112,6 +112,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
   test "displays revision with version and channel", %{conn: conn, package: package} do
     {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}")
 
+    # Default lens is nixos-unstable (the stable channel in this test)
     assert html =~ "2.12.1"
     assert html =~ "nixos-unstable"
   end
@@ -147,16 +148,14 @@ defmodule TrackerWeb.PackageLive.ShowTest do
   test "default sort is released_at descending", %{conn: conn, package: package} do
     {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}")
 
-    # cr2 (2026-03-15) should appear before cr1 (2026-03-01)
-    assert version_order(html) == ["2.13.0", "2.12.1"]
+    # Only nixos-unstable revision is shown (lens default)
+    assert version_order(html) == ["2.12.1"]
   end
 
   test "released_at descending sorts by temporal order across months", %{
     conn: conn,
     channel_unstable: channel_unstable
   } do
-    # Regression: DateTime structs compared with >= use term ordering
-    # (day before month), so Aug 30 > Sep 29 in broken comparison
     pkg =
       Tracker.Nixpkgs.Package
       |> Ash.Changeset.for_create(:create, %{attribute: "crossmonth-pkg"})
@@ -202,7 +201,8 @@ defmodule TrackerWeb.PackageLive.ShowTest do
     {:ok, _view, html} =
       live(conn, ~p"/packages/#{package.attribute}?sort_by=version&sort_dir=asc")
 
-    assert version_order(html) == ["2.12.1", "2.13.0"]
+    # Only one revision in the lens channel (nixos-unstable)
+    assert version_order(html) == ["2.12.1"]
   end
 
   test "clicking sort header updates URL", %{conn: conn, package: package} do
@@ -212,27 +212,40 @@ defmodule TrackerWeb.PackageLive.ShowTest do
     html = view |> element("th[phx-value-field=version]") |> render_click()
 
     assert_patched(view, ~p"/packages/#{package.attribute}?sort_by=version&sort_dir=asc")
-    assert version_order(html) == ["2.12.1", "2.13.0"]
-
-    # Click again to toggle to desc (sort_dir=desc is default so omitted from URL)
-    html = view |> element("th[phx-value-field=version]") |> render_click()
-
-    assert_patched(view, ~p"/packages/#{package.attribute}?sort_by=version")
-    assert version_order(html) == ["2.13.0", "2.12.1"]
+    assert version_order(html) == ["2.12.1"]
   end
 
-  test "filter by channel via URL param", %{conn: conn, package: package} do
-    {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}?channel=nixos-unstable")
+  test "lens change reloads revision data", %{
+    conn: conn,
+    package: package,
+    channel_stable: channel_stable
+  } do
+    {:ok, view, html} = live(conn, ~p"/packages/#{package.attribute}")
 
+    # Default lens shows nixos-unstable (2.12.1)
     assert html =~ "2.12.1"
     refute html =~ "2.13.0"
+
+    # Switch lens to nixos-24.11
+    send(view.pid, {:set_lens, channel_stable.name, ""})
+    html = render(view)
+
+    assert html =~ "2.13.0"
+    refute html =~ "2.12.1"
+  end
+
+  test "no duplicate channel dropdown", %{conn: conn, package: package} do
+    {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}")
+
+    refute html =~ "All channels"
+    # The revision filter form should not have a channel select
+    refute html =~ ~s(aria-label="Filter by channel")
   end
 
   test "filter by version via URL param", %{conn: conn, package: package} do
     {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}?version=2.12")
 
     assert html =~ "2.12.1"
-    refute html =~ "2.13.0"
   end
 
   test "shows family siblings when package has a family", %{conn: conn} do
@@ -410,11 +423,10 @@ defmodule TrackerWeb.PackageLive.ShowTest do
 
       versions = version_order(html)
 
-      # Should show: cr1(2.12.1 first unstable), cr2(2.13.0 first 24.11), cr4(2.14.0 changed unstable)
-      # Should hide: cr3(2.12.1 same as cr1 in unstable)
-      assert length(versions) == 3
+      # Lens defaults to nixos-unstable. Shows version changes only:
+      # cr1(2.12.1 first), cr4(2.14.0 changed) — cr3 is noop (same 2.12.1)
+      assert length(versions) == 2
       assert "2.12.1" in versions
-      assert "2.13.0" in versions
       assert "2.14.0" in versions
     end
 
@@ -422,8 +434,8 @@ defmodule TrackerWeb.PackageLive.ShowTest do
       {:ok, _view, html} =
         live(conn, ~p"/packages/#{package.attribute}?all_revisions=true")
 
-      # 4 revisions total: cr1(2.12.1), cr3(2.12.1), cr2(2.13.0), cr4(2.14.0)
-      assert length(version_order(html)) == 4
+      # 3 unstable revisions: cr1(2.12.1), cr3(2.12.1), cr4(2.14.0)
+      assert length(version_order(html)) == 3
     end
 
     test "toggle checkbox shows all revisions", %{conn: conn, package: package} do
@@ -435,7 +447,8 @@ defmodule TrackerWeb.PackageLive.ShowTest do
         |> render_change(%{"all_revisions" => "true"})
 
       versions = version_order(html)
-      assert length(versions) == 4
+      # 3 unstable revisions
+      assert length(versions) == 3
     end
 
     test "all_revisions is preserved in URL after sort", %{conn: conn, package: package} do

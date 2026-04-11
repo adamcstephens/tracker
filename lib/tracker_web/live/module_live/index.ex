@@ -90,11 +90,10 @@ defmodule TrackerWeb.ModuleLive.Index do
 
   defp load_modules(socket) do
     tp = socket.assigns.table_params
+    channel_id = socket.assigns.lens && socket.assigns.lens.channel.id
 
     page =
-      Tracker.Nixpkgs.Module.list!(tp.search,
-        page: [offset: tp.offset, count: true]
-      )
+      Tracker.Nixpkgs.Module.list!(tp.search, channel_id, page: [offset: tp.offset, count: true])
 
     pagination = TableParams.apply_pagination(tp, page, :modules)
 
@@ -108,6 +107,7 @@ defmodule TrackerWeb.ModuleLive.Index do
 
   @impl true
   def handle_info({:set_lens, channel_name, rev}, socket) do
-    {:noreply, TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)}
+    socket = TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)
+    {:noreply, load_modules(socket)}
   end
 end

@@ -92,7 +92,8 @@ defmodule TrackerWeb.ChangeLive.Index do
   end
 
   def handle_info({:set_lens, channel_name, rev}, socket) do
-    {:noreply, TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)}
+    socket = TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)
+    {:noreply, load_changes(socket)}
   end
 
   @impl true
@@ -100,14 +101,11 @@ defmodule TrackerWeb.ChangeLive.Index do
     tp = TableParams.from_params(params, @table_opts)
     base_ref_filter = Map.get(params, "base_ref", "")
 
-    lens = socket.assigns.lens && %{socket.assigns.lens | disabled?: true}
-
     socket =
       socket
       |> assign(:page_title, "Changes")
       |> assign(:table_params, tp)
       |> assign(:base_ref_filter, base_ref_filter)
-      |> assign(:lens, lens)
       |> load_changes()
 
     {:noreply, socket}
@@ -175,9 +173,10 @@ defmodule TrackerWeb.ChangeLive.Index do
 
   defp load_changes(socket) do
     tp = socket.assigns.table_params
+    channel_id = socket.assigns.lens && socket.assigns.lens.channel.id
 
     page =
-      Tracker.Nixpkgs.Change.list!(tp.search, socket.assigns.base_ref_filter,
+      Tracker.Nixpkgs.Change.list!(tp.search, socket.assigns.base_ref_filter, channel_id,
         actor: socket.assigns[:current_user],
         query: [sort: [{tp.sort_by, tp.sort_dir}]],
         page: [offset: tp.offset, count: true]

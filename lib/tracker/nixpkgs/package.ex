@@ -8,12 +8,12 @@ defmodule Tracker.Nixpkgs.Package do
 
   code_interface do
     define :read
-    define :list, args: [{:optional, :search}]
+    define :list, args: [{:optional, :search}, {:optional, :channel_id}]
     define :get_by_attribute, action: :read, get_by: [:attribute]
     define :create
     define :bulk_upsert, args: [:attribute]
-    define :by_maintainer, args: [:maintainer_id, {:optional, :search}]
-    define :by_team, args: [:team_id, {:optional, :search}]
+    define :by_maintainer, args: [:maintainer_id, {:optional, :search}, {:optional, :channel_id}]
+    define :by_team, args: [:team_id, {:optional, :search}, {:optional, :channel_id}]
     define :family_siblings, args: [:package_family_id, :exclude_id]
     define :variant_siblings, args: [:package_variant_group_id, :exclude_id]
     define :by_module, args: [:module_id]
@@ -27,6 +27,7 @@ defmodule Tracker.Nixpkgs.Package do
 
     read :list do
       argument :search, :ci_string
+      argument :channel_id, :integer
 
       pagination do
         offset? true
@@ -41,7 +42,12 @@ defmodule Tracker.Nixpkgs.Package do
                  contains(attribute, ^arg(:search))
                else
                  true
-               end
+               end and
+                 if not is_nil(^arg(:channel_id)) do
+                   exists(revisions, channel_revision.channel_id == ^arg(:channel_id))
+                 else
+                   true
+                 end
              )
     end
 
@@ -51,6 +57,7 @@ defmodule Tracker.Nixpkgs.Package do
       end
 
       argument :search, :ci_string
+      argument :channel_id, :integer
 
       pagination do
         offset? true
@@ -66,6 +73,11 @@ defmodule Tracker.Nixpkgs.Package do
                    contains(attribute, ^arg(:search))
                  else
                    true
+                 end and
+                 if not is_nil(^arg(:channel_id)) do
+                   exists(revisions, channel_revision.channel_id == ^arg(:channel_id))
+                 else
+                   true
                  end
              )
     end
@@ -76,6 +88,7 @@ defmodule Tracker.Nixpkgs.Package do
       end
 
       argument :search, :ci_string
+      argument :channel_id, :integer
 
       pagination do
         offset? true
@@ -89,6 +102,11 @@ defmodule Tracker.Nixpkgs.Package do
                exists(package_teams, team_id == ^arg(:team_id)) and
                  if not is_nil(^arg(:search)) and ^arg(:search) != "" do
                    contains(attribute, ^arg(:search))
+                 else
+                   true
+                 end and
+                 if not is_nil(^arg(:channel_id)) do
+                   exists(revisions, channel_revision.channel_id == ^arg(:channel_id))
                  else
                    true
                  end
