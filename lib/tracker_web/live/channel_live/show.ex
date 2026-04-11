@@ -1,6 +1,7 @@
 defmodule TrackerWeb.ChannelLive.Show do
   use TrackerWeb, :live_view
 
+  alias TrackerWeb.DataTable
   alias TrackerWeb.TableParams
 
   @table_opts [
@@ -22,83 +23,50 @@ defmodule TrackerWeb.ChannelLive.Show do
       </:actions>
     </.header>
 
-    <figure :if={@has_revisions?}>
-      <table role="grid">
-        <thead>
-          <tr>
-            <th></th>
-            <.sort_header field={:revision} label="Revision" table_params={@table_params} />
-            <.sort_header field={:result} label="Result" table_params={@table_params} />
-            <.sort_header field={:released_at} label="Released" table_params={@table_params} />
-          </tr>
-        </thead>
-        <tbody id="revisions">
-          <tr :for={rev <- @revisions}>
-            <td>
-              <input
-                type="checkbox"
-                checked={rev.revision in @selected_revisions}
-                phx-click="toggle-rev"
-                phx-value-revision={rev.revision}
-              />
-            </td>
-            <td>
-              <.revision_link revision={rev.revision} channel={@channel} />
-            </td>
-            <td>{format_result(rev.result)}</td>
-            <td>{format_date(rev.released_at)}</td>
-          </tr>
-        </tbody>
-      </table>
-    </figure>
+    <div :if={@has_revisions?}>
+      <DataTable.data_table
+        id="revisions"
+        rows={@revisions}
+        table_params={@table_params}
+        total_pages={@total_pages}
+        current_page={@current_page}
+        has_prev_page?={@has_prev_page?}
+        has_next_page?={@has_next_page?}
+      >
+        <:col :let={rev} label="">
+          <input
+            type="checkbox"
+            checked={rev.revision in @selected_revisions}
+            phx-click="toggle-rev"
+            phx-value-revision={rev.revision}
+          />
+        </:col>
+        <:col :let={rev} field={:revision} label="Revision" sortable>
+          <.revision_link revision={rev.revision} channel={@channel} />
+        </:col>
+        <:col :let={rev} field={:result} label="Result" sortable>
+          {format_result(rev.result)}
+        </:col>
+        <:col :let={rev} field={:released_at} label="Released" sortable>
+          {format_date(rev.released_at)}
+        </:col>
+      </DataTable.data_table>
 
-    <a
-      :if={length(@selected_revisions) == 2}
-      href={
-        ~p"/channels/#{@channel}/diff/#{Enum.at(@selected_revisions, 0)}/#{Enum.at(@selected_revisions, 1)}"
-      }
-      role="button"
-      style="margin-top: 1rem; display: inline-block;"
-    >
-      Show diff
-    </a>
+      <a
+        :if={length(@selected_revisions) == 2}
+        href={
+          ~p"/channels/#{@channel}/diff/#{Enum.at(@selected_revisions, 0)}/#{Enum.at(@selected_revisions, 1)}"
+        }
+        role="button"
+        style="margin-top: 1rem; display: inline-block;"
+      >
+        Show diff
+      </a>
+    </div>
 
     <p :if={not @has_revisions?}>
       No revisions found.
     </p>
-
-    <nav
-      :if={@total_pages > 1}
-      style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-top: 1rem;"
-    >
-      <.button
-        class="outline secondary"
-        style="padding: 0.25rem 0.75rem; font-size: 0.875rem;"
-        phx-click="prev-page"
-        disabled={!@has_prev_page?}
-      >
-        &larr;
-      </.button>
-      <small>
-        Page {@current_page} of {@total_pages}
-      </small>
-      <.button
-        class="outline secondary"
-        style="padding: 0.25rem 0.75rem; font-size: 0.875rem;"
-        phx-click="next-page"
-        disabled={!@has_next_page?}
-      >
-        &rarr;
-      </.button>
-    </nav>
-    """
-  end
-
-  defp sort_header(assigns) do
-    ~H"""
-    <th phx-click="sort" phx-value-field={@field} style="cursor: pointer">
-      {@label} {TableParams.sort_indicator(@table_params, @field)}
-    </th>
     """
   end
 
