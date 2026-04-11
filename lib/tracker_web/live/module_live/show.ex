@@ -1,6 +1,7 @@
 defmodule TrackerWeb.ModuleLive.Show do
   use TrackerWeb, :live_view
 
+  alias TrackerWeb.DataTable
   import TrackerWeb.CodeHighlight
 
   @impl true
@@ -86,30 +87,12 @@ defmodule TrackerWeb.ModuleLive.Show do
       </div>
     </div>
 
-    <nav
-      :if={@total_pages > 1 and !@channel_unavailable?}
-      style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-top: 1rem;"
-    >
-      <.button
-        class="outline secondary"
-        style="padding: 0.25rem 0.75rem; font-size: 0.875rem;"
-        phx-click="prev-page"
-        disabled={!@has_prev_page?}
-      >
-        &larr;
-      </.button>
-      <small>
-        Page {@current_page} of {@total_pages}
-      </small>
-      <.button
-        class="outline secondary"
-        style="padding: 0.25rem 0.75rem; font-size: 0.875rem;"
-        phx-click="next-page"
-        disabled={!@has_next_page?}
-      >
-        &rarr;
-      </.button>
-    </nav>
+    <DataTable.pagination
+      total_pages={@total_pages}
+      current_page={@current_page}
+      has_prev_page?={@has_prev_page?}
+      has_next_page?={@has_next_page?}
+    />
 
     <section :if={!@channel_unavailable?}>
       <h2>Declarations ({length(@module.module_declarations)})</h2>

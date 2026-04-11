@@ -1,6 +1,7 @@
 defmodule TrackerWeb.ChangeLive.Show do
   use TrackerWeb, :live_view
 
+  alias TrackerWeb.DataTable
   alias TrackerWeb.TableParams
 
   @impl true
@@ -86,30 +87,12 @@ defmodule TrackerWeb.ChangeLive.Show do
 
       <p :if={@package_count == 0}>No affected packages found.</p>
 
-      <nav
-        :if={@pkg_total_pages > 1}
-        style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-top: 1rem;"
-      >
-        <.button
-          class="outline secondary"
-          style="padding: 0.25rem 0.75rem; font-size: 0.875rem;"
-          phx-click="prev-page"
-          disabled={!@pkg_has_prev?}
-        >
-          &larr;
-        </.button>
-        <small>
-          Page {@pkg_current_page} of {@pkg_total_pages}
-        </small>
-        <.button
-          class="outline secondary"
-          style="padding: 0.25rem 0.75rem; font-size: 0.875rem;"
-          phx-click="next-page"
-          disabled={!@pkg_has_next?}
-        >
-          &rarr;
-        </.button>
-      </nav>
+      <DataTable.pagination
+        total_pages={@pkg_total_pages}
+        current_page={@pkg_current_page}
+        has_prev_page?={@pkg_has_prev?}
+        has_next_page?={@pkg_has_next?}
+      />
     </section>
     """
   end
