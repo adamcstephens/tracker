@@ -40,51 +40,36 @@ defmodule TrackerWeb.ChangeLive.Index do
       </select>
     </form>
 
-    <figure>
-      <table role="grid">
-        <thead>
-          <tr>
-            <.sort_header field={:number} label="#" table_params={@table_params} />
-            <.sort_header field={:title} label="Title" table_params={@table_params} />
-            <.sort_header field={:author} label="Author" table_params={@table_params} />
-            <.sort_header field={:base_ref} label="Base" table_params={@table_params} />
-            <.sort_header field={:merged_at} label="Merged" table_params={@table_params} />
-          </tr>
-        </thead>
-        <tbody id="changes" phx-update="stream">
-          <tr :for={{id, change} <- @streams.changes} id={id}>
-            <td>
-              <.link navigate={~p"/changes/#{change.number}"}>{change.number}</.link>
-            </td>
-            <td>
-              <.link navigate={~p"/changes/#{change.number}"}>
-                <span style="display: block; max-width: 50ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                  {change.title}
-                </span>
-              </.link>
-            </td>
-            <td>{change.author}</td>
-            <td>{change.base_ref}</td>
-            <td>{format_datetime(change.merged_at)}</td>
-          </tr>
-        </tbody>
-      </table>
-    </figure>
-
-    <DataTable.pagination
+    <DataTable.data_table
+      id="changes"
+      rows={@streams.changes}
+      table_params={@table_params}
+      base_path="/changes"
       total_pages={@total_pages}
       current_page={@current_page}
       has_prev_page?={@has_prev_page?}
       has_next_page?={@has_next_page?}
-    />
-    """
-  end
-
-  defp sort_header(assigns) do
-    ~H"""
-    <th phx-click="sort" phx-value-field={@field} style="cursor: pointer">
-      {@label} {TableParams.sort_indicator(@table_params, @field)}
-    </th>
+    >
+      <:col :let={{_id, change}} field={:number} label="#" sortable>
+        <.link navigate={~p"/changes/#{change.number}"}>{change.number}</.link>
+      </:col>
+      <:col :let={{_id, change}} field={:title} label="Title" sortable>
+        <.link navigate={~p"/changes/#{change.number}"}>
+          <span style="display: block; max-width: 50ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            {change.title}
+          </span>
+        </.link>
+      </:col>
+      <:col :let={{_id, change}} field={:author} label="Author" sortable>
+        {change.author}
+      </:col>
+      <:col :let={{_id, change}} field={:base_ref} label="Base" sortable>
+        {change.base_ref}
+      </:col>
+      <:col :let={{_id, change}} field={:merged_at} label="Merged" sortable>
+        {format_datetime(change.merged_at)}
+      </:col>
+    </DataTable.data_table>
     """
   end
 
