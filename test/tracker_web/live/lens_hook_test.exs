@@ -28,10 +28,15 @@ defmodule TrackerWeb.LensHookTest do
     %{stable: stable, unstable: unstable}
   end
 
-  defp build_socket do
+  defp build_socket(opts \\ []) do
+    connect_params = Keyword.get(opts, :connect_params, nil)
+    transport_pid = if connect_params, do: self(), else: nil
+
     %Phoenix.LiveView.Socket{
       endpoint: TrackerWeb.Endpoint,
-      assigns: %{__changed__: %{}}
+      transport_pid: transport_pid,
+      assigns: %{__changed__: %{}},
+      private: if(connect_params, do: %{connect_params: connect_params}, else: %{})
     }
   end
 
@@ -56,6 +61,15 @@ defmodule TrackerWeb.LensHookTest do
     test "URL params override session", %{stable: stable, unstable: unstable} do
       socket = build_socket()
       params = %{"lens_channel" => unstable.name}
+      session = %{"lens_channel_name" => stable.name}
+      {:cont, socket} = LensHook.on_mount(:default, params, session, socket)
+
+      assert socket.assigns.lens.channel.name == unstable.name
+    end
+
+    test "connect_params override session and URL params", %{stable: stable, unstable: unstable} do
+      socket = build_socket(connect_params: %{"_lens_channel" => unstable.name})
+      params = %{"lens_channel" => stable.name}
       session = %{"lens_channel_name" => stable.name}
       {:cont, socket} = LensHook.on_mount(:default, params, session, socket)
 
