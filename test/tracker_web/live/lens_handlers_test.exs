@@ -50,4 +50,40 @@ defmodule TrackerWeb.LensHandlersTest do
 
     assert socket.assigns.lens.channel.name == stable.name
   end
+
+  test "handle_lens_change pushes update-lens event with channel param", %{unstable: unstable} do
+    socket = build_socket()
+    socket = LensHandlers.handle_lens_change(socket, unstable.name, "")
+
+    events = socket.private.live_temp[:push_events]
+
+    assert Enum.any?(events, fn [event, payload | _] ->
+             event == "update-lens" and payload.lens_channel == unstable.name
+           end)
+  end
+
+  test "handle_lens_change includes lens_rev in URL event when revision is set", %{
+    unstable: unstable
+  } do
+    rev_hash = "abc1234"
+
+    _cr =
+      Tracker.Nixpkgs.ChannelRevision
+      |> Ash.Changeset.for_create(:create, %{
+        channel_id: unstable.id,
+        revision: rev_hash,
+        released_at: ~U[2025-06-01 00:00:00Z]
+      })
+      |> Ash.create!()
+
+    socket = build_socket()
+    socket = LensHandlers.handle_lens_change(socket, unstable.name, rev_hash)
+
+    events = socket.private.live_temp[:push_events]
+
+    assert Enum.any?(events, fn [event, payload | _] ->
+             event == "update-lens" and payload.lens_channel == unstable.name and
+               payload.lens_rev == rev_hash
+           end)
+  end
 end

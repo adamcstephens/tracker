@@ -22,8 +22,16 @@ defmodule TrackerWeb.LensHandlers do
     lens = Lens.resolve(channel_name, rev)
     cookie_token = Lens.sign_cookie(lens)
 
+    lens_url_params = %{lens_channel: lens.channel.name}
+
+    lens_url_params =
+      if lens.revision,
+        do: Map.put(lens_url_params, :lens_rev, lens.revision.revision),
+        else: lens_url_params
+
     socket
     |> assign(:lens, lens)
     |> push_event("set_lens_cookie", %{value: cookie_token, max_age: Lens.cookie_max_age()})
+    |> push_event("update-lens", lens_url_params)
   end
 end

@@ -73,6 +73,45 @@ defmodule TrackerWeb.PackageLive.IndexTest do
       refute html =~ pkg_out.attribute
     end
 
+    test "connect_params lens overrides default on mount", %{
+      conn: conn,
+      pkg_in: _pkg_in,
+      pkg_out: pkg_out
+    } do
+      # Create a second channel with pkg_out in it
+      channel2 =
+        Tracker.Nixpkgs.Channel.create!(%{
+          name: "nixos-24.11-cp",
+          display_name: "nixos-24.11-cp",
+          branch: "nixos-24.11-cp",
+          status: :active,
+          is_stable: false
+        })
+
+      cr2 =
+        Tracker.Nixpkgs.ChannelRevision
+        |> Ash.Changeset.for_create(:create, %{
+          channel_id: channel2.id,
+          revision: "ccc3333",
+          released_at: ~U[2025-01-03 00:00:00Z]
+        })
+        |> Ash.create!()
+
+      Tracker.Nixpkgs.PackageRevision
+      |> Ash.Changeset.for_create(:load, %{
+        version: "3.0",
+        package_id: pkg_out.id,
+        channel_revision_id: cr2.id
+      })
+      |> Ash.create!()
+
+      # Simulate JS connect_params carrying the lens from a previous page
+      conn = Phoenix.LiveViewTest.put_connect_params(conn, %{"_lens_channel" => channel2.name})
+      {:ok, _view, html} = live(conn, ~p"/packages")
+
+      assert html =~ pkg_out.attribute
+    end
+
     test "lens change reloads data filtered by new channel", %{
       conn: conn,
       pkg_in: _pkg_in,
