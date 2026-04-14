@@ -44,12 +44,6 @@ defmodule Tracker.Nixpkgs.OptionRevision do
       argument :channel_revision_id, :integer, allow_nil?: false
       argument :module_id, :integer, allow_nil?: false
 
-      pagination do
-        offset? true
-        countable true
-        default_limit 15
-      end
-
       prepare build(sort: [option_name: :asc], load: [option: [:packages]])
 
       filter expr(
