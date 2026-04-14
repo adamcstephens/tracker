@@ -51,20 +51,18 @@ defmodule TrackerWeb.LensHandlersTest do
     assert socket.assigns.lens.channel.name == stable.name
   end
 
-  test "handle_lens_change pushes update-lens event with channel param", %{unstable: unstable} do
+  test "set_lens_cookie event includes lens_channel for sessionStorage", %{unstable: unstable} do
     socket = build_socket()
     socket = LensHandlers.handle_lens_change(socket, unstable.name, "")
 
     events = socket.private.live_temp[:push_events]
 
-    assert Enum.any?(events, fn [event, payload | _] ->
-             event == "update-lens" and payload.lens_channel == unstable.name
-           end)
+    assert [["set_lens_cookie", payload | _]] = events
+    assert payload.lens_channel == unstable.name
+    assert payload.lens_rev == nil
   end
 
-  test "handle_lens_change includes lens_rev in URL event when revision is set", %{
-    unstable: unstable
-  } do
+  test "set_lens_cookie event includes lens_rev when revision is set", %{unstable: unstable} do
     rev_hash = "abc1234"
 
     _cr =
@@ -81,9 +79,8 @@ defmodule TrackerWeb.LensHandlersTest do
 
     events = socket.private.live_temp[:push_events]
 
-    assert Enum.any?(events, fn [event, payload | _] ->
-             event == "update-lens" and payload.lens_channel == unstable.name and
-               payload.lens_rev == rev_hash
-           end)
+    assert [["set_lens_cookie", payload | _]] = events
+    assert payload.lens_channel == unstable.name
+    assert payload.lens_rev == rev_hash
   end
 end

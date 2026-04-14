@@ -32,20 +32,16 @@ Hooks.UpdateURL = {
   }
 }
 
-// Current lens state, kept in sync by LensCookie hook.
-// Read by LiveSocket params function so every LiveView join
-// carries the latest lens values via connect_params.
-let currentLens = {channel: null, rev: null}
-
 Hooks.LensCookie = {
   mounted() {
-    this.handleEvent("set_lens_cookie", ({value, max_age}) => {
+    this.handleEvent("set_lens_cookie", ({value, max_age, lens_channel, lens_rev}) => {
       document.cookie = `_tracker_lens=${encodeURIComponent(value)}; path=/; max-age=${max_age}; samesite=lax`
-    })
-
-    this.handleEvent("update-lens", ({lens_channel, lens_rev}) => {
-      currentLens.channel = lens_channel
-      currentLens.rev = lens_rev || null
+      sessionStorage.setItem("lens_channel", lens_channel)
+      if (lens_rev) {
+        sessionStorage.setItem("lens_rev", lens_rev)
+      } else {
+        sessionStorage.removeItem("lens_rev")
+      }
     })
   }
 }
@@ -55,8 +51,10 @@ let liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: () => {
     let params = {_csrf_token: csrfToken}
-    if (currentLens.channel) params._lens_channel = currentLens.channel
-    if (currentLens.rev) params._lens_rev = currentLens.rev
+    let channel = sessionStorage.getItem("lens_channel")
+    let rev = sessionStorage.getItem("lens_rev")
+    if (channel) params._lens_channel = channel
+    if (rev) params._lens_rev = rev
     return params
   },
   hooks: Hooks
