@@ -237,7 +237,6 @@ defmodule TrackerWeb.PackageLive.ShowTest do
   test "no duplicate channel dropdown", %{conn: conn, package: package} do
     {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}")
 
-    refute html =~ "All channels"
     # The revision filter form should not have a channel select
     refute html =~ ~s(aria-label="Filter by channel")
   end

@@ -16,6 +16,7 @@ defmodule TrackerWeb.Lens do
     field :channel, Channel.t(), enforce: true
     field :revision, ChannelRevision.t() | nil
     field :disabled?, boolean(), default: false
+    field :all?, boolean(), default: false
   end
 
   @doc """
@@ -25,6 +26,13 @@ defmodule TrackerWeb.Lens do
   or not found.
   """
   @spec resolve(String.t() | nil, String.t() | nil) :: t() | nil
+  def resolve("all", _rev_hash) do
+    case default_channel() do
+      nil -> nil
+      channel -> %__MODULE__{channel: channel, all?: true}
+    end
+  end
+
   def resolve(channel_name, rev_hash) do
     case resolve_channel(channel_name) do
       nil ->
@@ -48,6 +56,10 @@ defmodule TrackerWeb.Lens do
   Format: `"channel_name"` or `"channel_name:revision_hash"`.
   """
   @spec cookie_value(t()) :: String.t()
+  def cookie_value(%__MODULE__{all?: true}) do
+    "all"
+  end
+
   def cookie_value(%__MODULE__{channel: channel, revision: nil}) do
     channel.name
   end
@@ -88,6 +100,14 @@ defmodule TrackerWeb.Lens do
       {:error, _} -> :error
     end
   end
+
+  @doc """
+  Returns the channel ID for filtering, or nil when the lens is nil or set to "all".
+  """
+  @spec channel_id(t() | nil) :: Ash.UUID.t() | nil
+  def channel_id(nil), do: nil
+  def channel_id(%__MODULE__{all?: true}), do: nil
+  def channel_id(%__MODULE__{channel: channel}), do: channel.id
 
   @doc """
   The maximum age for the lens cookie, in seconds.

@@ -380,7 +380,7 @@ defmodule TrackerWeb.PackageLive.Show do
     tp = socket.assigns.table_params
     version_filter = socket.assigns.version_filter
     all_revisions? = socket.assigns.all_revisions?
-    channel_id = socket.assigns.lens && socket.assigns.lens.channel.id
+    channel_id = TrackerWeb.Lens.channel_id(socket.assigns.lens)
 
     package_events = load_package_events(package_id)
 

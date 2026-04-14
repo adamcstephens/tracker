@@ -48,10 +48,13 @@ defmodule TrackerWeb.LensComponent do
             aria-label="Channel"
             disabled={@lens.disabled?}
           >
+            <option value="all" selected={@lens.all?}>
+              All channels
+            </option>
             <option
               :for={ch <- @channels}
               value={ch.name}
-              selected={ch.name == @lens.channel.name}
+              selected={!@lens.all? && ch.name == @lens.channel.name}
             >
               {ch.name}
             </option>

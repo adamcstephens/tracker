@@ -53,4 +53,11 @@ defmodule TrackerWeb.LensComponentTest do
 
     assert html =~ "Rev"
   end
+
+  test "renders 'All channels' option in dropdown", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/packages")
+
+    assert html =~ ~s(value="all")
+    assert html =~ "All channels"
+  end
 end

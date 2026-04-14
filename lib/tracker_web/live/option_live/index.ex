@@ -10,6 +10,10 @@ defmodule TrackerWeb.OptionLive.Index do
       Options
     </.header>
 
+    <p :if={@lens && @lens.all?}>
+      Options requires a specific channel. Showing {@lens.channel.name}.
+    </p>
+
     <form phx-change="filter" phx-submit="filter" id="option-filter" phx-hook="UpdateURL">
       <input
         type="search"

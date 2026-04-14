@@ -121,7 +121,7 @@ defmodule TrackerWeb.TeamLive.Show do
 
   defp reload_packages(socket) do
     tp = socket.assigns.table_params
-    channel_id = socket.assigns.lens && socket.assigns.lens.channel.id
+    channel_id = TrackerWeb.Lens.channel_id(socket.assigns.lens)
 
     packages =
       Tracker.Nixpkgs.Package.by_team!(socket.assigns.team.id, tp.search, channel_id,
