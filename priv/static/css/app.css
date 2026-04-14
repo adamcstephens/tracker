@@ -59,8 +59,8 @@
 	--pico-table-row-stripped-background-color: rgba(0, 0, 0, 0.03);
 	--pico-code-background-color: #f2f2f2;
 	--pico-code-color: #595959;
-	--pico-code-kbd-background-color: var(--pico-color);
-	--pico-code-kbd-color: var(--pico-background-color);
+	--pico-code-kbd-background-color: var(--pico-code-background-color);
+	--pico-code-kbd-color: var(--pico-code-color);
 	--pico-form-element-background-color: #f8f8f8;
 	--pico-form-element-selected-background-color: #e0e0e0;
 	--pico-form-element-border-color: #e0e0e0;
@@ -160,8 +160,8 @@
 		--pico-table-row-stripped-background-color: rgba(198, 198, 198, 0.03);
 		--pico-code-background-color: #323437;
 		--pico-code-color: #748999;
-		--pico-code-kbd-background-color: var(--pico-color);
-		--pico-code-kbd-color: var(--pico-background-color);
+		--pico-code-kbd-background-color: var(--pico-code-background-color);
+		--pico-code-kbd-color: var(--pico-code-color);
 		--pico-form-element-background-color: #323437;
 		--pico-form-element-selected-background-color: #373c4d;
 		--pico-form-element-border-color: #373c4d;
@@ -400,4 +400,80 @@ a.revision-link {
 	width: 1.25rem;
 	height: 1.25rem;
 	flex-shrink: 0;
+}
+
+/* Option details */
+.option-details {
+	margin-bottom: 0.5rem;
+	scroll-margin-top: 20rem;
+}
+
+.option-details {
+	padding-left: 1.25em;
+}
+
+.option-details summary {
+	cursor: pointer;
+	list-style: none;
+	margin-left: -1.25em;
+}
+
+.option-details summary::after {
+	display: none;
+}
+
+.option-details summary::before {
+	content: "▸ ";
+}
+
+.option-details[open] summary::before {
+	content: "▾ ";
+}
+
+.option-type-inline {
+	margin-left: 0.5rem;
+	color: var(--pico-muted-color);
+	display: inline-block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	max-width: 40ch;
+	vertical-align: bottom;
+}
+
+.option-anchor {
+	text-decoration: none;
+	color: var(--pico-muted-color);
+	visibility: hidden;
+}
+
+@media (hover: hover) {
+	.option-details summary:hover .option-anchor {
+		visibility: visible;
+	}
+}
+
+.option-details[open] .option-type-inline {
+	display: none;
+}
+
+dl.option-body {
+	display: grid;
+	grid-template-columns: auto 1fr;
+	gap: 0.25rem 1rem;
+	padding: 0.5rem 0 0.5rem 1rem;
+	margin-bottom: 0;
+}
+
+dl.option-body dt {
+	color: var(--pico-muted-color);
+	font-weight: normal;
+}
+
+dl.option-body dd {
+	margin: 0;
+}
+
+.option-read-only {
+	color: var(--pico-muted-color);
 }

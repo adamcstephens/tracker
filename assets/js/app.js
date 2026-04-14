@@ -32,6 +32,31 @@ Hooks.UpdateURL = {
   }
 }
 
+Hooks.AnchorExpand = {
+  mounted() {
+    this.expandAfterRender()
+    this._onHashChange = () => this.expandAfterRender()
+    window.addEventListener("hashchange", this._onHashChange)
+  },
+  updated() {
+    this.expandAfterRender()
+  },
+  destroyed() {
+    window.removeEventListener("hashchange", this._onHashChange)
+  },
+  expandAfterRender() {
+    requestAnimationFrame(() => {
+      let hash = window.location.hash
+      if (!hash) return
+      let target = document.getElementById(decodeURIComponent(hash.slice(1)))
+      if (target && target.tagName === "DETAILS") {
+        target.open = true
+        target.scrollIntoView({behavior: "smooth", block: "start"})
+      }
+    })
+  }
+}
+
 Hooks.LensCookie = {
   mounted() {
     this.handleEvent("set_lens_cookie", ({value, max_age, lens_channel, lens_rev}) => {

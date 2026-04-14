@@ -1,7 +1,6 @@
 defmodule TrackerWeb.ModuleLive.Show do
   use TrackerWeb, :live_view
 
-  alias TrackerWeb.DataTable
   import TrackerWeb.CodeHighlight
 
   @impl true
@@ -52,47 +51,47 @@ defmodule TrackerWeb.ModuleLive.Show do
 
     <h2 :if={!@channel_unavailable?}>Options ({@option_count})</h2>
 
-    <div :if={!@channel_unavailable?} id="options-list">
+    <div :if={!@channel_unavailable?} id="options-list" phx-hook="AnchorExpand">
       <div :for={{id, rev} <- @streams.options} id={id}>
-        <article id={"opt-#{option_name(rev)}"} style="margin-bottom: 1.5rem;">
-          <header>
+        <details id={"opt-#{option_name(rev)}"} class="option-details">
+          <summary>
             <strong>{option_name(rev)}</strong>
-            <span :if={rev.type} style="margin-left: 0.5rem;">
-              <kbd>{rev.type}</kbd>
-            </span>
-            <kbd :if={rev.read_only} style="margin-left: 0.25rem;">
-              read-only
-            </kbd>
-          </header>
+            <span :if={rev.type} class="option-type-inline">{rev.type}</span>
+            <a
+              href={"#opt-#{option_name(rev)}"}
+              class="option-anchor"
+              onclick="event.preventDefault(); history.replaceState(null, '', this.href); this.closest('details').open = !this.closest('details').open"
+            >
+              #
+            </a>
+          </summary>
 
-          <p :if={rev.description}>{rev.description}</p>
+          <dl class="option-body">
+            <dt :if={rev.type}>Type</dt>
+            <dd :if={rev.type}>
+              {rev.type}
+              <span :if={rev.read_only} class="option-read-only">(read-only)</span>
+            </dd>
 
-          <dl>
+            <dt :if={rev.description}>Description</dt>
+            <dd :if={rev.description}>{rev.description}</dd>
+
             <dt :if={rev.default}>Default</dt>
             <dd :if={rev.default}><.code_block code={rev.default} /></dd>
 
             <dt :if={rev.example}>Example</dt>
             <dd :if={rev.example}><.code_block code={rev.example} /></dd>
-          </dl>
 
-          <div :if={option_packages(rev) != []}>
-            <small>
-              Packages:
+            <dt :if={option_packages(rev) != []}>Packages</dt>
+            <dd :if={option_packages(rev) != []}>
               <span :for={pkg <- option_packages(rev)}>
                 <.link navigate={~p"/packages/#{pkg.attribute}"}>{pkg.attribute}</.link>
               </span>
-            </small>
-          </div>
-        </article>
+            </dd>
+          </dl>
+        </details>
       </div>
     </div>
-
-    <DataTable.pagination
-      total_pages={@total_pages}
-      current_page={@current_page}
-      has_prev_page?={@has_prev_page?}
-      has_next_page?={@has_next_page?}
-    />
 
     <section :if={!@channel_unavailable?}>
       <h2>Declarations ({length(@module.module_declarations)})</h2>
@@ -150,23 +149,18 @@ defmodule TrackerWeb.ModuleLive.Show do
     default_rev = if lens && lens.revision, do: lens.revision.revision, else: ""
     channel = Map.get(params, "channel", default_channel)
     rev = Map.get(params, "rev", default_rev)
-    page_num = params |> Map.get("page", "1") |> String.to_integer() |> max(1)
-    offset = (page_num - 1) * 15
-
     packages = Tracker.Nixpkgs.Package.by_module!(mod.id)
     submodules = Tracker.Nixpkgs.Module.children!(mod.display_name)
     parent_module = find_parent_module(mod.display_name)
 
     channel_revision = resolve_channel_revision(channel, rev)
 
-    {options_stream, option_count, has_more?} =
+    options =
       if channel_revision do
-        load_scoped_options(channel_revision.id, mod.id, offset)
+        load_scoped_options(channel_revision.id, mod.id)
       else
-        {[], 0, false}
+        []
       end
-
-    total_pages = ceil(option_count / 15)
 
     {:noreply,
      socket
@@ -179,61 +173,22 @@ defmodule TrackerWeb.ModuleLive.Show do
      |> assign(:rev, rev)
      |> assign(:channel_revision, channel_revision)
      |> assign(:channel_unavailable?, is_nil(channel_revision))
-     |> assign(:option_count, option_count)
-     |> stream(:options, options_stream, reset: true)
-     |> assign(:has_prev_page?, offset > 0)
-     |> assign(:has_next_page?, has_more?)
-     |> assign(:total_pages, total_pages)
-     |> assign(:current_page, div(offset, 15) + 1)}
+     |> assign(:option_count, length(options))
+     |> stream(:options, options, reset: true)}
   end
 
-  defp load_scoped_options(channel_revision_id, module_id, offset) do
-    page =
-      Tracker.Nixpkgs.OptionRevision.list_by_channel_revision_and_module!(
-        channel_revision_id,
-        module_id,
-        page: [offset: offset, count: true]
-      )
-
-    {page.results, page.count, page.more?}
+  defp load_scoped_options(channel_revision_id, module_id) do
+    Tracker.Nixpkgs.OptionRevision.list_by_channel_revision_and_module!(
+      channel_revision_id,
+      module_id
+    )
   end
 
-  @impl true
-  def handle_event("next-page", _params, socket) do
-    {:noreply,
-     push_patch(socket,
-       to:
-         show_path(
-           socket.assigns.module.display_name,
-           socket.assigns.channel,
-           socket.assigns.rev,
-           socket.assigns.current_page + 1
-         )
-     )}
-  end
-
-  @impl true
-  def handle_event("prev-page", _params, socket) do
-    {:noreply,
-     push_patch(socket,
-       to:
-         show_path(
-           socket.assigns.module.display_name,
-           socket.assigns.channel,
-           socket.assigns.rev,
-           max(socket.assigns.current_page - 1, 1)
-         )
-     )}
-  end
-
-  defp module_path(name, channel, rev), do: show_path(name, channel, rev, 1)
-
-  defp show_path(name, channel, rev, page) do
+  defp module_path(name, channel, rev) do
     params =
       %{}
       |> then(fn p -> if channel != "", do: Map.put(p, :channel, channel), else: p end)
       |> then(fn p -> if rev != "", do: Map.put(p, :rev, rev), else: p end)
-      |> then(fn p -> if page > 1, do: Map.put(p, :page, page), else: p end)
 
     case URI.encode_query(params) do
       "" -> "/modules/#{name}"
@@ -289,11 +244,10 @@ defmodule TrackerWeb.ModuleLive.Show do
     {:noreply,
      push_patch(socket,
        to:
-         show_path(
+         module_path(
            socket.assigns.module.display_name,
            channel_name,
-           rev,
-           1
+           rev
          )
      )}
   end
