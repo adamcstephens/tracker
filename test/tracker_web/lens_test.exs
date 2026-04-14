@@ -66,6 +66,20 @@ defmodule TrackerWeb.LensTest do
       lens = Lens.resolve("", nil)
       assert lens.channel.name == stable.name
     end
+
+    test "resolves 'all' to all-channels lens with default stable fallback", %{stable: stable} do
+      lens = Lens.resolve("all", nil)
+      assert lens.all? == true
+      assert lens.channel.name == stable.name
+      assert lens.revision == nil
+    end
+
+    test "resolves 'all' ignores revision", %{stable: stable} do
+      lens = Lens.resolve("all", "abc1234")
+      assert lens.all? == true
+      assert lens.channel.name == stable.name
+      assert lens.revision == nil
+    end
   end
 
   describe "cookie_value/1 and from_cookie/1" do
@@ -96,6 +110,35 @@ defmodule TrackerWeb.LensTest do
       {name, rev} = Lens.from_cookie("just-a-name")
       assert name == "just-a-name"
       assert rev == nil
+    end
+
+    test "cookie round-trips 'all' lens", %{stable: stable} do
+      lens = Lens.resolve("all", nil)
+      assert Lens.cookie_value(lens) == "all"
+
+      {name, rev} = Lens.from_cookie("all")
+      assert name == "all"
+      assert rev == nil
+
+      round_tripped = Lens.resolve(name, rev)
+      assert round_tripped.all? == true
+      assert round_tripped.channel.name == stable.name
+    end
+  end
+
+  describe "channel_id/1" do
+    test "returns nil for nil lens" do
+      assert Lens.channel_id(nil) == nil
+    end
+
+    test "returns nil for all-channels lens" do
+      lens = Lens.resolve("all", nil)
+      assert Lens.channel_id(lens) == nil
+    end
+
+    test "returns channel id for specific channel lens", %{unstable: unstable} do
+      lens = Lens.resolve(unstable.name, nil)
+      assert Lens.channel_id(lens) == unstable.id
     end
   end
 

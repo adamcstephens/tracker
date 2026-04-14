@@ -84,8 +84,6 @@ defmodule TrackerWeb.OptionLive.IndexTest do
   test "no duplicate channel dropdown in the page", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/options")
 
-    # The page-level "All channels" select should be gone (only the nav lens remains)
-    refute html =~ "All channels"
     # The page should not have a revision hash input
     refute html =~ ~s(placeholder="Revision hash...")
   end
@@ -148,6 +146,16 @@ defmodule TrackerWeb.OptionLive.IndexTest do
     {:ok, _view, html} = live(conn, ~p"/options")
 
     assert html =~ "/modules/services.nginx"
+  end
+
+  test "shows fallback notice when lens is set to 'all'", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/options")
+
+    send(view.pid, {:set_lens, "all", ""})
+    html = render(view)
+
+    assert html =~ "Options requires a specific channel"
+    assert html =~ "Showing"
   end
 
   test "shows message when channel has no options data", %{conn: conn} do

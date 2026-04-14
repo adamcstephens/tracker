@@ -173,7 +173,7 @@ defmodule TrackerWeb.ChangeLive.Index do
 
   defp load_changes(socket) do
     tp = socket.assigns.table_params
-    channel_id = socket.assigns.lens && socket.assigns.lens.channel.id
+    channel_id = TrackerWeb.Lens.channel_id(socket.assigns.lens)
 
     page =
       Tracker.Nixpkgs.Change.list!(tp.search, socket.assigns.base_ref_filter, channel_id,

@@ -11,6 +11,10 @@ defmodule TrackerWeb.ModuleLive.Index do
       Modules
     </.header>
 
+    <p :if={@lens && @lens.all?}>
+      Modules requires a specific channel. Showing {@lens.channel.name}.
+    </p>
+
     <form phx-change="search" phx-submit="search" id="module-search" phx-hook="UpdateURL">
       <input
         type="search"
