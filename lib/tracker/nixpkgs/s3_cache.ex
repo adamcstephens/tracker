@@ -198,6 +198,30 @@ defmodule Tracker.Nixpkgs.S3Cache do
   end
 
   @doc """
+  Deletes an object from S3. Returns `:ok` or `:error`.
+  """
+  def delete_object(config, key) do
+    req = s3_req(config)
+    url = s3_url(config, key)
+
+    case Req.delete(req, url: url) do
+      {:ok, %Req.Response{status: status}} when status in [200, 204] ->
+        :ok
+
+      {:ok, %Req.Response{status: status, body: resp_body}} ->
+        Logger.error(
+          "Failed to delete S3 object #{key}: status #{status}, body: #{inspect(resp_body)}"
+        )
+
+        :error
+
+      {:error, reason} ->
+        Logger.error("Failed to delete S3 object #{key}: #{inspect(reason)}")
+        :error
+    end
+  end
+
+  @doc """
   Puts an object into S3. Returns `:ok` or `:error`.
   """
   def put_object(config, key, body) do

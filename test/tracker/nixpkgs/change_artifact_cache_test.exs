@@ -57,6 +57,11 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCacheTest do
           :ets.insert(store, {s3_key, body})
           send(test_pid, {:s3_put, s3_key})
           Plug.Conn.send_resp(conn, 200, "")
+
+        "DELETE" ->
+          :ets.delete(store, s3_key)
+          send(test_pid, {:s3_delete, s3_key})
+          Plug.Conn.send_resp(conn, 204, "")
       end
     end)
 
@@ -75,7 +80,7 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCacheTest do
 
     meta_key = ChangeArtifactCache.meta_key(pr_number)
     full_meta_key = "/#{config.bucket}/#{meta_key}"
-    meta = %ChangeArtifactCache.Meta{run_id: run_id}
+    meta = %ChangeArtifactCache.Meta{run_id: run_id, names: artifact_names}
     :ets.insert(store, {full_meta_key, :erlang.term_to_binary(meta)})
   end
 
@@ -276,6 +281,41 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCacheTest do
     end
   end
 
+  describe "invalidate_meta/1" do
+    setup do
+      config = s3_config()
+      Application.put_env(:tracker, :s3_cache, Map.from_struct(config))
+
+      on_exit(fn ->
+        Application.delete_env(:tracker, :s3_cache)
+      end)
+
+      {:ok, config: config}
+    end
+
+    test "deletes the meta from S3 so the next cache_run_artifacts re-downloads",
+         %{config: config} do
+      pr_number = System.unique_integer([:positive])
+      store = stub_s3_store()
+      populate_cache(store, config, pr_number, 99001, @all_artifact_names)
+
+      assert :ok = ChangeArtifactCache.invalidate_meta(pr_number)
+
+      meta_key = ChangeArtifactCache.meta_key(pr_number)
+      assert_received {:s3_delete, "/test-bucket/" <> ^meta_key}
+
+      # Meta should be gone
+      assert :miss = S3Cache.get_object(config, meta_key)
+    end
+
+    test "returns :ok when meta does not exist" do
+      pr_number = System.unique_integer([:positive])
+      _store = stub_s3_store()
+
+      assert :ok = ChangeArtifactCache.invalidate_meta(pr_number)
+    end
+  end
+
   describe "fetch_comparison/5" do
     setup do
       config = s3_config()
@@ -303,6 +343,17 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCacheTest do
       _store = stub_s3_store()
 
       assert {:error, :not_cached} = ChangeArtifactCache.fetch_comparison(pr_number)
+    end
+
+    test "returns descriptive error when meta exists but comparison artifact is missing",
+         %{config: config} do
+      pr_number = System.unique_integer([:positive])
+      store = stub_s3_store()
+      # Populate cache with non-comparison artifacts only
+      populate_cache(store, config, pr_number, 99001, ["diff-aarch64-linux", "diff-x86_64-linux"])
+
+      assert {:error, {:comparison_not_in_run, ["diff-aarch64-linux", "diff-x86_64-linux"]}} =
+               ChangeArtifactCache.fetch_comparison(pr_number)
     end
   end
 end

@@ -19,6 +19,7 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCache do
     typedstruct enforce: true do
       field :version, integer(), default: 1
       field :run_id, integer()
+      field :names, [String.t()], default: []
     end
   end
 
@@ -67,15 +68,34 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCache do
     else
       Logger.debug("Caching #{length(artifacts)} artifacts for PR ##{pr_number}, run #{run_id}")
 
+      names = Enum.map(artifacts, & &1.name)
+
       case download_and_store_all(pr_number, artifacts, token, opts) do
         :ok ->
-          store_meta(m_key, %Meta{run_id: run_id})
+          store_meta(m_key, %Meta{run_id: run_id, names: names})
           :ok
 
         {:error, _} = error ->
           error
       end
     end
+  end
+
+  @doc """
+  Deletes the meta sidecar for a PR, forcing the next `cache_run_artifacts`
+  call to re-download and re-cache all artifacts.
+
+  Returns `:ok`.
+  """
+  def invalidate_meta(pr_number) do
+    key = meta_key(pr_number)
+
+    case S3Cache.config() do
+      nil -> :ok
+      config -> S3Cache.delete_object(config, key)
+    end
+
+    :ok
   end
 
   @doc """
@@ -99,8 +119,17 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCache do
   """
   def fetch_comparison(pr_number) do
     case read_artifact(pr_number, "comparison") do
-      {:ok, zip_body} -> extract_attrdiff(zip_body)
-      :miss -> {:error, :not_cached}
+      {:ok, zip_body} ->
+        extract_attrdiff(zip_body)
+
+      :miss ->
+        case read_meta(pr_number) do
+          {:ok, %Meta{names: names}} when names != [] ->
+            {:error, {:comparison_not_in_run, names}}
+
+          _ ->
+            {:error, :not_cached}
+        end
     end
   end
 
@@ -129,6 +158,21 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCache do
 
       {:error, reason} ->
         {:error, "Failed to extract zip: #{inspect(reason)}"}
+    end
+  end
+
+  defp read_meta(pr_number) do
+    key = meta_key(pr_number)
+
+    case S3Cache.config() do
+      nil ->
+        :miss
+
+      config ->
+        case S3Cache.get_object(config, key) do
+          {:ok, meta_binary} -> {:ok, :erlang.binary_to_term(meta_binary)}
+          :miss -> :miss
+        end
     end
   end
 
