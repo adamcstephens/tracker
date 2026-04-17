@@ -83,4 +83,15 @@ defmodule TrackerWeb.LensHandlersTest do
     assert payload.lens_channel == unstable.name
     assert payload.lens_rev == rev_hash
   end
+
+  test "set_lens_cookie event uses 'all' as lens_channel for all-channels lens" do
+    socket = build_socket()
+    socket = LensHandlers.handle_lens_change(socket, "all", "")
+
+    events = socket.private.live_temp[:push_events]
+
+    assert [["set_lens_cookie", payload | _]] = events
+    assert payload.lens_channel == "all"
+    assert payload.lens_rev == nil
+  end
 end

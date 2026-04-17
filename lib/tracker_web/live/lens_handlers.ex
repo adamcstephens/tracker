@@ -23,13 +23,14 @@ defmodule TrackerWeb.LensHandlers do
     cookie_token = Lens.sign_cookie(lens)
 
     rev_hash = if lens.revision, do: lens.revision.revision
+    lens_channel = if lens.all?, do: "all", else: lens.channel.name
 
     socket
     |> assign(:lens, lens)
     |> push_event("set_lens_cookie", %{
       value: cookie_token,
       max_age: Lens.cookie_max_age(),
-      lens_channel: lens.channel.name,
+      lens_channel: lens_channel,
       lens_rev: rev_hash
     })
   end
