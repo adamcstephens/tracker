@@ -9,6 +9,7 @@ defmodule Tracker.Nixpkgs.ChangePollWorker do
 
   @repo "NixOS/nixpkgs"
   @backfill_cutoff_days 90
+  @max_pages 10
 
   @impl Oban.Worker
   def perform(%Oban.Job{}) do
@@ -19,25 +20,66 @@ defmodule Tracker.Nixpkgs.ChangePollWorker do
 
       :ok ->
         token = Tracker.GitHub.installation_token!()
-        fetch_merged_pulls(token) |> handle_fetch_result(token)
+        [owner, repo] = String.split(@repo, "/")
+
+        fetcher = fn page ->
+          GitHub.Pulls.list(owner, repo,
+            state: "closed",
+            sort: "updated",
+            direction: "desc",
+            per_page: 100,
+            page: page,
+            auth: token
+          )
+        end
+
+        case poll_pages(fetcher) do
+          :ok ->
+            :ok
+
+          {:error, %GitHub.Error{reason: :rate_limited}} ->
+            snooze_seconds = Tracker.GitHub.seconds_until_reset(token)
+            Logger.warning("GitHub API rate limited, snoozing poll worker #{snooze_seconds}s")
+            {:snooze, snooze_seconds}
+
+          {:error, reason} ->
+            Logger.error("Failed to fetch pulls: #{inspect(reason)}")
+            {:error, reason}
+        end
     end
   end
 
-  @doc false
-  def handle_fetch_result({:ok, pulls}, _token) do
-    process_pull_requests(pulls)
-    :ok
-  end
+  @doc """
+  Polls GitHub for merged PRs, paging through results until all PRs on a page
+  are already known (or the page is empty). Accepts a fetcher function that
+  takes a page number and returns `{:ok, pulls}` or `{:error, reason}`.
 
-  def handle_fetch_result({:error, %GitHub.Error{reason: :rate_limited}}, token) do
-    snooze_seconds = Tracker.GitHub.seconds_until_reset(token)
-    Logger.warning("GitHub API rate limited, snoozing poll worker #{snooze_seconds}s")
-    {:snooze, snooze_seconds}
-  end
+  Stops paging when:
+  - An empty page is returned
+  - No new merged PRs are found on a page (all already tracked)
+  - The maximum page limit (#{@max_pages}) is reached
+  """
+  def poll_pages(fetcher), do: poll_page(fetcher, 1)
 
-  def handle_fetch_result({:error, reason}, _token) do
-    Logger.error("Failed to fetch pulls: #{inspect(reason)}")
-    {:error, reason}
+  defp poll_page(_fetcher, page) when page > @max_pages, do: :ok
+
+  defp poll_page(fetcher, page) do
+    case fetcher.(page) do
+      {:ok, []} ->
+        :ok
+
+      {:ok, pulls} ->
+        {:ok, count} = process_pull_requests(pulls)
+
+        if count > 0 do
+          poll_page(fetcher, page + 1)
+        else
+          :ok
+        end
+
+      {:error, _reason} = error ->
+        error
+    end
   end
 
   @doc """
@@ -133,23 +175,5 @@ defmodule Tracker.Nixpkgs.ChangePollWorker do
     |> Tracker.Nixpkgs.Change.existing_numbers!()
     |> Enum.map(& &1.number)
     |> MapSet.new()
-  end
-
-  defp fetch_merged_pulls(token) do
-    [owner, repo] = String.split(@repo, "/")
-
-    case GitHub.Pulls.list(owner, repo,
-           state: "closed",
-           sort: "updated",
-           direction: "desc",
-           per_page: 100,
-           auth: token
-         ) do
-      {:ok, pulls} ->
-        {:ok, pulls}
-
-      {:error, reason} ->
-        {:error, reason}
-    end
   end
 end
