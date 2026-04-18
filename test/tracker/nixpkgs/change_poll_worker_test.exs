@@ -3,8 +3,55 @@ defmodule Tracker.Nixpkgs.ChangePollWorkerTest do
 
   alias Tracker.Nixpkgs.ChangePollWorker
 
-  describe "perform/1" do
-    test "snoozes when rate limited" do
+  describe "poll_pages/1" do
+    test "processes single page and stops on empty next page" do
+      fetcher = fn
+        1 -> {:ok, [pr_struct(number: 5001, merged_at: ~U[2026-04-01 12:00:00Z])]}
+        2 -> {:ok, []}
+      end
+
+      assert :ok = ChangePollWorker.poll_pages(fetcher)
+      assert_enqueued(worker: Tracker.Nixpkgs.ChangeProcessWorker, args: %{"number" => 5001})
+    end
+
+    test "pages through multiple pages until no new merged PRs" do
+      fetcher = fn
+        1 -> {:ok, [pr_struct(number: 6001, merged_at: ~U[2026-04-01 12:00:00Z])]}
+        2 -> {:ok, [pr_struct(number: 6002, merged_at: ~U[2026-04-01 13:00:00Z])]}
+        3 -> {:ok, [pr_struct(number: 6003, merged_at: nil, state: "closed")]}
+      end
+
+      assert :ok = ChangePollWorker.poll_pages(fetcher)
+
+      assert_enqueued(worker: Tracker.Nixpkgs.ChangeProcessWorker, args: %{"number" => 6001})
+      assert_enqueued(worker: Tracker.Nixpkgs.ChangeProcessWorker, args: %{"number" => 6002})
+      refute_enqueued(worker: Tracker.Nixpkgs.ChangeProcessWorker, args: %{"number" => 6003})
+    end
+
+    test "stops when all merged PRs on a page are already known" do
+      Tracker.Nixpkgs.Change.bulk_upsert_all([
+        %{
+          number: 7001,
+          title: "already tracked",
+          state: :merged,
+          author: "alice",
+          url: "https://github.com/NixOS/nixpkgs/pull/7001"
+        }
+      ])
+
+      fetcher = fn
+        1 -> {:ok, [pr_struct(number: 7002, merged_at: ~U[2026-04-01 12:00:00Z])]}
+        2 -> {:ok, [pr_struct(number: 7001, merged_at: ~U[2026-04-01 12:00:00Z])]}
+        3 -> raise "should not fetch page 3"
+      end
+
+      assert :ok = ChangePollWorker.poll_pages(fetcher)
+
+      assert_enqueued(worker: Tracker.Nixpkgs.ChangeProcessWorker, args: %{"number" => 7002})
+      refute_enqueued(worker: Tracker.Nixpkgs.ChangeProcessWorker, args: %{"number" => 7001})
+    end
+
+    test "propagates rate limit error" do
       error = %GitHub.Error{
         reason: :rate_limited,
         message: "API rate limit exceeded",
@@ -15,8 +62,27 @@ defmodule Tracker.Nixpkgs.ChangePollWorkerTest do
         step: nil
       }
 
-      assert {:snooze, _seconds} =
-               ChangePollWorker.handle_fetch_result({:error, error}, "fake-token")
+      fetcher = fn 1 -> {:error, error} end
+
+      assert {:error, %GitHub.Error{reason: :rate_limited}} =
+               ChangePollWorker.poll_pages(fetcher)
+    end
+
+    test "propagates generic fetch error" do
+      error = %GitHub.Error{
+        reason: :server_error,
+        message: "Internal Server Error",
+        code: 500,
+        operation: nil,
+        source: nil,
+        stacktrace: [],
+        step: nil
+      }
+
+      fetcher = fn 1 -> {:error, error} end
+
+      assert {:error, %GitHub.Error{reason: :server_error}} =
+               ChangePollWorker.poll_pages(fetcher)
     end
   end
 
