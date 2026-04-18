@@ -66,10 +66,18 @@ defmodule Tracker.Nixpkgs.ChangePollWorker do
   defp poll_page(fetcher, page) do
     case fetcher.(page) do
       {:ok, []} ->
+        Logger.info(msg: "poll page returned empty, stopping", page: page)
         :ok
 
       {:ok, pulls} ->
         {:ok, count} = process_pull_requests(pulls)
+
+        Logger.info(
+          msg: "poll page processed",
+          page: page,
+          fetched: length(pulls),
+          new: count
+        )
 
         if count > 0 do
           poll_page(fetcher, page + 1)
