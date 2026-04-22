@@ -172,6 +172,124 @@ defmodule Tracker.Nixpkgs.ChangeTest do
     end
   end
 
+  describe "PR lifecycle fields" do
+    test "accepts :draft state" do
+      id_map =
+        Change.bulk_upsert_all([
+          %{
+            number: 6001,
+            title: "wip: draft pr",
+            state: :draft,
+            author: "alice",
+            url: "https://github.com/NixOS/nixpkgs/pull/6001"
+          }
+        ])
+
+      change = Ash.get!(Change, id_map[6001])
+      assert change.state == :draft
+    end
+
+    test "accepts :too_large processing_status" do
+      id_map =
+        Change.bulk_upsert_all([
+          %{
+            number: 6002,
+            title: "massive refactor",
+            state: :merged,
+            author: "bob",
+            url: "https://github.com/NixOS/nixpkgs/pull/6002",
+            processing_status: :too_large
+          }
+        ])
+
+      change = Ash.get!(Change, id_map[6002])
+      assert change.processing_status == :too_large
+    end
+
+    test "stores lifecycle tracking fields" do
+      id_map =
+        Change.bulk_upsert_all([
+          %{
+            number: 6003,
+            title: "tracked",
+            state: :open,
+            author: "carol",
+            url: "https://github.com/NixOS/nixpkgs/pull/6003",
+            node_id: "PR_kwDOAEVQ_M6ABCxyZ",
+            head_sha: "deadbeef1234567890deadbeef12345678901234",
+            gh_updated_at: ~U[2026-04-20 12:00:00Z],
+            last_checked_at: ~U[2026-04-21 08:00:00.123456Z],
+            closed_at: ~U[2026-04-22 08:00:00Z]
+          }
+        ])
+
+      change = Ash.get!(Change, id_map[6003])
+      assert change.node_id == "PR_kwDOAEVQ_M6ABCxyZ"
+      assert change.head_sha == "deadbeef1234567890deadbeef12345678901234"
+      assert change.gh_updated_at == ~U[2026-04-20 12:00:00Z]
+      assert change.last_checked_at == ~U[2026-04-21 08:00:00.123456Z]
+      assert change.closed_at == ~U[2026-04-22 08:00:00Z]
+    end
+
+    test "upsert refreshes lifecycle fields on subsequent calls" do
+      Change.bulk_upsert_all([
+        %{
+          number: 6005,
+          title: "evolving",
+          state: :draft,
+          author: "erin",
+          url: "https://github.com/NixOS/nixpkgs/pull/6005",
+          node_id: "PR_node_6005",
+          head_sha: "aaaa1111",
+          gh_updated_at: ~U[2026-04-20 12:00:00Z]
+        }
+      ])
+
+      id_map =
+        Change.bulk_upsert_all([
+          %{
+            number: 6005,
+            title: "evolving",
+            state: :open,
+            author: "erin",
+            url: "https://github.com/NixOS/nixpkgs/pull/6005",
+            node_id: "PR_node_6005",
+            head_sha: "bbbb2222",
+            gh_updated_at: ~U[2026-04-21 12:00:00Z],
+            last_checked_at: ~U[2026-04-21 12:01:00.000000Z]
+          }
+        ])
+
+      change = Ash.get!(Change, id_map[6005])
+      assert change.state == :open
+      assert change.head_sha == "bbbb2222"
+      assert change.gh_updated_at == ~U[2026-04-21 12:00:00Z]
+      assert change.last_checked_at == ~U[2026-04-21 12:01:00.000000Z]
+    end
+  end
+
+  describe "get_by_node_id/1" do
+    test "returns the change" do
+      Change.bulk_upsert_all([
+        %{
+          number: 6004,
+          title: "by node id",
+          state: :open,
+          author: "dave",
+          url: "https://github.com/NixOS/nixpkgs/pull/6004",
+          node_id: "PR_node_6004"
+        }
+      ])
+
+      assert {:ok, change} = Change.get_by_node_id("PR_node_6004")
+      assert change.number == 6004
+    end
+
+    test "returns error for unknown node_id" do
+      assert {:error, _} = Change.get_by_node_id("PR_does_not_exist")
+    end
+  end
+
   describe "relationships" do
     test "can link to packages via change_packages" do
       id_map =

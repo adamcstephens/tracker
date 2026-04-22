@@ -10,10 +10,13 @@ defmodule Tracker.Nixpkgs.Change do
     define :read
     define :list, args: [{:optional, :search}, {:optional, :base_ref}, {:optional, :channel_id}]
     define :get_by_number, action: :read, get_by: [:number]
+    define :get_by_node_id, action: :read, get_by: [:node_id]
     define :by_package, args: [:package_id]
     define :by_maintainer_github_id, args: [:github_id, {:optional, :channel_id}]
     define :update_package_count
     define :update_processing_status
+    define :set_node_id
+    define :list_missing_node_ids
     define :bulk_upsert, args: [:number]
     define :distinct_base_refs
     define :existing_numbers, args: [:numbers]
@@ -95,6 +98,21 @@ defmodule Tracker.Nixpkgs.Change do
       accept [:processing_status]
     end
 
+    update :set_node_id do
+      accept [:node_id]
+    end
+
+    read :list_missing_node_ids do
+      pagination do
+        offset? true
+        countable true
+        default_limit 100
+      end
+
+      prepare build(sort: [number: :asc])
+      filter expr(is_nil(node_id))
+    end
+
     read :distinct_base_refs do
       prepare build(distinct: [:base_ref], select: [:base_ref], sort: [:base_ref])
     end
@@ -109,6 +127,7 @@ defmodule Tracker.Nixpkgs.Change do
     create :bulk_upsert do
       accept [
         :number,
+        :node_id,
         :title,
         :state,
         :author,
@@ -117,8 +136,12 @@ defmodule Tracker.Nixpkgs.Change do
         :url,
         :base_ref,
         :head_ref,
+        :head_sha,
         :labels,
         :gh_created_at,
+        :gh_updated_at,
+        :last_checked_at,
+        :closed_at,
         :merged_at,
         :merge_commit_sha,
         :processing_status
@@ -128,6 +151,7 @@ defmodule Tracker.Nixpkgs.Change do
       upsert_identity :unique_number
 
       upsert_fields [
+        :node_id,
         :title,
         :state,
         :author,
@@ -136,8 +160,12 @@ defmodule Tracker.Nixpkgs.Change do
         :url,
         :base_ref,
         :head_ref,
+        :head_sha,
         :labels,
         :gh_created_at,
+        :gh_updated_at,
+        :last_checked_at,
+        :closed_at,
         :merged_at,
         :merge_commit_sha,
         :processing_status,
@@ -154,6 +182,8 @@ defmodule Tracker.Nixpkgs.Change do
       public? true
     end
 
+    attribute :node_id, :string, public?: true
+
     attribute :title, :string do
       allow_nil? false
       public? true
@@ -162,7 +192,7 @@ defmodule Tracker.Nixpkgs.Change do
     attribute :state, :atom do
       allow_nil? false
       public? true
-      constraints one_of: [:open, :closed, :merged]
+      constraints one_of: [:draft, :open, :closed, :merged]
     end
 
     attribute :author, :string, public?: true
@@ -171,8 +201,12 @@ defmodule Tracker.Nixpkgs.Change do
     attribute :url, :string, public?: true
     attribute :base_ref, :string, public?: true
     attribute :head_ref, :string, public?: true
+    attribute :head_sha, :string, public?: true
     attribute :labels, {:array, :string}, public?: true
     attribute :gh_created_at, :utc_datetime, public?: true
+    attribute :gh_updated_at, :utc_datetime, public?: true
+    attribute :last_checked_at, :utc_datetime_usec, public?: true
+    attribute :closed_at, :utc_datetime, public?: true
     attribute :merged_at, :utc_datetime, public?: true
     attribute :merge_commit_sha, :string, public?: true
     attribute :package_count, :integer, public?: true, default: 0
@@ -184,6 +218,7 @@ defmodule Tracker.Nixpkgs.Change do
         one_of: [
           :pending,
           :processed,
+          :too_large,
           :artifact_expired,
           :no_workflow_run,
           :no_comparison_artifact,
@@ -207,12 +242,13 @@ defmodule Tracker.Nixpkgs.Change do
 
   identities do
     identity :unique_number, [:number]
+    identity :unique_node_id, [:node_id], nils_distinct?: true
   end
 
-  # 16 columns: number, title, state, author, author_github_id, merged_by_github_id,
-  # url, base_ref, head_ref, labels, gh_created_at, merged_at, merge_commit_sha,
-  # processing_status, inserted_at, updated_at
-  @insert_cols 16
+  # 21 columns: number, node_id, title, state, author, author_github_id, merged_by_github_id,
+  # url, base_ref, head_ref, head_sha, labels, gh_created_at, gh_updated_at, last_checked_at,
+  # closed_at, merged_at, merge_commit_sha, processing_status, inserted_at, updated_at
+  @insert_cols 21
   @max_rows div(65_535, @insert_cols)
 
   @doc """
@@ -240,6 +276,7 @@ defmodule Tracker.Nixpkgs.Change do
           on_conflict:
             {:replace,
              [
+               :node_id,
                :title,
                :state,
                :author,
@@ -248,8 +285,12 @@ defmodule Tracker.Nixpkgs.Change do
                :url,
                :base_ref,
                :head_ref,
+               :head_sha,
                :labels,
                :gh_created_at,
+               :gh_updated_at,
+               :last_checked_at,
+               :closed_at,
                :merged_at,
                :merge_commit_sha,
                :processing_status,
