@@ -51,3 +51,4 @@ data/
 
 # Compiled NIF binaries
 /priv/native/
+.dexter.db .dexter.db-shm .dexter.db-wal
