@@ -38,7 +38,7 @@ defmodule Tracker.Nixpkgs.ChangeProcessWorker do
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"number" => number}}) do
-    case Tracker.GitHub.RateLimitCache.check() do
+    case Tracker.GitHub.RateLimitCache.check(:rest) do
       {:limited, seconds} ->
         Logger.info("Rate limit cached, snoozing PR ##{number} for #{seconds}s")
         {:snooze, seconds}
@@ -69,7 +69,7 @@ defmodule Tracker.Nixpkgs.ChangeProcessWorker do
       :ok
     else
       {:error, %GitHub.Error{reason: :rate_limited}} ->
-        snooze_seconds = Tracker.GitHub.seconds_until_reset(token)
+        snooze_seconds = Tracker.GitHub.seconds_until_reset(token, :rest)
         Logger.warning("Rate limited processing PR ##{number}, snoozing #{snooze_seconds}s")
         {:snooze, snooze_seconds}
 

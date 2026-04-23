@@ -13,7 +13,7 @@ defmodule Tracker.Nixpkgs.ChangePollWorker do
 
   @impl Oban.Worker
   def perform(%Oban.Job{}) do
-    case Tracker.GitHub.RateLimitCache.check() do
+    case Tracker.GitHub.RateLimitCache.check(:rest) do
       {:limited, seconds} ->
         Logger.info("Rate limited for #{seconds}s, skipping poll")
         :ok
@@ -38,7 +38,7 @@ defmodule Tracker.Nixpkgs.ChangePollWorker do
             :ok
 
           {:error, %GitHub.Error{reason: :rate_limited}} ->
-            snooze_seconds = Tracker.GitHub.seconds_until_reset(token)
+            snooze_seconds = Tracker.GitHub.seconds_until_reset(token, :rest)
             Logger.warning("GitHub API rate limited, snoozing poll worker #{snooze_seconds}s")
             {:snooze, snooze_seconds}
 
@@ -163,7 +163,7 @@ defmodule Tracker.Nixpkgs.ChangePollWorker do
         end
 
       {:error, %GitHub.Error{reason: :rate_limited}} ->
-        seconds = Tracker.GitHub.seconds_until_reset(token)
+        seconds = Tracker.GitHub.seconds_until_reset(token, :rest)
         minutes = div(seconds, 60)
 
         Logger.warning(
