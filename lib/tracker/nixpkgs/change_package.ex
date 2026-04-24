@@ -12,7 +12,7 @@ defmodule Tracker.Nixpkgs.ChangePackage do
   end
 
   actions do
-    defaults [:read]
+    defaults [:read, :destroy]
 
     create :load do
       accept [:change_id, :package_id, :type]
@@ -52,6 +52,20 @@ defmodule Tracker.Nixpkgs.ChangePackage do
         return_errors?: true
       )
     end)
+  end
+
+  @doc """
+  Bulk-destroys every ChangePackage row belonging to the given change_id.
+  Returns `:ok`.
+  """
+  def clear_for_change!(change_id) do
+    require Ash.Query
+
+    __MODULE__
+    |> Ash.Query.filter(change_id == ^change_id)
+    |> Ash.bulk_destroy!(:destroy, %{}, strategy: :atomic, return_errors?: true)
+
+    :ok
   end
 
   identities do
