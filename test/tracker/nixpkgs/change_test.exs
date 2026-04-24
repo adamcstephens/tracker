@@ -58,6 +58,44 @@ defmodule Tracker.Nixpkgs.ChangeTest do
       assert change.state == :merged
     end
 
+    test "does not reset processing_status on upsert of an existing row" do
+      # Discovery-style payload: no :processing_status key.
+      payload = %{
+        number: 2100,
+        title: "some PR",
+        state: :merged,
+        author: "alice",
+        url: "https://github.com/NixOS/nixpkgs/pull/2100"
+      }
+
+      id_map = Change.bulk_upsert_all([payload])
+      change = Ash.get!(Change, id_map[2100])
+
+      # Artifact pipeline sets status terminal.
+      Change.update_processing_status!(change, %{processing_status: :processed})
+
+      # Later discovery pass upserts the same row again (same discovery-style
+      # payload, no :processing_status). Status must survive.
+      Change.bulk_upsert_all([payload])
+
+      refreshed = Ash.get!(Change, id_map[2100])
+      assert refreshed.processing_status == :processed
+    end
+
+    test "sets processing_status to :pending on insert of a new row" do
+      payload = %{
+        number: 2200,
+        title: "fresh PR",
+        state: :open,
+        author: "bob",
+        url: "https://github.com/NixOS/nixpkgs/pull/2200"
+      }
+
+      id_map = Change.bulk_upsert_all([payload])
+      change = Ash.get!(Change, id_map[2200])
+      assert change.processing_status == :pending
+    end
+
     test "stores additional metadata fields" do
       id_map =
         Change.bulk_upsert_all([
