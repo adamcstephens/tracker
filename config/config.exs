@@ -29,6 +29,7 @@ config :tracker, Oban,
     {Oban.Plugins.Cron,
      crontab: [
        {"*/5 * * * *", Tracker.Nixpkgs.ChangeDiscoveryWorker},
+       {"*/3 * * * *", Tracker.Nixpkgs.ChangeRefreshWorker},
        {"0 */4 * * *", Tracker.Ingestion.CronWorker, queue: :ingestion}
      ]}
   ]

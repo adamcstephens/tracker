@@ -21,6 +21,9 @@ defmodule Tracker.Nixpkgs.Change do
     define :distinct_base_refs
     define :existing_numbers, args: [:numbers]
     define :max_gh_updated_at
+    define :stalest_unfinished
+    define :refresh_from_graphql
+    define :touch_last_checked
   end
 
   actions do
@@ -101,6 +104,34 @@ defmodule Tracker.Nixpkgs.Change do
 
     update :set_node_id do
       accept [:node_id]
+    end
+
+    update :refresh_from_graphql do
+      accept [
+        :state,
+        :head_sha,
+        :title,
+        :labels,
+        :gh_updated_at,
+        :closed_at,
+        :merged_at,
+        :merge_commit_sha
+      ]
+
+      change set_attribute(:last_checked_at, &DateTime.utc_now/0)
+    end
+
+    update :touch_last_checked do
+      change set_attribute(:last_checked_at, &DateTime.utc_now/0)
+    end
+
+    read :stalest_unfinished do
+      prepare build(
+                sort: [last_checked_at: :asc_nils_first],
+                limit: 100
+              )
+
+      filter expr(state in [:draft, :open] and not is_nil(node_id))
     end
 
     read :list_missing_node_ids do
