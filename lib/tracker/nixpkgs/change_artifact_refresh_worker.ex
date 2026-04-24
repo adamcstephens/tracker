@@ -7,7 +7,10 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
   Merge Group workflow run keyed by `merge_commit_sha`). trk-185 will
   add the `"head_sha_changed"` path for open/draft PRs.
   """
-  use Oban.Worker, queue: :changes, max_attempts: 10
+  use Oban.Worker,
+    queue: :changes,
+    max_attempts: 10,
+    unique: [fields: [:worker, :args], keys: [:number, :reason], period: 300]
 
   require Logger
 
@@ -71,9 +74,15 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
             Logger.warning("Artifact refresh rate limited, snoozing #{snooze}s")
             {:snooze, snooze}
 
-          {:error, :artifact_expired} ->
-            Change.update_processing_status!(change, %{processing_status: :artifact_expired})
-            Logger.warning(msg: "artifact expired", number: number)
+          {:error, terminal}
+          when terminal in ~w(artifact_expired no_workflow_run no_comparison_artifact)a ->
+            Logger.warning(
+              msg: "terminal artifact refresh outcome",
+              number: number,
+              reason: terminal
+            )
+
+            Change.update_processing_status!(change, %{processing_status: terminal})
             :ok
 
           {:error, reason} ->
