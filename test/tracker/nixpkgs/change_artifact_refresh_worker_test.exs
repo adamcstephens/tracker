@@ -114,20 +114,26 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorkerTest do
                )
     end
 
-    test "fetcher returning :artifact_expired sets status and returns :ok", %{
+    test "terminal errors set matching status and return :ok without retry", %{
       rate_limit_table: table
     } do
-      insert_change!(number: 9005, state: :merged, merge_commit_sha: "expsha")
+      for {reason, number} <- [
+            {:artifact_expired, 9005},
+            {:no_workflow_run, 9015},
+            {:no_comparison_artifact, 9025}
+          ] do
+        insert_change!(number: number, state: :merged, merge_commit_sha: "sha#{number}")
 
-      :ok =
-        ChangeArtifactRefreshWorker.run(
-          %{reason: "merged", number: 9005},
-          rate_limit_table: table,
-          attrdiff_fetcher: fn _ -> {:error, :artifact_expired} end
-        )
+        :ok =
+          ChangeArtifactRefreshWorker.run(
+            %{reason: "merged", number: number},
+            rate_limit_table: table,
+            attrdiff_fetcher: fn _ -> {:error, reason} end
+          )
 
-      {:ok, refreshed} = Change.get_by_number(9005)
-      assert refreshed.processing_status == :artifact_expired
+        {:ok, refreshed} = Change.get_by_number(number)
+        assert refreshed.processing_status == reason
+      end
     end
 
     test "fetcher generic error sets :failed and returns {:error, reason}", %{
