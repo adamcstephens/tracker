@@ -312,7 +312,8 @@ defmodule Tracker.Nixpkgs.Change do
       |> Map.put(:inserted_at, now)
       |> Map.put(:updated_at, now)
       |> Map.update(:state, :open, &to_string/1)
-      |> Map.update(:processing_status, "pending", &to_string/1)
+      |> Map.put_new(:processing_status, "pending")
+      |> Map.update!(:processing_status, &to_string/1)
     end)
     |> Stream.chunk_every(@max_rows)
     |> Enum.reduce(%{}, fn chunk, acc ->
@@ -340,7 +341,6 @@ defmodule Tracker.Nixpkgs.Change do
                :closed_at,
                :merged_at,
                :merge_commit_sha,
-               :processing_status,
                :updated_at
              ]},
           conflict_target: :number,
