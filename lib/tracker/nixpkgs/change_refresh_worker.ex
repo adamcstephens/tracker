@@ -136,11 +136,27 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorker do
   defp maybe_add(list, true, tag), do: [tag | list]
   defp maybe_add(list, false, _), do: list
 
-  # Default on_transition hook. trk-183 will replace this with an actual
-  # Oban enqueue against Tracker.Nixpkgs.ChangeArtifactRefreshWorker.
-  defp log_transition(change, reason) do
+  # Default on_transition hook.
+  defp log_transition(change, :merged = reason) do
     Logger.info(
       msg: "artifact_refresh transition detected",
+      number: change.number,
+      node_id: change.node_id,
+      reason: reason
+    )
+
+    %{"number" => change.number, "reason" => "merged"}
+    |> Tracker.Nixpkgs.ChangeArtifactRefreshWorker.new()
+    |> Oban.insert!()
+
+    :ok
+  end
+
+  # trk-185 will wire :head_sha_changed once the open/draft artifact source
+  # is identified.
+  defp log_transition(change, :head_sha_changed = reason) do
+    Logger.info(
+      msg: "artifact_refresh transition detected (not yet enqueued)",
       number: change.number,
       node_id: change.node_id,
       reason: reason

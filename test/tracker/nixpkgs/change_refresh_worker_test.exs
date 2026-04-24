@@ -229,6 +229,49 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorkerTest do
     end
   end
 
+  describe "default on_transition hook" do
+    test "enqueues ChangeArtifactRefreshWorker for :merged transitions" do
+      insert_change!(number: 300, state: :open, node_id: "pr_def_m", head_sha: "sha_old")
+
+      ChangeRefreshWorker.run(
+        fetcher: fn _ ->
+          {:ok,
+           %{
+             "pr_def_m" =>
+               pr(
+                 node_id: "pr_def_m",
+                 number: 300,
+                 state: :merged,
+                 head_sha: "sha_old",
+                 merged_at: ~U[2026-04-23 10:00:00Z],
+                 merge_commit_sha: "mcsha"
+               )
+           }}
+        end
+      )
+
+      assert_enqueued(
+        worker: Tracker.Nixpkgs.ChangeArtifactRefreshWorker,
+        args: %{"number" => 300, "reason" => "merged"}
+      )
+    end
+
+    test "does NOT enqueue for :head_sha_changed (deferred to trk-185)" do
+      insert_change!(number: 301, state: :open, node_id: "pr_def_hs", head_sha: "sha_a")
+
+      ChangeRefreshWorker.run(
+        fetcher: fn _ ->
+          {:ok,
+           %{
+             "pr_def_hs" => pr(node_id: "pr_def_hs", number: 301, state: :open, head_sha: "sha_b")
+           }}
+        end
+      )
+
+      refute_enqueued(worker: Tracker.Nixpkgs.ChangeArtifactRefreshWorker)
+    end
+  end
+
   describe "rate-limit short-circuit" do
     test "skips when :graphql rate-limit cache says limited", %{rate_limit_table: table} do
       reset_at = System.os_time(:second) + 300
