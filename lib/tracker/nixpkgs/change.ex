@@ -20,6 +20,7 @@ defmodule Tracker.Nixpkgs.Change do
     define :bulk_upsert, args: [:number]
     define :distinct_base_refs
     define :existing_numbers, args: [:numbers]
+    define :max_gh_updated_at
   end
 
   actions do
@@ -122,6 +123,14 @@ defmodule Tracker.Nixpkgs.Change do
 
       prepare build(select: [:number])
       filter expr(number in ^arg(:numbers))
+    end
+
+    action :max_gh_updated_at, :utc_datetime do
+      allow_nil? true
+
+      run fn _input, _context ->
+        Ash.max(__MODULE__, :gh_updated_at)
+      end
     end
 
     create :bulk_upsert do
