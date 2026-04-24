@@ -28,7 +28,7 @@ config :tracker, Oban,
     {Oban.Plugins.Lifeline, rescue_after: :timer.minutes(30)},
     {Oban.Plugins.Cron,
      crontab: [
-       {"*/5 * * * *", Tracker.Nixpkgs.ChangePollWorker},
+       {"*/5 * * * *", Tracker.Nixpkgs.ChangeDiscoveryWorker},
        {"0 */4 * * *", Tracker.Ingestion.CronWorker, queue: :ingestion}
      ]}
   ]
