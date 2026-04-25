@@ -131,6 +131,34 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorkerTest do
     end
   end
 
+  describe "watermark/0" do
+    test "returns the max gh_updated_at when newer than the 90-day floor" do
+      Change.bulk_upsert_all([
+        %{
+          number: 9101,
+          title: "older",
+          state: :open,
+          gh_updated_at: ~U[2026-04-10 00:00:00Z]
+        },
+        %{
+          number: 9102,
+          title: "newer",
+          state: :open,
+          gh_updated_at: ~U[2026-04-20 00:00:00Z]
+        }
+      ])
+
+      assert ChangeDiscoveryWorker.watermark() == ~U[2026-04-20 00:00:00Z]
+    end
+
+    test "returns the 90-day floor when the DB is empty" do
+      floor = DateTime.utc_now() |> DateTime.add(-90, :day)
+      got = ChangeDiscoveryWorker.watermark()
+
+      assert DateTime.diff(got, floor) |> abs() < 5
+    end
+  end
+
   describe "parse_pr_payload/1" do
     test "maps merged_at to :merged state" do
       pr = pr_struct(number: 1, state: "closed", merged_at: ~U[2026-04-01 00:00:00Z])
