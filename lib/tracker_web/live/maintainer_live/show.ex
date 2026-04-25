@@ -96,14 +96,14 @@ defmodule TrackerWeb.MaintainerLive.Show do
   @impl true
   def mount(_params, _session, socket) do
     if connected?(socket) do
-      Phoenix.PubSub.subscribe(Tracker.PubSub, "changes")
+      Phoenix.PubSub.subscribe(Tracker.PubSub, "changes:updated")
     end
 
     {:ok, assign_new(socket, :current_user, fn -> nil end)}
   end
 
   @impl true
-  def handle_info({:change_processed, _payload}, socket) do
+  def handle_info(%Ash.Notifier.Notification{resource: Tracker.Nixpkgs.Change}, socket) do
     {:noreply, reload_page_data(socket)}
   end
 

@@ -79,7 +79,7 @@ defmodule TrackerWeb.ChangeLive.Index do
   @impl true
   def mount(_params, _session, socket) do
     if connected?(socket) do
-      Phoenix.PubSub.subscribe(Tracker.PubSub, "changes")
+      Phoenix.PubSub.subscribe(Tracker.PubSub, "changes:updated")
     end
 
     base_refs = load_base_refs()
@@ -87,7 +87,7 @@ defmodule TrackerWeb.ChangeLive.Index do
   end
 
   @impl true
-  def handle_info({:change_processed, _payload}, socket) do
+  def handle_info(%Ash.Notifier.Notification{resource: Tracker.Nixpkgs.Change}, socket) do
     {:noreply, socket |> assign(:base_refs, load_base_refs()) |> load_changes()}
   end
 

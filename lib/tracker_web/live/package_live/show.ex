@@ -319,7 +319,7 @@ defmodule TrackerWeb.PackageLive.Show do
     all_revisions? = params["all_revisions"] == "true"
 
     if connected?(socket) do
-      Phoenix.PubSub.subscribe(Tracker.PubSub, "changes")
+      Phoenix.PubSub.subscribe(Tracker.PubSub, "changes:updated")
 
       if socket.assigns.lens do
         Phoenix.PubSub.subscribe(
@@ -344,7 +344,7 @@ defmodule TrackerWeb.PackageLive.Show do
   end
 
   @impl true
-  def handle_info({:change_processed, _payload}, socket) do
+  def handle_info(%Ash.Notifier.Notification{resource: Tracker.Nixpkgs.Change}, socket) do
     {:noreply, assign(socket, :recent_changes, load_recent_changes(socket.assigns.package.id))}
   end
 

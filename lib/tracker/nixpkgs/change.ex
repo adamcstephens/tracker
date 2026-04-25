@@ -1,5 +1,9 @@
 defmodule Tracker.Nixpkgs.Change do
-  use Ash.Resource, otp_app: :tracker, domain: Tracker.Nixpkgs, data_layer: AshPostgres.DataLayer
+  use Ash.Resource,
+    otp_app: :tracker,
+    domain: Tracker.Nixpkgs,
+    data_layer: AshPostgres.DataLayer,
+    notifiers: [Ash.Notifier.PubSub]
 
   postgres do
     table "changes"
@@ -219,6 +223,15 @@ defmodule Tracker.Nixpkgs.Change do
         :updated_at
       ]
     end
+  end
+
+  pub_sub do
+    module Phoenix.PubSub
+    name Tracker.PubSub
+    prefix "changes"
+
+    publish :update_processing_status, "updated"
+    publish :refresh_from_graphql, "updated"
   end
 
   attributes do
