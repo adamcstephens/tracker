@@ -24,7 +24,7 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorkerTest do
 
       assert {:ok, %Change{state: :open}} = Change.get_by_number(5001)
       assert {:ok, %Change{state: :draft}} = Change.get_by_number(5002)
-      refute_enqueued(worker: Tracker.Nixpkgs.ChangeProcessWorker)
+      refute_enqueued(worker: Tracker.Nixpkgs.ChangeArtifactRefreshWorker)
     end
 
     test "stops paging when last PR on page is older than watermark" do
@@ -72,7 +72,7 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorkerTest do
       assert {:ok, 0} = ChangeDiscoveryWorker.discover_pages(fetcher, watermark)
     end
 
-    test "does not enqueue ChangeProcessWorker for merged PRs" do
+    test "does not enqueue artifact work for merged PRs" do
       watermark = ~U[2026-01-01 00:00:00Z]
 
       fetcher = fn
@@ -93,7 +93,7 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorkerTest do
 
       assert {:ok, 1} = ChangeDiscoveryWorker.discover_pages(fetcher, watermark)
       assert {:ok, %Change{state: :merged}} = Change.get_by_number(8001)
-      refute_enqueued(worker: Tracker.Nixpkgs.ChangeProcessWorker)
+      refute_enqueued(worker: Tracker.Nixpkgs.ChangeArtifactRefreshWorker)
     end
 
     test "propagates rate limit error" do

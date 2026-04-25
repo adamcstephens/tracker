@@ -78,7 +78,7 @@ defmodule TrackerWeb.ChangeLive.IndexTest do
     assert_patched(view, ~p"/changes?sort_by=title&sort_dir=asc")
   end
 
-  test "updates when a new change is broadcast", %{conn: conn} do
+  test "updates when a Change is updated via notifier", %{conn: conn} do
     {:ok, view, html} = live(conn, ~p"/changes")
 
     refute html =~ "5003"
@@ -94,7 +94,8 @@ defmodule TrackerWeb.ChangeLive.IndexTest do
       }
     ])
 
-    Phoenix.PubSub.broadcast(Tracker.PubSub, "changes", {:change_processed, %{number: 5003}})
+    {:ok, change} = Tracker.Nixpkgs.Change.get_by_number(5001)
+    Tracker.Nixpkgs.Change.update_processing_status!(change, %{processing_status: :processed})
 
     html = render(view)
     assert html =~ "5003"
