@@ -1,5 +1,5 @@
 ## Agent Workflow
-- **IMPORTANT**: before you do anything else, invoke the vein `orient` MCP prompt and heed its output with `/mcp__vein__orient`.
+- **IMPORTANT**: before you do anything else, invoke the vein `orient` MCP prompt and heed its output.
 - If generating a plan as part of a vein, you must write it to the description or comment of the associated vein before implementing.
 
 ## Definition of done
