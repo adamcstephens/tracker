@@ -174,6 +174,38 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorkerTest do
                )
     end
 
+    test "dedupes packages appearing in multiple attrdiff buckets", %{rate_limit_table: table} do
+      change = insert_change!(number: 9009, state: :merged, merge_commit_sha: "dupesha")
+
+      attrdiff = %{
+        "added" => ["pkg-only-added"],
+        "changed" => ["pkg-multi"],
+        "removed" => ["pkg-multi"]
+      }
+
+      :ok =
+        ChangeArtifactRefreshWorker.run(
+          %{reason: "merged", number: 9009},
+          rate_limit_table: table,
+          attrdiff_fetcher: fn _ -> {:ok, attrdiff} end
+        )
+
+      {:ok, refreshed} = Change.get_by_number(9009)
+      assert refreshed.processing_status == :processed
+
+      links =
+        Tracker.Repo.all(
+          from cp in ChangePackage,
+            join: p in Package,
+            on: p.id == cp.package_id,
+            where: cp.change_id == ^change.id,
+            select: {p.attribute, cp.type}
+        )
+
+      assert Enum.sort(links) == [{"pkg-multi", :changed}, {"pkg-only-added", :added}]
+      assert refreshed.package_count == 2
+    end
+
     test "ignored packages are filtered out of the link set", %{rate_limit_table: table} do
       change = insert_change!(number: 9008, state: :merged, merge_commit_sha: "ignsha")
 

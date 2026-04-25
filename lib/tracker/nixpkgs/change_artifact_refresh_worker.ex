@@ -103,7 +103,11 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
   end
 
   defp apply_refresh(change, attrdiff) do
-    typed_entries = flatten_attrdiff(attrdiff)
+    typed_entries =
+      attrdiff
+      |> flatten_attrdiff()
+      |> Enum.uniq_by(&elem(&1, 1))
+
     total = length(typed_entries)
 
     if total > @link_cap do
