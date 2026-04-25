@@ -198,11 +198,12 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorker do
     end
   end
 
-  defp watermark do
+  @doc false
+  def watermark do
     floor = DateTime.utc_now() |> DateTime.add(-@watermark_floor_days, :day)
 
     case Change.max_gh_updated_at() do
-      %DateTime{} = dt ->
+      {:ok, %DateTime{} = dt} ->
         if DateTime.before?(dt, floor), do: floor, else: dt
 
       _ ->
