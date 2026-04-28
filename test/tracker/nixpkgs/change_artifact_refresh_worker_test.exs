@@ -234,13 +234,145 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorkerTest do
     end
   end
 
+  describe "run/2 with reason=head_sha_changed" do
+    test "replaces link set, updates status to :processed, bumps package_count", %{
+      rate_limit_table: table
+    } do
+      change = insert_change!(number: 9200, state: :open, head_sha: "newsha")
+
+      stale_pkg = insert_package!("legacy-open-pkg")
+      insert_change_package!(change.id, stale_pkg.id, :changed)
+
+      attrdiff = %{"added" => ["open-pkg-a"], "changed" => ["open-pkg-b"], "removed" => []}
+
+      :ok =
+        ChangeArtifactRefreshWorker.run(
+          %{reason: "head_sha_changed", number: 9200},
+          rate_limit_table: table,
+          attrdiff_fetcher: fn _change -> {:ok, attrdiff} end
+        )
+
+      {:ok, refreshed} = Change.get_by_number(9200)
+      assert refreshed.processing_status == :processed
+      assert refreshed.package_count == 2
+
+      links =
+        Tracker.Repo.all(
+          from cp in ChangePackage,
+            join: p in Package,
+            on: p.id == cp.package_id,
+            where: cp.change_id == ^change.id,
+            select: {p.attribute, cp.type}
+        )
+
+      assert Enum.sort(links) == [{"open-pkg-a", :added}, {"open-pkg-b", :changed}]
+    end
+
+    test "cap enforcement: over 1000 entries writes zero rows, status :too_large", %{
+      rate_limit_table: table
+    } do
+      change = insert_change!(number: 9201, state: :draft, head_sha: "bigopen")
+      over_cap = for i <- 1..1001, do: "open-pkg-#{i}"
+      attrdiff = %{"added" => over_cap, "changed" => [], "removed" => []}
+
+      :ok =
+        ChangeArtifactRefreshWorker.run(
+          %{reason: "head_sha_changed", number: 9201},
+          rate_limit_table: table,
+          attrdiff_fetcher: fn _ -> {:ok, attrdiff} end
+        )
+
+      {:ok, refreshed} = Change.get_by_number(9201)
+      assert refreshed.processing_status == :too_large
+      assert refreshed.package_count == 1001
+
+      link_count =
+        Tracker.Repo.one(
+          from(cp in ChangePackage, where: cp.change_id == ^change.id, select: count(cp.id))
+        )
+
+      assert link_count == 0
+    end
+
+    test "fetcher returning :snooze propagates {:snooze, n}", %{rate_limit_table: table} do
+      insert_change!(number: 9202, state: :open, head_sha: "snoozeopen")
+
+      assert {:snooze, 90} =
+               ChangeArtifactRefreshWorker.run(
+                 %{reason: "head_sha_changed", number: 9202},
+                 rate_limit_table: table,
+                 attrdiff_fetcher: fn _ -> {:snooze, 90} end
+               )
+    end
+
+    test "terminal errors set matching status and return :ok without retry", %{
+      rate_limit_table: table
+    } do
+      for {reason, number} <- [
+            {:artifact_expired, 9203},
+            {:no_workflow_run, 9213},
+            {:no_comparison_artifact, 9223}
+          ] do
+        insert_change!(number: number, state: :open, head_sha: "sha#{number}")
+
+        :ok =
+          ChangeArtifactRefreshWorker.run(
+            %{reason: "head_sha_changed", number: number},
+            rate_limit_table: table,
+            attrdiff_fetcher: fn _ -> {:error, reason} end
+          )
+
+        {:ok, refreshed} = Change.get_by_number(number)
+        assert refreshed.processing_status == reason
+      end
+    end
+
+    test "fetcher generic error sets :failed and returns {:error, reason}", %{
+      rate_limit_table: table
+    } do
+      insert_change!(number: 9204, state: :open, head_sha: "erropen")
+
+      assert {:error, :boom} =
+               ChangeArtifactRefreshWorker.run(
+                 %{reason: "head_sha_changed", number: 9204},
+                 rate_limit_table: table,
+                 attrdiff_fetcher: fn _ -> {:error, :boom} end
+               )
+
+      {:ok, refreshed} = Change.get_by_number(9204)
+      assert refreshed.processing_status == :failed
+    end
+
+    test "REST rate-limit cache short-circuits with snooze", %{rate_limit_table: table} do
+      RateLimitCache.set_reset(:rest, System.os_time(:second) + 60, table)
+
+      assert {:snooze, seconds} =
+               ChangeArtifactRefreshWorker.run(
+                 %{reason: "head_sha_changed", number: 9205},
+                 rate_limit_table: table,
+                 attrdiff_fetcher: fn _ -> raise "fetcher should not be called" end
+               )
+
+      assert seconds > 0
+    end
+
+    test "unknown Change number: logs and returns :ok", %{rate_limit_table: table} do
+      assert :ok =
+               ChangeArtifactRefreshWorker.run(
+                 %{reason: "head_sha_changed", number: 999_999_998},
+                 rate_limit_table: table,
+                 attrdiff_fetcher: fn _ -> raise "fetcher should not be called" end
+               )
+    end
+  end
+
   describe "run/2 with unknown reason" do
     test "no-ops and returns :ok", %{rate_limit_table: table} do
       insert_change!(number: 9100, state: :open)
 
       assert :ok =
                ChangeArtifactRefreshWorker.run(
-                 %{reason: "head_sha_changed", number: 9100},
+                 %{reason: "something_else", number: 9100},
                  rate_limit_table: table,
                  attrdiff_fetcher: fn _ -> raise "fetcher should not be called" end
                )

@@ -256,7 +256,7 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorkerTest do
       )
     end
 
-    test "does NOT enqueue for :head_sha_changed (deferred to trk-185)" do
+    test "enqueues ChangeArtifactRefreshWorker for :head_sha_changed transitions" do
       insert_change!(number: 301, state: :open, node_id: "pr_def_hs", head_sha: "sha_a")
 
       ChangeRefreshWorker.run(
@@ -268,7 +268,10 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorkerTest do
         end
       )
 
-      refute_enqueued(worker: Tracker.Nixpkgs.ChangeArtifactRefreshWorker)
+      assert_enqueued(
+        worker: Tracker.Nixpkgs.ChangeArtifactRefreshWorker,
+        args: %{"number" => 301, "reason" => "head_sha_changed"}
+      )
     end
   end
 
