@@ -5,7 +5,7 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorkerTest do
   alias Tracker.Nixpkgs.ChangeDiscoveryWorker
 
   describe "discover_pages/2" do
-    test "upserts every PR on every fetched page" do
+    test "upserts every PR on every fetched page and enqueues head_sha_changed for new open/draft" do
       fetcher = fn
         1 ->
           {:ok,
@@ -24,6 +24,58 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorkerTest do
 
       assert {:ok, %Change{state: :open}} = Change.get_by_number(5001)
       assert {:ok, %Change{state: :draft}} = Change.get_by_number(5002)
+
+      assert_enqueued(
+        worker: Tracker.Nixpkgs.ChangeArtifactRefreshWorker,
+        args: %{"number" => 5001, "reason" => "head_sha_changed"}
+      )
+
+      assert_enqueued(
+        worker: Tracker.Nixpkgs.ChangeArtifactRefreshWorker,
+        args: %{"number" => 5002, "reason" => "head_sha_changed"}
+      )
+    end
+
+    test "does not enqueue artifact work for already-existing open Changes" do
+      Change.bulk_upsert_all([
+        %{
+          number: 5050,
+          title: "pre-existing",
+          state: :open,
+          author: "tester",
+          url: "https://github.com/NixOS/nixpkgs/pull/5050",
+          base_ref: "master",
+          head_sha: "headsha1"
+        }
+      ])
+
+      fetcher = fn
+        1 -> {:ok, [pr_struct(number: 5050, state: "open", merged_at: nil)]}
+        2 -> {:ok, []}
+      end
+
+      watermark = ~U[2026-01-01 00:00:00Z]
+
+      assert {:ok, 1} = ChangeDiscoveryWorker.discover_pages(fetcher, watermark)
+      refute_enqueued(worker: Tracker.Nixpkgs.ChangeArtifactRefreshWorker)
+    end
+
+    test "does not enqueue artifact work for newly-discovered closed (non-merged) PRs" do
+      fetcher = fn
+        1 ->
+          {:ok,
+           [
+             pr_struct(number: 5099, state: "closed", merged_at: nil)
+           ]}
+
+        2 ->
+          {:ok, []}
+      end
+
+      watermark = ~U[2026-01-01 00:00:00Z]
+
+      assert {:ok, 1} = ChangeDiscoveryWorker.discover_pages(fetcher, watermark)
+      assert {:ok, %Change{state: :closed}} = Change.get_by_number(5099)
       refute_enqueued(worker: Tracker.Nixpkgs.ChangeArtifactRefreshWorker)
     end
 
