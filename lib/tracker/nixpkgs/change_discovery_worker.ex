@@ -12,6 +12,7 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorker do
   require Logger
 
   alias Tracker.Nixpkgs.Change
+  alias Tracker.Nixpkgs.ChangeArtifactRefreshWorker
 
   @repo "NixOS/nixpkgs"
   @watermark_floor_days 90
@@ -124,9 +125,28 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorker do
 
       _ ->
         records = Enum.map(pulls, &parse_pr_payload/1)
+        preexisting = preexisting_numbers(records)
         _ = Change.bulk_upsert_all(records)
+        enqueue_artifact_refresh_for_new_open_drafts(records, preexisting)
         {:ok, length(records)}
     end
+  end
+
+  defp preexisting_numbers(records) do
+    records
+    |> Enum.map(& &1.number)
+    |> Change.existing_numbers!()
+    |> MapSet.new(& &1.number)
+  end
+
+  defp enqueue_artifact_refresh_for_new_open_drafts(records, preexisting) do
+    Enum.each(records, fn record ->
+      if record.state in [:open, :draft] and record.number not in preexisting do
+        %{"number" => record.number, "reason" => "head_sha_changed"}
+        |> ChangeArtifactRefreshWorker.new()
+        |> Oban.insert!()
+      end
+    end)
   end
 
   @doc """
@@ -162,8 +182,7 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorker do
   using the same full-lifecycle upsert path as scheduled discovery.
 
   Stops when it reaches PRs older than #{@watermark_floor_days} days
-  (artifact expiry window). No artifact work is enqueued here — it's
-  driven by the refresh worker from state transitions.
+  (artifact expiry window).
   """
   def backfill do
     token = Tracker.GitHub.installation_token!()
