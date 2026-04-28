@@ -136,8 +136,7 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorker do
   defp maybe_add(list, true, tag), do: [tag | list]
   defp maybe_add(list, false, _), do: list
 
-  # Default on_transition hook.
-  defp log_transition(change, :merged = reason) do
+  defp log_transition(change, reason) when reason in [:merged, :head_sha_changed] do
     Logger.info(
       msg: "artifact_refresh transition detected",
       number: change.number,
@@ -145,22 +144,9 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorker do
       reason: reason
     )
 
-    %{"number" => change.number, "reason" => "merged"}
+    %{"number" => change.number, "reason" => Atom.to_string(reason)}
     |> Tracker.Nixpkgs.ChangeArtifactRefreshWorker.new()
     |> Oban.insert!()
-
-    :ok
-  end
-
-  # trk-185 will wire :head_sha_changed once the open/draft artifact source
-  # is identified.
-  defp log_transition(change, :head_sha_changed = reason) do
-    Logger.info(
-      msg: "artifact_refresh transition detected (not yet enqueued)",
-      number: change.number,
-      node_id: change.node_id,
-      reason: reason
-    )
 
     :ok
   end

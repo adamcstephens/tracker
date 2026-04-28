@@ -13,6 +13,8 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCache do
 
   alias Tracker.Nixpkgs.S3Cache
 
+  # Meta should always be read forward
+  # avoid breaking changes, or upcast on read
   defmodule Meta do
     use TypedStruct
 
@@ -20,6 +22,10 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCache do
       field :version, integer(), default: 1
       field :run_id, integer()
       field :names, [String.t()], default: []
+      # Workflow that produced the cached artifacts. `:merge_group` is the
+      # post-merge canonical comparison; `:pr` is the in-flight PR-run
+      # comparison and should not satisfy reads expecting `:merge_group`.
+      field :source, :merge_group | :pr, default: :merge_group
     end
   end
 
@@ -57,10 +63,16 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCache do
 
   Each artifact map must have `:name` and `:archive_download_url` keys.
 
+  Options:
+    * `:source` — `:merge_group` (default) or `:pr`. Records which
+      workflow produced these artifacts so that `fetch_comparison/2`
+      can reject a cache hit from the wrong source.
+
   Returns `:ok` or `{:error, reason}` (stops on first download failure).
   """
   def cache_run_artifacts(pr_number, run_id, artifacts, token, opts \\ []) do
     m_key = meta_key(pr_number)
+    source = Keyword.get(opts, :source, :merge_group)
 
     if run_cached?(m_key, run_id) do
       Logger.debug("All artifacts cached for PR ##{pr_number}, run #{run_id}")
@@ -72,7 +84,7 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCache do
 
       case download_and_store_all(pr_number, artifacts, token, opts) do
         :ok ->
-          store_meta(m_key, %Meta{run_id: run_id, names: names})
+          store_meta(m_key, %Meta{run_id: run_id, names: names, source: source})
           :ok
 
         {:error, _} = error ->
@@ -115,12 +127,42 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCache do
   @doc """
   Reads the cached comparison artifact and extracts its attrdiff.
 
+  Options:
+    * `:expected_source` — when set, the cached `Meta.source` must match
+      or the read returns `{:error, {:source_mismatch, cached}}`. Used
+      to keep a PR-run cache from satisfying a merged read.
+
   Returns `{:ok, attrdiff}` or `{:error, reason}`.
   """
-  def fetch_comparison(pr_number) do
+  def fetch_comparison(pr_number, opts \\ []) do
+    expected = Keyword.get(opts, :expected_source)
+
+    with :ok <- check_source(pr_number, expected),
+         {:ok, zip_body} <- read_or_miss(pr_number) do
+      extract_attrdiff(zip_body)
+    end
+  end
+
+  defp check_source(_pr_number, nil), do: :ok
+
+  defp check_source(pr_number, expected) do
+    case read_meta(pr_number) do
+      {:ok, meta} ->
+        # Pre-trk-185 metas were serialized without :source; grandfather
+        # them in as :merge_group since that was the only path then.
+        cached = Map.get(meta, :source) || :merge_group
+
+        if cached == expected, do: :ok, else: {:error, {:source_mismatch, cached}}
+
+      :miss ->
+        :ok
+    end
+  end
+
+  defp read_or_miss(pr_number) do
     case read_artifact(pr_number, "comparison") do
       {:ok, zip_body} ->
-        extract_attrdiff(zip_body)
+        {:ok, zip_body}
 
       :miss ->
         case read_meta(pr_number) do

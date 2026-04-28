@@ -3,9 +3,14 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
   Refreshes the ChangePackage link set for a Change from its latest
   comparison artifact, atomically replacing the existing links.
 
-  Currently only the `"merged"` reason is implemented (pulls from the
-  Merge Group workflow run keyed by `merge_commit_sha`). trk-185 will
-  add the `"head_sha_changed"` path for open/draft PRs.
+  Two reasons are supported:
+
+    * `"merged"` — pulls the comparison from the Merge Group workflow
+      run keyed by `merge_commit_sha`.
+    * `"head_sha_changed"` — pulls the comparison from the open/draft
+      PR's "PR" workflow run (event `pull_request_target`) keyed by
+      `head_sha`. Run each time the head_sha advances so the link set
+      stays current while the PR is in flight.
   """
   use Oban.Worker,
     queue: :changes,
@@ -34,7 +39,8 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
   """
   def run(args, opts \\ [])
 
-  def run(%{reason: "merged", number: number}, opts) do
+  def run(%{reason: reason, number: number}, opts)
+      when reason in ["merged", "head_sha_changed"] do
     table = Keyword.get(opts, :rate_limit_table, RateLimitCache)
 
     case RateLimitCache.check(:rest, table) do
@@ -43,7 +49,7 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
         {:snooze, seconds}
 
       :ok ->
-        do_run_merged(number, opts)
+        do_run(reason, number, opts)
     end
   end
 
@@ -57,10 +63,11 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
     :ok
   end
 
-  defp do_run_merged(number, opts) do
+  defp do_run(reason, number, opts) do
     case Change.get_by_number(number) do
       {:ok, change} ->
-        fetcher = Keyword.get_lazy(opts, :attrdiff_fetcher, fn -> &default_fetcher/1 end)
+        fetcher =
+          Keyword.get_lazy(opts, :attrdiff_fetcher, fn -> default_fetcher_for(reason) end)
 
         case fetcher.(change) do
           {:ok, attrdiff} ->
@@ -101,6 +108,9 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
         :ok
     end
   end
+
+  defp default_fetcher_for("merged"), do: &default_merged_fetcher/1
+  defp default_fetcher_for("head_sha_changed"), do: &default_head_sha_fetcher/1
 
   defp apply_refresh(change, attrdiff) do
     typed_entries =
@@ -211,11 +221,11 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
     |> Map.new(&{&1.attribute, &1.id})
   end
 
-  defp default_fetcher(change) do
+  defp default_merged_fetcher(change) do
     token = Tracker.GitHub.installation_token!()
 
     cache_first =
-      case ChangeArtifactCache.fetch_comparison(change.number) do
+      case ChangeArtifactCache.fetch_comparison(change.number, expected_source: :merge_group) do
         {:ok, attrdiff} -> {:ok, attrdiff}
         {:error, _} -> :miss
       end
@@ -225,19 +235,46 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
         ok
 
       :miss ->
-        fetch_from_github(change, token)
+        fetch_from_github(change,
+          find_run: &find_merge_group_run/4,
+          sha: change.merge_commit_sha,
+          source: :merge_group,
+          token: token
+        )
     end
   end
 
-  defp fetch_from_github(change, token) do
-    [owner, repo] = String.split(@repo, "/")
+  # Open/draft PRs: skip cache-first because head_sha (and thus the
+  # underlying run) just changed. cache_run_artifacts overwrites the
+  # cached comparison.zip when run_id differs, so the fetch path
+  # always reflects the current head_sha.
+  defp default_head_sha_fetcher(change) do
+    token = Tracker.GitHub.installation_token!()
 
-    with {:ok, run_id} <- find_merge_group_run(owner, repo, change.merge_commit_sha, token),
+    fetch_from_github(change,
+      find_run: &find_pr_run/4,
+      sha: change.head_sha,
+      source: :pr,
+      token: token
+    )
+  end
+
+  defp fetch_from_github(change, opts) do
+    [owner, repo] = String.split(@repo, "/")
+    find_run = Keyword.fetch!(opts, :find_run)
+    sha = Keyword.fetch!(opts, :sha)
+    source = Keyword.fetch!(opts, :source)
+    token = Keyword.fetch!(opts, :token)
+
+    with {:ok, run_id} <- find_run.(owner, repo, sha, token),
          {:ok, %{artifacts: artifacts}} <-
            GitHub.Actions.list_workflow_run_artifacts(owner, repo, run_id, auth: token),
          :ok <-
-           ChangeArtifactCache.cache_run_artifacts(change.number, run_id, artifacts, token),
-         {:ok, attrdiff} <- ChangeArtifactCache.fetch_comparison(change.number) do
+           ChangeArtifactCache.cache_run_artifacts(change.number, run_id, artifacts, token,
+             source: source
+           ),
+         {:ok, attrdiff} <-
+           ChangeArtifactCache.fetch_comparison(change.number, expected_source: source) do
       {:ok, attrdiff}
     else
       {:error, %GitHub.Error{reason: :rate_limited}} -> {:error, :rate_limited}
@@ -245,19 +282,25 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
     end
   end
 
-  defp find_merge_group_run(_owner, _repo, nil, _token), do: {:error, :no_workflow_run}
+  defp find_merge_group_run(owner, repo, sha, token),
+    do: find_run(owner, repo, sha, token, "Merge Group")
 
-  defp find_merge_group_run(owner, repo, sha, token) do
+  defp find_pr_run(owner, repo, sha, token),
+    do: find_run(owner, repo, sha, token, "PR")
+
+  defp find_run(_owner, _repo, nil, _token, _name), do: {:error, :no_workflow_run}
+
+  defp find_run(owner, repo, sha, token, name) do
     case GitHub.Actions.list_workflow_runs_for_repo(owner, repo,
            head_sha: sha,
            per_page: 100,
            auth: token
          ) do
       {:ok, %{workflow_runs: runs}} ->
-        case Enum.find(runs, &(&1.name == "Merge Group" && &1.status == "completed")) do
+        case Enum.find(runs, &(&1.name == name && &1.status == "completed")) do
           nil ->
-            if Enum.find(runs, &(&1.name == "Merge Group")) do
-              Logger.info("Merge Group run not yet complete for #{sha}, snoozing")
+            if Enum.find(runs, &(&1.name == name)) do
+              Logger.info("#{name} run not yet complete for #{sha}, snoozing")
               {:snooze, 120}
             else
               {:error, :no_workflow_run}
