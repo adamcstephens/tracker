@@ -310,7 +310,6 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorkerTest do
     } do
       for {reason, number} <- [
             {:artifact_expired, 9203},
-            {:no_workflow_run, 9213},
             {:no_comparison_artifact, 9223}
           ] do
         insert_change!(number: number, state: :open, head_sha: "sha#{number}")
@@ -325,6 +324,23 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorkerTest do
         {:ok, refreshed} = Change.get_by_number(number)
         assert refreshed.processing_status == reason
       end
+    end
+
+    test ":no_workflow_run returns {:error, _} and leaves processing_status untouched", %{
+      rate_limit_table: table
+    } do
+      insert_change!(number: 9213, state: :open, head_sha: "sha9213")
+
+      assert {:error, :no_workflow_run} =
+               ChangeArtifactRefreshWorker.run(
+                 %{reason: "head_sha_changed", number: 9213},
+                 rate_limit_table: table,
+                 attrdiff_fetcher: fn _ -> {:error, :no_workflow_run} end
+               )
+
+      {:ok, refreshed} = Change.get_by_number(9213)
+      refute refreshed.processing_status == :no_workflow_run
+      refute refreshed.processing_status == :failed
     end
 
     test "fetcher generic error sets :failed and returns {:error, reason}", %{
