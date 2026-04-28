@@ -188,6 +188,27 @@ defmodule TrackerWeb.PackageLive.IndexTest do
     assert dot_segment_idx < substring_idx
   end
 
+  describe "discovered column" do
+    test "renders 'Discovered' column header", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/packages")
+      assert html =~ "Discovered"
+    end
+
+    test "default sort lists most recently discovered packages first", %{conn: conn} do
+      # Setup creates 6 packages in order; the last one inserted should appear first.
+      {:ok, _view, html} = live(conn, ~p"/packages")
+
+      assert attribute_order(html) |> hd() == "emacs.firefox-tools"
+    end
+
+    test "sort_by=inserted_at&sort_dir=asc reverses default order", %{conn: conn} do
+      {:ok, _view, html} =
+        live(conn, ~p"/packages?sort_by=inserted_at&sort_dir=asc")
+
+      assert attribute_order(html) |> hd() == "firefox"
+    end
+  end
+
   defp attribute_order(html) do
     ~r/<td[^>]*>\s*(?:<a[^>]*>)?\s*([a-z][\w.-]*)\s*(?:<\/a>)?\s*<\/td>/
     |> Regex.scan(html)
