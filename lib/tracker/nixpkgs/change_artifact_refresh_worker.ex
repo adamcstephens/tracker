@@ -81,6 +81,14 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
             Logger.warning("Artifact refresh rate limited, snoozing #{snooze}s")
             {:snooze, snooze}
 
+          {:error, :no_workflow_run} when reason == "head_sha_changed" ->
+            Logger.info(
+              msg: "PR run not yet present, retrying artifact refresh",
+              number: number
+            )
+
+            {:error, :no_workflow_run}
+
           {:error, terminal}
           when terminal in ~w(artifact_expired no_workflow_run no_comparison_artifact)a ->
             Logger.warning(
