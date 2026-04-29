@@ -6,7 +6,9 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorkerTest do
   alias Tracker.GitHub.GraphQL.PullRequest
   alias Tracker.GitHub.RateLimitCache
   alias Tracker.Nixpkgs.Change
+  alias Tracker.Nixpkgs.ChangePackage
   alias Tracker.Nixpkgs.ChangeRefreshWorker
+  alias Tracker.Nixpkgs.Package
 
   setup do
     table = :"rate_limit_cache_refresh_#{System.unique_integer([:positive])}"
@@ -113,7 +115,7 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorkerTest do
       assert recorder.calls.() == []
     end
 
-    test "open → closed (no merge) does not emit any artifact transition" do
+    test "open → closed (no merge) emits :closed_no_merge transition" do
       insert_change!(number: 103, state: :open, node_id: "pr_cl", head_sha: "sha_cl")
       recorder = transition_recorder()
 
@@ -135,7 +137,31 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorkerTest do
       )
 
       assert {:ok, %Change{state: :closed, closed_at: %DateTime{}}} = Change.get_by_number(103)
-      assert recorder.calls.() == []
+      assert [{%Change{number: 103}, :closed_no_merge}] = recorder.calls.()
+    end
+
+    test "draft → closed (no merge) emits :closed_no_merge transition" do
+      insert_change!(number: 109, state: :draft, node_id: "pr_dcl", head_sha: "sha_dcl")
+      recorder = transition_recorder()
+
+      ChangeRefreshWorker.run(
+        fetcher: fn _ ->
+          {:ok,
+           %{
+             "pr_dcl" =>
+               pr(
+                 node_id: "pr_dcl",
+                 number: 109,
+                 state: :closed,
+                 head_sha: "sha_dcl",
+                 closed_at: ~U[2026-04-23 09:00:00Z]
+               )
+           }}
+        end,
+        on_transition: recorder.fn
+      )
+
+      assert [{%Change{number: 109}, :closed_no_merge}] = recorder.calls.()
     end
 
     test ":not_found bumps last_checked_at, keeps state, and warns" do
@@ -273,6 +299,47 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorkerTest do
         args: %{"number" => 301, "reason" => "head_sha_changed"}
       )
     end
+
+    test "clears ChangePackage links and resets package_count on :closed_no_merge" do
+      insert_change!(
+        number: 302,
+        state: :open,
+        node_id: "pr_def_cl",
+        head_sha: "sha_cl",
+        package_count: 3
+      )
+
+      {:ok, change} = Change.get_by_number(302)
+      package = insert_package!("foo")
+
+      ChangePackage.bulk_create_all([
+        %{change_id: change.id, package_id: package.id, type: :added}
+      ])
+
+      ChangeRefreshWorker.run(
+        fetcher: fn _ ->
+          {:ok,
+           %{
+             "pr_def_cl" =>
+               pr(
+                 node_id: "pr_def_cl",
+                 number: 302,
+                 state: :closed,
+                 head_sha: "sha_cl",
+                 closed_at: ~U[2026-04-23 09:00:00Z]
+               )
+           }}
+        end
+      )
+
+      assert {:ok, %Change{state: :closed, package_count: 0}} = Change.get_by_number(302)
+
+      import Ecto.Query
+
+      assert Tracker.Repo.one(
+               from(cp in ChangePackage, where: cp.change_id == ^change.id, select: count(cp.id))
+             ) == 0
+    end
   end
 
   describe "rate-limit short-circuit" do
@@ -304,6 +371,16 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorkerTest do
       |> Map.merge(defaults, fn _k, v, _d -> v end)
 
     Change.bulk_upsert_all([record])
+  end
+
+  defp insert_package!(attribute) do
+    Package.bulk_upsert_all([%{attribute: attribute}])
+
+    require Ash.Query
+
+    Package
+    |> Ash.Query.filter(attribute == ^attribute)
+    |> Ash.read_one!()
   end
 
   defp pr(opts) do
