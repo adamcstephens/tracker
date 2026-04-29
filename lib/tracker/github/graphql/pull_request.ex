@@ -9,6 +9,8 @@ defmodule Tracker.GitHub.GraphQL.PullRequest do
     field :node_id, String.t()
     field :number, pos_integer()
     field :state, :draft | :open | :closed | :merged
+    field :base_ref, String.t() | nil, enforce: false, default: nil
+    field :head_ref, String.t() | nil, enforce: false, default: nil
     field :head_sha, String.t()
     field :title, String.t()
     field :updated_at, DateTime.t()

@@ -211,6 +211,36 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorkerTest do
       assert DateTime.after?(change.last_checked_at, old_time)
     end
 
+    test "base_ref change persists from GraphQL response" do
+      insert_change!(
+        number: 110,
+        state: :open,
+        node_id: "pr_br",
+        head_sha: "sha_br",
+        base_ref: "master"
+      )
+
+      ChangeRefreshWorker.run(
+        fetcher: fn _ ->
+          {:ok,
+           %{
+             "pr_br" =>
+               pr(
+                 node_id: "pr_br",
+                 number: 110,
+                 state: :open,
+                 head_sha: "sha_br",
+                 base_ref: "staging-next",
+                 head_ref: "topic/retarget"
+               )
+           }}
+        end
+      )
+
+      assert {:ok, %Change{base_ref: "staging-next", head_ref: "topic/retarget"}} =
+               Change.get_by_number(110)
+    end
+
     test "labels and title update from GraphQL response" do
       insert_change!(number: 106, state: :open, node_id: "pr_lbl", labels: ["old"])
 
@@ -388,6 +418,8 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorkerTest do
       node_id: opts[:node_id],
       number: opts[:number],
       state: opts[:state] || :open,
+      base_ref: opts[:base_ref] || "master",
+      head_ref: opts[:head_ref] || "feature",
       head_sha: opts[:head_sha] || "default_sha",
       title: opts[:title] || "pr #{opts[:number]}",
       updated_at: opts[:updated_at] || ~U[2026-04-23 12:00:00Z],
