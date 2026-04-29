@@ -45,6 +45,8 @@ defmodule Tracker.GitHub.GraphQLTest do
       "number" => opts[:number],
       "state" => opts[:state] || "OPEN",
       "isDraft" => opts[:isDraft] || false,
+      "baseRefName" => opts[:baseRefName] || "master",
+      "headRefName" => opts[:headRefName] || "feature",
       "headRefOid" => opts[:headRefOid] || "abc123",
       "title" => opts[:title] || "test PR",
       "updatedAt" => opts[:updatedAt] || "2026-04-01T12:00:00Z",
@@ -162,6 +164,34 @@ defmodule Tracker.GitHub.GraphQLTest do
 
       assert {:ok, %{"pr_l" => %PullRequest{labels: ["bug", "10.rebuild-linux: 1"]}}} =
                GraphQL.fetch_prs(["pr_l"], call())
+    end
+
+    test "decodes baseRefName and headRefName onto base_ref and head_ref" do
+      Req.Test.stub(
+        __MODULE__,
+        graphql_response(%{
+          "data" => %{
+            "rateLimit" => rate_limit(),
+            "nodes" => [
+              pr_node(
+                id: "pr_refs",
+                number: 1,
+                baseRefName: "staging-next",
+                headRefName: "topic/foo"
+              )
+            ]
+          }
+        })
+      )
+
+      assert {:ok,
+              %{
+                "pr_refs" => %PullRequest{
+                  base_ref: "staging-next",
+                  head_ref: "topic/foo"
+                }
+              }} =
+               GraphQL.fetch_prs(["pr_refs"], call())
     end
 
     test "surfaces mergeCommitOid as merge_commit_sha" do

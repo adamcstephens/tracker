@@ -29,6 +29,8 @@ defmodule Tracker.GitHub.GraphQL do
         number
         state
         isDraft
+        baseRefName
+        headRefName
         headRefOid
         title
         updatedAt
@@ -166,6 +168,8 @@ defmodule Tracker.GitHub.GraphQL do
       node_id: id,
       number: node["number"],
       state: decode_state(node["state"], node["isDraft"]),
+      base_ref: node["baseRefName"],
+      head_ref: node["headRefName"],
       head_sha: node["headRefOid"],
       title: node["title"],
       updated_at: parse_datetime(node["updatedAt"]),

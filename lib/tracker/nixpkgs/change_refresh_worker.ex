@@ -107,6 +107,8 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorker do
   defp apply_pr(change, pr, on_transition) do
     attrs = %{
       state: pr.state,
+      base_ref: pr.base_ref,
+      head_ref: pr.head_ref,
       head_sha: pr.head_sha,
       title: pr.title,
       labels: pr.labels,

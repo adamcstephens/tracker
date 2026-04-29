@@ -115,6 +115,8 @@ defmodule Tracker.Nixpkgs.Change do
     update :refresh_from_graphql do
       accept [
         :state,
+        :base_ref,
+        :head_ref,
         :head_sha,
         :title,
         :labels,
