@@ -14,6 +14,7 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorker do
   alias Tracker.GitHub.GraphQL.PullRequest
   alias Tracker.GitHub.RateLimitCache
   alias Tracker.Nixpkgs.Change
+  alias Tracker.Nixpkgs.ChangePackage
 
   @impl Oban.Worker
   def perform(%Oban.Job{}) do
@@ -131,6 +132,10 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorker do
       pr.state in [:open, :draft] and prior_sha != pr.head_sha,
       :head_sha_changed
     )
+    |> maybe_add(
+      prior_state in [:open, :draft] and pr.state == :closed and is_nil(pr.merged_at),
+      :closed_no_merge
+    )
   end
 
   defp maybe_add(list, true, tag), do: [tag | list]
@@ -148,6 +153,31 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorker do
     |> Tracker.Nixpkgs.ChangeArtifactRefreshWorker.new()
     |> Oban.insert!()
 
+    :ok
+  end
+
+  defp log_transition(change, :closed_no_merge) do
+    Logger.info(
+      msg: "clearing ChangePackage links for closed-without-merge PR",
+      number: change.number,
+      node_id: change.node_id
+    )
+
+    {:ok, notifications} =
+      Tracker.Repo.transaction(fn ->
+        ChangePackage.clear_for_change!(change.id)
+
+        {_, notifications} =
+          Change.update_package_count!(
+            change,
+            %{package_count: 0},
+            return_notifications?: true
+          )
+
+        notifications
+      end)
+
+    Ash.Notifier.notify(notifications)
     :ok
   end
 end
