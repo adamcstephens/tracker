@@ -3,57 +3,68 @@ defmodule Tracker.Fixtures do
   Test helpers for setting up ingestion data.
   """
 
-  alias Tracker.Ingestion.Helpers
-
   @doc """
   Loads options data into the database for a channel revision.
 
   Accepts a raw options map (as from options.json) and a channel revision.
-  Upserts modules, declarations, options, and option revisions.
+  Upserts options, option revisions, files, and option-revision-file links.
   """
   def load_options(options_map, channel_revision) do
-    {module_records, declaration_records, option_to_display_name} =
-      Tracker.Nixpkgs.Module.derive_from_options(options_map)
-
-    module_id_map = Tracker.Nixpkgs.Module.bulk_upsert_all(module_records)
-
-    declaration_records
-    |> Enum.map(fn %{path: path, display_name: dn} ->
-      %{path: path, module_id: Map.fetch!(module_id_map, dn)}
-    end)
-    |> Tracker.Nixpkgs.ModuleDeclaration.bulk_upsert_all()
-
     option_records =
-      Enum.map(options_map, fn {name, _entry} ->
-        display_name = Map.get(option_to_display_name, name)
-        module_id = if display_name, do: Map.get(module_id_map, display_name)
-
-        %{name: name}
-        |> Helpers.maybe_put(:module_id, module_id)
-      end)
+      Enum.map(options_map, fn {name, _entry} -> %{name: name} end)
 
     option_id_map = Tracker.Nixpkgs.Option.bulk_upsert_all(option_records)
 
-    options_map
-    |> Enum.map(fn {name, entry} ->
-      %{
-        option_id: Map.fetch!(option_id_map, name),
-        channel_revision_id: channel_revision.id,
-        description: entry["description"],
-        type: entry["type"],
-        default: extract_text(entry["default"]),
-        example: extract_text(entry["example"]),
-        read_only: entry["readOnly"] || false,
-        loc: entry["loc"],
-        declarations: entry["declarations"],
-        related_packages: entry["relatedPackages"]
-      }
-    end)
-    |> Tracker.Nixpkgs.OptionRevision.bulk_insert_all()
+    revision_records =
+      Enum.map(options_map, fn {name, entry} ->
+        %{
+          option_id: Map.fetch!(option_id_map, name),
+          channel_revision_id: channel_revision.id,
+          description: entry["description"],
+          type: entry["type"],
+          default: extract_text(entry["default"]),
+          example: extract_text(entry["example"]),
+          read_only: entry["readOnly"] || false,
+          loc: entry["loc"],
+          declarations: entry["declarations"],
+          related_packages: entry["relatedPackages"]
+        }
+      end)
+
+    option_revision_id_map = Tracker.Nixpkgs.OptionRevision.bulk_insert_all(revision_records)
+
+    declaration_paths =
+      options_map
+      |> Enum.flat_map(fn {_name, entry} -> entry["declarations"] || [] end)
+      |> Enum.map(&normalize_declaration/1)
+      |> Enum.uniq()
+
+    file_id_map = Tracker.Nixpkgs.File.bulk_upsert_all(declaration_paths)
+
+    option_revision_file_records =
+      options_map
+      |> Enum.flat_map(fn {name, entry} ->
+        option_id = Map.fetch!(option_id_map, name)
+        revision_id = Map.fetch!(option_revision_id_map, option_id)
+
+        (entry["declarations"] || [])
+        |> Enum.map(&normalize_declaration/1)
+        |> Enum.uniq()
+        |> Enum.map(fn path ->
+          %{option_revision_id: revision_id, file_id: Map.fetch!(file_id_map, path)}
+        end)
+      end)
+
+    Tracker.Nixpkgs.OptionRevisionFile.bulk_insert_all(option_revision_file_records)
 
     :ok
   end
 
   defp extract_text(%{"text" => text}), do: text
   defp extract_text(_), do: nil
+
+  defp normalize_declaration("nixos/modules/nixos/modules/" <> rest),
+    do: "nixos/modules/" <> rest
+
+  defp normalize_declaration(path), do: path
 end

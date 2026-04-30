@@ -47,37 +47,6 @@
       "size": null,
       "source": "updated_at",
       "type": "utc_datetime_usec"
-    },
-    {
-      "allow_nil?": false,
-      "default": "nil",
-      "generated?": false,
-      "precision": null,
-      "primary_key?": false,
-      "references": {
-        "deferrable": false,
-        "destination_attribute": "id",
-        "destination_attribute_default": null,
-        "destination_attribute_generated": null,
-        "index?": false,
-        "match_type": null,
-        "match_with": null,
-        "multitenancy": {
-          "attribute": null,
-          "global": null,
-          "strategy": null
-        },
-        "name": "module_declarations_module_id_fkey",
-        "on_delete": null,
-        "on_update": null,
-        "primary_key?": true,
-        "schema": "public",
-        "table": "modules"
-      },
-      "scale": null,
-      "size": null,
-      "source": "module_id",
-      "type": "bigint"
     }
   ],
   "base_filter": null,
@@ -86,12 +55,12 @@
   "custom_indexes": [],
   "custom_statements": [],
   "has_create_action": false,
-  "hash": "F51591D5DC63A55E8F55584227F702BABD0E8A5E769A653CC77015CE3DD7AD29",
+  "hash": "2D22056A1E2DB5C78E01846C16B8940C82E8C17E44C2DDF5DFBC44BC2947121D",
   "identities": [
     {
       "all_tenants?": false,
       "base_filter": null,
-      "index_name": "module_declarations_unique_path_index",
+      "index_name": "files_unique_path_index",
       "keys": [
         {
           "type": "atom",
@@ -110,5 +79,5 @@
   },
   "repo": "Elixir.Tracker.Repo",
   "schema": null,
-  "table": "module_declarations"
+  "table": "files"
 }

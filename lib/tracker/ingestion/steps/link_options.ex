@@ -33,19 +33,13 @@ defmodule Tracker.Ingestion.Steps.LinkOptions do
           |> Map.new(&{&1.attribute, &1.id})
       end
 
-    {option_id_map, option_module_map} = load_option_maps()
+    option_id_map = load_option_id_map()
 
     links
     |> Enum.flat_map(fn {option_name, attr_path} ->
       with {:ok, option_id} <- Map.fetch(option_id_map, option_name),
            {:ok, package_id} <- Map.fetch(package_id_map, attr_path) do
-        [
-          %{
-            option_id: option_id,
-            package_id: package_id,
-            module_id: Map.get(option_module_map, option_name)
-          }
-        ]
+        [%{option_id: option_id, package_id: package_id}]
       else
         _ -> []
       end
@@ -56,14 +50,9 @@ defmodule Tracker.Ingestion.Steps.LinkOptions do
     :ok
   end
 
-  defp load_option_maps do
-    rows =
-      from(o in "options", select: {o.name, o.id, o.module_id})
-      |> Tracker.Repo.all()
-
-    id_map = Map.new(rows, fn {name, id, _} -> {name, id} end)
-    module_map = Map.new(rows, fn {name, _, module_id} -> {name, module_id} end)
-
-    {id_map, module_map}
+  defp load_option_id_map do
+    from(o in "options", select: {o.name, o.id})
+    |> Tracker.Repo.all()
+    |> Map.new(fn {name, id} -> {name, id} end)
   end
 end

@@ -14,18 +14,6 @@
     },
     {
       "allow_nil?": false,
-      "default": "nil",
-      "generated?": false,
-      "precision": null,
-      "primary_key?": false,
-      "references": null,
-      "scale": null,
-      "size": null,
-      "source": "path",
-      "type": "text"
-    },
-    {
-      "allow_nil?": false,
       "default": "fragment(\"(now() AT TIME ZONE 'utc')\")",
       "generated?": false,
       "precision": null,
@@ -67,16 +55,47 @@
           "global": null,
           "strategy": null
         },
-        "name": "module_declarations_module_id_fkey",
+        "name": "option_packages_option_id_fkey",
         "on_delete": null,
         "on_update": null,
         "primary_key?": true,
         "schema": "public",
-        "table": "modules"
+        "table": "options"
       },
       "scale": null,
       "size": null,
-      "source": "module_id",
+      "source": "option_id",
+      "type": "bigint"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": {
+        "deferrable": false,
+        "destination_attribute": "id",
+        "destination_attribute_default": null,
+        "destination_attribute_generated": null,
+        "index?": false,
+        "match_type": null,
+        "match_with": null,
+        "multitenancy": {
+          "attribute": null,
+          "global": null,
+          "strategy": null
+        },
+        "name": "option_packages_package_id_fkey",
+        "on_delete": null,
+        "on_update": null,
+        "primary_key?": true,
+        "schema": "public",
+        "table": "packages"
+      },
+      "scale": null,
+      "size": null,
+      "source": "package_id",
       "type": "bigint"
     }
   ],
@@ -85,24 +104,24 @@
   "create_table_options": null,
   "custom_indexes": [],
   "custom_statements": [],
-  "has_create_action": false,
-  "hash": "920540CC5CE3CF40C1BC7B6EA8B60910E5D2AF3D7CF630BD4348097370FF2290",
+  "has_create_action": true,
+  "hash": "3AA1A1881B43B6BAD94E394779F6D8AE73E6B765C8A4793C96DE22EE5B162720",
   "identities": [
     {
       "all_tenants?": false,
       "base_filter": null,
-      "index_name": "module_declarations_unique_path_module_index",
+      "index_name": "option_packages_unique_option_package_index",
       "keys": [
         {
           "type": "atom",
-          "value": "path"
+          "value": "option_id"
         },
         {
           "type": "atom",
-          "value": "module_id"
+          "value": "package_id"
         }
       ],
-      "name": "unique_path_module",
+      "name": "unique_option_package",
       "nils_distinct?": true,
       "where": null
     }
@@ -114,5 +133,5 @@
   },
   "repo": "Elixir.Tracker.Repo",
   "schema": null,
-  "table": "module_declarations"
+  "table": "option_packages"
 }
