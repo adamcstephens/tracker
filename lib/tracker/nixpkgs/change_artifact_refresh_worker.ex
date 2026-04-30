@@ -27,6 +27,8 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
 
   @repo "NixOS/nixpkgs"
   @link_cap 1000
+  @files_per_page 100
+  @files_hard_cap 3000
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"number" => number, "reason" => reason}}) do
@@ -71,7 +73,9 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
 
         case fetcher.(change) do
           {:ok, attrdiff} ->
-            apply_refresh(change, attrdiff)
+            with :ok <- apply_refresh(change, attrdiff) do
+              refresh_changed_files(change, opts)
+            end
 
           {:snooze, _} = snooze ->
             snooze
@@ -119,6 +123,69 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
 
   defp default_fetcher_for("merged"), do: &default_merged_fetcher/1
   defp default_fetcher_for("head_sha_changed"), do: &default_head_sha_fetcher/1
+
+  defp refresh_changed_files(change, opts) do
+    case Keyword.get_lazy(opts, :files_fetcher, &configured_files_fetcher/0) do
+      nil ->
+        :ok
+
+      fetcher ->
+        case fetcher.(change) do
+          {:ok, paths} when is_list(paths) ->
+            Change.update_changed_files!(change, %{changed_files: paths})
+            :ok
+
+          {:error, reason} ->
+            Logger.warning(
+              msg: "changed_files fetch failed; package refresh kept",
+              number: change.number,
+              reason: inspect(reason)
+            )
+
+            :ok
+        end
+    end
+  end
+
+  defp configured_files_fetcher do
+    Application.get_env(:tracker, :changed_files_fetcher, &default_files_fetcher/1)
+  end
+
+  defp default_files_fetcher(change) do
+    [owner, repo] = String.split(@repo, "/")
+    token = Tracker.GitHub.installation_token!()
+    fetch_files_paginated(owner, repo, change.number, token, 1, [])
+  end
+
+  defp fetch_files_paginated(_owner, _repo, _number, _token, _page, acc)
+       when length(acc) >= @files_hard_cap do
+    Logger.warning(msg: "changed_files hit hard cap, truncating", cap: @files_hard_cap)
+    {:ok, Enum.take(acc, @files_hard_cap)}
+  end
+
+  defp fetch_files_paginated(owner, repo, number, token, page, acc) do
+    case GitHub.Pulls.list_files(owner, repo, number,
+           per_page: @files_per_page,
+           page: page,
+           auth: token
+         ) do
+      {:ok, entries} when is_list(entries) ->
+        names = Enum.map(entries, & &1.filename)
+        next_acc = acc ++ names
+
+        if length(entries) < @files_per_page do
+          {:ok, next_acc}
+        else
+          fetch_files_paginated(owner, repo, number, token, page + 1, next_acc)
+        end
+
+      {:error, %GitHub.Error{reason: :rate_limited}} ->
+        {:error, :rate_limited}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
 
   defp apply_refresh(change, attrdiff) do
     typed_entries =

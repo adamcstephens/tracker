@@ -18,6 +18,7 @@ defmodule Tracker.Nixpkgs.Change do
     define :by_package, args: [:package_id]
     define :by_maintainer_github_id, args: [:github_id, {:optional, :channel_id}]
     define :update_package_count
+    define :update_changed_files
     define :update_processing_status
     define :set_node_id
     define :list_missing_node_ids
@@ -102,6 +103,10 @@ defmodule Tracker.Nixpkgs.Change do
 
     update :update_package_count do
       accept [:package_count]
+    end
+
+    update :update_changed_files do
+      accept [:changed_files]
     end
 
     update :update_processing_status do
@@ -281,6 +286,12 @@ defmodule Tracker.Nixpkgs.Change do
     attribute :merged_at, :utc_datetime, public?: true
     attribute :merge_commit_sha, :string, public?: true
     attribute :package_count, :integer, public?: true, default: 0
+
+    attribute :changed_files, {:array, :string} do
+      public? true
+      allow_nil? false
+      default []
+    end
 
     attribute :processing_status, :atom,
       public?: true,

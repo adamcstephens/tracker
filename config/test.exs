@@ -37,6 +37,11 @@ config :phoenix, :plug_init_mode, :runtime
 
 config :tracker, release_cache_load: false
 
+# Tests that exercise ChangeArtifactRefreshWorker without explicitly stubbing
+# `:files_fetcher` should not hit the GitHub REST API. Tests covering
+# changed_files persistence pass an explicit `:files_fetcher` opt.
+config :tracker, changed_files_fetcher: nil
+
 # Enable helpful, but potentially expensive runtime checks
 config :phoenix_live_view,
   enable_expensive_runtime_checks: true
