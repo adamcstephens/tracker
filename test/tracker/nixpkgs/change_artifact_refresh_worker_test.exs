@@ -6,7 +6,9 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorkerTest do
   alias Tracker.GitHub.RateLimitCache
   alias Tracker.Nixpkgs.Change
   alias Tracker.Nixpkgs.ChangeArtifactRefreshWorker
+  alias Tracker.Nixpkgs.ChangeFile
   alias Tracker.Nixpkgs.ChangePackage
+  alias Tracker.Nixpkgs.File, as: NixFile
   alias Tracker.Nixpkgs.Package
 
   setup do
@@ -383,8 +385,10 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorkerTest do
   end
 
   describe "run/2 changed_files persistence" do
-    test "persists fetched file paths on merged refresh", %{rate_limit_table: table} do
-      insert_change!(number: 9400, state: :merged, merge_commit_sha: "fcsha")
+    test "persists fetched file paths as change_files rows on merged refresh", %{
+      rate_limit_table: table
+    } do
+      change = insert_change!(number: 9400, state: :merged, merge_commit_sha: "fcsha")
       attrdiff = %{"added" => ["pkg-a"], "changed" => [], "removed" => []}
       paths = ["pkgs/pkg-a/default.nix", "doc/release-notes.md"]
 
@@ -397,12 +401,12 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorkerTest do
         )
 
       {:ok, refreshed} = Change.get_by_number(9400)
-      assert refreshed.changed_files == paths
       assert refreshed.processing_status == :processed
+      assert change_file_paths(change.id) == Enum.sort(paths)
     end
 
     test "persists fetched file paths on head_sha_changed refresh", %{rate_limit_table: table} do
-      insert_change!(number: 9401, state: :open, head_sha: "fcopen")
+      change = insert_change!(number: 9401, state: :open, head_sha: "fcopen")
       attrdiff = %{"added" => ["pkg-b"], "changed" => [], "removed" => []}
       paths = ["pkgs/pkg-b/default.nix"]
 
@@ -414,12 +418,11 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorkerTest do
           files_fetcher: fn _ -> {:ok, paths} end
         )
 
-      {:ok, refreshed} = Change.get_by_number(9401)
-      assert refreshed.changed_files == paths
+      assert change_file_paths(change.id) == paths
     end
 
-    test "empty file list yields empty array", %{rate_limit_table: table} do
-      insert_change!(number: 9402, state: :merged, merge_commit_sha: "emptyfc")
+    test "empty file list yields no change_files rows", %{rate_limit_table: table} do
+      change = insert_change!(number: 9402, state: :merged, merge_commit_sha: "emptyfc")
       attrdiff = %{"added" => [], "changed" => [], "removed" => []}
 
       :ok =
@@ -430,8 +433,69 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorkerTest do
           files_fetcher: fn _ -> {:ok, []} end
         )
 
-      {:ok, refreshed} = Change.get_by_number(9402)
-      assert refreshed.changed_files == []
+      assert change_file_paths(change.id) == []
+    end
+
+    test "subsequent refresh replaces the prior change_files set", %{rate_limit_table: table} do
+      change = insert_change!(number: 9410, state: :open, head_sha: "replace1")
+      attrdiff = %{"added" => ["pkg-r"], "changed" => [], "removed" => []}
+
+      :ok =
+        ChangeArtifactRefreshWorker.run(
+          %{reason: "head_sha_changed", number: 9410},
+          rate_limit_table: table,
+          attrdiff_fetcher: fn _ -> {:ok, attrdiff} end,
+          files_fetcher: fn _ -> {:ok, ["pkgs/old/default.nix"]} end
+        )
+
+      :ok =
+        ChangeArtifactRefreshWorker.run(
+          %{reason: "head_sha_changed", number: 9410},
+          rate_limit_table: table,
+          attrdiff_fetcher: fn _ -> {:ok, attrdiff} end,
+          files_fetcher: fn _ -> {:ok, ["pkgs/new/default.nix"]} end
+        )
+
+      assert change_file_paths(change.id) == ["pkgs/new/default.nix"]
+    end
+
+    test "normalizes paths via File.normalize_path", %{rate_limit_table: table} do
+      change = insert_change!(number: 9411, state: :merged, merge_commit_sha: "normsha")
+      attrdiff = %{"added" => ["pkg-n"], "changed" => [], "removed" => []}
+
+      paths = [
+        "./pkgs/foo/default.nix",
+        "nixos/modules/nixos/modules/services/foo.nix"
+      ]
+
+      :ok =
+        ChangeArtifactRefreshWorker.run(
+          %{reason: "merged", number: 9411},
+          rate_limit_table: table,
+          attrdiff_fetcher: fn _ -> {:ok, attrdiff} end,
+          files_fetcher: fn _ -> {:ok, paths} end
+        )
+
+      assert change_file_paths(change.id) == [
+               "nixos/modules/services/foo.nix",
+               "pkgs/foo/default.nix"
+             ]
+    end
+
+    test "duplicate paths in the fetcher result are deduped", %{rate_limit_table: table} do
+      change = insert_change!(number: 9412, state: :merged, merge_commit_sha: "dupesha2")
+      attrdiff = %{"added" => ["pkg-d"], "changed" => [], "removed" => []}
+      paths = ["pkgs/d/default.nix", "pkgs/d/default.nix"]
+
+      :ok =
+        ChangeArtifactRefreshWorker.run(
+          %{reason: "merged", number: 9412},
+          rate_limit_table: table,
+          attrdiff_fetcher: fn _ -> {:ok, attrdiff} end,
+          files_fetcher: fn _ -> {:ok, paths} end
+        )
+
+      assert change_file_paths(change.id) == ["pkgs/d/default.nix"]
     end
 
     test "files_fetcher error does not roll back package refresh", %{rate_limit_table: table} do
@@ -449,7 +513,7 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorkerTest do
       {:ok, refreshed} = Change.get_by_number(9403)
       assert refreshed.processing_status == :processed
       assert refreshed.package_count == 1
-      assert refreshed.changed_files == []
+      assert change_file_paths(change.id) == []
 
       link_count =
         Tracker.Repo.one(
@@ -460,12 +524,13 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorkerTest do
     end
 
     test "staging short-circuit still persists file paths", %{rate_limit_table: table} do
-      insert_change!(
-        number: 9404,
-        state: :merged,
-        merge_commit_sha: "stagingfcsha",
-        base_ref: "staging"
-      )
+      change =
+        insert_change!(
+          number: 9404,
+          state: :merged,
+          merge_commit_sha: "stagingfcsha",
+          base_ref: "staging"
+        )
 
       attrdiff = %{"added" => ["s-pkg"], "changed" => [], "removed" => []}
       paths = ["pkgs/s-pkg/default.nix"]
@@ -478,14 +543,13 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorkerTest do
           files_fetcher: fn _ -> {:ok, paths} end
         )
 
-      {:ok, refreshed} = Change.get_by_number(9404)
-      assert refreshed.changed_files == paths
+      assert change_file_paths(change.id) == paths
     end
 
     test "files fetch is skipped when attrdiff fetch returns terminal error", %{
       rate_limit_table: table
     } do
-      insert_change!(number: 9405, state: :merged, merge_commit_sha: "termsha")
+      change = insert_change!(number: 9405, state: :merged, merge_commit_sha: "termsha")
 
       :ok =
         ChangeArtifactRefreshWorker.run(
@@ -497,7 +561,7 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorkerTest do
 
       {:ok, refreshed} = Change.get_by_number(9405)
       assert refreshed.processing_status == :artifact_expired
-      assert refreshed.changed_files == []
+      assert change_file_paths(change.id) == []
     end
   end
 
@@ -702,5 +766,16 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorkerTest do
 
   defp insert_change_package!(change_id, package_id, type) do
     ChangePackage.bulk_create_all([%{change_id: change_id, package_id: package_id, type: type}])
+  end
+
+  defp change_file_paths(change_id) do
+    Tracker.Repo.all(
+      from cf in ChangeFile,
+        join: f in NixFile,
+        on: f.id == cf.file_id,
+        where: cf.change_id == ^change_id,
+        select: f.path,
+        order_by: f.path
+    )
   end
 end

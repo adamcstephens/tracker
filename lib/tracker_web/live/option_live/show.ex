@@ -100,6 +100,17 @@ defmodule TrackerWeb.OptionLive.Show do
         </li>
       </ul>
     </section>
+
+    <section :if={@recent_prs != []}>
+      <h2>Recent PRs</h2>
+      <ul>
+        <li :for={pr <- @recent_prs}>
+          <.link navigate={~p"/changes/#{pr.number}"}>#{pr.number}</.link>
+          {pr.title}
+          <small :if={pr.state}>· {pr.state}</small>
+        </li>
+      </ul>
+    </section>
     """
   end
 
@@ -155,6 +166,8 @@ defmodule TrackerWeb.OptionLive.Show do
         cr -> load_prefix_view(cr.id, prefix)
       end
 
+    recent_prs = recent_prs_for_files(files)
+
     nothing_here? =
       channel_revision != nil and subgroups == [] and leaf_options == [] and files == []
 
@@ -170,8 +183,15 @@ defmodule TrackerWeb.OptionLive.Show do
      |> assign(:subgroups, subgroups)
      |> assign(:leaf_options, leaf_options)
      |> assign(:files, files)
+     |> assign(:recent_prs, recent_prs)
      |> assign(:leaf, leaf?)
      |> assign(:nothing_here?, nothing_here?)}
+  end
+
+  defp recent_prs_for_files([]), do: []
+
+  defp recent_prs_for_files(files) do
+    Tracker.Nixpkgs.Change.by_files!(Enum.map(files, & &1.id), 10)
   end
 
   defp load_prefix_view(channel_revision_id, prefix) do

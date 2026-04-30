@@ -94,6 +94,16 @@ defmodule TrackerWeb.ChangeLive.Show do
         has_next_page?={@pkg_has_next?}
       />
     </section>
+
+    <section :if={@affected_prefixes != []}>
+      <h2>Affected options</h2>
+      <ul>
+        <li :for={{prefix, count} <- @affected_prefixes}>
+          <.link navigate={~p"/options/#{prefix}"}>{prefix}</.link>
+          <small>({count} options)</small>
+        </li>
+      </ul>
+    </section>
     """
   end
 
@@ -134,7 +144,42 @@ defmodule TrackerWeb.ChangeLive.Show do
      |> assign(:author_maintainer, author_maintainer)
      |> assign(:merger_maintainer, merger_maintainer)
      |> assign(:table_params, tp)
-     |> load_packages(change.id)}
+     |> load_packages(change.id)
+     |> load_affected_prefixes(change.id, socket.assigns.lens)}
+  end
+
+  defp load_affected_prefixes(socket, change_id, lens) do
+    prefixes =
+      case channel_revision_for_lens(lens) do
+        nil ->
+          []
+
+        cr ->
+          change_id
+          |> Tracker.Nixpkgs.OptionRevision.list_by_change_and_channel_revision!(cr.id)
+          |> Enum.map(&fold_to_prefix(&1.option.name))
+          |> Enum.frequencies()
+          |> Enum.sort_by(fn {prefix, _} -> prefix end)
+      end
+
+    assign(socket, :affected_prefixes, prefixes)
+  end
+
+  defp channel_revision_for_lens(nil), do: nil
+  defp channel_revision_for_lens(%{revision: %{} = cr}), do: cr
+
+  defp channel_revision_for_lens(%{channel: %{id: channel_id}}) do
+    case Tracker.Nixpkgs.ChannelRevision.latest_by_channel(channel_id) do
+      {:ok, cr} -> cr
+      _ -> nil
+    end
+  end
+
+  defp fold_to_prefix(name) do
+    case String.split(name, ".") do
+      [single] -> single
+      [a, b | _] -> a <> "." <> b
+    end
   end
 
   @impl true

@@ -3,6 +3,8 @@ defmodule TrackerWeb.OptionLive.ShowTest do
 
   import Phoenix.LiveViewTest
 
+  require Ash.Query
+
   alias Tracker.Fixtures
   alias Tracker.Nixpkgs.Channel
 
@@ -153,5 +155,38 @@ defmodule TrackerWeb.OptionLive.ShowTest do
     # Should still render the prefix
     html = render(view)
     assert html =~ "services.nginx"
+  end
+
+  test "lists recent PRs whose change_files intersect the prefix's file set", %{conn: conn} do
+    %{id: change_id} =
+      Tracker.Nixpkgs.Change
+      |> Ash.Changeset.for_create(:bulk_upsert, %{
+        number: 7777,
+        title: "nginx: bump to 1.27",
+        state: :merged,
+        url: "https://github.com/NixOS/nixpkgs/pull/7777",
+        base_ref: "master",
+        gh_updated_at: ~U[2026-04-25 10:00:00Z]
+      })
+      |> Ash.create!()
+
+    file =
+      Tracker.Nixpkgs.File
+      |> Ash.Query.filter(path == "nixos/modules/services/web-servers/nginx/default.nix")
+      |> Ash.read_one!()
+
+    Tracker.Nixpkgs.ChangeFile.bulk_insert_all([%{change_id: change_id, file_id: file.id}])
+
+    {:ok, _view, html} = live(conn, ~p"/options/services.nginx")
+
+    assert html =~ "Recent PRs"
+    assert html =~ "7777"
+    assert html =~ "nginx: bump to 1.27"
+  end
+
+  test "Recent PRs section omitted when no change_files intersect", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/options/services.nginx")
+
+    refute html =~ "Recent PRs"
   end
 end

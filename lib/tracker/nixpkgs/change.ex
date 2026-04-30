@@ -16,9 +16,9 @@ defmodule Tracker.Nixpkgs.Change do
     define :get_by_number, action: :read, get_by: [:number]
     define :get_by_node_id, action: :read, get_by: [:node_id]
     define :by_package, args: [:package_id]
+    define :by_files, args: [:file_ids, {:optional, :limit}]
     define :by_maintainer_github_id, args: [:github_id, {:optional, :channel_id}]
     define :update_package_count
-    define :update_changed_files
     define :update_processing_status
     define :set_node_id
     define :list_missing_node_ids
@@ -79,6 +79,19 @@ defmodule Tracker.Nixpkgs.Change do
       filter expr(exists(change_packages, package_id == ^arg(:package_id)))
     end
 
+    read :by_files do
+      argument :file_ids, {:array, :integer}, allow_nil?: false
+      argument :limit, :integer, default: 10
+
+      prepare fn query, _ctx ->
+        limit = Ash.Query.get_argument(query, :limit)
+        Ash.Query.limit(query, limit)
+      end
+
+      prepare build(sort: [gh_updated_at: :desc_nils_last])
+      filter expr(exists(change_files, file_id in ^arg(:file_ids)))
+    end
+
     read :by_maintainer_github_id do
       argument :github_id, :integer, allow_nil?: false
       argument :channel_id, :integer
@@ -103,10 +116,6 @@ defmodule Tracker.Nixpkgs.Change do
 
     update :update_package_count do
       accept [:package_count]
-    end
-
-    update :update_changed_files do
-      accept [:changed_files]
     end
 
     update :update_processing_status do
@@ -287,12 +296,6 @@ defmodule Tracker.Nixpkgs.Change do
     attribute :merge_commit_sha, :string, public?: true
     attribute :package_count, :integer, public?: true, default: 0
 
-    attribute :changed_files, {:array, :string} do
-      public? true
-      allow_nil? false
-      default []
-    end
-
     attribute :processing_status, :atom,
       public?: true,
       default: :pending,
@@ -314,11 +317,18 @@ defmodule Tracker.Nixpkgs.Change do
   relationships do
     has_many :change_packages, Tracker.Nixpkgs.ChangePackage
     has_many :change_channels, Tracker.Nixpkgs.ChangeChannel
+    has_many :change_files, Tracker.Nixpkgs.ChangeFile
 
     many_to_many :packages, Tracker.Nixpkgs.Package do
       through Tracker.Nixpkgs.ChangePackage
       source_attribute_on_join_resource :change_id
       destination_attribute_on_join_resource :package_id
+    end
+
+    many_to_many :files, Tracker.Nixpkgs.File do
+      through Tracker.Nixpkgs.ChangeFile
+      source_attribute_on_join_resource :change_id
+      destination_attribute_on_join_resource :file_id
     end
   end
 

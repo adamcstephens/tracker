@@ -41,7 +41,7 @@ defmodule Tracker.Ingestion.Steps.LoadOptions do
     declaration_paths =
       options_map
       |> Enum.flat_map(fn {_name, entry} -> entry["declarations"] || [] end)
-      |> Enum.map(&normalize_declaration/1)
+      |> Enum.map(&Tracker.Nixpkgs.File.normalize_path/1)
       |> Enum.uniq()
 
     file_id_map = Tracker.Nixpkgs.File.bulk_upsert_all(declaration_paths)
@@ -53,7 +53,7 @@ defmodule Tracker.Ingestion.Steps.LoadOptions do
         revision_id = Map.fetch!(option_revision_id_map, option_id)
 
         (entry["declarations"] || [])
-        |> Enum.map(&normalize_declaration/1)
+        |> Enum.map(&Tracker.Nixpkgs.File.normalize_path/1)
         |> Enum.uniq()
         |> Enum.map(fn path ->
           %{option_revision_id: revision_id, file_id: Map.fetch!(file_id_map, path)}
@@ -67,9 +67,4 @@ defmodule Tracker.Ingestion.Steps.LoadOptions do
 
   defp extract_text(%{"text" => text}), do: text
   defp extract_text(_), do: nil
-
-  defp normalize_declaration("nixos/modules/nixos/modules/" <> rest),
-    do: "nixos/modules/" <> rest
-
-  defp normalize_declaration(path), do: path
 end

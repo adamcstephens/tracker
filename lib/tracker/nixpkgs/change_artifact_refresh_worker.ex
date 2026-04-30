@@ -22,7 +22,9 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
   alias Tracker.GitHub.RateLimitCache
   alias Tracker.Nixpkgs.Change
   alias Tracker.Nixpkgs.ChangeArtifactCache
+  alias Tracker.Nixpkgs.ChangeFile
   alias Tracker.Nixpkgs.ChangePackage
+  alias Tracker.Nixpkgs.File, as: NixFile
   alias Tracker.Nixpkgs.Package
 
   @repo "NixOS/nixpkgs"
@@ -132,7 +134,7 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
       fetcher ->
         case fetcher.(change) do
           {:ok, paths} when is_list(paths) ->
-            Change.update_changed_files!(change, %{changed_files: paths})
+            replace_change_files!(change, paths)
             :ok
 
           {:error, reason} ->
@@ -145,6 +147,34 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
             :ok
         end
     end
+  end
+
+  defp replace_change_files!(change, paths) do
+    normalized =
+      paths
+      |> Enum.map(&NixFile.normalize_path/1)
+      |> Enum.uniq()
+
+    Tracker.Repo.transaction(fn ->
+      ChangeFile.clear_for_change!(change.id)
+
+      case normalized do
+        [] ->
+          :ok
+
+        paths ->
+          file_id_map = NixFile.bulk_upsert_all(paths)
+
+          records =
+            Enum.map(paths, fn path ->
+              %{change_id: change.id, file_id: Map.fetch!(file_id_map, path)}
+            end)
+
+          ChangeFile.bulk_insert_all(records)
+      end
+    end)
+
+    :ok
   end
 
   defp configured_files_fetcher do
