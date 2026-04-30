@@ -1,8 +1,8 @@
-defmodule Tracker.Nixpkgs.ModuleDeclaration do
+defmodule Tracker.Nixpkgs.OptionRevisionFile do
   use Ash.Resource, otp_app: :tracker, domain: Tracker.Nixpkgs, data_layer: AshPostgres.DataLayer
 
   postgres do
-    table "module_declarations"
+    table "option_revision_files"
     repo Tracker.Repo
   end
 
@@ -17,32 +17,31 @@ defmodule Tracker.Nixpkgs.ModuleDeclaration do
   attributes do
     integer_primary_key :id
 
-    attribute :path, :string do
-      allow_nil? false
-      public? true
-    end
-
     timestamps()
   end
 
   relationships do
-    belongs_to :module, Tracker.Nixpkgs.Module, attribute_type: :integer, allow_nil?: false
+    belongs_to :option_revision, Tracker.Nixpkgs.OptionRevision,
+      attribute_type: :integer,
+      allow_nil?: false
+
+    belongs_to :file, Tracker.Nixpkgs.File, attribute_type: :integer, allow_nil?: false
   end
 
   identities do
-    identity :unique_path_module, [:path, :module_id]
+    identity :unique_revision_file, [:option_revision_id, :file_id]
   end
 
-  # 4 columns: path, module_id, inserted_at, updated_at
+  # 5 columns: id, option_revision_id, file_id, inserted_at, updated_at
   @insert_cols 4
   @max_rows div(65_535, @insert_cols)
 
   @doc """
-  Bulk upsert module declarations using raw Ecto insert_all for performance.
+  Bulk insert option_revision_files records from `%{option_revision_id, file_id}` maps.
 
-  Accepts records like %{path: "...", module_id: 123}.
+  Idempotent on (option_revision_id, file_id).
   """
-  def bulk_upsert_all(records) do
+  def bulk_insert_all(records) do
     now = DateTime.utc_now(:second)
 
     records
@@ -54,10 +53,10 @@ defmodule Tracker.Nixpkgs.ModuleDeclaration do
     |> Stream.chunk_every(@max_rows)
     |> Enum.each(fn chunk ->
       Tracker.Repo.insert_all(
-        "module_declarations",
+        "option_revision_files",
         chunk,
-        on_conflict: {:replace, [:updated_at]},
-        conflict_target: [:path, :module_id]
+        on_conflict: :nothing,
+        conflict_target: [:option_revision_id, :file_id]
       )
     end)
   end

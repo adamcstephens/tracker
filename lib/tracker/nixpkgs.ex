@@ -17,12 +17,12 @@ defmodule Tracker.Nixpkgs do
     resource Tracker.Nixpkgs.PackageTeam
     resource Tracker.Nixpkgs.TeamMember
     resource Tracker.Nixpkgs.PackageEvent
-    resource Tracker.Nixpkgs.Module
-    resource Tracker.Nixpkgs.ModuleDeclaration
     resource Tracker.Nixpkgs.Option
     resource Tracker.Nixpkgs.OptionRevision
     resource Tracker.Nixpkgs.OptionEvent
     resource Tracker.Nixpkgs.OptionPackage
+    resource Tracker.Nixpkgs.File
+    resource Tracker.Nixpkgs.OptionRevisionFile
     resource Tracker.Nixpkgs.Change
     resource Tracker.Nixpkgs.ChangePackage
     resource Tracker.Nixpkgs.ChangeChannel

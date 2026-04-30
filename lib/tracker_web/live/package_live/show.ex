@@ -74,10 +74,7 @@ defmodule TrackerWeb.PackageLive.Show do
       <h2>NixOS Options</h2>
       <ul>
         <li :for={opt <- @package.options}>
-          <.link :if={opt.module} navigate={"/modules/#{opt.module.display_name}#opt-#{opt.name}"}>
-            {opt.name}
-          </.link>
-          <span :if={!opt.module}>{opt.name}</span>
+          <.link navigate={~p"/options/#{opt.name}"}>{opt.name}</.link>
           <% rev = Map.get(@option_revisions, opt.id) %>
           <small :if={rev}>
             <span :if={rev.type}> ({rev.type})</span>
@@ -301,7 +298,7 @@ defmodule TrackerWeb.PackageLive.Show do
   def handle_params(%{"name" => name} = params, _url, socket) do
     package =
       Tracker.Nixpkgs.Package.get_by_attribute!(name,
-        load: [:maintainers, :teams, options: [:module]]
+        load: [:maintainers, :teams, :options]
       )
 
     recent_changes = load_recent_changes(package.id)

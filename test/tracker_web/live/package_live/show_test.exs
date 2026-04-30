@@ -326,25 +326,16 @@ defmodule TrackerWeb.PackageLive.ShowTest do
 
   describe "linked options" do
     setup %{package: package, cr1: cr1} do
-      mod =
-        Tracker.Nixpkgs.Module
-        |> Ash.Changeset.for_create(:bulk_upsert, %{
-          display_name: "services.hello"
-        })
-        |> Ash.create!()
-
       option =
         Tracker.Nixpkgs.Option
         |> Ash.Changeset.for_create(:bulk_upsert, %{
-          name: "services.hello.enable",
-          module_id: mod.id
+          name: "services.hello.enable"
         })
         |> Ash.create!()
 
       Tracker.Nixpkgs.OptionPackage.load!(%{
         option_id: option.id,
-        package_id: package.id,
-        module_id: mod.id
+        package_id: package.id
       })
 
       Tracker.Nixpkgs.OptionRevision
@@ -356,7 +347,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
       })
       |> Ash.create!()
 
-      %{option: option, module: mod}
+      %{option: option}
     end
 
     test "shows linked options section", %{conn: conn, package: package} do
@@ -373,10 +364,10 @@ defmodule TrackerWeb.PackageLive.ShowTest do
       assert html =~ "Whether to enable hello service."
     end
 
-    test "option links to module show page", %{conn: conn, package: package, module: mod} do
+    test "option links to options show page", %{conn: conn, package: package} do
       {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}")
 
-      assert html =~ ~s|/modules/#{mod.display_name}#opt-services.hello.enable|
+      assert html =~ ~s|/options/services.hello.enable|
     end
   end
 

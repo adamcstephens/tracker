@@ -30,10 +30,15 @@ defmodule TrackerWeb.OptionLive.Index do
 
     <.table id="options" rows={@streams.options}>
       <:col :let={{_id, row}} label="Option">
-        <.option_link option={option_record(row)} />
+        <.link navigate={~p"/options/#{option_name(row)}"}>{option_name(row)}</.link>
       </:col>
-      <:col :let={{_id, row}} label="Module">
-        <.module_link module={option_module(row)} />
+      <:col :let={{_id, row}} label="Group">
+        <.link
+          :if={parent_prefix(option_name(row))}
+          navigate={~p"/options/#{parent_prefix(option_name(row))}"}
+        >
+          {parent_prefix(option_name(row))}
+        </.link>
       </:col>
     </.table>
 
@@ -46,39 +51,14 @@ defmodule TrackerWeb.OptionLive.Index do
     """
   end
 
-  attr :option, :any, required: true
+  defp option_name(%Tracker.Nixpkgs.OptionRevision{option: %{name: name}}), do: name
+  defp option_name(%Tracker.Nixpkgs.Option{name: name}), do: name
 
-  defp option_link(%{option: %{module: nil}} = assigns), do: ~H"<span>{@option.name}</span>"
-
-  defp option_link(assigns) do
-    ~H"""
-    <.link navigate={module_path(@option.module.display_name, @option.name)}>
-      {@option.name}
-    </.link>
-    """
-  end
-
-  attr :module, :any, required: true
-
-  defp module_link(%{module: nil} = assigns), do: ~H""
-
-  defp module_link(assigns) do
-    ~H"""
-    <.link navigate={module_path(@module.display_name)}>
-      {@module.display_name}
-    </.link>
-    """
-  end
-
-  defp option_record(%Tracker.Nixpkgs.OptionRevision{option: option}), do: option
-  defp option_record(%Tracker.Nixpkgs.Option{} = option), do: option
-
-  defp option_module(%Tracker.Nixpkgs.OptionRevision{option: %{module: mod}}), do: mod
-  defp option_module(%Tracker.Nixpkgs.Option{module: mod}), do: mod
-
-  defp module_path(name, anchor \\ nil) do
-    path = "/modules/#{name}"
-    if anchor, do: "#{path}#opt-#{anchor}", else: path
+  defp parent_prefix(name) do
+    case String.split(name, ".") do
+      [_only] -> nil
+      parts -> parts |> Enum.drop(-1) |> Enum.join(".")
+    end
   end
 
   @impl true

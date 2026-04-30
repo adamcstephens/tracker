@@ -55,14 +55,9 @@ defmodule TrackerWeb.OptionLive.IndexTest do
     Fixtures.load_options(@sample_options, cr)
 
     # Also create unscoped options (not in any channel revision)
-    mod =
-      Tracker.Nixpkgs.Module
-      |> Ash.Changeset.for_create(:bulk_upsert, %{display_name: "services.opttest"})
-      |> Ash.create!()
-
     for name <- ["services.opttest.enable", "services.opttest.port"] do
       Tracker.Nixpkgs.Option
-      |> Ash.Changeset.for_create(:bulk_upsert, %{name: name, module_id: mod.id})
+      |> Ash.Changeset.for_create(:bulk_upsert, %{name: name})
       |> Ash.create!()
     end
 
@@ -72,11 +67,9 @@ defmodule TrackerWeb.OptionLive.IndexTest do
   test "shows channel-scoped options via lens", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/options")
 
-    # Should show options from the channel revision (loaded via lens)
     assert html =~ "services.nginx.enable"
     assert html =~ "services.openssh.enable"
     assert html =~ "programs.vim.enable"
-    # Unscoped options should NOT appear (lens scopes to channel)
     refute html =~ "services.opttest.enable"
     refute html =~ "services.opttest.port"
   end
@@ -84,7 +77,6 @@ defmodule TrackerWeb.OptionLive.IndexTest do
   test "no duplicate channel dropdown in the page", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/options")
 
-    # The page should not have a revision hash input
     refute html =~ ~s(placeholder="Revision hash...")
   end
 
@@ -97,7 +89,6 @@ defmodule TrackerWeb.OptionLive.IndexTest do
   end
 
   test "lens change reloads data", %{conn: conn} do
-    # Create a second channel with different options
     channel2 =
       Channel.create!(%{
         name: "nixos-24.11",
@@ -119,7 +110,6 @@ defmodule TrackerWeb.OptionLive.IndexTest do
     cr2 =
       Tracker.Nixpkgs.ChannelRevision.record_options_result!(cr2, %{options_result: :success})
 
-    # Load only nginx option into channel2
     Fixtures.load_options(
       Map.take(@sample_options, ["services.nginx.enable"]),
       cr2
@@ -127,7 +117,6 @@ defmodule TrackerWeb.OptionLive.IndexTest do
 
     {:ok, view, _html} = live(conn, ~p"/options")
 
-    # Switch lens to channel2
     send(view.pid, {:set_lens, channel2.name, ""})
     html = render(view)
 
@@ -135,17 +124,16 @@ defmodule TrackerWeb.OptionLive.IndexTest do
     refute html =~ "services.openssh.enable"
   end
 
-  test "option links navigate to module page", %{conn: conn} do
+  test "option links navigate to /options/:name", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/options")
 
-    # Links should go to the module page (lens is sitewide, no need for channel params)
-    assert html =~ "/modules/services.nginx#opt-services.nginx.enable"
+    assert html =~ ~s(href="/options/services.nginx.enable")
   end
 
-  test "module links navigate to module page", %{conn: conn} do
+  test "group links navigate to parent prefix", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/options")
 
-    assert html =~ "/modules/services.nginx"
+    assert html =~ ~s(href="/options/services.nginx")
   end
 
   test "shows fallback notice when lens is set to 'all'", %{conn: conn} do
@@ -168,7 +156,6 @@ defmodule TrackerWeb.OptionLive.IndexTest do
         is_stable: false
       })
 
-    # Channel exists but has no revisions
     _cr2 =
       Tracker.Nixpkgs.ChannelRevision.create!(%{
         channel_id: channel2.id,
@@ -178,7 +165,6 @@ defmodule TrackerWeb.OptionLive.IndexTest do
 
     {:ok, view, _html} = live(conn, ~p"/options")
 
-    # Switch to channel with no options-processed revision
     send(view.pid, {:set_lens, channel2.name, ""})
     html = render(view)
 

@@ -21,7 +21,7 @@
       "references": null,
       "scale": null,
       "size": null,
-      "source": "display_name",
+      "source": "name",
       "type": "text"
     },
     {
@@ -55,19 +55,19 @@
   "custom_indexes": [],
   "custom_statements": [],
   "has_create_action": true,
-  "hash": "D4FC754D6FAD8FF03DA0E2481759F9FB107F5D1BE5CD1B5E154A3ACFF74D9B5F",
+  "hash": "920777E698D0EBACD187563CEC313EB12465C2315322AF2840A5B0AF60B21B36",
   "identities": [
     {
       "all_tenants?": false,
       "base_filter": null,
-      "index_name": "modules_unique_display_name_index",
+      "index_name": "options_unique_name_index",
       "keys": [
         {
           "type": "atom",
-          "value": "display_name"
+          "value": "name"
         }
       ],
-      "name": "unique_display_name",
+      "name": "unique_name",
       "nils_distinct?": true,
       "where": null
     }
@@ -79,5 +79,5 @@
   },
   "repo": "Elixir.Tracker.Repo",
   "schema": null,
-  "table": "modules"
+  "table": "options"
 }

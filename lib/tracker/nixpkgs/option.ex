@@ -9,7 +9,6 @@ defmodule Tracker.Nixpkgs.Option do
   code_interface do
     define :read
     define :list, args: [{:optional, :search}]
-    define :list_by_module, args: [:module_id]
     define :bulk_upsert, args: [:name]
     define :id_map, action: :id_map
   end
@@ -26,7 +25,7 @@ defmodule Tracker.Nixpkgs.Option do
         default_limit 15
       end
 
-      prepare build(sort: :name, load: [:module])
+      prepare build(sort: :name)
 
       filter expr(
                if not is_nil(^arg(:search)) and ^arg(:search) != "" do
@@ -37,30 +36,15 @@ defmodule Tracker.Nixpkgs.Option do
              )
     end
 
-    read :list_by_module do
-      argument :module_id, :integer do
-        allow_nil? false
-      end
-
-      pagination do
-        offset? true
-        countable true
-        default_limit 15
-      end
-
-      prepare build(sort: :name, load: [:packages])
-      filter expr(module_id == ^arg(:module_id))
-    end
-
     read :id_map do
       prepare build(select: [:name])
     end
 
     create :bulk_upsert do
-      accept [:name, :module_id]
+      accept [:name]
       upsert? true
       upsert_identity :unique_name
-      upsert_fields [:module_id, :updated_at]
+      upsert_fields [:updated_at]
     end
   end
 
@@ -76,11 +60,6 @@ defmodule Tracker.Nixpkgs.Option do
   end
 
   relationships do
-    belongs_to :module, Tracker.Nixpkgs.Module do
-      attribute_type :integer
-      allow_nil? true
-    end
-
     has_many :option_revisions, Tracker.Nixpkgs.OptionRevision
 
     many_to_many :packages, Tracker.Nixpkgs.Package do
@@ -94,8 +73,8 @@ defmodule Tracker.Nixpkgs.Option do
     identity :unique_name, [:name]
   end
 
-  # 3 columns: name, module_id, inserted_at, updated_at
-  @insert_cols 4
+  # 3 columns: name, inserted_at, updated_at
+  @insert_cols 3
   @max_rows div(65_535, @insert_cols)
 
   @doc """
@@ -118,7 +97,7 @@ defmodule Tracker.Nixpkgs.Option do
         Tracker.Repo.insert_all(
           "options",
           chunk,
-          on_conflict: {:replace, [:module_id, :updated_at]},
+          on_conflict: {:replace, [:updated_at]},
           conflict_target: :name,
           returning: [:id, :name]
         )

@@ -41,37 +41,4 @@ defmodule Tracker.Nixpkgs.ChannelFetcher do
     |> ExBrotli.decompress!()
     |> :json.decode()
   end
-
-  @doc """
-  Computes the longest common dot-separated prefix for a list of option names.
-
-  For a single option name, returns all but the last segment
-  (or the name itself if single-segment).
-  """
-  def display_name_for_options([single]) do
-    case String.split(single, ".") do
-      [one] -> one
-      parts -> parts |> Enum.drop(-1) |> Enum.join(".")
-    end
-  end
-
-  def display_name_for_options(option_names) do
-    split_names = Enum.map(option_names, &String.split(&1, "."))
-
-    split_names
-    |> Enum.zip_reduce([], fn segments, acc ->
-      segment = hd(segments)
-
-      if Enum.all?(segments, &(&1 == segment)) do
-        [segment | acc]
-      else
-        acc
-      end
-    end)
-    |> Enum.reverse()
-    |> case do
-      [] -> hd(option_names)
-      parts -> Enum.join(parts, ".")
-    end
-  end
 end

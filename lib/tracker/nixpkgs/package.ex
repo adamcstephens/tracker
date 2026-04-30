@@ -16,7 +16,6 @@ defmodule Tracker.Nixpkgs.Package do
     define :by_team, args: [:team_id, {:optional, :search}, {:optional, :channel_id}]
     define :family_siblings, args: [:package_family_id, :exclude_id]
     define :variant_siblings, args: [:package_variant_group_id, :exclude_id]
-    define :by_module, args: [:module_id]
     define :id_map, action: :id_map
     define :ids_by_attributes, args: [:attributes]
     define :by_change, args: [:change_id, {:optional, :search}]
@@ -141,14 +140,6 @@ defmodule Tracker.Nixpkgs.Package do
                package_variant_group_id == ^arg(:package_variant_group_id) and
                  id != ^arg(:exclude_id)
              )
-    end
-
-    read :by_module do
-      argument :module_id, :integer, allow_nil?: false
-
-      prepare build(sort: :attribute)
-
-      filter expr(exists(option_packages, module_id == ^arg(:module_id)))
     end
 
     read :by_change do

@@ -11,7 +11,7 @@ defmodule Tracker.Nixpkgs.OptionRevision do
     define :load
     define :latest_by_option_ids, args: [:option_ids]
     define :list_by_channel_revision, args: [:channel_revision_id, {:optional, :search}]
-    define :list_by_channel_revision_and_module, args: [:channel_revision_id, :module_id]
+    define :list_by_channel_revision_and_prefix, args: [:channel_revision_id, :prefix]
   end
 
   actions do
@@ -27,7 +27,7 @@ defmodule Tracker.Nixpkgs.OptionRevision do
         default_limit 15
       end
 
-      prepare build(sort: [option_name: :asc], load: [option: [:module]])
+      prepare build(sort: [option_name: :asc], load: [:option])
 
       filter expr(channel_revision_id == ^arg(:channel_revision_id))
 
@@ -40,15 +40,16 @@ defmodule Tracker.Nixpkgs.OptionRevision do
              )
     end
 
-    read :list_by_channel_revision_and_module do
+    read :list_by_channel_revision_and_prefix do
       argument :channel_revision_id, :integer, allow_nil?: false
-      argument :module_id, :integer, allow_nil?: false
+      argument :prefix, :string, allow_nil?: false
 
-      prepare build(sort: [option_name: :asc], load: [option: [:packages]])
+      prepare build(sort: [option_name: :asc], load: [option: [:packages], files: []])
 
       filter expr(
                channel_revision_id == ^arg(:channel_revision_id) and
-                 option.module_id == ^arg(:module_id)
+                 (option.name == ^arg(:prefix) or
+                    fragment("? LIKE ? || '.%'", option.name, ^arg(:prefix)))
              )
     end
 
@@ -117,6 +118,14 @@ defmodule Tracker.Nixpkgs.OptionRevision do
     belongs_to :channel_revision, Tracker.Nixpkgs.ChannelRevision,
       attribute_type: :integer,
       allow_nil?: false
+
+    has_many :option_revision_files, Tracker.Nixpkgs.OptionRevisionFile
+
+    many_to_many :files, Tracker.Nixpkgs.File do
+      through Tracker.Nixpkgs.OptionRevisionFile
+      source_attribute_on_join_resource :option_revision_id
+      destination_attribute_on_join_resource :file_id
+    end
   end
 
   calculations do
@@ -163,6 +172,10 @@ defmodule Tracker.Nixpkgs.OptionRevision do
     end)
   end
 
+  @doc """
+  Bulk upserts option revisions, returning a map of `option_id => option_revision_id`
+  scoped to the records inserted/updated.
+  """
   def bulk_insert_all(records) do
     now = DateTime.utc_now(:second)
 
@@ -173,25 +186,29 @@ defmodule Tracker.Nixpkgs.OptionRevision do
       |> Map.put(:updated_at, now)
     end)
     |> Stream.chunk_every(@max_rows)
-    |> Enum.each(fn chunk ->
-      Tracker.Repo.insert_all(
-        "option_revisions",
-        chunk,
-        on_conflict:
-          {:replace,
-           [
-             :description,
-             :type,
-             :default,
-             :example,
-             :read_only,
-             :loc,
-             :declarations,
-             :related_packages,
-             :updated_at
-           ]},
-        conflict_target: [:channel_revision_id, :option_id]
-      )
+    |> Enum.reduce(%{}, fn chunk, acc ->
+      {_count, rows} =
+        Tracker.Repo.insert_all(
+          "option_revisions",
+          chunk,
+          on_conflict:
+            {:replace,
+             [
+               :description,
+               :type,
+               :default,
+               :example,
+               :read_only,
+               :loc,
+               :declarations,
+               :related_packages,
+               :updated_at
+             ]},
+          conflict_target: [:channel_revision_id, :option_id],
+          returning: [:id, :option_id]
+        )
+
+      Map.merge(acc, Map.new(rows, fn %{id: id, option_id: oid} -> {oid, id} end))
     end)
   end
 end
