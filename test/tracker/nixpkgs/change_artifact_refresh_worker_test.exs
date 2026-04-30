@@ -382,6 +382,125 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorkerTest do
     end
   end
 
+  describe "run/2 changed_files persistence" do
+    test "persists fetched file paths on merged refresh", %{rate_limit_table: table} do
+      insert_change!(number: 9400, state: :merged, merge_commit_sha: "fcsha")
+      attrdiff = %{"added" => ["pkg-a"], "changed" => [], "removed" => []}
+      paths = ["pkgs/pkg-a/default.nix", "doc/release-notes.md"]
+
+      :ok =
+        ChangeArtifactRefreshWorker.run(
+          %{reason: "merged", number: 9400},
+          rate_limit_table: table,
+          attrdiff_fetcher: fn _ -> {:ok, attrdiff} end,
+          files_fetcher: fn _ -> {:ok, paths} end
+        )
+
+      {:ok, refreshed} = Change.get_by_number(9400)
+      assert refreshed.changed_files == paths
+      assert refreshed.processing_status == :processed
+    end
+
+    test "persists fetched file paths on head_sha_changed refresh", %{rate_limit_table: table} do
+      insert_change!(number: 9401, state: :open, head_sha: "fcopen")
+      attrdiff = %{"added" => ["pkg-b"], "changed" => [], "removed" => []}
+      paths = ["pkgs/pkg-b/default.nix"]
+
+      :ok =
+        ChangeArtifactRefreshWorker.run(
+          %{reason: "head_sha_changed", number: 9401},
+          rate_limit_table: table,
+          attrdiff_fetcher: fn _ -> {:ok, attrdiff} end,
+          files_fetcher: fn _ -> {:ok, paths} end
+        )
+
+      {:ok, refreshed} = Change.get_by_number(9401)
+      assert refreshed.changed_files == paths
+    end
+
+    test "empty file list yields empty array", %{rate_limit_table: table} do
+      insert_change!(number: 9402, state: :merged, merge_commit_sha: "emptyfc")
+      attrdiff = %{"added" => [], "changed" => [], "removed" => []}
+
+      :ok =
+        ChangeArtifactRefreshWorker.run(
+          %{reason: "merged", number: 9402},
+          rate_limit_table: table,
+          attrdiff_fetcher: fn _ -> {:ok, attrdiff} end,
+          files_fetcher: fn _ -> {:ok, []} end
+        )
+
+      {:ok, refreshed} = Change.get_by_number(9402)
+      assert refreshed.changed_files == []
+    end
+
+    test "files_fetcher error does not roll back package refresh", %{rate_limit_table: table} do
+      change = insert_change!(number: 9403, state: :merged, merge_commit_sha: "errfc")
+      attrdiff = %{"added" => ["pkg-c"], "changed" => [], "removed" => []}
+
+      :ok =
+        ChangeArtifactRefreshWorker.run(
+          %{reason: "merged", number: 9403},
+          rate_limit_table: table,
+          attrdiff_fetcher: fn _ -> {:ok, attrdiff} end,
+          files_fetcher: fn _ -> {:error, :boom} end
+        )
+
+      {:ok, refreshed} = Change.get_by_number(9403)
+      assert refreshed.processing_status == :processed
+      assert refreshed.package_count == 1
+      assert refreshed.changed_files == []
+
+      link_count =
+        Tracker.Repo.one(
+          from(cp in ChangePackage, where: cp.change_id == ^change.id, select: count(cp.id))
+        )
+
+      assert link_count == 1
+    end
+
+    test "staging short-circuit still persists file paths", %{rate_limit_table: table} do
+      insert_change!(
+        number: 9404,
+        state: :merged,
+        merge_commit_sha: "stagingfcsha",
+        base_ref: "staging"
+      )
+
+      attrdiff = %{"added" => ["s-pkg"], "changed" => [], "removed" => []}
+      paths = ["pkgs/s-pkg/default.nix"]
+
+      :ok =
+        ChangeArtifactRefreshWorker.run(
+          %{reason: "merged", number: 9404},
+          rate_limit_table: table,
+          attrdiff_fetcher: fn _ -> {:ok, attrdiff} end,
+          files_fetcher: fn _ -> {:ok, paths} end
+        )
+
+      {:ok, refreshed} = Change.get_by_number(9404)
+      assert refreshed.changed_files == paths
+    end
+
+    test "files fetch is skipped when attrdiff fetch returns terminal error", %{
+      rate_limit_table: table
+    } do
+      insert_change!(number: 9405, state: :merged, merge_commit_sha: "termsha")
+
+      :ok =
+        ChangeArtifactRefreshWorker.run(
+          %{reason: "merged", number: 9405},
+          rate_limit_table: table,
+          attrdiff_fetcher: fn _ -> {:error, :artifact_expired} end,
+          files_fetcher: fn _ -> raise "files_fetcher should not be called on terminal error" end
+        )
+
+      {:ok, refreshed} = Change.get_by_number(9405)
+      assert refreshed.processing_status == :artifact_expired
+      assert refreshed.changed_files == []
+    end
+  end
+
   describe "run/2 with unknown reason" do
     test "no-ops and returns :ok", %{rate_limit_table: table} do
       insert_change!(number: 9100, state: :open)
