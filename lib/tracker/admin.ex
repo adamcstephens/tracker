@@ -7,6 +7,10 @@ defmodule Tracker.Admin do
   alias Tracker.Nixpkgs.Change
   alias Tracker.Nixpkgs.ChangeArtifactRefreshWorker
 
+  def reprocess_change(number) when is_integer(number) do
+    Tracker.Nixpkgs.ChangeArtifactRefreshWorker.run(%{reason: "head_sha_changed", number: number})
+  end
+
   @doc """
   Re-enqueues `ChangeArtifactRefreshWorker` for every Change that GitHub
   has touched within the given window, routing each by state:
