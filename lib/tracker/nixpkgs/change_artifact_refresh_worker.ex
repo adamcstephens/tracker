@@ -128,72 +128,66 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
 
     total = length(typed_entries)
 
-    if total > @link_cap do
-      Logger.warning(
-        msg: "link cap exceeded, marking too_large",
-        number: change.number,
-        total: total,
-        cap: @link_cap
-      )
+    cond do
+      staging?(change) ->
+        write_refresh!(change, [], :processed, total)
 
-      {:ok, notifications} =
-        Tracker.Repo.transaction(fn ->
-          ChangePackage.clear_for_change!(change.id)
+      total > @link_cap ->
+        Logger.warning(
+          msg: "link cap exceeded, marking too_large",
+          number: change.number,
+          total: total,
+          cap: @link_cap
+        )
 
-          {_, n1} =
-            Change.update_processing_status!(
-              change,
-              %{processing_status: :too_large},
-              return_notifications?: true
-            )
+        write_refresh!(change, [], :too_large, total)
 
-          {_, n2} =
-            Change.update_package_count!(
-              change,
-              %{package_count: total},
-              return_notifications?: true
-            )
-
-          n1 ++ n2
-        end)
-
-      Ash.Notifier.notify(notifications)
-      :ok
-    else
-      all_attrs = Enum.map(typed_entries, &elem(&1, 1))
-      ensure_packages_exist(all_attrs)
-      id_map = package_id_map(all_attrs)
-
-      records =
-        Enum.map(typed_entries, fn {type, attr} ->
-          %{change_id: change.id, package_id: id_map[attr], type: type}
-        end)
-
-      {:ok, notifications} =
-        Tracker.Repo.transaction(fn ->
-          ChangePackage.clear_for_change!(change.id)
-          ChangePackage.bulk_create_all(records)
-
-          {_, n1} =
-            Change.update_processing_status!(
-              change,
-              %{processing_status: :processed},
-              return_notifications?: true
-            )
-
-          {_, n2} =
-            Change.update_package_count!(
-              change,
-              %{package_count: total},
-              return_notifications?: true
-            )
-
-          n1 ++ n2
-        end)
-
-      Ash.Notifier.notify(notifications)
-      :ok
+      true ->
+        write_refresh!(change, build_link_records(change, typed_entries), :processed, total)
     end
+  end
+
+  # Staging-targeted PRs (base_ref starting with "staging") get
+  # package_count from the attrdiff but no ChangePackage rows. Mass
+  # staging churn would otherwise pollute per-package change lists.
+  defp staging?(change),
+    do: String.starts_with?(change.base_ref || "", "staging")
+
+  defp build_link_records(change, typed_entries) do
+    all_attrs = Enum.map(typed_entries, &elem(&1, 1))
+    ensure_packages_exist(all_attrs)
+    id_map = package_id_map(all_attrs)
+
+    Enum.map(typed_entries, fn {type, attr} ->
+      %{change_id: change.id, package_id: id_map[attr], type: type}
+    end)
+  end
+
+  defp write_refresh!(change, records, status, total) do
+    {:ok, notifications} =
+      Tracker.Repo.transaction(fn ->
+        ChangePackage.clear_for_change!(change.id)
+        if records != [], do: ChangePackage.bulk_create_all(records)
+
+        {_, n1} =
+          Change.update_processing_status!(
+            change,
+            %{processing_status: status},
+            return_notifications?: true
+          )
+
+        {_, n2} =
+          Change.update_package_count!(
+            change,
+            %{package_count: total},
+            return_notifications?: true
+          )
+
+        n1 ++ n2
+      end)
+
+    Ash.Notifier.notify(notifications)
+    :ok
   end
 
   @ignored_packages [

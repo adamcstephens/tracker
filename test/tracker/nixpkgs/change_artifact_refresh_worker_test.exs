@@ -395,6 +395,167 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorkerTest do
     end
   end
 
+  describe "run/2 staging base_ref short-circuit" do
+    test "merged + base_ref=\"staging\" writes zero links, status :processed, sets package_count",
+         %{rate_limit_table: table} do
+      change =
+        insert_change!(
+          number: 9300,
+          state: :merged,
+          merge_commit_sha: "stagingsha",
+          base_ref: "staging"
+        )
+
+      attrdiff = %{"added" => ["s-pkg-a", "s-pkg-b"], "changed" => [], "removed" => []}
+
+      :ok =
+        ChangeArtifactRefreshWorker.run(
+          %{reason: "merged", number: 9300},
+          rate_limit_table: table,
+          attrdiff_fetcher: fn _ -> {:ok, attrdiff} end
+        )
+
+      {:ok, refreshed} = Change.get_by_number(9300)
+      assert refreshed.processing_status == :processed
+      assert refreshed.package_count == 2
+
+      link_count =
+        Tracker.Repo.one(
+          from(cp in ChangePackage, where: cp.change_id == ^change.id, select: count(cp.id))
+        )
+
+      assert link_count == 0
+    end
+
+    test "merged + base_ref=\"staging-23.11\" prefix variant short-circuits the same way", %{
+      rate_limit_table: table
+    } do
+      change =
+        insert_change!(
+          number: 9301,
+          state: :merged,
+          merge_commit_sha: "stagingvarsha",
+          base_ref: "staging-23.11"
+        )
+
+      attrdiff = %{"added" => ["sv-pkg-a"], "changed" => ["sv-pkg-b"], "removed" => []}
+
+      :ok =
+        ChangeArtifactRefreshWorker.run(
+          %{reason: "merged", number: 9301},
+          rate_limit_table: table,
+          attrdiff_fetcher: fn _ -> {:ok, attrdiff} end
+        )
+
+      {:ok, refreshed} = Change.get_by_number(9301)
+      assert refreshed.processing_status == :processed
+      assert refreshed.package_count == 2
+
+      link_count =
+        Tracker.Repo.one(
+          from(cp in ChangePackage, where: cp.change_id == ^change.id, select: count(cp.id))
+        )
+
+      assert link_count == 0
+    end
+
+    test "head_sha_changed + base_ref staging-next writes zero links, status :processed", %{
+      rate_limit_table: table
+    } do
+      change =
+        insert_change!(
+          number: 9302,
+          state: :open,
+          head_sha: "stagingopensha",
+          base_ref: "staging-next"
+        )
+
+      attrdiff = %{"added" => ["sn-pkg"], "changed" => [], "removed" => []}
+
+      :ok =
+        ChangeArtifactRefreshWorker.run(
+          %{reason: "head_sha_changed", number: 9302},
+          rate_limit_table: table,
+          attrdiff_fetcher: fn _ -> {:ok, attrdiff} end
+        )
+
+      {:ok, refreshed} = Change.get_by_number(9302)
+      assert refreshed.processing_status == :processed
+      assert refreshed.package_count == 1
+
+      link_count =
+        Tracker.Repo.one(
+          from(cp in ChangePackage, where: cp.change_id == ^change.id, select: count(cp.id))
+        )
+
+      assert link_count == 0
+    end
+
+    test "pre-existing links on a staging change are cleared on refresh", %{
+      rate_limit_table: table
+    } do
+      change =
+        insert_change!(
+          number: 9303,
+          state: :merged,
+          merge_commit_sha: "stalestagingsha",
+          base_ref: "staging"
+        )
+
+      stale_pkg = insert_package!("legacy-staging-pkg")
+      insert_change_package!(change.id, stale_pkg.id, :changed)
+
+      attrdiff = %{"added" => ["fresh-staging-pkg"], "changed" => [], "removed" => []}
+
+      :ok =
+        ChangeArtifactRefreshWorker.run(
+          %{reason: "merged", number: 9303},
+          rate_limit_table: table,
+          attrdiff_fetcher: fn _ -> {:ok, attrdiff} end
+        )
+
+      link_count =
+        Tracker.Repo.one(
+          from(cp in ChangePackage, where: cp.change_id == ^change.id, select: count(cp.id))
+        )
+
+      assert link_count == 0
+    end
+
+    test "staging change over the 1000 cap stays :processed, never :too_large", %{
+      rate_limit_table: table
+    } do
+      change =
+        insert_change!(
+          number: 9304,
+          state: :merged,
+          merge_commit_sha: "stagingbigsha",
+          base_ref: "staging"
+        )
+
+      over_cap = for i <- 1..1001, do: "s-pkg-#{i}"
+      attrdiff = %{"added" => over_cap, "changed" => [], "removed" => []}
+
+      :ok =
+        ChangeArtifactRefreshWorker.run(
+          %{reason: "merged", number: 9304},
+          rate_limit_table: table,
+          attrdiff_fetcher: fn _ -> {:ok, attrdiff} end
+        )
+
+      {:ok, refreshed} = Change.get_by_number(9304)
+      assert refreshed.processing_status == :processed
+      assert refreshed.package_count == 1001
+
+      link_count =
+        Tracker.Repo.one(
+          from(cp in ChangePackage, where: cp.change_id == ^change.id, select: count(cp.id))
+        )
+
+      assert link_count == 0
+    end
+  end
+
   defp insert_change!(attrs) do
     defaults = [
       title: "test PR",
