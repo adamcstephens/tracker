@@ -26,5 +26,6 @@ defmodule Tracker.Nixpkgs do
     resource Tracker.Nixpkgs.Change
     resource Tracker.Nixpkgs.ChangePackage
     resource Tracker.Nixpkgs.ChangeChannel
+    resource Tracker.Nixpkgs.ChangeFile
   end
 end

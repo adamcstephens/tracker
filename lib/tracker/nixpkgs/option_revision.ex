@@ -12,6 +12,7 @@ defmodule Tracker.Nixpkgs.OptionRevision do
     define :latest_by_option_ids, args: [:option_ids]
     define :list_by_channel_revision, args: [:channel_revision_id, {:optional, :search}]
     define :list_by_channel_revision_and_prefix, args: [:channel_revision_id, :prefix]
+    define :list_by_change_and_channel_revision, args: [:change_id, :channel_revision_id]
   end
 
   actions do
@@ -59,6 +60,21 @@ defmodule Tracker.Nixpkgs.OptionRevision do
       filter expr(option_id in ^arg(:option_ids))
 
       prepare build(sort: [option_id: :asc, released_at: :desc], distinct: [:option_id])
+    end
+
+    read :list_by_change_and_channel_revision do
+      argument :change_id, :integer, allow_nil?: false
+      argument :channel_revision_id, :integer, allow_nil?: false
+
+      prepare build(sort: [option_name: :asc], load: [:option])
+
+      filter expr(
+               channel_revision_id == ^arg(:channel_revision_id) and
+                 exists(
+                   option_revision_files,
+                   exists(file.change_files, change_id == ^arg(:change_id))
+                 )
+             )
     end
 
     create :load do

@@ -55,11 +55,26 @@ defmodule Tracker.Nixpkgs.File do
 
   relationships do
     has_many :option_revision_files, Tracker.Nixpkgs.OptionRevisionFile
+    has_many :change_files, Tracker.Nixpkgs.ChangeFile
   end
 
   identities do
     identity :unique_path, [:path]
   end
+
+  @doc """
+  Normalize a file path so option-revision and change ingestion converge on
+  the same `files.path` row.
+
+  Trims leading `./` and rewrites the historical `nixos/modules/nixos/modules/`
+  duplication that appears in some declarations metadata.
+  """
+  def normalize_path("./" <> rest), do: normalize_path(rest)
+
+  def normalize_path("nixos/modules/nixos/modules/" <> rest),
+    do: "nixos/modules/" <> rest
+
+  def normalize_path(path) when is_binary(path), do: path
 
   # 3 columns: path, inserted_at, updated_at
   @insert_cols 3
