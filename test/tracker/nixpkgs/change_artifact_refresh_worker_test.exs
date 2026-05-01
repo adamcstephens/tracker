@@ -579,7 +579,7 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorkerTest do
   end
 
   describe "run/2 staging base_ref short-circuit" do
-    test "merged + base_ref=\"staging\" writes zero links, status :processed, sets package_count",
+    test "merged + base_ref=\"staging\" writes zero links, status :base_ref_skipped, sets package_count",
          %{rate_limit_table: table} do
       change =
         insert_change!(
@@ -599,7 +599,7 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorkerTest do
         )
 
       {:ok, refreshed} = Change.get_by_number(9300)
-      assert refreshed.processing_status == :processed
+      assert refreshed.processing_status == :base_ref_skipped
       assert refreshed.package_count == 2
 
       link_count =
@@ -631,7 +631,7 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorkerTest do
         )
 
       {:ok, refreshed} = Change.get_by_number(9301)
-      assert refreshed.processing_status == :processed
+      assert refreshed.processing_status == :base_ref_skipped
       assert refreshed.package_count == 2
 
       link_count =
@@ -642,9 +642,10 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorkerTest do
       assert link_count == 0
     end
 
-    test "head_sha_changed + base_ref staging-next writes zero links, status :processed", %{
-      rate_limit_table: table
-    } do
+    test "head_sha_changed + base_ref staging-next writes zero links, status :base_ref_skipped",
+         %{
+           rate_limit_table: table
+         } do
       change =
         insert_change!(
           number: 9302,
@@ -663,7 +664,7 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorkerTest do
         )
 
       {:ok, refreshed} = Change.get_by_number(9302)
-      assert refreshed.processing_status == :processed
+      assert refreshed.processing_status == :base_ref_skipped
       assert refreshed.package_count == 1
 
       link_count =
@@ -705,7 +706,7 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorkerTest do
       assert link_count == 0
     end
 
-    test "staging change over the 1000 cap stays :processed, never :too_large", %{
+    test "staging change over the 1000 cap stays :base_ref_skipped, never :too_large", %{
       rate_limit_table: table
     } do
       change =
@@ -727,7 +728,7 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorkerTest do
         )
 
       {:ok, refreshed} = Change.get_by_number(9304)
-      assert refreshed.processing_status == :processed
+      assert refreshed.processing_status == :base_ref_skipped
       assert refreshed.package_count == 1001
 
       link_count =

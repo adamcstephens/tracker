@@ -304,6 +304,7 @@ defmodule Tracker.Nixpkgs.Change do
           :pending,
           :processed,
           :too_large,
+          :base_ref_skipped,
           :artifact_expired,
           :no_workflow_run,
           :no_comparison_artifact,
