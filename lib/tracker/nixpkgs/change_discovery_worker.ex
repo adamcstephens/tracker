@@ -155,12 +155,13 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorker do
   """
   def parse_pr_payload(pr) do
     merged_by = Map.get(pr, :merged_by)
+    state = parse_state(pr)
 
     %{
       number: pr.number,
       node_id: pr.node_id,
       title: pr.title,
-      state: parse_state(pr),
+      state: state,
       author: pr.user && pr.user.login,
       author_github_id: pr.user && pr.user.id,
       merged_by_github_id: merged_by && merged_by.id,
@@ -173,7 +174,9 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorker do
       gh_updated_at: parse_datetime(pr.updated_at),
       closed_at: parse_datetime(pr.closed_at),
       merged_at: parse_datetime(pr.merged_at),
-      merge_commit_sha: pr.merge_commit_sha
+      # REST populates merge_commit_sha on open PRs with a test-merge SHA;
+      # only persist the real one when the PR is actually merged.
+      merge_commit_sha: (state == :merged && pr.merge_commit_sha) || nil
     }
   end
 

@@ -245,6 +245,55 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorkerTest do
       assert %{merged_by_github_id: nil} = ChangeDiscoveryWorker.parse_pr_payload(pr)
     end
 
+    test "drops merge_commit_sha for open PRs (REST returns a test-merge SHA)" do
+      pr =
+        pr_struct(
+          number: 1,
+          state: "open",
+          merged_at: nil,
+          merge_commit_sha: "testmergesha"
+        )
+
+      assert %{merge_commit_sha: nil} = ChangeDiscoveryWorker.parse_pr_payload(pr)
+    end
+
+    test "drops merge_commit_sha for draft PRs" do
+      pr =
+        pr_struct(
+          number: 1,
+          state: "open",
+          draft: true,
+          merged_at: nil,
+          merge_commit_sha: "testmergesha"
+        )
+
+      assert %{merge_commit_sha: nil} = ChangeDiscoveryWorker.parse_pr_payload(pr)
+    end
+
+    test "drops merge_commit_sha for closed-without-merge PRs" do
+      pr =
+        pr_struct(
+          number: 1,
+          state: "closed",
+          merged_at: nil,
+          merge_commit_sha: "testmergesha"
+        )
+
+      assert %{merge_commit_sha: nil} = ChangeDiscoveryWorker.parse_pr_payload(pr)
+    end
+
+    test "keeps merge_commit_sha for merged PRs" do
+      pr =
+        pr_struct(
+          number: 1,
+          state: "closed",
+          merged_at: ~U[2026-04-01 00:00:00Z],
+          merge_commit_sha: "realmergesha"
+        )
+
+      assert %{merge_commit_sha: "realmergesha"} = ChangeDiscoveryWorker.parse_pr_payload(pr)
+    end
+
     test "extracts full attribute set" do
       pr =
         pr_struct(
