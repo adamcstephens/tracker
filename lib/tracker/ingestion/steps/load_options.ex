@@ -31,7 +31,6 @@ defmodule Tracker.Ingestion.Steps.LoadOptions do
           example: extract_text(entry["example"]),
           read_only: entry["readOnly"] || false,
           loc: entry["loc"],
-          declarations: entry["declarations"],
           related_packages: entry["relatedPackages"]
         }
       end)
