@@ -37,7 +37,8 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
           merge_commit_sha: "abc123def456",
           gh_created_at: ~U[2026-03-28 16:15:06Z],
           merged_at: ~U[2026-03-31 01:57:58Z],
-          package_count: 1
+          package_count: 1,
+          processing_status: :processed
         }
       ])
 

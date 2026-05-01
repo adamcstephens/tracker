@@ -7,8 +7,9 @@ defmodule Tracker.Admin do
   alias Tracker.Nixpkgs.Change
   alias Tracker.Nixpkgs.ChangeArtifactRefreshWorker
 
-  def reprocess_change(number) when is_integer(number) do
-    Tracker.Nixpkgs.ChangeArtifactRefreshWorker.run(%{reason: "head_sha_changed", number: number})
+  def reprocess_change(number, reason \\ "head_sha_changed")
+      when is_integer(number) and reason in ["head_sha_changed", "merged"] do
+    Tracker.Nixpkgs.ChangeArtifactRefreshWorker.run(%{reason: reason, number: number})
   end
 
   @doc """

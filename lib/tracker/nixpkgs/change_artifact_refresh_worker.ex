@@ -227,7 +227,7 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
 
     cond do
       staging?(change) ->
-        write_refresh!(change, [], :processed, total)
+        write_refresh!(change, [], :base_ref_skipped, total)
 
       total > @link_cap ->
         Logger.warning(

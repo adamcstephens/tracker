@@ -55,7 +55,7 @@ defmodule TrackerWeb.ChangeLive.Show do
       </div>
     </div>
 
-    <section>
+    <section :if={@change.processing_status == :processed and @package_count > 0}>
       <h2>Affected Packages ({@package_count})</h2>
 
       <form
