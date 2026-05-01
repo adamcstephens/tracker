@@ -87,7 +87,6 @@ defmodule Tracker.Nixpkgs.OptionRevision do
         :example,
         :read_only,
         :loc,
-        :declarations,
         :related_packages
       ]
 
@@ -101,7 +100,6 @@ defmodule Tracker.Nixpkgs.OptionRevision do
         :example,
         :read_only,
         :loc,
-        :declarations,
         :related_packages,
         :updated_at
       ]
@@ -122,7 +120,6 @@ defmodule Tracker.Nixpkgs.OptionRevision do
     end
 
     attribute :loc, {:array, :string}, public?: true
-    attribute :declarations, {:array, :string}, public?: true
     attribute :related_packages, :string, public?: true
 
     timestamps()
@@ -153,9 +150,9 @@ defmodule Tracker.Nixpkgs.OptionRevision do
     identity :unique_option_revision, [:channel_revision_id, :option_id]
   end
 
-  # 12 columns: option_id, channel_revision_id, description, type, default, example,
-  #             read_only, loc, declarations, related_packages, inserted_at, updated_at
-  @insert_cols 12
+  # 11 columns: option_id, channel_revision_id, description, type, default, example,
+  #             read_only, loc, related_packages, inserted_at, updated_at
+  @insert_cols 11
   @max_rows div(65_535, @insert_cols)
 
   @doc """
@@ -216,7 +213,6 @@ defmodule Tracker.Nixpkgs.OptionRevision do
                :example,
                :read_only,
                :loc,
-               :declarations,
                :related_packages,
                :updated_at
              ]},
