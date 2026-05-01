@@ -19,6 +19,12 @@ defmodule TrackerWeb.ChangeLive.Show do
         <mark :if={@change.state == :merged}>merged</mark>
         <span :if={@change.state == :open}>open</span>
         <span :if={@change.state == :closed}>closed</span>
+        <span :if={@change.state == :draft}>draft</span>
+      </:item>
+      <:item :if={@change.processing_status != :processed} title="Processing Status">
+        <kbd>
+          {processing_status_label(@change.processing_status)}
+        </kbd>
       </:item>
       <:item title="Author">
         {author_display(@change, @author_maintainer)}
@@ -55,44 +61,52 @@ defmodule TrackerWeb.ChangeLive.Show do
       </div>
     </div>
 
-    <section :if={@change.processing_status == :processed and @package_count > 0}>
+    <section>
       <h2>Affected Packages ({@package_count})</h2>
 
-      <form
-        :if={@package_count > 15}
-        phx-change="search-packages"
-        phx-submit="search-packages"
-        id="package-search"
-        phx-hook="UpdateURL"
-      >
-        <input
-          type="search"
-          name="search"
-          value={@table_params.search}
-          placeholder="Filter packages..."
-          phx-debounce="300"
+      <p :if={@change.processing_status != :processed}>
+        {processing_status_explanation(@change.processing_status, @change)}
+      </p>
+
+      <%= if @change.processing_status == :processed and @package_count > 0 do %>
+        <form
+          :if={@package_count > 15}
+          phx-change="search-packages"
+          phx-submit="search-packages"
+          id="package-search"
+          phx-hook="UpdateURL"
+        >
+          <input
+            type="search"
+            name="search"
+            value={@table_params.search}
+            placeholder="Filter packages..."
+            phx-debounce="300"
+          />
+        </form>
+
+        <.table id="affected-packages" rows={@streams.packages}>
+          <:col :let={{_id, pkg}} label="Package">
+            <.link navigate={~p"/packages/#{pkg.attribute}"}>{pkg.attribute}</.link>
+          </:col>
+          <:col :let={{_id, pkg}} label="Description">
+            <span style="display: block; max-width: 40ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+              {pkg.description}
+            </span>
+          </:col>
+        </.table>
+
+        <DataTable.pagination
+          total_pages={@pkg_total_pages}
+          current_page={@pkg_current_page}
+          has_prev_page?={@pkg_has_prev?}
+          has_next_page?={@pkg_has_next?}
         />
-      </form>
+      <% end %>
 
-      <.table id="affected-packages" rows={@streams.packages}>
-        <:col :let={{_id, pkg}} label="Package">
-          <.link navigate={~p"/packages/#{pkg.attribute}"}>{pkg.attribute}</.link>
-        </:col>
-        <:col :let={{_id, pkg}} label="Description">
-          <span style="display: block; max-width: 40ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-            {pkg.description}
-          </span>
-        </:col>
-      </.table>
-
-      <p :if={@package_count == 0}>No affected packages found.</p>
-
-      <DataTable.pagination
-        total_pages={@pkg_total_pages}
-        current_page={@pkg_current_page}
-        has_prev_page?={@pkg_has_prev?}
-        has_next_page?={@pkg_has_next?}
-      />
+      <p :if={@change.processing_status == :processed and @package_count == 0}>
+        No affected packages found.
+      </p>
     </section>
 
     <section :if={@affected_prefixes != []}>
@@ -109,6 +123,38 @@ defmodule TrackerWeb.ChangeLive.Show do
 
   defp format_datetime(nil), do: "-"
   defp format_datetime(dt), do: Calendar.strftime(dt, "%Y-%m-%d %H:%M")
+
+  defp processing_status_label(:pending), do: "pending"
+  defp processing_status_label(:too_large), do: "too large"
+  defp processing_status_label(:base_ref_skipped), do: "base ref skipped"
+  defp processing_status_label(:artifact_expired), do: "artifact expired"
+  defp processing_status_label(:no_workflow_run), do: "no workflow run"
+  defp processing_status_label(:no_comparison_artifact), do: "no comparison artifact"
+  defp processing_status_label(:failed), do: "failed"
+
+  defp processing_status_explanation(:pending, _),
+    do: "This change hasn't been processed yet."
+
+  defp processing_status_explanation(:base_ref_skipped, change),
+    do:
+      "Targets #{change.base_ref}. Per-package relations are skipped when targeting mass-rebuild branches"
+
+  defp processing_status_explanation(:too_large, change),
+    do:
+      "The attrdiff touched #{change.package_count} attributes, over the per-change link cap. " <>
+        "Per-package links were not written."
+
+  defp processing_status_explanation(:artifact_expired, _),
+    do: "GitHub's nixpkgs-review artifact has expired, so we can't compute affected packages."
+
+  defp processing_status_explanation(:no_workflow_run, _),
+    do: "No nixpkgs-review workflow run was found for this change."
+
+  defp processing_status_explanation(:no_comparison_artifact, _),
+    do: "No comparison artifact was found in the workflow run."
+
+  defp processing_status_explanation(:failed, _),
+    do: "Processing failed for this change."
 
   defp author_display(change, nil), do: change.author || "Unknown"
 
