@@ -59,7 +59,7 @@ defmodule Tracker.Nixpkgs.Change do
                    true
                  end and
                  if not is_nil(^arg(:channel_id)) do
-                   exists(change_channels, channel_id == ^arg(:channel_id))
+                   exists(change_branches, branch.channel_id == ^arg(:channel_id))
                  else
                    true
                  end
@@ -107,7 +107,7 @@ defmodule Tracker.Nixpkgs.Change do
       filter expr(
                (author_github_id == ^arg(:github_id) or merged_by_github_id == ^arg(:github_id)) and
                  if not is_nil(^arg(:channel_id)) do
-                   exists(change_channels, channel_id == ^arg(:channel_id))
+                   exists(change_branches, branch.channel_id == ^arg(:channel_id))
                  else
                    true
                  end
@@ -317,7 +317,7 @@ defmodule Tracker.Nixpkgs.Change do
 
   relationships do
     has_many :change_packages, Tracker.Nixpkgs.ChangePackage
-    has_many :change_channels, Tracker.Nixpkgs.ChangeChannel
+    has_many :change_branches, Tracker.Nixpkgs.ChangeBranch
     has_many :change_files, Tracker.Nixpkgs.ChangeFile
 
     many_to_many :packages, Tracker.Nixpkgs.Package do

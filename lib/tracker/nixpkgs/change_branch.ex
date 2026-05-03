@@ -1,8 +1,8 @@
-defmodule Tracker.Nixpkgs.ChangeChannel do
+defmodule Tracker.Nixpkgs.ChangeBranch do
   use Ash.Resource, otp_app: :tracker, domain: Tracker.Nixpkgs, data_layer: AshPostgres.DataLayer
 
   postgres do
-    table "change_channels"
+    table "change_branches"
     repo Tracker.Repo
   end
 
@@ -15,17 +15,18 @@ defmodule Tracker.Nixpkgs.ChangeChannel do
     defaults [:read]
 
     create :create do
-      accept [:change_id, :channel_id, :channel_revision_id, :landed_at]
+      primary? true
+      accept [:change_id, :branch_id, :channel_revision_id, :arrived_at]
       upsert? true
-      upsert_identity :unique_change_channel
-      upsert_fields [:channel_revision_id, :landed_at, :updated_at]
+      upsert_identity :unique_change_branch
+      upsert_fields [:channel_revision_id, :arrived_at, :updated_at]
     end
   end
 
   attributes do
     integer_primary_key :id
 
-    attribute :landed_at, :utc_datetime do
+    attribute :arrived_at, :utc_datetime do
       allow_nil? false
       public? true
     end
@@ -36,7 +37,7 @@ defmodule Tracker.Nixpkgs.ChangeChannel do
   relationships do
     belongs_to :change, Tracker.Nixpkgs.Change, attribute_type: :integer, allow_nil?: false
 
-    belongs_to :channel, Tracker.Nixpkgs.Channel, attribute_type: :integer, allow_nil?: false
+    belongs_to :branch, Tracker.Nixpkgs.Branch, attribute_type: :integer, allow_nil?: false
 
     belongs_to :channel_revision, Tracker.Nixpkgs.ChannelRevision,
       attribute_type: :integer,
@@ -44,6 +45,6 @@ defmodule Tracker.Nixpkgs.ChangeChannel do
   end
 
   identities do
-    identity :unique_change_channel, [:change_id, :channel_id]
+    identity :unique_change_branch, [:change_id, :branch_id]
   end
 end

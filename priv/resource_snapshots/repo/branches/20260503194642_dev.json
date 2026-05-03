@@ -21,8 +21,20 @@
       "references": null,
       "scale": null,
       "size": null,
-      "source": "landed_at",
-      "type": "utc_datetime"
+      "source": "name",
+      "type": "text"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "kind",
+      "type": "text"
     },
     {
       "allow_nil?": false,
@@ -49,68 +61,6 @@
       "type": "utc_datetime_usec"
     },
     {
-      "allow_nil?": false,
-      "default": "nil",
-      "generated?": false,
-      "precision": null,
-      "primary_key?": false,
-      "references": {
-        "deferrable": false,
-        "destination_attribute": "id",
-        "destination_attribute_default": null,
-        "destination_attribute_generated": null,
-        "index?": false,
-        "match_type": null,
-        "match_with": null,
-        "multitenancy": {
-          "attribute": null,
-          "global": null,
-          "strategy": null
-        },
-        "name": "change_channels_change_id_fkey",
-        "on_delete": null,
-        "on_update": null,
-        "primary_key?": true,
-        "schema": "public",
-        "table": "changes"
-      },
-      "scale": null,
-      "size": null,
-      "source": "change_id",
-      "type": "bigint"
-    },
-    {
-      "allow_nil?": false,
-      "default": "nil",
-      "generated?": false,
-      "precision": null,
-      "primary_key?": false,
-      "references": {
-        "deferrable": false,
-        "destination_attribute": "id",
-        "destination_attribute_default": null,
-        "destination_attribute_generated": null,
-        "index?": false,
-        "match_type": null,
-        "match_with": null,
-        "multitenancy": {
-          "attribute": null,
-          "global": null,
-          "strategy": null
-        },
-        "name": "change_channels_channel_id_fkey",
-        "on_delete": null,
-        "on_update": null,
-        "primary_key?": true,
-        "schema": "public",
-        "table": "channels"
-      },
-      "scale": null,
-      "size": null,
-      "source": "channel_id",
-      "type": "bigint"
-    },
-    {
       "allow_nil?": true,
       "default": "nil",
       "generated?": false,
@@ -129,16 +79,16 @@
           "global": null,
           "strategy": null
         },
-        "name": "change_channels_channel_revision_id_fkey",
+        "name": "branches_channel_id_fkey",
         "on_delete": null,
         "on_update": null,
         "primary_key?": true,
         "schema": "public",
-        "table": "channel_revisions"
+        "table": "channels"
       },
       "scale": null,
       "size": null,
-      "source": "channel_revision_id",
+      "source": "channel_id",
       "type": "bigint"
     }
   ],
@@ -148,23 +98,19 @@
   "custom_indexes": [],
   "custom_statements": [],
   "has_create_action": true,
-  "hash": "D977F6415142F05E462EB9F9F431DA79FFC7A50C12E00D8721D41926063711DB",
+  "hash": "9D2F24E2B5D3BBE61314427DD8ED1F0420A33DEB56E2813B7F847DF9F848DE55",
   "identities": [
     {
       "all_tenants?": false,
       "base_filter": null,
-      "index_name": "change_channels_unique_change_channel_index",
+      "index_name": "branches_unique_name_index",
       "keys": [
         {
           "type": "atom",
-          "value": "change_id"
-        },
-        {
-          "type": "atom",
-          "value": "channel_id"
+          "value": "name"
         }
       ],
-      "name": "unique_change_channel",
+      "name": "unique_name",
       "nils_distinct?": true,
       "where": null
     }
@@ -176,5 +122,5 @@
   },
   "repo": "Elixir.Tracker.Repo",
   "schema": null,
-  "table": "change_channels"
+  "table": "branches"
 }
