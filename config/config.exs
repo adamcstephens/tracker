@@ -112,6 +112,11 @@ config :tracker, TrackerWeb.Endpoint,
 # at the `config/runtime.exs`.
 config :tracker, Tracker.Mailer, adapter: Swoosh.Adapters.Local
 
+config :tracker, Tracker.GitServer,
+  repo_url: "https://github.com/NixOS/nixpkgs.git",
+  path: "data/nixpkgs.git",
+  auto_start: true
+
 # Configure esbuild (the version is required)
 config :esbuild,
   version: "0.17.11",
