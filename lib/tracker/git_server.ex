@@ -134,14 +134,20 @@ defmodule Tracker.GitServer do
 
   # Internal
 
+  # We mirror only refs/heads/* — nixpkgs has ~480k refs/pull/* refs that
+  # would otherwise dominate every fetch's negotiation cost.
+  @fetch_refspec "+refs/heads/*:refs/heads/*"
+
   defp ensure_repo(%State{path: path} = state) do
     cond do
       not File.exists?(path) ->
-        clone(state)
+        with %State{ready: true} = state <- clone(state) do
+          configure_remote(state)
+        end
 
       healthy_repo?(path) ->
         Logger.info("GitServer: reusing existing repo at #{path}")
-        %State{state | ready: true}
+        configure_remote(%State{state | ready: true})
 
       true ->
         Logger.error(
@@ -156,7 +162,9 @@ defmodule Tracker.GitServer do
     Logger.info("GitServer: cloning #{url} into #{path}")
     File.mkdir_p!(Path.dirname(path))
 
-    case System.cmd("git", ["clone", "--mirror", "--quiet", url, path], stderr_to_stdout: true) do
+    args = ["clone", "--bare", "--quiet", "--no-tags", url, path]
+
+    case System.cmd("git", args, stderr_to_stdout: true) do
       {_, 0} ->
         Logger.info("GitServer: clone complete")
         %State{state | ready: true}
@@ -165,6 +173,20 @@ defmodule Tracker.GitServer do
         Logger.error("GitServer: clone failed (#{code}): #{String.trim(output)}")
         state
     end
+  end
+
+  defp configure_remote(%State{path: path} = state) do
+    {_, 0} =
+      System.cmd("git", ["-C", path, "config", "remote.origin.fetch", @fetch_refspec],
+        stderr_to_stdout: true
+      )
+
+    {_, 0} =
+      System.cmd("git", ["-C", path, "config", "remote.origin.tagOpt", "--no-tags"],
+        stderr_to_stdout: true
+      )
+
+    state
   end
 
   defp healthy_repo?(path) do

@@ -83,6 +83,28 @@ defmodule Tracker.GitServerTest do
       assert GitServer.ancestor?(pid, "deadbeef", "refs/heads/main") == {:error, :not_ready}
     end
 
+    test "configures a narrow fetch refspec scoped to refs/heads/*", %{
+      upstream: upstream,
+      local: local
+    } do
+      pid =
+        start_supervised!(
+          {GitServer, name: nil, repo_url: upstream, path: local, auto_start: true}
+        )
+
+      assert GitServer.ready?(pid)
+
+      {fetch, 0} =
+        System.cmd("git", ["-C", local, "config", "--get-all", "remote.origin.fetch"])
+
+      assert String.trim(fetch) == "+refs/heads/*:refs/heads/*"
+
+      {tagopt, 0} =
+        System.cmd("git", ["-C", local, "config", "--get-all", "remote.origin.tagOpt"])
+
+      assert String.trim(tagopt) == "--no-tags"
+    end
+
     test "stays :not_ready when path is a half-cloned mirror with no refs",
          %{local: local} = ctx do
       File.mkdir_p!(local)
