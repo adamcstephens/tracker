@@ -82,6 +82,19 @@ defmodule Tracker.GitServerTest do
       refute GitServer.ready?(pid)
       assert GitServer.ancestor?(pid, "deadbeef", "refs/heads/main") == {:error, :not_ready}
     end
+
+    test "stays :not_ready when path is a half-cloned mirror with no refs",
+         %{local: local} = ctx do
+      File.mkdir_p!(local)
+      {_, 0} = System.cmd("git", ["-C", local, "init", "--quiet", "--bare"])
+
+      pid =
+        start_supervised!(
+          {GitServer, name: nil, repo_url: ctx.upstream, path: local, auto_start: true}
+        )
+
+      refute GitServer.ready?(pid)
+    end
   end
 
   describe "ancestor?/3" do
