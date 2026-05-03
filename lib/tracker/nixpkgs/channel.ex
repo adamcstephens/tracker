@@ -95,7 +95,6 @@ defmodule Tracker.Nixpkgs.Channel do
 
   relationships do
     has_many :channel_revisions, Tracker.Nixpkgs.ChannelRevision
-    has_many :change_channels, Tracker.Nixpkgs.ChangeChannel
   end
 
   identities do

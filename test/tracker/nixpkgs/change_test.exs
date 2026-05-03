@@ -174,14 +174,19 @@ defmodule Tracker.Nixpkgs.ChangeTest do
         ])
         |> Map.fetch!(5002)
 
-      Tracker.Nixpkgs.ChangeChannel
-      |> Ash.Changeset.for_create(:create, %{
+      branch =
+        Tracker.Nixpkgs.Branch.create!(%{
+          name: "nixos-unstable",
+          kind: :channel,
+          channel_id: channel.id
+        })
+
+      Tracker.Nixpkgs.ChangeBranch.create!(%{
         change_id: change_in_id,
-        channel_id: channel.id,
+        branch_id: branch.id,
         channel_revision_id: cr.id,
-        landed_at: ~U[2025-01-01 10:00:00Z]
+        arrived_at: ~U[2025-01-01 10:00:00Z]
       })
-      |> Ash.create!()
 
       %{channel: channel, change_in_id: change_in_id, change_out_id: change_out_id}
     end
