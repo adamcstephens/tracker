@@ -139,13 +139,13 @@ defmodule Tracker.GitServer do
       not File.exists?(path) ->
         clone(state)
 
-      valid_git_dir?(path) ->
+      healthy_repo?(path) ->
         Logger.info("GitServer: reusing existing repo at #{path}")
         %State{state | ready: true}
 
       true ->
         Logger.error(
-          "GitServer: #{path} exists but is not a git directory; refusing to clone over it"
+          "GitServer: #{path} exists but is not a healthy git repo; refusing to clone over it"
         )
 
         state
@@ -167,6 +167,10 @@ defmodule Tracker.GitServer do
     end
   end
 
+  defp healthy_repo?(path) do
+    valid_git_dir?(path) and has_refs?(path)
+  end
+
   defp valid_git_dir?(path) do
     expanded = Path.expand(path)
 
@@ -174,6 +178,13 @@ defmodule Tracker.GitServer do
            stderr_to_stdout: true
          ) do
       {output, 0} -> Path.expand(String.trim(output)) == expanded
+      _ -> false
+    end
+  end
+
+  defp has_refs?(path) do
+    case System.cmd("git", ["-C", path, "for-each-ref", "--count=1"], stderr_to_stdout: true) do
+      {output, 0} -> String.trim(output) != ""
       _ -> false
     end
   end
