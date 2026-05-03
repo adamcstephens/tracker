@@ -20,6 +20,10 @@ if System.get_env("PHX_SERVER") do
   config :tracker, TrackerWeb.Endpoint, server: true
 end
 
+if path = System.get_env("NIXPKGS_GIT_PATH") do
+  config :tracker, Tracker.GitServer, path: path
+end
+
 if System.get_env("TRACKER_S3_BUCKET") do
   s3_opts = [
     bucket: System.fetch_env!("TRACKER_S3_BUCKET"),

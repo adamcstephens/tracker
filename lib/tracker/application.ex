@@ -11,6 +11,7 @@ defmodule Tracker.Application do
 
     children = [
       Tracker.Repo,
+      {Tracker.GitServer, Application.get_env(:tracker, Tracker.GitServer, [])},
       Tracker.GitHub.RateLimitCache,
       {Oban,
        AshOban.config(

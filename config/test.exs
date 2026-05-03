@@ -37,6 +37,8 @@ config :phoenix, :plug_init_mode, :runtime
 
 config :tracker, release_cache_load: false
 
+config :tracker, Tracker.GitServer, auto_start: false
+
 # Tests that exercise ChangeArtifactRefreshWorker without explicitly stubbing
 # `:files_fetcher` should not hit the GitHub REST API. Tests covering
 # changed_files persistence pass an explicit `:files_fetcher` opt.
