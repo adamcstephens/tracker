@@ -11,4 +11,13 @@ defmodule TrackerWeb.Layouts do
   use TrackerWeb, :html
 
   embed_templates "layouts/*"
+
+  def active_nav?(view, prefix) when is_atom(view) do
+    case Module.split(view) do
+      [_, ^prefix | _] -> true
+      _ -> false
+    end
+  end
+
+  def active_nav?(_view, _prefix), do: false
 end

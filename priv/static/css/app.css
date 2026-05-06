@@ -477,3 +477,16 @@ dl.option-body dd {
 .option-read-only {
 	color: var(--pico-muted-color);
 }
+
+header nav a[aria-current="page"] {
+	background-color: var(--pico-primary-background);
+	color: var(--pico-primary-inverse);
+	padding: 0.25rem 0.75rem;
+	border-radius: var(--pico-border-radius);
+	text-decoration: none;
+}
+
+header nav a[aria-current="page"]:hover {
+	background-color: var(--pico-primary-hover-background);
+	color: var(--pico-primary-inverse);
+}

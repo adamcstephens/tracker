@@ -1,12 +1,54 @@
 <header class="container">
   <nav>
     <ul>
-      <li><.link navigate={~p"/packages"}>Packages</.link></li>
-      <li><.link navigate={~p"/channels"}>Channels</.link></li>
-      <li><.link navigate={~p"/options"}>Options</.link></li>
-      <li><.link navigate={~p"/changes"}>Changes</.link></li>
-      <li><.link navigate={~p"/maintainers"}>Maintainers</.link></li>
-      <li><.link navigate={~p"/teams"}>Teams</.link></li>
+      <li>
+        <.link
+          navigate={~p"/packages"}
+          aria-current={active_nav?(@socket.view, "PackageLive") && "page"}
+        >
+          Packages
+        </.link>
+      </li>
+      <li>
+        <.link
+          navigate={~p"/channels"}
+          aria-current={active_nav?(@socket.view, "ChannelLive") && "page"}
+        >
+          Channels
+        </.link>
+      </li>
+      <li>
+        <.link
+          navigate={~p"/options"}
+          aria-current={active_nav?(@socket.view, "OptionLive") && "page"}
+        >
+          Options
+        </.link>
+      </li>
+      <li>
+        <.link
+          navigate={~p"/changes"}
+          aria-current={active_nav?(@socket.view, "ChangeLive") && "page"}
+        >
+          Changes
+        </.link>
+      </li>
+      <li>
+        <.link
+          navigate={~p"/maintainers"}
+          aria-current={active_nav?(@socket.view, "MaintainerLive") && "page"}
+        >
+          Maintainers
+        </.link>
+      </li>
+      <li>
+        <.link
+          navigate={~p"/teams"}
+          aria-current={active_nav?(@socket.view, "TeamLive") && "page"}
+        >
+          Teams
+        </.link>
+      </li>
     </ul>
     <ul>
       <li :if={assigns[:lens]}>
