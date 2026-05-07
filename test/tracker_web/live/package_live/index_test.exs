@@ -26,7 +26,6 @@ defmodule TrackerWeb.PackageLive.IndexTest do
         Tracker.Nixpkgs.Channel.create!(%{
           name: "nixos-unstable",
           display_name: "nixos-unstable",
-          branch: "nixos-unstable",
           status: :active,
           is_stable: true
         })
@@ -83,7 +82,6 @@ defmodule TrackerWeb.PackageLive.IndexTest do
         Tracker.Nixpkgs.Channel.create!(%{
           name: "nixos-24.11-cp",
           display_name: "nixos-24.11-cp",
-          branch: "nixos-24.11-cp",
           status: :active,
           is_stable: false
         })
@@ -122,7 +120,6 @@ defmodule TrackerWeb.PackageLive.IndexTest do
         Tracker.Nixpkgs.Channel.create!(%{
           name: "nixos-24.11",
           display_name: "nixos-24.11",
-          branch: "nixos-24.11",
           status: :active,
           is_stable: false
         })

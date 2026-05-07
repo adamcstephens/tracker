@@ -10,7 +10,6 @@ defmodule TrackerWeb.ChannelLive.DiffTest do
       Channel.create!(%{
         name: "nixos-unstable",
         display_name: "NixOS Unstable",
-        branch: "nixos-unstable",
         status: :active,
         is_stable: false
       })

@@ -173,10 +173,10 @@ defmodule TrackerWeb.ChangeLive.Index do
 
   defp load_changes(socket) do
     tp = socket.assigns.table_params
-    channel_id = TrackerWeb.Lens.channel_id(socket.assigns.lens)
+    channel_name = TrackerWeb.Lens.channel_name(socket.assigns.lens)
 
     page =
-      Tracker.Nixpkgs.Change.list!(tp.search, socket.assigns.base_ref_filter, channel_id,
+      Tracker.Nixpkgs.Change.list!(tp.search, socket.assigns.base_ref_filter, channel_name,
         actor: socket.assigns[:current_user],
         query: [sort: [{tp.sort_by, tp.sort_dir}]],
         page: [offset: tp.offset, count: true]

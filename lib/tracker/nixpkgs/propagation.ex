@@ -138,4 +138,20 @@ defmodule Tracker.Nixpkgs.Propagation do
     seed = "staging-#{version}"
     [seed | downstream(seed)]
   end
+
+  @doc """
+  Returns true when `name` is a known branch in the propagation graph.
+
+  Accepts any static branch and any versioned branch belonging to a release
+  line — version is derived from the name itself, so this needs no channel
+  state.
+  """
+  @spec valid_branch?(String.t()) :: boolean()
+  def valid_branch?(name) do
+    name in static_branches() or
+      case Regex.run(~r/(\d+\.\d+)/, name) do
+        [_, version] -> name in branches_for_release(version)
+        _ -> false
+      end
+  end
 end

@@ -12,12 +12,12 @@ defmodule Tracker.Nixpkgs.Change do
 
   code_interface do
     define :read
-    define :list, args: [{:optional, :search}, {:optional, :base_ref}, {:optional, :channel_id}]
+    define :list, args: [{:optional, :search}, {:optional, :base_ref}, {:optional, :channel_name}]
     define :get_by_number, action: :read, get_by: [:number]
     define :get_by_node_id, action: :read, get_by: [:node_id]
     define :by_package, args: [:package_id]
     define :by_files, args: [:file_ids, {:optional, :limit}]
-    define :by_maintainer_github_id, args: [:github_id, {:optional, :channel_id}]
+    define :by_maintainer_github_id, args: [:github_id, {:optional, :channel_name}]
     define :update_package_count
     define :update_processing_status
     define :set_node_id
@@ -39,7 +39,7 @@ defmodule Tracker.Nixpkgs.Change do
     read :list do
       argument :search, :ci_string
       argument :base_ref, :string
-      argument :channel_id, :integer
+      argument :channel_name, :string
 
       pagination do
         offset? true
@@ -58,8 +58,8 @@ defmodule Tracker.Nixpkgs.Change do
                  else
                    true
                  end and
-                 if not is_nil(^arg(:channel_id)) do
-                   exists(change_branches, branch.channel_id == ^arg(:channel_id))
+                 if not is_nil(^arg(:channel_name)) do
+                   exists(change_branches, branch_name == ^arg(:channel_name))
                  else
                    true
                  end
@@ -94,7 +94,7 @@ defmodule Tracker.Nixpkgs.Change do
 
     read :by_maintainer_github_id do
       argument :github_id, :integer, allow_nil?: false
-      argument :channel_id, :integer
+      argument :channel_name, :string
 
       pagination do
         offset? true
@@ -106,8 +106,8 @@ defmodule Tracker.Nixpkgs.Change do
 
       filter expr(
                (author_github_id == ^arg(:github_id) or merged_by_github_id == ^arg(:github_id)) and
-                 if not is_nil(^arg(:channel_id)) do
-                   exists(change_branches, branch.channel_id == ^arg(:channel_id))
+                 if not is_nil(^arg(:channel_name)) do
+                   exists(change_branches, branch_name == ^arg(:channel_name))
                  else
                    true
                  end

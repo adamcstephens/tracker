@@ -136,7 +136,6 @@ defmodule Tracker.Nixpkgs.ChangeTest do
         Channel.create!(%{
           name: "nixos-unstable",
           display_name: "nixos-unstable",
-          branch: "nixos-unstable",
           status: :active,
           is_stable: false
         })
@@ -174,16 +173,9 @@ defmodule Tracker.Nixpkgs.ChangeTest do
         ])
         |> Map.fetch!(5002)
 
-      branch =
-        Tracker.Nixpkgs.Branch.create!(%{
-          name: "nixos-unstable",
-          kind: :channel,
-          channel_id: channel.id
-        })
-
       Tracker.Nixpkgs.ChangeBranch.create!(%{
         change_id: change_in_id,
-        branch_id: branch.id,
+        branch_name: "nixos-unstable",
         channel_revision_id: cr.id,
         arrived_at: ~U[2025-01-01 10:00:00Z]
       })
@@ -191,7 +183,7 @@ defmodule Tracker.Nixpkgs.ChangeTest do
       %{channel: channel, change_in_id: change_in_id, change_out_id: change_out_id}
     end
 
-    test "without channel_id returns all changes", %{
+    test "without channel_name returns all changes", %{
       change_in_id: change_in_id,
       change_out_id: change_out_id
     } do
@@ -202,12 +194,12 @@ defmodule Tracker.Nixpkgs.ChangeTest do
       assert change_out_id in ids
     end
 
-    test "with channel_id returns only changes in that channel", %{
+    test "with channel_name returns only changes in that channel", %{
       channel: channel,
       change_in_id: change_in_id,
       change_out_id: change_out_id
     } do
-      page = Change.list!(nil, nil, channel.id, page: [count: true])
+      page = Change.list!(nil, nil, channel.name, page: [count: true])
 
       ids = Enum.map(page.results, & &1.id)
       assert change_in_id in ids

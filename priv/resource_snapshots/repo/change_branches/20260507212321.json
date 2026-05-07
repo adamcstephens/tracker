@@ -21,6 +21,18 @@
       "references": null,
       "scale": null,
       "size": null,
+      "source": "branch_name",
+      "type": "text"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
       "source": "arrived_at",
       "type": "utc_datetime"
     },
@@ -80,37 +92,6 @@
       "type": "bigint"
     },
     {
-      "allow_nil?": false,
-      "default": "nil",
-      "generated?": false,
-      "precision": null,
-      "primary_key?": false,
-      "references": {
-        "deferrable": false,
-        "destination_attribute": "id",
-        "destination_attribute_default": null,
-        "destination_attribute_generated": null,
-        "index?": false,
-        "match_type": null,
-        "match_with": null,
-        "multitenancy": {
-          "attribute": null,
-          "global": null,
-          "strategy": null
-        },
-        "name": "change_branches_branch_id_fkey",
-        "on_delete": null,
-        "on_update": null,
-        "primary_key?": true,
-        "schema": "public",
-        "table": "branches"
-      },
-      "scale": null,
-      "size": null,
-      "source": "branch_id",
-      "type": "bigint"
-    },
-    {
       "allow_nil?": true,
       "default": "nil",
       "generated?": false,
@@ -148,7 +129,7 @@
   "custom_indexes": [],
   "custom_statements": [],
   "has_create_action": true,
-  "hash": "3BF41E046BDAA3EA441B06F1D492F71B56DA1843464C33B086A3DACEE39597F8",
+  "hash": "FDFCE8FCF201A0C95539457779212CC9A552AA9913A18E6B61DCF67397D62C0A",
   "identities": [
     {
       "all_tenants?": false,
@@ -161,7 +142,7 @@
         },
         {
           "type": "atom",
-          "value": "branch_id"
+          "value": "branch_name"
         }
       ],
       "name": "unique_change_branch",

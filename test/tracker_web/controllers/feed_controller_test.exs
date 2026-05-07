@@ -9,7 +9,6 @@ defmodule TrackerWeb.FeedControllerTest do
         Channel.create!(%{
           name: "nixos-feed-test",
           display_name: "NixOS Feed Test",
-          branch: "nixos-feed-test",
           status: :active,
           is_stable: false
         })
@@ -54,7 +53,6 @@ defmodule TrackerWeb.FeedControllerTest do
         Channel.create!(%{
           name: "nixos-feed-pkg",
           display_name: "NixOS Feed Pkg",
-          branch: "nixos-feed-pkg",
           status: :active,
           is_stable: false
         })

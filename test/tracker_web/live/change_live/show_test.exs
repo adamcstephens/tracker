@@ -111,7 +111,6 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
         Tracker.Nixpkgs.Channel.create!(%{
           name: "nixos-unstable",
           display_name: "NixOS Unstable",
-          branch: "nixos-unstable",
           status: :active,
           is_stable: true
         })

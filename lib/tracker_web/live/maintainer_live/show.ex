@@ -187,9 +187,10 @@ defmodule TrackerWeb.MaintainerLive.Show do
     maintainer = socket.assigns.maintainer
     tp = socket.assigns.table_params
     channel_id = TrackerWeb.Lens.channel_id(socket.assigns.lens)
+    channel_name = TrackerWeb.Lens.channel_name(socket.assigns.lens)
 
     recent_changes =
-      Tracker.Nixpkgs.Change.by_maintainer_github_id!(maintainer.github_id, channel_id,
+      Tracker.Nixpkgs.Change.by_maintainer_github_id!(maintainer.github_id, channel_name,
         page: [limit: 10]
       ).results
 
