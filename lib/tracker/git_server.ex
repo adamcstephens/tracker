@@ -2,17 +2,25 @@ defmodule Tracker.GitServer do
   @moduledoc """
   Owns a local git clone of an upstream repository.
 
-  Clones on boot (asynchronously, via `handle_continue/2`), serializes
-  subsequent git invocations through a single GenServer, and exposes a
-  narrow Elixir-ergonomic API for the operations we actually need.
+  Clones on boot (asynchronously, via `handle_continue/2`) and serializes
+  long-running mutations (`fetch/1`) through the GenServer.
 
   Generic over `repo_url` and `path`; one named instance is started under
   the application supervisor for nixpkgs.
 
-  Calls made before the repo is ready return `{:error, :not_ready}`.
-  Long-running operations (`fetch/1`) hold the GenServer for their
-  duration — read-throughput limits during a fetch are an accepted
-  tradeoff for first cut.
+  ## Reads bypass the GenServer
+
+  Read operations like `ancestor?/3` take a `State` snapshot directly —
+  they shell out to git, which handles concurrent readers natively, and
+  routing them through the GenServer would needlessly serialize them
+  behind any in-flight `fetch`. Snapshot once with `state/1` and reuse
+  it. A snapshot taken before a fetch will see pre-fetch refs for the
+  rest of its lifetime; for ingestion that gives a consistent view of
+  the world for the duration of a run.
+
+  Mutating calls made before the repo is ready return
+  `{:error, :not_ready}`; reads against a not-ready snapshot do the
+  same.
   """
 
   use GenServer
@@ -58,13 +66,68 @@ defmodule Tracker.GitServer do
   end
 
   @doc """
-  Returns whether `sha` is an ancestor of (or equal to) `ref` in the local
-  clone. Does not fetch — call `fetch/1` first if freshness matters.
+  Returns a `State` snapshot suitable for passing to `ancestor?/3` and
+  `ancestors?/3`. Re-fetch after a `fetch/1` if you want the new refs.
   """
-  @spec ancestor?(GenServer.server(), String.t(), String.t()) ::
-          {:ok, boolean()} | {:error, :not_ready | term()}
-  def ancestor?(server \\ __MODULE__, sha, ref) do
-    GenServer.call(server, {:ancestor?, sha, ref}, :infinity)
+  @spec state(GenServer.server()) :: State.t()
+  def state(server \\ __MODULE__) do
+    GenServer.call(server, :state, :infinity)
+  end
+
+  @doc """
+  Returns whether `sha` is an ancestor of (or equal to) `ref` in the
+  local clone. Does not fetch — call `fetch/1` first if freshness
+  matters.
+
+  Bypasses the GenServer: pass a snapshot from `state/1`. Safe to call
+  concurrently from many processes.
+  """
+  @spec ancestor?(String.t(), String.t(), State.t()) ::
+          {:ok, boolean()}
+          | {:error, :not_ready | :unknown_sha | :unknown_ref | term()}
+  def ancestor?(_sha, _ref, %State{ready: false}), do: {:error, :not_ready}
+
+  def ancestor?(sha, ref, %State{path: path}) do
+    case run_git(path, ["merge-base", "--is-ancestor", sha, ref]) do
+      {_, 0} ->
+        {:ok, true}
+
+      {_, 1} ->
+        {:ok, false}
+
+      {output, _code} ->
+        trimmed = String.trim(output)
+
+        cond do
+          String.contains?(trimmed, "Not a valid commit name") ->
+            {:error, :unknown_sha}
+
+          String.contains?(trimmed, "unknown revision") or
+              String.contains?(trimmed, "Not a valid object name") ->
+            {:error, :unknown_ref}
+
+          true ->
+            {:error, {:git_failed, trimmed}}
+        end
+    end
+  end
+
+  @doc """
+  Returns ancestor results for `sha` against many `refs`, as a map keyed
+  by ref. Each value matches `ancestor?/3`'s return shape.
+
+  Sequential by design: callers fanning out across many shas should
+  parallelize at the sha level (`Task.async_stream`), reusing the same
+  snapshot.
+  """
+  @spec ancestors?(String.t(), [String.t()], State.t()) ::
+          %{
+            String.t() =>
+              {:ok, boolean()}
+              | {:error, :not_ready | :unknown_sha | :unknown_ref | term()}
+          }
+  def ancestors?(sha, refs, %State{} = state) do
+    Map.new(refs, fn ref -> {ref, ancestor?(sha, ref, state)} end)
   end
 
   # GenServer callbacks
@@ -93,6 +156,10 @@ defmodule Tracker.GitServer do
     {:reply, state.ready, state}
   end
 
+  def handle_call(:state, _from, %State{} = state) do
+    {:reply, state, state}
+  end
+
   def handle_call(_, _from, %State{ready: false} = state) do
     {:reply, {:error, :not_ready}, state}
   end
@@ -104,31 +171,6 @@ defmodule Tracker.GitServer do
 
       {output, code} ->
         {:reply, {:error, {:fetch_failed, code, String.trim(output)}}, state}
-    end
-  end
-
-  def handle_call({:ancestor?, sha, ref}, _from, %State{} = state) do
-    case run_git(state.path, ["merge-base", "--is-ancestor", sha, ref]) do
-      {_, 0} ->
-        {:reply, {:ok, true}, state}
-
-      {_, 1} ->
-        {:reply, {:ok, false}, state}
-
-      {output, _code} ->
-        trimmed = String.trim(output)
-
-        cond do
-          String.contains?(trimmed, "Not a valid commit name") ->
-            {:reply, {:error, :unknown_sha}, state}
-
-          String.contains?(trimmed, "unknown revision") or
-              String.contains?(trimmed, "Not a valid object name") ->
-            {:reply, {:error, :unknown_ref}, state}
-
-          true ->
-            {:reply, {:error, {:git_failed, trimmed}}, state}
-        end
     end
   end
 

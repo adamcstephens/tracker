@@ -34,7 +34,10 @@ defmodule Tracker.GitServerTest do
         )
 
       refute GitServer.ready?(pid)
-      assert GitServer.ancestor?(pid, "deadbeef", "refs/heads/main") == {:error, :not_ready}
+
+      assert GitServer.ancestor?("deadbeef", "refs/heads/main", GitServer.state(pid)) ==
+               {:error, :not_ready}
+
       assert GitServer.fetch(pid) == {:error, :not_ready}
 
       refute File.exists?(local), "should not clone when auto_start is false"
@@ -80,7 +83,9 @@ defmodule Tracker.GitServerTest do
         )
 
       refute GitServer.ready?(pid)
-      assert GitServer.ancestor?(pid, "deadbeef", "refs/heads/main") == {:error, :not_ready}
+
+      assert GitServer.ancestor?("deadbeef", "refs/heads/main", GitServer.state(pid)) ==
+               {:error, :not_ready}
     end
 
     test "configures a narrow fetch refspec scoped to refs/heads/*", %{
@@ -127,29 +132,81 @@ defmodule Tracker.GitServerTest do
         )
 
       assert GitServer.ready?(pid)
-      %{pid: pid}
+      %{state: GitServer.state(pid)}
     end
 
-    test "true for an ancestor of the ref", %{pid: pid, sha_one: sha_one} do
-      assert GitServer.ancestor?(pid, sha_one, "refs/heads/main") == {:ok, true}
+    test "true for an ancestor of the ref", %{state: state, sha_one: sha_one} do
+      assert GitServer.ancestor?(sha_one, "refs/heads/main", state) == {:ok, true}
     end
 
-    test "true when sha equals the ref tip", %{pid: pid, sha_two: sha_two} do
-      assert GitServer.ancestor?(pid, sha_two, "refs/heads/main") == {:ok, true}
+    test "true when sha equals the ref tip", %{state: state, sha_two: sha_two} do
+      assert GitServer.ancestor?(sha_two, "refs/heads/main", state) == {:ok, true}
     end
 
-    test "false for a sha on an unmerged side branch", %{pid: pid, sha_side: sha_side} do
-      assert GitServer.ancestor?(pid, sha_side, "refs/heads/main") == {:ok, false}
+    test "false for a sha on an unmerged side branch", %{state: state, sha_side: sha_side} do
+      assert GitServer.ancestor?(sha_side, "refs/heads/main", state) == {:ok, false}
     end
 
-    test ":unknown_sha for a sha that isn't in the local clone", %{pid: pid} do
+    test ":unknown_sha for a sha that isn't in the local clone", %{state: state} do
       missing = String.duplicate("0", 40)
-      assert GitServer.ancestor?(pid, missing, "refs/heads/main") == {:error, :unknown_sha}
+      assert GitServer.ancestor?(missing, "refs/heads/main", state) == {:error, :unknown_sha}
     end
 
-    test ":unknown_ref for a ref that doesn't exist locally", %{pid: pid, sha_one: sha_one} do
-      assert GitServer.ancestor?(pid, sha_one, "refs/heads/does-not-exist") ==
+    test ":unknown_ref for a ref that doesn't exist locally", %{state: state, sha_one: sha_one} do
+      assert GitServer.ancestor?(sha_one, "refs/heads/does-not-exist", state) ==
                {:error, :unknown_ref}
+    end
+  end
+
+  describe "ancestors?/3" do
+    setup ctx do
+      pid =
+        start_supervised!(
+          {GitServer, name: nil, repo_url: ctx.upstream, path: ctx.local, auto_start: true}
+        )
+
+      assert GitServer.ready?(pid)
+      %{state: GitServer.state(pid)}
+    end
+
+    test "returns a result per ref", %{state: state, sha_one: sha_one} do
+      results =
+        GitServer.ancestors?(
+          sha_one,
+          ["refs/heads/main", "refs/heads/side", "refs/heads/does-not-exist"],
+          state
+        )
+
+      assert results == %{
+               "refs/heads/main" => {:ok, true},
+               "refs/heads/side" => {:ok, true},
+               "refs/heads/does-not-exist" => {:error, :unknown_ref}
+             }
+    end
+
+    test "uniformly returns :not_ready against a not-ready snapshot", ctx do
+      not_ready_local = Path.join(ctx.base, "not_ready.git")
+
+      pid =
+        start_supervised!(
+          Supervisor.child_spec(
+            {GitServer,
+             name: nil, repo_url: ctx.upstream, path: not_ready_local, auto_start: false},
+            id: :not_ready_gitserver
+          )
+        )
+
+      results =
+        GitServer.ancestors?(
+          "deadbeef",
+          ["refs/heads/main", "refs/heads/other"],
+          GitServer.state(pid)
+        )
+
+      assert results == %{
+               "refs/heads/main" => {:error, :not_ready},
+               "refs/heads/other" => {:error, :not_ready}
+             }
     end
   end
 
@@ -168,9 +225,13 @@ defmodule Tracker.GitServerTest do
 
       new_sha = add_upstream_commit(Path.join(base, "upstream_work"), upstream)
 
-      assert GitServer.ancestor?(pid, new_sha, "refs/heads/main") == {:error, :unknown_sha}
+      assert GitServer.ancestor?(new_sha, "refs/heads/main", GitServer.state(pid)) ==
+               {:error, :unknown_sha}
+
       assert GitServer.fetch(pid) == :ok
-      assert GitServer.ancestor?(pid, new_sha, "refs/heads/main") == {:ok, true}
+
+      assert GitServer.ancestor?(new_sha, "refs/heads/main", GitServer.state(pid)) ==
+               {:ok, true}
     end
   end
 
