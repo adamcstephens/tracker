@@ -7,7 +7,6 @@ defmodule Tracker.Nixpkgs.ChannelRevisionTest do
     Channel.create!(%{
       name: name,
       display_name: name,
-      branch: name,
       status: :active,
       is_stable: false
     })

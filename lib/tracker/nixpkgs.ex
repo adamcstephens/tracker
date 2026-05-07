@@ -23,7 +23,6 @@ defmodule Tracker.Nixpkgs do
     resource Tracker.Nixpkgs.OptionPackage
     resource Tracker.Nixpkgs.File
     resource Tracker.Nixpkgs.OptionRevisionFile
-    resource Tracker.Nixpkgs.Branch
     resource Tracker.Nixpkgs.Change
     resource Tracker.Nixpkgs.ChangePackage
     resource Tracker.Nixpkgs.ChangeBranch

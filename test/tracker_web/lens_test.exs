@@ -11,7 +11,6 @@ defmodule TrackerWeb.LensTest do
       Channel.create!(%{
         name: "nixos-25.#{suffix}",
         display_name: "NixOS 25.#{suffix}",
-        branch: "release-25.#{suffix}",
         status: :active,
         is_stable: true
       })
@@ -20,7 +19,6 @@ defmodule TrackerWeb.LensTest do
       Channel.create!(%{
         name: "nixos-unstable-#{suffix}",
         display_name: "NixOS Unstable #{suffix}",
-        branch: "nixos-unstable-#{suffix}",
         status: :active,
         is_stable: false
       })
@@ -53,7 +51,6 @@ defmodule TrackerWeb.LensTest do
         Channel.create!(%{
           name: "nixos-24.#{suffix}",
           display_name: "NixOS 24.#{suffix}",
-          branch: "release-24.#{suffix}",
           status: :retired,
           is_stable: true
         })

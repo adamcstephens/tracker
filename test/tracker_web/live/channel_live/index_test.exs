@@ -10,7 +10,6 @@ defmodule TrackerWeb.ChannelLive.IndexTest do
       Channel.create!(%{
         name: "nixos-unstable",
         display_name: "NixOS Unstable",
-        branch: "nixos-unstable",
         status: :active,
         is_stable: false
       })
@@ -19,7 +18,6 @@ defmodule TrackerWeb.ChannelLive.IndexTest do
       Channel.create!(%{
         name: "nixos-24.11",
         display_name: "NixOS 24.11",
-        branch: "release-24.11",
         status: :active,
         is_stable: true
       })

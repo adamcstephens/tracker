@@ -9,7 +9,6 @@ defmodule Tracker.Ingestion.PipelineTest do
       Channel.create!(%{
         name: "nixos-unstable",
         display_name: "NixOS Unstable",
-        branch: "nixos-unstable",
         status: :active,
         is_stable: false
       })
@@ -304,7 +303,6 @@ defmodule Tracker.Ingestion.PipelineTest do
         Channel.create!(%{
           name: "nixos-25.11",
           display_name: "NixOS 25.11",
-          branch: "release-25.11",
           status: :active,
           is_stable: true
         })
@@ -329,7 +327,6 @@ defmodule Tracker.Ingestion.PipelineTest do
         Channel.create!(%{
           name: "nixos-25.11",
           display_name: "NixOS 25.11",
-          branch: "release-25.11",
           status: :active,
           is_stable: true
         })

@@ -14,7 +14,6 @@ defmodule Tracker.Ingestion.CronWorkerTest do
       Channel.create!(%{
         name: "nixos-unstable",
         display_name: "NixOS Unstable",
-        branch: "nixos-unstable",
         status: :active,
         is_stable: false
       })
@@ -58,7 +57,6 @@ defmodule Tracker.Ingestion.CronWorkerTest do
       Channel.create!(%{
         name: "nixos-retired",
         display_name: "NixOS Retired",
-        branch: "nixos-retired",
         status: :retired,
         is_stable: false
       })

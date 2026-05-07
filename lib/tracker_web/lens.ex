@@ -110,6 +110,14 @@ defmodule TrackerWeb.Lens do
   def channel_id(%__MODULE__{channel: channel}), do: channel.id
 
   @doc """
+  Returns the channel name for filtering, or nil when the lens is nil or set to "all".
+  """
+  @spec channel_name(t() | nil) :: String.t() | nil
+  def channel_name(nil), do: nil
+  def channel_name(%__MODULE__{all?: true}), do: nil
+  def channel_name(%__MODULE__{channel: channel}), do: channel.name
+
+  @doc """
   The maximum age for the lens cookie, in seconds.
   """
   def cookie_max_age, do: @cookie_max_age

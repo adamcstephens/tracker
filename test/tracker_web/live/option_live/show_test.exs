@@ -53,7 +53,6 @@ defmodule TrackerWeb.OptionLive.ShowTest do
       Channel.create!(%{
         name: "nixos-unstable",
         display_name: "NixOS Unstable",
-        branch: "nixos-unstable",
         status: :active,
         is_stable: true
       })
@@ -132,7 +131,6 @@ defmodule TrackerWeb.OptionLive.ShowTest do
       Channel.create!(%{
         name: "nixpkgs-unstable",
         display_name: "Nixpkgs Unstable",
-        branch: "nixpkgs-unstable",
         status: :active,
         is_stable: false
       })

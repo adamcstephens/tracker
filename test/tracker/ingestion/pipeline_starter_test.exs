@@ -15,7 +15,6 @@ defmodule Tracker.Ingestion.PipelineStarterTest do
       Channel.create!(%{
         name: @channel_name,
         display_name: "NixOS Unstable",
-        branch: "nixos-unstable",
         status: :active,
         is_stable: false
       })

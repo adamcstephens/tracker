@@ -20,10 +20,10 @@ defmodule Tracker.Nixpkgs.Channel do
 
     create :create do
       primary? true
-      accept [:name, :display_name, :branch, :status, :is_stable, :options_source]
+      accept [:name, :display_name, :status, :is_stable, :options_source]
       upsert? true
       upsert_identity :unique_name
-      upsert_fields [:display_name, :branch, :status, :is_stable, :options_source, :updated_at]
+      upsert_fields [:display_name, :status, :is_stable, :options_source, :updated_at]
     end
 
     read :by_name do
@@ -69,11 +69,6 @@ defmodule Tracker.Nixpkgs.Channel do
       public? true
     end
 
-    attribute :branch, :string do
-      allow_nil? false
-      public? true
-    end
-
     attribute :status, :atom do
       allow_nil? false
       public? true
@@ -112,7 +107,6 @@ defmodule Tracker.Nixpkgs.Channel do
       create!(%{
         name: name,
         display_name: name,
-        branch: name,
         status: :active,
         is_stable: stable?(name)
       })

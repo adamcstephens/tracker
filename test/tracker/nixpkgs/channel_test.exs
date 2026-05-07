@@ -9,7 +9,6 @@ defmodule Tracker.Nixpkgs.ChannelTest do
         Channel.create(%{
           name: "nixos-unstable",
           display_name: "NixOS Unstable",
-          branch: "nixos-unstable",
           status: :active,
           is_stable: false,
           options_source: "nixos"
@@ -17,7 +16,6 @@ defmodule Tracker.Nixpkgs.ChannelTest do
 
       assert channel.name == "nixos-unstable"
       assert channel.display_name == "NixOS Unstable"
-      assert channel.branch == "nixos-unstable"
       assert channel.status == :active
       assert channel.is_stable == false
       assert channel.options_source == "nixos"
@@ -32,7 +30,6 @@ defmodule Tracker.Nixpkgs.ChannelTest do
         Channel.create(%{
           name: "nixos-unstable",
           display_name: "NixOS Unstable",
-          branch: "nixos-unstable",
           status: :active,
           is_stable: false
         })
@@ -41,7 +38,6 @@ defmodule Tracker.Nixpkgs.ChannelTest do
         Channel.create(%{
           name: "nixos-unstable",
           display_name: "NixOS Unstable (updated)",
-          branch: "nixos-unstable",
           status: :retired,
           is_stable: false
         })
@@ -59,7 +55,6 @@ defmodule Tracker.Nixpkgs.ChannelTest do
           Channel.create(%{
             name: "test-#{status}",
             display_name: "Test",
-            branch: "test",
             status: status,
             is_stable: false
           })
@@ -74,7 +69,6 @@ defmodule Tracker.Nixpkgs.ChannelTest do
       Channel.create!(%{
         name: "nixos-unstable",
         display_name: "NixOS Unstable",
-        branch: "nixos-unstable",
         status: :active,
         is_stable: false
       })
@@ -82,7 +76,6 @@ defmodule Tracker.Nixpkgs.ChannelTest do
       Channel.create!(%{
         name: "nixos-24.05",
         display_name: "NixOS 24.05",
-        branch: "release-24.05",
         status: :retired,
         is_stable: true
       })
@@ -98,7 +91,6 @@ defmodule Tracker.Nixpkgs.ChannelTest do
       Channel.create!(%{
         name: "nixos-unstable",
         display_name: "NixOS Unstable",
-        branch: "nixos-unstable",
         status: :active,
         is_stable: false
       })
@@ -117,7 +109,6 @@ defmodule Tracker.Nixpkgs.ChannelTest do
       Channel.create!(%{
         name: "nixpkgs-unstable",
         display_name: "Nixpkgs Unstable",
-        branch: "nixpkgs-unstable",
         status: :active,
         is_stable: false
       })
@@ -125,7 +116,6 @@ defmodule Tracker.Nixpkgs.ChannelTest do
       Channel.create!(%{
         name: "nixos-unstable",
         display_name: "NixOS Unstable",
-        branch: "nixos-unstable",
         status: :active,
         is_stable: false
       })
@@ -133,7 +123,6 @@ defmodule Tracker.Nixpkgs.ChannelTest do
       Channel.create!(%{
         name: "nixos-25.11",
         display_name: "NixOS 25.11",
-        branch: "release-25.11",
         status: :active,
         is_stable: true
       })
@@ -152,7 +141,6 @@ defmodule Tracker.Nixpkgs.ChannelTest do
       Channel.create!(%{
         name: "nixos-24.#{s}",
         display_name: "NixOS 24.#{s}",
-        branch: "release-24.#{s}",
         status: :active,
         is_stable: true
       })
@@ -160,7 +148,6 @@ defmodule Tracker.Nixpkgs.ChannelTest do
       Channel.create!(%{
         name: "nixos-25.#{s}",
         display_name: "NixOS 25.#{s}",
-        branch: "release-25.#{s}",
         status: :active,
         is_stable: true
       })
@@ -175,7 +162,6 @@ defmodule Tracker.Nixpkgs.ChannelTest do
       Channel.create!(%{
         name: "nixos-25.#{s}",
         display_name: "NixOS 25.#{s}",
-        branch: "release-25.#{s}",
         status: :retired,
         is_stable: true
       })
@@ -183,7 +169,6 @@ defmodule Tracker.Nixpkgs.ChannelTest do
       Channel.create!(%{
         name: "nixos-24.#{s}",
         display_name: "NixOS 24.#{s}",
-        branch: "release-24.#{s}",
         status: :active,
         is_stable: true
       })
@@ -191,7 +176,6 @@ defmodule Tracker.Nixpkgs.ChannelTest do
       Channel.create!(%{
         name: "nixos-26.#{s}",
         display_name: "NixOS 26.#{s}",
-        branch: "release-26.#{s}",
         status: :pre_release,
         is_stable: true
       })
@@ -206,7 +190,6 @@ defmodule Tracker.Nixpkgs.ChannelTest do
       Channel.create!(%{
         name: "nixos-unstable-#{s}",
         display_name: "NixOS Unstable #{s}",
-        branch: "nixos-unstable-#{s}",
         status: :active,
         is_stable: false
       })

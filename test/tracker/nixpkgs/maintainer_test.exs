@@ -16,7 +16,6 @@ defmodule Tracker.Nixpkgs.MaintainerTest do
         Channel.create!(%{
           name: "nixos-unstable",
           display_name: "nixos-unstable",
-          branch: "nixos-unstable",
           status: :active,
           is_stable: false
         })
