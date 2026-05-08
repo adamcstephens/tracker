@@ -48,6 +48,25 @@ defmodule Tracker.Nixpkgs.ChangeBranch do
     identity :unique_change_branch, [:change_id, :branch_name]
   end
 
+  @doc """
+  Idempotently records `base_ref` as a `ChangeBranch` for `change_id` when
+  `base_ref` is part of the propagation graph; no-op otherwise.
+
+  Called from the write paths that transition a Change to `:merged` so the
+  merge target is recorded without waiting for the next periodic ancestor
+  check.
+  """
+  @spec seed_for_base_ref(integer(), String.t() | nil) :: :ok
+  def seed_for_base_ref(change_id, base_ref) when is_integer(change_id) and is_binary(base_ref) do
+    if Propagation.valid_branch?(base_ref) do
+      create!(%{change_id: change_id, branch_name: base_ref})
+    end
+
+    :ok
+  end
+
+  def seed_for_base_ref(_change_id, _base_ref), do: :ok
+
   defmodule ValidateBranchName do
     @moduledoc false
     use Ash.Resource.Validation
