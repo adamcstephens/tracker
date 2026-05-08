@@ -1,8 +1,6 @@
 defmodule TrackerWeb.CoreComponents do
   @moduledoc """
   Provides core UI components.
-
-  Components use semantic HTML styled by Pico CSS.
   """
   use Phoenix.Component
   use Gettext, backend: TrackerWeb.Gettext

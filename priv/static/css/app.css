@@ -77,7 +77,7 @@ h6 {
 }
 
 /* Project design tokens. Names follow tmp/design_handoff_nav_lens_search/README.md.
-   Values preserve the existing Pico-derived palette for now; the handoff palette
+   Current values are inherited from the previous palette; the handoff palette
    is adopted in a later phase. */
 :root {
 	--radius: 10px;
@@ -132,8 +132,8 @@ h6 {
 }
 
 /* ========================================================================
-   Base element styles. Replace what Pico used to provide. Selectors here
-   use elements (low specificity) so component styles below win cleanly.
+   Base element styles. Selectors here use elements (low specificity) so
+   component styles below win cleanly.
    ======================================================================== */
 
 html {
@@ -905,11 +905,11 @@ dl.option-body dd {
 	color: var(--text-2);
 }
 
-/* App chrome — plain CSS (no @layer; layered rules lose to unlayered Pico).
+/* App chrome.
    Spec: tmp/design_handoff_nav_lens_search/README.md */
 
-/* Strip Pico defaults from form elements/links inside chrome —
-   the rules below own the look entirely. */
+/* Strip base form/button styling inside chrome — the rules below own
+   the look entirely. */
 .app-header :is(input, select, button),
 .app-mobile-tabs :is(input, select, button) {
 	appearance: none;
