@@ -58,7 +58,8 @@ defmodule TrackerWeb.PackageLive.Index do
       |> assign(:page_search, %PageSearch{
         action: "/packages",
         placeholder: "Filter packages…",
-        value: tp.search
+        value: tp.search,
+        hidden: TableParams.to_hidden_inputs(tp)
       })
       |> load_packages()
 
