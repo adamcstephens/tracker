@@ -101,6 +101,28 @@ defmodule TrackerWeb.LayoutsTest do
     end
   end
 
+  describe "mobile bottom tab bar" do
+    test "renders a fixed bottom nav with five tab links", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/changes")
+
+      assert html =~ ~s(class="app-mobile-tabs")
+      assert html =~ ~s(aria-label="Sections")
+
+      # Five primary mobile tabs.
+      for label <- ~w(Pkgs Chans Changes Options More) do
+        assert html =~ ~r{class="app-mobile-tab[^"]*"[^>]*>\s*#{label}}
+      end
+    end
+
+    test "active mobile tab matches current section", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/changes")
+
+      # The Changes mobile tab should have aria-current=page.
+      assert html =~
+               ~r{class="app-mobile-tab[^"]*is-active[^"]*"[^>]*aria-current="page"[^>]*>\s*Changes}
+    end
+  end
+
   describe "list page titles" do
     test "Changes index does not render a redundant page title", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/changes")

@@ -648,6 +648,87 @@ dl.option-body dd {
 	border-left: 1px solid var(--pico-muted-border-color);
 }
 
+/* Mobile bottom tab bar — hidden on desktop */
+.app-mobile-tabs {
+	display: none;
+}
+
+/* Mobile chrome (< 720px): collapse desktop tabs into a fixed bottom tab bar,
+   stack search and lens, and reserve body padding for the bar. */
+@media (max-width: 719px) {
+	.app-header__row--top .app-tabs,
+	.app-header__row--top .app-user {
+		display: none;
+	}
+
+	.app-header__row {
+		padding: 0.5rem 0.875rem;
+	}
+
+	.app-header__row--top {
+		justify-content: flex-start;
+	}
+
+	.app-header__row--bottom {
+		flex-wrap: wrap;
+		gap: 0.5rem;
+	}
+
+	.app-search {
+		flex: 1 1 100%;
+		min-width: 0;
+	}
+
+	.app-header__lens-slot {
+		margin-left: 0;
+		flex: 1 1 100%;
+	}
+
+	.lens__form {
+		display: flex;
+		width: 100%;
+	}
+
+	main.container {
+		padding-bottom: calc(4rem + env(safe-area-inset-bottom));
+	}
+
+	.app-mobile-tabs {
+		display: grid;
+		grid-template-columns: repeat(5, 1fr);
+		position: fixed;
+		bottom: 0;
+		left: 0;
+		right: 0;
+		background-color: var(--pico-background-color);
+		border-top: 1px solid var(--pico-muted-border-color);
+		padding: 0.375rem 0.25rem max(0.5rem, env(safe-area-inset-bottom));
+		z-index: 50;
+	}
+
+	.app-mobile-tab {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 2.75rem;
+		padding: 0.375rem 0.25rem;
+		font-size: 0.75rem;
+		font-weight: 500;
+		color: var(--pico-muted-color);
+		text-decoration: none;
+		border-radius: 0.5rem;
+	}
+
+	.app-mobile-tab:hover {
+		color: var(--pico-color);
+		text-decoration: none;
+	}
+
+	.app-mobile-tab.is-active {
+		color: var(--pico-primary);
+	}
+}
+
 /* Change Show — redesign. All rules scoped to .change-show. */
 .change-show .change-head {
 	margin-bottom: 1.25rem;
