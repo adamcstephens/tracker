@@ -478,47 +478,115 @@ dl.option-body dd {
 	color: var(--pico-muted-color);
 }
 
-/* App chrome — two-row top navigation */
-.app-header {
-	background-color: var(--pico-background-color);
-	border-bottom: 1px solid var(--pico-muted-border-color);
+/* App chrome — plain CSS (no @layer; layered rules lose to unlayered Pico).
+   Spec: tmp/tracker2/design_handoff_nav_lens_search/README.md */
+
+:root {
+	--chrome-bg: var(--pico-background-color);
+	--chrome-surface: var(--pico-form-element-background-color);
+	--chrome-surface-2: #ececec;
+	--chrome-line: var(--pico-muted-border-color);
+	--chrome-line-soft: #ececec;
+	--chrome-accent: var(--pico-primary);
+	--chrome-accent-on: var(--pico-primary-inverse);
+	--chrome-text: var(--pico-color);
+	--chrome-text-muted: var(--pico-muted-color);
+	--chrome-text-faint: var(--pico-muted-color);
 }
 
-.app-header__row {
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme]) {
+		--chrome-surface-2: #404452;
+		--chrome-line: #4d5568;
+		--chrome-line-soft: #2f3340;
+	}
+}
+
+/* Strip Pico defaults from form elements/links inside chrome —
+   the rules below own the look entirely. */
+.app-header :is(input, select, button),
+.app-mobile-tabs :is(input, select, button) {
+	appearance: none;
+	background: transparent;
+	background-image: none;
+	border: 0;
+	box-shadow: none;
+	outline: 0;
+	margin: 0;
+	padding: 0;
+	height: auto;
+	min-height: 0;
+	width: auto;
+	color: inherit;
+	font: inherit;
+	line-height: inherit;
+}
+
+.app-header :is(input, select, button):focus,
+.app-mobile-tabs :is(input, select, button):focus {
+	box-shadow: none;
+	background: transparent;
+	outline: 0;
+}
+
+.app-header a,
+.app-mobile-tabs a {
+	color: inherit;
+	text-decoration: none;
+}
+
+.app-header a:hover,
+.app-mobile-tabs a:hover {
+	text-decoration: none;
+}
+
+/* Outer chrome — single bottom border */
+.app-header {
+	background: var(--chrome-bg);
+	border-bottom: 1px solid var(--chrome-line);
+}
+
+/* Row 1 — brand · tabs · user. Flush bottom so tab underline aligns. */
+.app-header__row--top {
+	padding-top: 0.75rem;
+}
+
+.app-header__row--top > .container {
 	display: flex;
 	align-items: center;
-	gap: 1rem;
-	padding: 0.5rem 1.25rem;
-	max-width: 1480px;
-	margin: 0 auto;
+	gap: 1.125rem;
 }
 
-.app-header__row--top {
-	gap: 1.25rem;
-	padding-bottom: 0;
-}
-
+/* Row 2 — search · lens */
 .app-header__row--bottom {
-	gap: 0.625rem;
-	padding-top: 0.5rem;
-	padding-bottom: 0.625rem;
+	padding: 0.75rem 0 0.875rem;
+}
+
+.app-header__row--bottom > .container {
+	display: flex;
+	align-items: stretch;
+	gap: 0.75rem;
 	min-height: 2.5rem;
 }
 
+/* Brand */
 .app-brand {
 	display: inline-flex;
 	align-items: center;
-	gap: 0.5rem;
+	gap: 0.5625rem;
+	color: var(--chrome-text);
 	font-weight: 600;
 	font-size: 0.9375rem;
 	letter-spacing: -0.01em;
-	color: var(--pico-color);
-	text-decoration: none;
+	flex-shrink: 0;
+}
+
+.app-brand--mobile {
+	display: none;
 }
 
 .app-brand:hover {
-	color: var(--pico-color);
-	text-decoration: none;
+	color: var(--chrome-text);
 }
 
 .app-brand__mark {
@@ -527,17 +595,18 @@ dl.option-body dd {
 	width: 1.375rem;
 	height: 1.375rem;
 	border-radius: 0.375rem;
-	background-color: var(--pico-primary-background);
-	color: var(--pico-primary-inverse);
+	background: var(--chrome-accent);
+	color: var(--chrome-accent-on);
 	font-family: var(--pico-font-family-monospace);
 	font-size: 0.6875rem;
 	font-weight: 600;
 }
 
+/* Tabs — each tab carries its own horizontal padding; gap between tabs is 0 */
 .app-tabs {
 	display: inline-flex;
 	align-items: center;
-	gap: 1.125rem;
+	gap: 0;
 	list-style: none;
 	margin: 0;
 	padding: 0;
@@ -549,139 +618,228 @@ dl.option-body dd {
 }
 
 .app-tabs a {
-	display: inline-block;
-	padding: 0.5rem 0.125rem;
-	color: var(--pico-muted-color);
+	display: inline-flex;
+	align-items: center;
+	gap: 0.375rem;
+	padding: 0.875rem;
+	color: var(--chrome-text-muted);
 	font-size: 0.8125rem;
 	font-weight: 500;
-	text-decoration: none;
+	line-height: 1;
 	border-bottom: 2px solid transparent;
 	margin-bottom: -1px;
 }
 
 .app-tabs a:hover {
-	color: var(--pico-color);
-	text-decoration: none;
+	color: var(--chrome-text);
 }
 
 .app-tabs a[aria-current="page"] {
-	color: var(--pico-color);
-	border-bottom-color: var(--pico-primary);
+	color: var(--chrome-text);
+	border-bottom-color: var(--chrome-accent);
 }
 
+/* User chip */
 .app-user {
 	margin-left: auto;
 	display: inline-flex;
 	align-items: center;
+	flex-shrink: 0;
+}
+
+.app-user__chip {
+	display: inline-flex;
+	align-items: center;
 	gap: 0.5rem;
+	padding: 0.375rem 0.5rem 0.375rem 0.625rem;
+	background: var(--chrome-surface);
+	border: 1px solid var(--chrome-line-soft);
+	border-radius: 0.5rem;
+	color: var(--chrome-text);
 	font-size: 0.8125rem;
-	color: var(--pico-muted-color);
+	font-weight: 500;
+	cursor: pointer;
 }
 
-.app-user a {
-	color: var(--pico-primary);
+.app-user__chip:hover {
+	background: var(--chrome-surface-2);
 }
 
-.app-header__lens-slot {
-	margin-left: auto;
+.app-user__avatar {
+	display: inline-grid;
+	place-items: center;
+	width: 1.375rem;
+	height: 1.375rem;
+	border-radius: 999px;
+	background: var(--chrome-surface-2);
+	color: var(--chrome-text);
+	font-family: var(--pico-font-family-monospace);
+	font-size: 0.625rem;
+	font-weight: 600;
+}
+
+.app-user__caret {
+	color: var(--chrome-text-faint);
+	font-size: 0.6875rem;
+}
+
+/* Search input — row 2 */
+.app-search {
+	flex: 1;
+	display: flex;
+	align-items: center;
+	gap: 0.625rem;
+	padding: 0.625rem 0.75rem 0.625rem 0.875rem;
+	background: var(--chrome-surface);
+	border: 1px solid var(--chrome-line);
+	border-radius: 0.625rem;
+	margin-bottom: 0;
+	min-height: 2.25rem;
+	color: var(--chrome-text-faint);
+	font-size: 0.875rem;
+	cursor: text;
+}
+
+.app-search:focus-within {
+	border-color: var(--chrome-accent);
+	background: var(--chrome-surface-2);
+}
+
+.app-search__icon {
+	width: 1.0625rem;
+	height: 1.0625rem;
+	color: var(--chrome-text-muted);
+	flex-shrink: 0;
+}
+
+.app-search input[type="search"] {
+	flex: 1;
+	color: var(--chrome-text);
+	font: inherit;
+	background-image: none;
+}
+
+.app-search input[type="search"]::placeholder {
+	color: var(--chrome-text-faint);
+}
+
+.app-search__hint {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 1.25rem;
+	height: 1.25rem;
+	padding: 0 0.375rem;
+	background: var(--chrome-surface-2);
+	border: 1px solid var(--chrome-line);
+	border-bottom-width: 2px;
+	border-radius: 0.25rem;
+	font-family: var(--pico-font-family-monospace);
+	font-size: 0.6875rem;
+	color: var(--chrome-text-muted);
+	flex-shrink: 0;
 }
 
 /* Lens chip — divided pill */
+.app-header__lens-slot {
+	display: flex;
+	align-items: stretch;
+}
+
 .lens {
-	display: inline-block;
+	display: flex;
+	flex-shrink: 0;
 }
 
 .lens__form {
 	display: inline-flex;
 	align-items: stretch;
-	border: 1px solid var(--pico-muted-border-color);
-	border-radius: 0.4375rem;
-	background-color: var(--pico-form-element-background-color);
+	flex: 1;
+	border: 1px solid var(--chrome-line);
+	border-radius: 0.5rem;
+	background: var(--chrome-surface);
 	overflow: hidden;
 	margin-bottom: 0;
 }
 
-.lens__form > * {
+.lens-label {
 	display: inline-flex;
 	align-items: center;
-	padding: 0.25rem 0.625rem;
-	font-size: 0.78125rem;
+	padding: 0.3125rem 0.625rem;
+	background: var(--chrome-surface-2);
+	border-right: 1px solid var(--chrome-line);
+	color: var(--chrome-text-faint);
+	font-family: var(--pico-font-family-monospace);
+	font-size: 0.6875rem;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
 }
 
-.lens-label {
-	color: var(--pico-muted-color);
-	font-family: var(--pico-font-family-monospace);
-	font-size: 0.75rem;
-	border-right: 1px solid var(--pico-muted-border-color);
-	background-color: var(--pico-card-sectioning-background-color);
+.lens-channel-cell {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.375rem;
+	padding: 0.3125rem 0.625rem;
+}
+
+.lens-dot {
+	width: 0.375rem;
+	height: 0.375rem;
+	border-radius: 999px;
+	background: var(--chrome-accent);
+	flex-shrink: 0;
 }
 
 .lens__select {
-	background-color: transparent;
-	border: 0;
-	color: var(--pico-color);
+	color: var(--chrome-text);
 	font-family: var(--pico-font-family-monospace);
 	font-size: 0.78125rem;
 	font-weight: 500;
-	margin: 0;
-	padding-top: 0.25rem;
-	padding-bottom: 0.25rem;
-	padding-left: 0.625rem;
-	height: auto;
-	line-height: 1.2;
-	box-shadow: none;
-	background-position: right 0.5rem center;
-	background-size: 0.6em auto;
-	padding-right: 1.5rem;
-}
-
-.lens__select:focus {
-	box-shadow: none;
-	border-color: transparent;
-	background-color: transparent;
+	cursor: pointer;
+	padding-right: 0.875rem;
 }
 
 .lens-rev {
-	color: var(--pico-muted-color);
+	display: inline-flex;
+	align-items: center;
+	padding: 0.3125rem 0.625rem;
+	border-left: 1px solid var(--chrome-line);
+	color: var(--chrome-text-muted);
 	font-family: var(--pico-font-family-monospace);
 	font-size: 0.71875rem;
-	border-left: 1px solid var(--pico-muted-border-color);
 }
 
-/* Mobile bottom tab bar — hidden on desktop */
+/* Mobile bottom tabs — hidden on desktop */
 .app-mobile-tabs {
 	display: none;
 }
 
-/* Mobile chrome (< 720px): collapse desktop tabs into a fixed bottom tab bar,
-   stack search and lens, and reserve body padding for the bar. */
 @media (max-width: 719px) {
-	.app-header__row--top .app-tabs,
-	.app-header__row--top .app-user {
+	.app-header__row--top {
 		display: none;
 	}
 
-	.app-header__row {
-		padding: 0.5rem 0.875rem;
-	}
-
-	.app-header__row--top {
-		justify-content: flex-start;
-	}
-
-	.app-header__row--bottom {
+	.app-header__row--bottom > .container {
 		flex-wrap: wrap;
-		gap: 0.5rem;
+		gap: 0.625rem;
+	}
+
+	.app-brand--mobile {
+		display: inline-flex;
 	}
 
 	.app-search {
-		flex: 1 1 100%;
+		flex: 1;
 		min-width: 0;
 	}
 
+	.app-search__hint {
+		display: none;
+	}
+
 	.app-header__lens-slot {
-		margin-left: 0;
 		flex: 1 1 100%;
+		padding-left: calc(1.375rem + 0.625rem);
 	}
 
 	.lens__form {
@@ -700,8 +858,8 @@ dl.option-body dd {
 		bottom: 0;
 		left: 0;
 		right: 0;
-		background-color: var(--pico-background-color);
-		border-top: 1px solid var(--pico-muted-border-color);
+		background: var(--chrome-bg);
+		border-top: 1px solid var(--chrome-line);
 		padding: 0.375rem 0.25rem max(0.5rem, env(safe-area-inset-bottom));
 		z-index: 50;
 	}
@@ -714,18 +872,16 @@ dl.option-body dd {
 		padding: 0.375rem 0.25rem;
 		font-size: 0.75rem;
 		font-weight: 500;
-		color: var(--pico-muted-color);
-		text-decoration: none;
+		color: var(--chrome-text-muted);
 		border-radius: 0.5rem;
 	}
 
 	.app-mobile-tab:hover {
-		color: var(--pico-color);
-		text-decoration: none;
+		color: var(--chrome-text);
 	}
 
 	.app-mobile-tab.is-active {
-		color: var(--pico-primary);
+		color: var(--chrome-accent);
 	}
 }
 

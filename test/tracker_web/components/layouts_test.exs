@@ -101,6 +101,32 @@ defmodule TrackerWeb.LayoutsTest do
     end
   end
 
+  describe "polished chrome elements" do
+    test "user chip renders as a styled chip when signed out", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/changes")
+
+      assert html =~ ~s(class="app-user__chip")
+      assert html =~ "Sign in"
+    end
+
+    test "header rows are wrapped in a container for body-aligned width", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/changes")
+
+      assert html =~ ~r{app-header__row--top.*?class="container}s
+      assert html =~ ~r{app-header__row--bottom.*?class="container}s
+    end
+  end
+
+  describe "lens dot prefix" do
+    test "renders an indigo dot adjacent to the channel select", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/changes")
+
+      assert html =~ ~s(class="lens-dot")
+      # Dot lives in the same cell as the select.
+      assert html =~ ~r{lens-channel-cell.*?lens-dot.*?<select}s
+    end
+  end
+
   describe "mobile bottom tab bar" do
     test "renders a fixed bottom nav with five tab links", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/changes")

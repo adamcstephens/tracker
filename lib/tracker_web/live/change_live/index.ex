@@ -24,7 +24,7 @@ defmodule TrackerWeb.ChangeLive.Index do
       style="display: flex; gap: 0.5rem; align-items: end; margin-bottom: 1rem;"
     >
       <input type="hidden" name="search" value={@table_params.search} />
-      <select name="base_ref" aria-label="Filter by base branch" style="flex: 1;">
+      <select name="base_ref" aria-label="Filter by base branch" style="max-width: 16rem;">
         <option value="">All branches</option>
         <option :for={base <- @base_refs} value={base} selected={base == @base_ref_filter}>
           {base}

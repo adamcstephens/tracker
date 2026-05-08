@@ -1,95 +1,116 @@
 <header class="app-header">
   <div class="app-header__row app-header__row--top">
-    <.link navigate={~p"/"} class="app-brand">
-      <span class="app-brand__mark" aria-hidden="true">T</span>
-      <span class="app-brand__word">Tracker</span>
-    </.link>
-    <nav aria-label="Primary">
-      <ul class="app-tabs">
-        <li>
-          <.link
-            navigate={~p"/packages"}
-            aria-current={active_nav?(@socket.view, "PackageLive") && "page"}
-          >
-            Packages
-          </.link>
-        </li>
-        <li>
-          <.link
-            navigate={~p"/channels"}
-            aria-current={active_nav?(@socket.view, "ChannelLive") && "page"}
-          >
-            Channels
-          </.link>
-        </li>
-        <li>
-          <.link
-            navigate={~p"/options"}
-            aria-current={active_nav?(@socket.view, "OptionLive") && "page"}
-          >
-            Options
-          </.link>
-        </li>
-        <li>
-          <.link
-            navigate={~p"/changes"}
-            aria-current={active_nav?(@socket.view, "ChangeLive") && "page"}
-          >
-            Changes
-          </.link>
-        </li>
-        <li>
-          <.link
-            navigate={~p"/maintainers"}
-            aria-current={active_nav?(@socket.view, "MaintainerLive") && "page"}
-          >
-            Maintainers
-          </.link>
-        </li>
-        <li>
-          <.link
-            navigate={~p"/teams"}
-            aria-current={active_nav?(@socket.view, "TeamLive") && "page"}
-          >
-            Teams
-          </.link>
-        </li>
-      </ul>
-    </nav>
-    <div class="app-user">
-      <%= if @current_user do %>
-        <span>Hello, {@current_user.github_username}!</span>
-      <% else %>
-        <.link navigate={~p"/sign-in"}>Sign in</.link>
-      <% end %>
+    <div class="container">
+      <.link navigate={~p"/"} class="app-brand">
+        <span class="app-brand__mark" aria-hidden="true">T</span>
+        <span class="app-brand__word">Tracker</span>
+      </.link>
+      <nav aria-label="Primary">
+        <ul class="app-tabs">
+          <li>
+            <.link
+              navigate={~p"/packages"}
+              aria-current={active_nav?(@socket.view, "PackageLive") && "page"}
+            >
+              Packages
+            </.link>
+          </li>
+          <li>
+            <.link
+              navigate={~p"/channels"}
+              aria-current={active_nav?(@socket.view, "ChannelLive") && "page"}
+            >
+              Channels
+            </.link>
+          </li>
+          <li>
+            <.link
+              navigate={~p"/options"}
+              aria-current={active_nav?(@socket.view, "OptionLive") && "page"}
+            >
+              Options
+            </.link>
+          </li>
+          <li>
+            <.link
+              navigate={~p"/changes"}
+              aria-current={active_nav?(@socket.view, "ChangeLive") && "page"}
+            >
+              Changes
+            </.link>
+          </li>
+          <li>
+            <.link
+              navigate={~p"/maintainers"}
+              aria-current={active_nav?(@socket.view, "MaintainerLive") && "page"}
+            >
+              Maintainers
+            </.link>
+          </li>
+          <li>
+            <.link
+              navigate={~p"/teams"}
+              aria-current={active_nav?(@socket.view, "TeamLive") && "page"}
+            >
+              Teams
+            </.link>
+          </li>
+        </ul>
+      </nav>
+      <div class="app-user">
+        <%= if @current_user do %>
+          <button type="button" class="app-user__chip">
+            <span class="app-user__avatar" aria-hidden="true">
+              {monogram(@current_user.github_username)}
+            </span>
+            <span class="app-user__name">{@current_user.github_username}</span>
+            <span class="app-user__caret" aria-hidden="true">▾</span>
+          </button>
+        <% else %>
+          <.link navigate={~p"/sign-in"} class="app-user__chip">Sign in</.link>
+        <% end %>
+      </div>
     </div>
   </div>
   <div class="app-header__row app-header__row--bottom">
-    <form
-      :if={assigns[:page_search]}
-      method="get"
-      action={@page_search.action}
-      phx-change={@page_search.event}
-      phx-submit={@page_search.event}
-      class="app-search"
-    >
-      <input
-        :for={{k, v} <- @page_search.hidden}
-        type="hidden"
-        name={k}
-        value={v}
-      />
-      <input
-        type="search"
-        name={@page_search.param}
-        value={@page_search.value}
-        placeholder={@page_search.placeholder}
-        aria-label={@page_search.placeholder}
-        phx-debounce="300"
-      />
-    </form>
-    <div :if={assigns[:lens]} class="app-header__lens-slot">
-      <.live_component module={TrackerWeb.LensComponent} id="lens" lens={@lens} />
+    <div class="container">
+      <.link navigate={~p"/"} class="app-brand app-brand--mobile" aria-label="Tracker home">
+        <span class="app-brand__mark" aria-hidden="true">T</span>
+      </.link>
+      <form
+        :if={assigns[:page_search]}
+        method="get"
+        action={@page_search.action}
+        phx-change={@page_search.event}
+        phx-submit={@page_search.event}
+        class="app-search"
+      >
+        <svg
+          class="app-search__icon"
+          aria-hidden="true"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.6"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
+        </svg>
+        <input :for={{k, v} <- @page_search.hidden} type="hidden" name={k} value={v} />
+        <input
+          type="search"
+          name={@page_search.param}
+          value={@page_search.value}
+          placeholder={@page_search.placeholder}
+          aria-label={@page_search.placeholder}
+          phx-debounce="300"
+        />
+        <span class="app-search__hint" aria-hidden="true">/</span>
+      </form>
+      <div :if={assigns[:lens]} class="app-header__lens-slot">
+        <.live_component module={TrackerWeb.LensComponent} id="lens" lens={@lens} />
+      </div>
     </div>
   </div>
 </header>
