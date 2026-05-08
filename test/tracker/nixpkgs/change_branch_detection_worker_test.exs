@@ -33,12 +33,13 @@ defmodule Tracker.Nixpkgs.ChangeBranchDetectionWorkerTest do
   end
 
   describe "run/1" do
-    test "creates ChangeBranch for downstream branches that contain merge_commit_sha", ctx do
+    test "creates ChangeBranch for base_ref and downstream branches that contain merge_commit_sha",
+         ctx do
       change = insert_change!(base_ref: "master", merge_commit_sha: ctx.sha_mc)
 
       :ok = ChangeBranchDetectionWorker.run(git_server: ctx.git_server)
 
-      assert recorded_branches(change) == ["nixpkgs-unstable"]
+      assert recorded_branches(change) == ["master", "nixpkgs-unstable"]
     end
 
     test "does not duplicate ChangeBranch rows already present", ctx do
@@ -48,20 +49,20 @@ defmodule Tracker.Nixpkgs.ChangeBranchDetectionWorkerTest do
 
       :ok = ChangeBranchDetectionWorker.run(git_server: ctx.git_server)
 
-      assert recorded_branches(change) == ["nixpkgs-unstable"]
+      assert recorded_branches(change) == ["master", "nixpkgs-unstable"]
     end
 
-    test "skips Changes whose recorded set covers all terminal channels", ctx do
+    test "skips Changes whose recorded set covers base_ref and all terminal channels", ctx do
       change = insert_change!(base_ref: "master", merge_commit_sha: ctx.sha_mc)
 
-      for branch <- ~w(nixpkgs-unstable nixos-unstable-small nixos-unstable) do
+      for branch <- ~w(master nixpkgs-unstable nixos-unstable-small nixos-unstable) do
         ChangeBranch.create!(%{change_id: change.id, branch_name: branch})
       end
 
       :ok = ChangeBranchDetectionWorker.run(git_server: ctx.git_server)
 
       assert recorded_branches(change) ==
-               ["nixos-unstable", "nixos-unstable-small", "nixpkgs-unstable"]
+               ["master", "nixos-unstable", "nixos-unstable-small", "nixpkgs-unstable"]
     end
 
     test "ignores Changes with nil merge_commit_sha", ctx do

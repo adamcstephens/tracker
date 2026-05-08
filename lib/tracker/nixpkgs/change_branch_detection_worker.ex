@@ -8,10 +8,14 @@ defmodule Tracker.Nixpkgs.ChangeBranchDetectionWorker do
   every branch tip in the propagation DAG is current.
 
   For each in-flight Change (merged, with a `merge_commit_sha` and
-  `base_ref` in the propagation graph, not yet covering all terminal
-  channels reachable from `base_ref`), the worker fans out per-change
-  using `Task.async_stream` over `Propagation.downstream(base_ref)`,
-  reusing a single `GitServer` snapshot.
+  `base_ref` in the propagation graph, not yet covering `base_ref` and
+  every terminal channel reachable from it), the worker fans out
+  per-change using `Task.async_stream` over
+  `[base_ref | Propagation.downstream(base_ref)]`, reusing a single
+  `GitServer` snapshot. The `base_ref` itself is included so the merge
+  target is seeded on the first run, even when the open→merged
+  transition was applied via `bulk_upsert_all` (which bypasses Ash
+  actions).
   """
   use Oban.Worker, queue: :ingestion, max_attempts: 5, unique: [period: 60]
 
@@ -72,13 +76,12 @@ defmodule Tracker.Nixpkgs.ChangeBranchDetectionWorker do
   defp pending_branches(change) do
     if Propagation.valid_branch?(change.base_ref) do
       recorded = MapSet.new(change.change_branches, & &1.branch_name)
-      terminals = MapSet.new(Propagation.terminal_channels(change.base_ref))
+      covered = MapSet.new([change.base_ref | Propagation.terminal_channels(change.base_ref)])
 
-      if MapSet.subset?(terminals, recorded) do
+      if MapSet.subset?(covered, recorded) do
         []
       else
-        change.base_ref
-        |> Propagation.downstream()
+        [change.base_ref | Propagation.downstream(change.base_ref)]
         |> Enum.reject(&MapSet.member?(recorded, &1))
         |> Enum.map(&{change, &1})
       end
