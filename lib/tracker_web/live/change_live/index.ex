@@ -13,10 +13,6 @@ defmodule TrackerWeb.ChangeLive.Index do
   @impl true
   def render(assigns) do
     ~H"""
-    <.header>
-      Changes
-    </.header>
-
     <form
       phx-change="filter"
       phx-submit="filter"

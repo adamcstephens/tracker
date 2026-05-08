@@ -6,10 +6,6 @@ defmodule TrackerWeb.OptionLive.Index do
   @impl true
   def render(assigns) do
     ~H"""
-    <.header>
-      Options
-    </.header>
-
     <p :if={@lens && @lens.all?}>
       Options requires a specific channel. Showing {@lens.channel.name}.
     </p>

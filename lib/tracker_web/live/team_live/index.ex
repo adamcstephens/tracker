@@ -7,10 +7,6 @@ defmodule TrackerWeb.TeamLive.Index do
   @impl true
   def render(assigns) do
     ~H"""
-    <.header>
-      Teams
-    </.header>
-
     <form phx-change="search" phx-submit="search" id="team-search" phx-hook="UpdateURL">
       <input
         type="search"

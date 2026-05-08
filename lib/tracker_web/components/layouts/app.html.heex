@@ -1,66 +1,74 @@
-<header class="container">
-  <nav>
-    <ul>
-      <li>
-        <.link
-          navigate={~p"/packages"}
-          aria-current={active_nav?(@socket.view, "PackageLive") && "page"}
-        >
-          Packages
-        </.link>
-      </li>
-      <li>
-        <.link
-          navigate={~p"/channels"}
-          aria-current={active_nav?(@socket.view, "ChannelLive") && "page"}
-        >
-          Channels
-        </.link>
-      </li>
-      <li>
-        <.link
-          navigate={~p"/options"}
-          aria-current={active_nav?(@socket.view, "OptionLive") && "page"}
-        >
-          Options
-        </.link>
-      </li>
-      <li>
-        <.link
-          navigate={~p"/changes"}
-          aria-current={active_nav?(@socket.view, "ChangeLive") && "page"}
-        >
-          Changes
-        </.link>
-      </li>
-      <li>
-        <.link
-          navigate={~p"/maintainers"}
-          aria-current={active_nav?(@socket.view, "MaintainerLive") && "page"}
-        >
-          Maintainers
-        </.link>
-      </li>
-      <li>
-        <.link
-          navigate={~p"/teams"}
-          aria-current={active_nav?(@socket.view, "TeamLive") && "page"}
-        >
-          Teams
-        </.link>
-      </li>
-    </ul>
-    <ul>
-      <li :if={assigns[:lens]}>
-        <.live_component module={TrackerWeb.LensComponent} id="lens" lens={@lens} />
-      </li>
+<header class="app-header">
+  <div class="app-header__row app-header__row--top">
+    <.link navigate={~p"/"} class="app-brand">
+      <span class="app-brand__mark" aria-hidden="true">T</span>
+      <span class="app-brand__word">Tracker</span>
+    </.link>
+    <nav aria-label="Primary">
+      <ul class="app-tabs">
+        <li>
+          <.link
+            navigate={~p"/packages"}
+            aria-current={active_nav?(@socket.view, "PackageLive") && "page"}
+          >
+            Packages
+          </.link>
+        </li>
+        <li>
+          <.link
+            navigate={~p"/channels"}
+            aria-current={active_nav?(@socket.view, "ChannelLive") && "page"}
+          >
+            Channels
+          </.link>
+        </li>
+        <li>
+          <.link
+            navigate={~p"/options"}
+            aria-current={active_nav?(@socket.view, "OptionLive") && "page"}
+          >
+            Options
+          </.link>
+        </li>
+        <li>
+          <.link
+            navigate={~p"/changes"}
+            aria-current={active_nav?(@socket.view, "ChangeLive") && "page"}
+          >
+            Changes
+          </.link>
+        </li>
+        <li>
+          <.link
+            navigate={~p"/maintainers"}
+            aria-current={active_nav?(@socket.view, "MaintainerLive") && "page"}
+          >
+            Maintainers
+          </.link>
+        </li>
+        <li>
+          <.link
+            navigate={~p"/teams"}
+            aria-current={active_nav?(@socket.view, "TeamLive") && "page"}
+          >
+            Teams
+          </.link>
+        </li>
+      </ul>
+    </nav>
+    <div class="app-user">
       <%= if @current_user do %>
-        <li>Hello, {@current_user.github_username}!</li>
+        <span>Hello, {@current_user.github_username}!</span>
       <% else %>
-        <li><.link navigate={~p"/sign-in"}>Sign in</.link></li>
+        <.link navigate={~p"/sign-in"}>Sign in</.link>
       <% end %>
-    </ul>
-  </nav>
+    </div>
+  </div>
+  <div class="app-header__row app-header__row--bottom">
+    <div :if={assigns[:lens]} class="app-header__lens-slot">
+      <.live_component module={TrackerWeb.LensComponent} id="lens" lens={@lens} />
+    </div>
+  </div>
 </header>
 <main class="container">
   <.flash_group flash={@flash} />
