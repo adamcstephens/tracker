@@ -20,4 +20,17 @@ defmodule TrackerWeb.Layouts do
   end
 
   def active_nav?(_view, _prefix), do: false
+
+  @doc """
+  Returns up to two uppercase initials for a given name, used as the
+  monogram in the user chip avatar.
+  """
+  def monogram(name) when is_binary(name) and byte_size(name) > 0 do
+    name
+    |> String.graphemes()
+    |> Enum.take(2)
+    |> Enum.map_join("", &String.upcase/1)
+  end
+
+  def monogram(_), do: ""
 end

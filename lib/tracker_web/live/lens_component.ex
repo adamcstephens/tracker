@@ -44,21 +44,24 @@ defmodule TrackerWeb.LensComponent do
       >
         <input type="hidden" name="_csrf_token" value={Phoenix.Controller.get_csrf_token()} />
         <span class="lens-label">Channel</span>
-        <select
-          name="channel"
-          aria-label="Channel"
-          class="lens__select"
-          disabled={@lens.disabled?}
-        >
-          <option value="all" selected={@lens.all?}>All channels</option>
-          <option
-            :for={ch <- @channels}
-            value={ch.name}
-            selected={!@lens.all? && ch.name == @lens.channel.name}
+        <span class="lens-channel-cell">
+          <span class="lens-dot" aria-hidden="true"></span>
+          <select
+            name="channel"
+            aria-label="Channel"
+            class="lens__select"
+            disabled={@lens.disabled?}
           >
-            {ch.name}
-          </option>
-        </select>
+            <option value="all" selected={@lens.all?}>All channels</option>
+            <option
+              :for={ch <- @channels}
+              value={ch.name}
+              selected={!@lens.all? && ch.name == @lens.channel.name}
+            >
+              {ch.name}
+            </option>
+          </select>
+        </span>
         <span :if={short_rev(@lens)} class="lens-rev">@{short_rev(@lens)}</span>
       </form>
     </div>
