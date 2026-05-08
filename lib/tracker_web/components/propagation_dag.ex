@@ -120,7 +120,7 @@ defmodule TrackerWeb.PropagationDag do
           y1: from.y + @node_h / 2,
           x2: to.x,
           y2: to.y + @node_h / 2,
-          stroke: "var(--pico-muted-border-color, #aaa)"
+          stroke: "var(--line, #aaa)"
         }
       end)
 
@@ -143,12 +143,12 @@ defmodule TrackerWeb.PropagationDag do
     }
   end
 
-  defp fill_for(%{present: true}), do: "var(--pico-primary-background, #1095c1)"
-  defp fill_for(%{present: false}), do: "var(--pico-card-background-color, #f6f8fa)"
+  defp fill_for(%{present: true}), do: "var(--accent, #1095c1)"
+  defp fill_for(%{present: false}), do: "var(--surface, #f6f8fa)"
 
-  defp stroke_for(%{present: true}), do: "var(--pico-primary, #1095c1)"
-  defp stroke_for(%{present: false}), do: "var(--pico-muted-border-color, #c8ced4)"
+  defp stroke_for(%{present: true}), do: "var(--accent, #1095c1)"
+  defp stroke_for(%{present: false}), do: "var(--line, #c8ced4)"
 
-  defp text_fill_for(%{present: true}), do: "var(--pico-primary-inverse, #fff)"
-  defp text_fill_for(%{present: false}), do: "var(--pico-muted-color, #6c757d)"
+  defp text_fill_for(%{present: true}), do: "var(--accent-on, #fff)"
+  defp text_fill_for(%{present: false}), do: "var(--text-2, #6c757d)"
 end
