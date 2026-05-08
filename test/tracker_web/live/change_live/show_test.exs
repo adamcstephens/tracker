@@ -189,4 +189,56 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
 
     refute html =~ "Affected options"
   end
+
+  describe "propagation lifecycle section" do
+    test "renders the DAG rooted at the change's base_ref", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/changes/6001")
+
+      assert html =~ "Propagation"
+      assert html =~ ~s|data-branch="master"|
+      assert html =~ ~s|data-branch="nixpkgs-unstable"|
+      assert html =~ ~s|data-branch="nixos-unstable-small"|
+      assert html =~ ~s|data-branch="nixos-unstable"|
+    end
+
+    test "marks branches with a ChangeBranch as present", %{conn: conn} do
+      change_id = Tracker.Nixpkgs.Change.get_by_number!(6001).id
+
+      Tracker.Nixpkgs.ChangeBranch.create!(%{change_id: change_id, branch_name: "master"})
+
+      Tracker.Nixpkgs.ChangeBranch.create!(%{
+        change_id: change_id,
+        branch_name: "nixpkgs-unstable"
+      })
+
+      {:ok, _view, html} = live(conn, ~p"/changes/6001")
+
+      assert html =~ ~r/class="[^"]*propagation-node-present[^"]*"[^>]*data-branch="master"/
+
+      assert html =~
+               ~r/class="[^"]*propagation-node-present[^"]*"[^>]*data-branch="nixpkgs-unstable"/
+
+      assert html =~
+               ~r/class="[^"]*propagation-node-pending[^"]*"[^>]*data-branch="nixos-unstable"/
+    end
+
+    test "hides the section when base_ref is not a known propagation branch", %{conn: conn} do
+      Tracker.Nixpkgs.Change.bulk_upsert_all([
+        %{
+          number: 6002,
+          title: "branch-less change",
+          state: :open,
+          author: "x",
+          url: "https://github.com/NixOS/nixpkgs/pull/6002",
+          base_ref: "feature-branch",
+          processing_status: :pending
+        }
+      ])
+
+      {:ok, _view, html} = live(conn, ~p"/changes/6002")
+
+      refute html =~ "Propagation"
+      refute html =~ "propagation-dag"
+    end
+  end
 end
