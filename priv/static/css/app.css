@@ -490,3 +490,169 @@ header nav a[aria-current="page"]:hover {
 	background-color: var(--pico-primary-hover-background);
 	color: var(--pico-primary-inverse);
 }
+
+/* Change Show — redesign. All rules scoped to .change-show. */
+.change-show .change-head {
+	margin-bottom: 1.25rem;
+}
+
+.change-show .change-head-row {
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+	flex-wrap: wrap;
+	margin-bottom: 0.5rem;
+}
+
+.change-show .change-prnum {
+	font-size: 1rem;
+	font-weight: 600;
+}
+
+.change-show .pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	padding: 0.2rem 0.6rem;
+	border-radius: 999px;
+	font-size: 0.8125rem;
+	font-weight: 600;
+	line-height: 1;
+	white-space: nowrap;
+}
+
+.change-show .pill .dot {
+	width: 0.5rem;
+	height: 0.5rem;
+	border-radius: 999px;
+	background: currentColor;
+}
+
+.change-show .pill-merged {
+	color: #8957e5;
+	background: #f1eaff;
+}
+
+.change-show .pill-open {
+	color: #1f883d;
+	background: #dafbe1;
+}
+
+.change-show .pill-closed {
+	color: #cf222e;
+	background: #ffebe9;
+}
+
+.change-show .pill-draft {
+	color: #6e7781;
+	background: #eaeef2;
+}
+
+.change-show .change-card {
+	border: 1px solid var(--pico-card-border-color, #e0e3e7);
+	border-radius: 8px;
+	padding: 1.25rem 1.25rem 1rem;
+	margin-bottom: 1.25rem;
+	background: var(--pico-background-color, #fff);
+}
+
+.change-show .change-card-head {
+	display: flex;
+	align-items: baseline;
+	justify-content: flex-end;
+	margin-bottom: 0.5rem;
+}
+
+.change-show .change-card .propagation-dag {
+	display: block;
+	margin: 0 auto;
+	max-width: 100%;
+}
+
+.change-show .change-meta {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 0.5rem 2rem;
+	padding: 1rem 1.25rem;
+	border: 1px solid var(--pico-card-border-color, #e0e3e7);
+	border-radius: 8px;
+	background: var(--pico-card-background-color, #f6f8fa);
+	margin-bottom: 1rem;
+}
+
+.change-show .change-meta > div {
+	display: grid;
+	grid-template-columns: 9rem 1fr;
+	gap: 0.5rem;
+	align-items: baseline;
+}
+
+.change-show .change-meta dt {
+	color: var(--pico-muted-color, #646b79);
+	font-size: 0.8125rem;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	font-weight: 600;
+	margin: 0;
+}
+
+.change-show .change-meta dd {
+	margin: 0;
+	font-size: 0.9375rem;
+}
+
+.change-show .change-labels {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.4rem;
+	margin-bottom: 1.5rem;
+}
+
+.change-show .label-chip {
+	display: inline-block;
+	font-size: 0.75rem;
+	padding: 0.15rem 0.5rem;
+	border-radius: 999px;
+	background: var(--pico-card-background-color, #f6f8fa);
+	border: 1px solid var(--pico-card-border-color, #e0e3e7);
+	color: var(--pico-muted-color, #646b79);
+	font-family: var(--pico-font-family-monospace, ui-monospace, monospace);
+}
+
+.change-show .change-section {
+	margin-bottom: 1.5rem;
+}
+
+.change-show .change-section-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	margin-bottom: 0.75rem;
+}
+
+.change-show .change-section-head form {
+	flex: 0 0 320px;
+	margin: 0;
+}
+
+.change-show .change-section-head form input[type="search"] {
+	margin: 0;
+}
+
+.change-show .change-desc {
+	display: block;
+	max-width: 48ch;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--pico-muted-color, #646b79);
+}
+
+.change-show .muted {
+	color: var(--pico-muted-color, #646b79);
+}
+
+.change-show .mono {
+	font-family: var(--pico-font-family-monospace, ui-monospace, monospace);
+}
