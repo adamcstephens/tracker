@@ -65,6 +65,29 @@
     </div>
   </div>
   <div class="app-header__row app-header__row--bottom">
+    <form
+      :if={assigns[:page_search]}
+      method="get"
+      action={@page_search.action}
+      phx-change={@page_search.event}
+      phx-submit={@page_search.event}
+      class="app-search"
+    >
+      <input
+        :for={{k, v} <- @page_search.hidden}
+        type="hidden"
+        name={k}
+        value={v}
+      />
+      <input
+        type="search"
+        name={@page_search.param}
+        value={@page_search.value}
+        placeholder={@page_search.placeholder}
+        aria-label={@page_search.placeholder}
+        phx-debounce="300"
+      />
+    </form>
     <div :if={assigns[:lens]} class="app-header__lens-slot">
       <.live_component module={TrackerWeb.LensComponent} id="lens" lens={@lens} />
     </div>

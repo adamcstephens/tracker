@@ -2,6 +2,7 @@ defmodule TrackerWeb.OptionLive.Index do
   use TrackerWeb, :live_view
 
   alias TrackerWeb.DataTable
+  alias TrackerWeb.PageSearch
 
   @impl true
   def render(assigns) do
@@ -9,16 +10,6 @@ defmodule TrackerWeb.OptionLive.Index do
     <p :if={@lens && @lens.all?}>
       Options requires a specific channel. Showing {@lens.channel.name}.
     </p>
-
-    <form phx-change="filter" phx-submit="filter" id="option-filter" phx-hook="UpdateURL">
-      <input
-        type="search"
-        name="search"
-        value={@search}
-        placeholder="Search options..."
-        phx-debounce="300"
-      />
-    </form>
 
     <p :if={@channel_unavailable?}>
       The {@lens.channel.name} channel doesn't have options data.
@@ -71,7 +62,15 @@ defmodule TrackerWeb.OptionLive.Index do
     page = params |> Map.get("page", "1") |> String.to_integer() |> max(1)
     offset = (page - 1) * 15
 
-    socket = assign(socket, :page_title, "Options")
+    socket =
+      socket
+      |> assign(:page_title, "Options")
+      |> assign(:page_search, %PageSearch{
+        action: "/options",
+        placeholder: "Filter options…",
+        value: search,
+        event: "filter"
+      })
 
     socket =
       if socket.assigns[:search] == search and

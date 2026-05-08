@@ -2,21 +2,12 @@ defmodule TrackerWeb.TeamLive.Index do
   use TrackerWeb, :live_view
 
   alias TrackerWeb.DataTable
+  alias TrackerWeb.PageSearch
   alias TrackerWeb.TableParams
 
   @impl true
   def render(assigns) do
     ~H"""
-    <form phx-change="search" phx-submit="search" id="team-search" phx-hook="UpdateURL">
-      <input
-        type="search"
-        name="search"
-        value={@table_params.search}
-        placeholder="Search teams..."
-        phx-debounce="300"
-      />
-    </form>
-
     <.table
       id="teams"
       rows={@streams.teams}
@@ -49,6 +40,11 @@ defmodule TrackerWeb.TeamLive.Index do
      socket
      |> assign(:page_title, "Teams")
      |> assign(:table_params, tp)
+     |> assign(:page_search, %PageSearch{
+       action: "/teams",
+       placeholder: "Filter teams…",
+       value: tp.search
+     })
      |> load_teams()}
   end
 

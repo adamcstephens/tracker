@@ -2,21 +2,12 @@ defmodule TrackerWeb.MaintainerLive.Index do
   use TrackerWeb, :live_view
 
   alias TrackerWeb.DataTable
+  alias TrackerWeb.PageSearch
   alias TrackerWeb.TableParams
 
   @impl true
   def render(assigns) do
     ~H"""
-    <form phx-change="search" phx-submit="search" id="maintainer-search" phx-hook="UpdateURL">
-      <input
-        type="search"
-        name="search"
-        value={@table_params.search}
-        placeholder="Search maintainers..."
-        phx-debounce="300"
-      />
-    </form>
-
     <.table
       id="maintainers"
       rows={@streams.maintainers}
@@ -44,7 +35,14 @@ defmodule TrackerWeb.MaintainerLive.Index do
   def handle_params(params, _url, socket) do
     tp = TableParams.from_params(params)
 
-    socket = assign(socket, :page_title, "Maintainers")
+    socket =
+      socket
+      |> assign(:page_title, "Maintainers")
+      |> assign(:page_search, %PageSearch{
+        action: "/maintainers",
+        placeholder: "Filter maintainers…",
+        value: tp.search
+      })
 
     socket =
       if TableParams.changed?(socket.assigns[:table_params], tp) do

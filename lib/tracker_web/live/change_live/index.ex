@@ -2,6 +2,7 @@ defmodule TrackerWeb.ChangeLive.Index do
   use TrackerWeb, :live_view
 
   alias TrackerWeb.DataTable
+  alias TrackerWeb.PageSearch
   alias TrackerWeb.TableParams
 
   @table_opts [
@@ -14,20 +15,15 @@ defmodule TrackerWeb.ChangeLive.Index do
   def render(assigns) do
     ~H"""
     <form
+      method="get"
+      action="/changes"
       phx-change="filter"
       phx-submit="filter"
-      id="change-filters"
+      id="change-base-ref-filter"
       phx-hook="UpdateURL"
       style="display: flex; gap: 0.5rem; align-items: end; margin-bottom: 1rem;"
     >
-      <input
-        type="search"
-        name="search"
-        value={@table_params.search}
-        placeholder="Search title or author..."
-        phx-debounce="300"
-        style="flex: 3;"
-      />
+      <input type="hidden" name="search" value={@table_params.search} />
       <select name="base_ref" aria-label="Filter by base branch" style="flex: 1;">
         <option value="">All branches</option>
         <option :for={base <- @base_refs} value={base} selected={base == @base_ref_filter}>
@@ -102,9 +98,22 @@ defmodule TrackerWeb.ChangeLive.Index do
       |> assign(:page_title, "Changes")
       |> assign(:table_params, tp)
       |> assign(:base_ref_filter, base_ref_filter)
+      |> assign(:page_search, page_search(tp, base_ref_filter))
       |> load_changes()
 
     {:noreply, socket}
+  end
+
+  defp page_search(tp, base_ref_filter) do
+    hidden = if base_ref_filter == "", do: %{}, else: %{"base_ref" => base_ref_filter}
+
+    %PageSearch{
+      action: "/changes",
+      placeholder: "Filter changes…",
+      value: tp.search,
+      event: "filter",
+      hidden: hidden
+    }
   end
 
   @impl true
