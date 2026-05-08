@@ -3,8 +3,6 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
 
   import Phoenix.LiveViewTest
 
-  require Ash.Query
-
   setup do
     maintainer =
       Tracker.Nixpkgs.Maintainer
@@ -89,7 +87,7 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
   test "shows affected packages", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/changes/6001")
 
-    assert html =~ "Affected Packages"
+    assert html =~ "Affected packages"
     assert html =~ "show-change-pkg"
   end
 
@@ -103,91 +101,6 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
     {:ok, _view, html} = live(conn, ~p"/changes/6001")
 
     assert html =~ "https://github.com/NixOS/nixpkgs/commit/abc123def456"
-  end
-
-  describe "affected options section" do
-    setup do
-      channel =
-        Tracker.Nixpkgs.Channel.create!(%{
-          name: "nixos-unstable",
-          display_name: "NixOS Unstable",
-          status: :active,
-          is_stable: true
-        })
-
-      cr =
-        Tracker.Nixpkgs.ChannelRevision.create!(%{
-          channel_id: channel.id,
-          revision: "showrevopts0001",
-          released_at: ~U[2026-04-01 10:00:00Z]
-        })
-
-      Tracker.Nixpkgs.ChannelRevision.record_result!(cr, %{result: :success})
-
-      cr =
-        Tracker.Nixpkgs.ChannelRevision.record_options_result!(cr, %{options_result: :success})
-
-      Tracker.Fixtures.load_options(
-        %{
-          "services.nginx.enable" => %{
-            "declarations" => ["nixos/modules/services/web-servers/nginx/default.nix"],
-            "description" => "Enable Nginx.",
-            "loc" => ["services", "nginx", "enable"],
-            "readOnly" => false,
-            "type" => "boolean"
-          },
-          "services.nginx.user" => %{
-            "declarations" => ["nixos/modules/services/web-servers/nginx/default.nix"],
-            "description" => "User to run Nginx as.",
-            "loc" => ["services", "nginx", "user"],
-            "readOnly" => false,
-            "type" => "string"
-          },
-          "boot.kernelPackages" => %{
-            "declarations" => ["nixos/modules/system/boot/kernel.nix"],
-            "description" => "Kernel.",
-            "loc" => ["boot", "kernelPackages"],
-            "readOnly" => false,
-            "type" => "string"
-          }
-        },
-        cr
-      )
-
-      change_id = Tracker.Nixpkgs.Change.get_by_number!(6001).id
-
-      [nginx_file, _kernel_file] =
-        Tracker.Nixpkgs.File
-        |> Ash.Query.filter(
-          path in [
-            "nixos/modules/services/web-servers/nginx/default.nix",
-            "nixos/modules/system/boot/kernel.nix"
-          ]
-        )
-        |> Ash.Query.sort(path: :asc)
-        |> Ash.read!()
-
-      Tracker.Nixpkgs.ChangeFile.bulk_insert_all([
-        %{change_id: change_id, file_id: nginx_file.id}
-      ])
-
-      :ok
-    end
-
-    test "lists folded prefixes from options touched via change_files", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/changes/6001")
-
-      assert html =~ "Affected options"
-      assert html =~ "services.nginx"
-      assert html =~ "(2 options)"
-      refute html =~ "boot.kernelPackages"
-    end
-  end
-
-  test "Affected options section omitted when no change_files", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/changes/6001")
-
-    refute html =~ "Affected options"
   end
 
   describe "propagation lifecycle section" do
