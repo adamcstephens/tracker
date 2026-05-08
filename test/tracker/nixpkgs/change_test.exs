@@ -176,8 +176,7 @@ defmodule Tracker.Nixpkgs.ChangeTest do
       Tracker.Nixpkgs.ChangeBranch.create!(%{
         change_id: change_in_id,
         branch_name: "nixos-unstable",
-        channel_revision_id: cr.id,
-        arrived_at: ~U[2025-01-01 10:00:00Z]
+        channel_revision_id: cr.id
       })
 
       %{channel: channel, change_in_id: change_in_id, change_out_id: change_out_id}

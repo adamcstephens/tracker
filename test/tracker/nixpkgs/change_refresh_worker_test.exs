@@ -343,8 +343,7 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorkerTest do
       {:ok, change} = Change.get_by_number(310)
       change = Ash.load!(change, :change_branches)
 
-      assert [%ChangeBranch{branch_name: "master", arrived_at: ~U[2026-04-23 10:00:00Z]}] =
-               change.change_branches
+      assert [%ChangeBranch{branch_name: "master"}] = change.change_branches
     end
 
     test "skips ChangeBranch bootstrap when base_ref is not a propagation branch" do

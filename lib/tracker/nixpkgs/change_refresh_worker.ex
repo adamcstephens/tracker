@@ -190,11 +190,7 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorker do
   defp seed_change_branch(%Change{base_ref: base_ref} = change)
        when is_binary(base_ref) do
     if Propagation.valid_branch?(base_ref) do
-      ChangeBranch.create!(%{
-        change_id: change.id,
-        branch_name: base_ref,
-        arrived_at: change.merged_at || DateTime.utc_now()
-      })
+      ChangeBranch.create!(%{change_id: change.id, branch_name: base_ref})
     end
 
     :ok

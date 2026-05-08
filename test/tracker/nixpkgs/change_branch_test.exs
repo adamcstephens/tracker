@@ -32,15 +32,10 @@ defmodule Tracker.Nixpkgs.ChangeBranchTest do
       change = create_change!()
 
       {:ok, cb} =
-        ChangeBranch.create(%{
-          change_id: change.id,
-          branch_name: "master",
-          arrived_at: ~U[2026-04-01 12:00:00Z]
-        })
+        ChangeBranch.create(%{change_id: change.id, branch_name: "master"})
 
       assert cb.change_id == change.id
       assert cb.branch_name == "master"
-      assert cb.arrived_at == ~U[2026-04-01 12:00:00Z]
       assert is_nil(cb.channel_revision_id)
     end
 
@@ -59,7 +54,6 @@ defmodule Tracker.Nixpkgs.ChangeBranchTest do
         ChangeBranch.create(%{
           change_id: change.id,
           branch_name: "nixos-unstable",
-          arrived_at: ~U[2026-04-01 12:00:00Z],
           channel_revision_id: rev.id
         })
 
@@ -70,21 +64,12 @@ defmodule Tracker.Nixpkgs.ChangeBranchTest do
       change = create_change!()
 
       {:ok, cb1} =
-        ChangeBranch.create(%{
-          change_id: change.id,
-          branch_name: "master",
-          arrived_at: ~U[2026-04-01 12:00:00Z]
-        })
+        ChangeBranch.create(%{change_id: change.id, branch_name: "master"})
 
       {:ok, cb2} =
-        ChangeBranch.create(%{
-          change_id: change.id,
-          branch_name: "master",
-          arrived_at: ~U[2026-04-01 14:00:00Z]
-        })
+        ChangeBranch.create(%{change_id: change.id, branch_name: "master"})
 
       assert cb1.id == cb2.id
-      assert cb2.arrived_at == ~U[2026-04-01 14:00:00Z]
     end
 
     test "rejects unknown branch_name" do
@@ -93,8 +78,7 @@ defmodule Tracker.Nixpkgs.ChangeBranchTest do
       assert {:error, _} =
                ChangeBranch.create(%{
                  change_id: change.id,
-                 branch_name: "totally-not-a-branch",
-                 arrived_at: ~U[2026-04-01 12:00:00Z]
+                 branch_name: "totally-not-a-branch"
                })
     end
 
@@ -102,11 +86,7 @@ defmodule Tracker.Nixpkgs.ChangeBranchTest do
       change = create_change!()
 
       {:ok, cb} =
-        ChangeBranch.create(%{
-          change_id: change.id,
-          branch_name: "release-25.11",
-          arrived_at: ~U[2026-04-01 12:00:00Z]
-        })
+        ChangeBranch.create(%{change_id: change.id, branch_name: "release-25.11"})
 
       assert cb.branch_name == "release-25.11"
     end
@@ -116,17 +96,8 @@ defmodule Tracker.Nixpkgs.ChangeBranchTest do
     test "change has_many change_branches" do
       change = create_change!()
 
-      ChangeBranch.create!(%{
-        change_id: change.id,
-        branch_name: "master",
-        arrived_at: ~U[2026-04-01 12:00:00Z]
-      })
-
-      ChangeBranch.create!(%{
-        change_id: change.id,
-        branch_name: "staging",
-        arrived_at: ~U[2026-04-01 13:00:00Z]
-      })
+      ChangeBranch.create!(%{change_id: change.id, branch_name: "master"})
+      ChangeBranch.create!(%{change_id: change.id, branch_name: "staging"})
 
       change = Ash.load!(change, :change_branches)
       assert length(change.change_branches) == 2

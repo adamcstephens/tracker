@@ -39,47 +39,24 @@ defmodule Tracker.Nixpkgs.ChangeBranchDetectionWorkerTest do
     test "does not duplicate ChangeBranch rows already present", ctx do
       change = insert_change!(base_ref: "master", merge_commit_sha: ctx.sha_mc)
 
-      ChangeBranch.create!(%{
-        change_id: change.id,
-        branch_name: "nixpkgs-unstable",
-        arrived_at: ~U[2026-01-01 00:00:00Z]
-      })
+      ChangeBranch.create!(%{change_id: change.id, branch_name: "nixpkgs-unstable"})
 
       :ok = ChangeBranchDetectionWorker.run(git_server: ctx.git_server)
 
-      [cb] =
-        change
-        |> Ash.load!(:change_branches)
-        |> Map.fetch!(:change_branches)
-
-      assert cb.branch_name == "nixpkgs-unstable"
-      assert cb.arrived_at == ~U[2026-01-01 00:00:00Z]
+      assert recorded_branches(change) == ["nixpkgs-unstable"]
     end
 
     test "skips Changes whose recorded set covers all terminal channels", ctx do
       change = insert_change!(base_ref: "master", merge_commit_sha: ctx.sha_mc)
 
       for branch <- ~w(nixpkgs-unstable nixos-unstable-small nixos-unstable) do
-        ChangeBranch.create!(%{
-          change_id: change.id,
-          branch_name: branch,
-          arrived_at: ~U[2026-01-01 00:00:00Z]
-        })
+        ChangeBranch.create!(%{change_id: change.id, branch_name: branch})
       end
 
       :ok = ChangeBranchDetectionWorker.run(git_server: ctx.git_server)
 
-      arrived =
-        change
-        |> Ash.load!(:change_branches)
-        |> Map.fetch!(:change_branches)
-        |> Enum.map(& &1.arrived_at)
-
-      assert arrived == [
-               ~U[2026-01-01 00:00:00Z],
-               ~U[2026-01-01 00:00:00Z],
-               ~U[2026-01-01 00:00:00Z]
-             ]
+      assert recorded_branches(change) ==
+               ["nixos-unstable", "nixos-unstable-small", "nixpkgs-unstable"]
     end
 
     test "ignores Changes with nil merge_commit_sha", ctx do
