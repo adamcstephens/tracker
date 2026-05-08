@@ -13,10 +13,6 @@ defmodule TrackerWeb.PackageLive.Index do
   @impl true
   def render(assigns) do
     ~H"""
-    <.header>
-      Listing Packages
-    </.header>
-
     <form phx-change="search" phx-submit="search" id="package-search" phx-hook="UpdateURL">
       <input
         type="search"
@@ -66,7 +62,7 @@ defmodule TrackerWeb.PackageLive.Index do
 
     socket =
       socket
-      |> assign(:page_title, "Listing Packages")
+      |> assign(:page_title, "Packages")
       |> assign(:table_params, tp)
       |> load_packages()
 

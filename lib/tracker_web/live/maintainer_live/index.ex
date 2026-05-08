@@ -7,10 +7,6 @@ defmodule TrackerWeb.MaintainerLive.Index do
   @impl true
   def render(assigns) do
     ~H"""
-    <.header>
-      Maintainers
-    </.header>
-
     <form phx-change="search" phx-submit="search" id="maintainer-search" phx-hook="UpdateURL">
       <input
         type="search"

@@ -13,10 +13,6 @@ defmodule TrackerWeb.ChannelLive.Index do
   @impl true
   def render(assigns) do
     ~H"""
-    <.header>
-      Channels
-    </.header>
-
     <DataTable.data_table
       id="channels"
       rows={@streams.channels}
