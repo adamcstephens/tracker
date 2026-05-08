@@ -24,7 +24,12 @@ defmodule Tracker.Nixpkgs.ChangeBranchDetectionWorkerTest do
 
     assert GitServer.ready?(pid)
 
-    Map.merge(shas, %{git_server: pid, base: base})
+    Map.merge(shas, %{
+      git_server: pid,
+      base: base,
+      upstream: upstream,
+      upstream_work: upstream_work
+    })
   end
 
   describe "run/1" do
@@ -73,6 +78,18 @@ defmodule Tracker.Nixpkgs.ChangeBranchDetectionWorkerTest do
       :ok = ChangeBranchDetectionWorker.run(git_server: ctx.git_server)
 
       assert recorded_branches(change) == []
+    end
+
+    test "fetches upstream before detecting so newly-pushed branch tips are visible", ctx do
+      change = insert_change!(base_ref: "master", merge_commit_sha: ctx.sha_mc)
+
+      # Local clone currently has nixos-unstable @ sha_a (no MC). Advance the
+      # upstream branch to MC; only a fetch will surface this to the worker.
+      advance_branch_on_upstream(ctx.upstream_work, ctx.upstream, "nixos-unstable", ctx.sha_mc)
+
+      :ok = ChangeBranchDetectionWorker.run(git_server: ctx.git_server)
+
+      assert "nixos-unstable" in recorded_branches(change)
     end
 
     test "handles unknown_ref gracefully (logs and continues)", ctx do
@@ -158,6 +175,23 @@ defmodule Tracker.Nixpkgs.ChangeBranchDetectionWorkerTest do
     {_, 0} = System.cmd("git", ["clone", "--quiet", "--bare", work, bare])
 
     %{sha_a: sha_a, sha_b: sha_b, sha_mc: sha_mc}
+  end
+
+  defp advance_branch_on_upstream(work, bare, branch, sha) do
+    git!(work, ["branch", "--force", branch, sha])
+
+    {_, 0} =
+      System.cmd("git", [
+        "-C",
+        bare,
+        "fetch",
+        "--quiet",
+        "--update-head-ok",
+        work,
+        "+#{branch}:#{branch}"
+      ])
+
+    :ok
   end
 
   defp git!(cwd, args) do
