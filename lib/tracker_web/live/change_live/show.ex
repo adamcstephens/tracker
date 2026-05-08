@@ -1,7 +1,9 @@
 defmodule TrackerWeb.ChangeLive.Show do
   use TrackerWeb, :live_view
 
+  alias Tracker.Nixpkgs.Propagation
   alias TrackerWeb.DataTable
+  alias TrackerWeb.PropagationDag
   alias TrackerWeb.TableParams
 
   @impl true
@@ -118,6 +120,11 @@ defmodule TrackerWeb.ChangeLive.Show do
         </li>
       </ul>
     </section>
+
+    <section :if={@lifecycle_dag.nodes != []}>
+      <h2>Propagation</h2>
+      <PropagationDag.dag dag={@lifecycle_dag} />
+    </section>
     """
   end
 
@@ -176,12 +183,19 @@ defmodule TrackerWeb.ChangeLive.Show do
   @impl true
   def handle_params(%{"number" => number_str} = params, _url, socket) do
     number = String.to_integer(number_str)
-    change = Tracker.Nixpkgs.Change.get_by_number!(number)
+
+    change =
+      number
+      |> Tracker.Nixpkgs.Change.get_by_number!()
+      |> Ash.load!(:change_branches)
 
     author_maintainer = find_maintainer(change.author_github_id)
     merger_maintainer = find_maintainer(change.merged_by_github_id)
 
     tp = TableParams.from_params(params)
+
+    present_branches = Enum.map(change.change_branches, & &1.branch_name)
+    lifecycle_dag = Propagation.lifecycle(change.base_ref, present_branches)
 
     {:noreply,
      socket
@@ -189,6 +203,7 @@ defmodule TrackerWeb.ChangeLive.Show do
      |> assign(:change, change)
      |> assign(:author_maintainer, author_maintainer)
      |> assign(:merger_maintainer, merger_maintainer)
+     |> assign(:lifecycle_dag, lifecycle_dag)
      |> assign(:table_params, tp)
      |> load_packages(change.id)
      |> load_affected_prefixes(change.id, socket.assigns.lens)}

@@ -2,6 +2,7 @@ defmodule Tracker.Nixpkgs.PropagationTest do
   use ExUnit.Case, async: true
 
   alias Tracker.Nixpkgs.Propagation
+  alias Tracker.Nixpkgs.Propagation.{Dag, Edge}
 
   describe "next_branches/1" do
     test "master flows to nixos-unstable-small and nixpkgs-unstable" do
@@ -189,6 +190,90 @@ defmodule Tracker.Nixpkgs.PropagationTest do
       assert "nixos-unstable" in branches
       assert "nixos-unstable-small" in branches
       assert "nixpkgs-unstable" in branches
+    end
+  end
+
+  describe "lifecycle/2" do
+    test "from master includes the root and all descendants" do
+      %{nodes: nodes} = Propagation.lifecycle("master", [])
+
+      names = Enum.map(nodes, & &1.name)
+      assert "master" in names
+      assert "nixpkgs-unstable" in names
+      assert "nixos-unstable-small" in names
+      assert "nixos-unstable" in names
+    end
+
+    test "marks present branches and leaves the rest pending" do
+      %{nodes: nodes} = Propagation.lifecycle("master", ["master", "nixpkgs-unstable"])
+
+      by_name = Map.new(nodes, &{&1.name, &1})
+      assert by_name["master"].present
+      assert by_name["nixpkgs-unstable"].present
+      refute by_name["nixos-unstable-small"].present
+      refute by_name["nixos-unstable"].present
+    end
+
+    test "assigns levels by BFS depth from the root" do
+      %{nodes: nodes} = Propagation.lifecycle("master", [])
+      by_name = Map.new(nodes, &{&1.name, &1})
+
+      assert by_name["master"].level == 0
+      assert by_name["nixpkgs-unstable"].level == 1
+      assert by_name["nixos-unstable-small"].level == 1
+      assert by_name["nixos-unstable"].level == 2
+    end
+
+    test "tags each node with its kind" do
+      %{nodes: nodes} = Propagation.lifecycle("master", [])
+      by_name = Map.new(nodes, &{&1.name, &1})
+
+      assert by_name["master"].kind == :branch
+      assert by_name["nixpkgs-unstable"].kind == :channel
+      assert by_name["nixos-unstable"].kind == :channel
+    end
+
+    test "edges are restricted to nodes within the DAG" do
+      %{edges: edges} = Propagation.lifecycle("master", [])
+
+      assert %Edge{from: "master", to: "nixpkgs-unstable"} in edges
+      assert %Edge{from: "master", to: "nixos-unstable-small"} in edges
+      assert %Edge{from: "nixos-unstable-small", to: "nixos-unstable"} in edges
+
+      from_branches = Enum.map(edges, & &1.from)
+      to_branches = Enum.map(edges, & &1.to)
+      refute "haskell-updates" in from_branches
+      refute "staging" in to_branches
+    end
+
+    test "from staging covers the full chain through master" do
+      %{nodes: nodes} = Propagation.lifecycle("staging", [])
+      by_name = Map.new(nodes, &{&1.name, &1})
+
+      assert by_name["staging"].level == 0
+      assert by_name["staging-next"].level == 1
+      assert by_name["master"].level == 2
+      assert by_name["nixos-unstable"].level == 4
+    end
+
+    test "from versioned release stays in the release line" do
+      %{nodes: nodes} = Propagation.lifecycle("release-25.11", [])
+
+      names = Enum.map(nodes, & &1.name)
+      assert "release-25.11" in names
+      assert "nixos-25.11-small" in names
+      assert "nixos-25.11" in names
+      assert "nixpkgs-25.11-darwin" in names
+      refute "master" in names
+      refute "nixos-unstable" in names
+    end
+
+    test "unknown base_ref returns an empty DAG" do
+      assert Propagation.lifecycle("not-a-branch", []) == %Dag{nodes: [], edges: []}
+    end
+
+    test "nil base_ref returns an empty DAG" do
+      assert Propagation.lifecycle(nil, []) == %Dag{nodes: [], edges: []}
     end
   end
 end

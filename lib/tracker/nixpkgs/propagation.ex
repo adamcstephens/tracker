@@ -154,4 +154,99 @@ defmodule Tracker.Nixpkgs.Propagation do
         _ -> false
       end
   end
+
+  defmodule Node do
+    @moduledoc false
+    use TypedStruct
+
+    typedstruct enforce: true do
+      field :name, String.t()
+      field :kind, :branch | :channel
+      field :level, non_neg_integer()
+      field :present, boolean()
+    end
+  end
+
+  defmodule Edge do
+    @moduledoc false
+    use TypedStruct
+
+    typedstruct enforce: true do
+      field :from, String.t()
+      field :to, String.t()
+    end
+  end
+
+  defmodule Dag do
+    @moduledoc false
+    use TypedStruct
+
+    typedstruct enforce: true do
+      field :nodes, [Tracker.Nixpkgs.Propagation.Node.t()]
+      field :edges, [Tracker.Nixpkgs.Propagation.Edge.t()]
+    end
+  end
+
+  @doc """
+  Builds the propagation DAG rooted at `base_ref`, with each node tagged
+  `present: true` when its `name` appears in `present_branches`.
+
+  Levels are BFS depths from the root. Edges are restricted to pairs where
+  both endpoints are inside the DAG. Returns an empty DAG when `base_ref`
+  is nil or not a known branch.
+  """
+  @spec lifecycle(String.t() | nil, [String.t()]) :: Dag.t()
+  def lifecycle(base_ref, present_branches) when is_binary(base_ref) do
+    if valid_branch?(base_ref) do
+      build_dag(base_ref, MapSet.new(present_branches))
+    else
+      %Dag{nodes: [], edges: []}
+    end
+  end
+
+  def lifecycle(nil, _present_branches), do: %Dag{nodes: [], edges: []}
+
+  defp build_dag(root, present_set) do
+    levels = bfs_levels(root)
+    branches = Map.keys(levels)
+    branch_set = MapSet.new(branches)
+
+    nodes =
+      branches
+      |> Enum.map(fn name ->
+        %Node{
+          name: name,
+          kind: kind(name),
+          level: Map.fetch!(levels, name),
+          present: MapSet.member?(present_set, name)
+        }
+      end)
+      |> Enum.sort_by(&{&1.level, &1.name})
+
+    edges =
+      for from <- branches,
+          to <- next_branches(from),
+          MapSet.member?(branch_set, to),
+          do: %Edge{from: from, to: to}
+
+    %Dag{nodes: nodes, edges: edges}
+  end
+
+  defp bfs_levels(root) do
+    do_bfs([{root, 0}], %{})
+  end
+
+  defp do_bfs([], levels), do: levels
+
+  defp do_bfs([{name, level} | rest], levels) do
+    case Map.fetch(levels, name) do
+      {:ok, _} ->
+        do_bfs(rest, levels)
+
+      :error ->
+        levels = Map.put(levels, name, level)
+        next = Enum.map(next_branches(name), &{&1, level + 1})
+        do_bfs(rest ++ next, levels)
+    end
+  end
 end
