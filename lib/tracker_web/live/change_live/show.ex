@@ -14,7 +14,7 @@ defmodule TrackerWeb.ChangeLive.Show do
     * Drops the affected option prefixes section.
     * Drops the inline "timeline" strip below the DAG.
     * Hides propagation entirely until the change is merged.
-    * Replaces the dl + <mark> state with a Pico-aligned status pill.
+    * Replaces the dl + <mark> state with a status pill.
     * Renders the DAG without column headers (the labels were
       cluttering and not helping comprehension).
   """
