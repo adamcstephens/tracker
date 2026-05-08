@@ -1,28 +1,163 @@
-/* Custom overrides for Pico CSS */
+/* Custom CSS Reset (Joshua W. Comeau)
+   https://www.joshwcomeau.com/css/custom-css-reset/ */
+/* 1. Use a more-intuitive box-sizing model */
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
 
-/* Global sizing overrides */
+/* 2. Remove default margin */
+*:not(dialog) {
+	margin: 0;
+}
+
+/* 3. Enable keyword animations */
+@media (prefers-reduced-motion: no-preference) {
+	html {
+		interpolate-size: allow-keywords;
+	}
+}
+
+body {
+	/* 4. Increase line-height */
+	line-height: 1.5;
+	/* 5. Improve text rendering */
+	-webkit-font-smoothing: antialiased;
+}
+
+/* 6. Improve media defaults */
+img,
+picture,
+video,
+canvas,
+svg {
+	display: block;
+	max-width: 100%;
+}
+
+/* 7. Inherit fonts for form controls */
+input,
+button,
+textarea,
+select {
+	font: inherit;
+}
+
+/* 8. Avoid text overflows */
+p,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+	overflow-wrap: break-word;
+}
+
+/* 9. Improve line wrapping */
+p {
+	text-wrap: pretty;
+}
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+	text-wrap: balance;
+}
+
+/*
+  10. Create a root stacking context
+*/
+#root,
+#__next {
+	isolation: isolate;
+}
+
+/* Project design tokens. Names follow tmp/design_handoff_nav_lens_search/README.md.
+   Values preserve the existing Pico-derived palette for now; the handoff palette
+   is adopted in a later phase. */
+:root {
+	--radius: 10px;
+	--radius-sm: 7px;
+	--radius-lg: 14px;
+	--mono:
+		ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono",
+		monospace;
+	--sans:
+		system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+		Arial, "Helvetica Neue", sans-serif;
+
+	--bg: #ffffff;
+	--bg-canvas: #ffffff;
+	--surface: #f8f8f8;
+	--surface-2: #ececec;
+	--surface-3: #e0e0e0;
+	--line: #e0e0e0;
+	--line-soft: #ececec;
+	--text: #000000;
+	--text-2: #595959;
+	--text-3: #595959;
+	--accent: #0031a9;
+	--accent-on: #ffffff;
+	--accent-soft: rgba(0, 49, 169, 0.075);
+	--accent-bg: rgba(0, 49, 169, 0.1);
+	--accent-edge: rgba(0, 49, 169, 0.5);
+	--good: #006800;
+	--warn: #f0a868;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme]) {
+		--bg: #080808;
+		--bg-canvas: #080808;
+		--surface: #323437;
+		--surface-2: #404452;
+		--surface-3: #373c4d;
+		--line: #373c4d;
+		--line-soft: #2f3340;
+		--text: #c6c6c6;
+		--text-2: #748999;
+		--text-3: #748999;
+		--accent: #80a0ff;
+		--accent-on: #080808;
+		--accent-soft: rgba(128, 160, 255, 0.0375);
+		--accent-bg: rgba(128, 160, 255, 0.15);
+		--accent-edge: rgba(128, 160, 255, 0.3);
+		--good: #36c692;
+		--warn: #f0a868;
+	}
+}
+
+/* Pico variable overrides. Where a project token has the same value, alias to
+   it so future renames in lib/ flow through one place. The non-aliased Pico
+   tokens (h-color, secondary, ins/del, switch, range, modal, etc.) are kept
+   as-is until phase 2/3 retires Pico itself. */
 :root {
 	--pico-font-size: 90.0%;
 	--pico-typography-spacing-vertical: 0.5rem;
+	--pico-font-family-monospace: var(--mono);
 }
 
 /* Light theme (Modus Operandi) */
 :root:not([data-theme="dark"]) {
-	--pico-background-color: #ffffff;
-	--pico-color: #000000;
+	--pico-background-color: var(--bg);
+	--pico-color: var(--text);
 	--pico-text-selection-color: rgba(0, 49, 169, 0.25);
-	--pico-muted-color: #595959;
-	--pico-muted-border-color: #e0e0e0;
-	--pico-primary: #0031a9;
-	--pico-primary-background: #0031a9;
+	--pico-muted-color: var(--text-2);
+	--pico-muted-border-color: var(--line);
+	--pico-primary: var(--accent);
+	--pico-primary-background: var(--accent);
 	--pico-primary-border: var(--pico-primary-background);
 	--pico-primary-underline: rgba(0, 49, 169, 0.5);
 	--pico-primary-hover: #0000ff;
 	--pico-primary-hover-background: #002090;
 	--pico-primary-hover-border: var(--pico-primary-hover-background);
 	--pico-primary-hover-underline: var(--pico-primary-hover);
-	--pico-primary-focus: rgba(0, 49, 169, 0.5);
-	--pico-primary-inverse: #ffffff;
+	--pico-primary-focus: var(--accent-edge);
+	--pico-primary-inverse: var(--accent-on);
 	--pico-secondary: #505050;
 	--pico-secondary-background: #505050;
 	--pico-secondary-border: var(--pico-secondary-background);
@@ -109,21 +244,21 @@
 /* Dark theme (Moonfly) */
 @media (prefers-color-scheme: dark) {
 	:root:not([data-theme]) {
-		--pico-background-color: #080808;
-		--pico-color: #c6c6c6;
+		--pico-background-color: var(--bg);
+		--pico-color: var(--text);
 		--pico-text-selection-color: rgba(128, 160, 255, 0.25);
-		--pico-muted-color: #748999;
-		--pico-muted-border-color: #373c4d;
-		--pico-primary: #80a0ff;
-		--pico-primary-background: #80a0ff;
+		--pico-muted-color: var(--text-2);
+		--pico-muted-border-color: var(--line);
+		--pico-primary: var(--accent);
+		--pico-primary-background: var(--accent);
 		--pico-primary-border: var(--pico-primary-background);
 		--pico-primary-underline: rgba(128, 160, 255, 0.5);
 		--pico-primary-hover: #74b2ff;
 		--pico-primary-hover-background: #6a90e6;
 		--pico-primary-hover-border: var(--pico-primary-hover-background);
 		--pico-primary-hover-underline: var(--pico-primary-hover);
-		--pico-primary-focus: rgba(128, 160, 255, 0.375);
-		--pico-primary-inverse: #080808;
+		--pico-primary-focus: var(--accent-edge);
+		--pico-primary-inverse: var(--accent-on);
 		--pico-secondary: #748999;
 		--pico-secondary-background: #4d5d8d;
 		--pico-secondary-border: var(--pico-secondary-background);
@@ -479,28 +614,7 @@ dl.option-body dd {
 }
 
 /* App chrome — plain CSS (no @layer; layered rules lose to unlayered Pico).
-   Spec: tmp/tracker2/design_handoff_nav_lens_search/README.md */
-
-:root {
-	--chrome-bg: var(--pico-background-color);
-	--chrome-surface: var(--pico-form-element-background-color);
-	--chrome-surface-2: #ececec;
-	--chrome-line: var(--pico-muted-border-color);
-	--chrome-line-soft: #ececec;
-	--chrome-accent: var(--pico-primary);
-	--chrome-accent-on: var(--pico-primary-inverse);
-	--chrome-text: var(--pico-color);
-	--chrome-text-muted: var(--pico-muted-color);
-	--chrome-text-faint: var(--pico-muted-color);
-}
-
-@media (prefers-color-scheme: dark) {
-	:root:not([data-theme]) {
-		--chrome-surface-2: #404452;
-		--chrome-line: #4d5568;
-		--chrome-line-soft: #2f3340;
-	}
-}
+   Spec: tmp/design_handoff_nav_lens_search/README.md */
 
 /* Strip Pico defaults from form elements/links inside chrome —
    the rules below own the look entirely. */
@@ -542,8 +656,8 @@ dl.option-body dd {
 
 /* Outer chrome — single bottom border */
 .app-header {
-	background: var(--chrome-bg);
-	border-bottom: 1px solid var(--chrome-line);
+	background: var(--bg);
+	border-bottom: 1px solid var(--line);
 }
 
 /* Row 1 — brand · tabs · user. Flush bottom so tab underline aligns. */
@@ -574,7 +688,7 @@ dl.option-body dd {
 	display: inline-flex;
 	align-items: center;
 	gap: 0.5625rem;
-	color: var(--chrome-text);
+	color: var(--text);
 	font-weight: 600;
 	font-size: 0.9375rem;
 	letter-spacing: -0.01em;
@@ -586,7 +700,7 @@ dl.option-body dd {
 }
 
 .app-brand:hover {
-	color: var(--chrome-text);
+	color: var(--text);
 }
 
 .app-brand__mark {
@@ -595,8 +709,8 @@ dl.option-body dd {
 	width: 1.375rem;
 	height: 1.375rem;
 	border-radius: 0.375rem;
-	background: var(--chrome-accent);
-	color: var(--chrome-accent-on);
+	background: var(--accent);
+	color: var(--accent-on);
 	font-family: var(--pico-font-family-monospace);
 	font-size: 0.6875rem;
 	font-weight: 600;
@@ -622,7 +736,7 @@ dl.option-body dd {
 	align-items: center;
 	gap: 0.375rem;
 	padding: 0.875rem;
-	color: var(--chrome-text-muted);
+	color: var(--text-2);
 	font-size: 0.8125rem;
 	font-weight: 500;
 	line-height: 1;
@@ -631,12 +745,12 @@ dl.option-body dd {
 }
 
 .app-tabs a:hover {
-	color: var(--chrome-text);
+	color: var(--text);
 }
 
 .app-tabs a[aria-current="page"] {
-	color: var(--chrome-text);
-	border-bottom-color: var(--chrome-accent);
+	color: var(--text);
+	border-bottom-color: var(--accent);
 }
 
 /* User chip */
@@ -652,17 +766,17 @@ dl.option-body dd {
 	align-items: center;
 	gap: 0.5rem;
 	padding: 0.375rem 0.5rem 0.375rem 0.625rem;
-	background: var(--chrome-surface);
-	border: 1px solid var(--chrome-line-soft);
+	background: var(--surface);
+	border: 1px solid var(--line-soft);
 	border-radius: 0.5rem;
-	color: var(--chrome-text);
+	color: var(--text);
 	font-size: 0.8125rem;
 	font-weight: 500;
 	cursor: pointer;
 }
 
 .app-user__chip:hover {
-	background: var(--chrome-surface-2);
+	background: var(--surface-2);
 }
 
 .app-user__avatar {
@@ -671,15 +785,15 @@ dl.option-body dd {
 	width: 1.375rem;
 	height: 1.375rem;
 	border-radius: 999px;
-	background: var(--chrome-surface-2);
-	color: var(--chrome-text);
+	background: var(--surface-2);
+	color: var(--text);
 	font-family: var(--pico-font-family-monospace);
 	font-size: 0.625rem;
 	font-weight: 600;
 }
 
 .app-user__caret {
-	color: var(--chrome-text-faint);
+	color: var(--text-3);
 	font-size: 0.6875rem;
 }
 
@@ -690,37 +804,37 @@ dl.option-body dd {
 	align-items: center;
 	gap: 0.625rem;
 	padding: 0.625rem 0.75rem 0.625rem 0.875rem;
-	background: var(--chrome-surface);
-	border: 1px solid var(--chrome-line);
+	background: var(--surface);
+	border: 1px solid var(--line);
 	border-radius: 0.625rem;
 	margin-bottom: 0;
 	min-height: 2.25rem;
-	color: var(--chrome-text-faint);
+	color: var(--text-3);
 	font-size: 0.875rem;
 	cursor: text;
 }
 
 .app-search:focus-within {
-	border-color: var(--chrome-accent);
-	background: var(--chrome-surface-2);
+	border-color: var(--accent);
+	background: var(--surface-2);
 }
 
 .app-search__icon {
 	width: 1.0625rem;
 	height: 1.0625rem;
-	color: var(--chrome-text-muted);
+	color: var(--text-2);
 	flex-shrink: 0;
 }
 
 .app-search input[type="search"] {
 	flex: 1;
-	color: var(--chrome-text);
+	color: var(--text);
 	font: inherit;
 	background-image: none;
 }
 
 .app-search input[type="search"]::placeholder {
-	color: var(--chrome-text-faint);
+	color: var(--text-3);
 }
 
 .app-search__hint {
@@ -730,13 +844,13 @@ dl.option-body dd {
 	min-width: 1.25rem;
 	height: 1.25rem;
 	padding: 0 0.375rem;
-	background: var(--chrome-surface-2);
-	border: 1px solid var(--chrome-line);
+	background: var(--surface-2);
+	border: 1px solid var(--line);
 	border-bottom-width: 2px;
 	border-radius: 0.25rem;
 	font-family: var(--pico-font-family-monospace);
 	font-size: 0.6875rem;
-	color: var(--chrome-text-muted);
+	color: var(--text-2);
 	flex-shrink: 0;
 }
 
@@ -755,9 +869,9 @@ dl.option-body dd {
 	display: inline-flex;
 	align-items: stretch;
 	flex: 1;
-	border: 1px solid var(--chrome-line);
+	border: 1px solid var(--line);
 	border-radius: 0.5rem;
-	background: var(--chrome-surface);
+	background: var(--surface);
 	overflow: hidden;
 	margin-bottom: 0;
 }
@@ -766,9 +880,9 @@ dl.option-body dd {
 	display: inline-flex;
 	align-items: center;
 	padding: 0.3125rem 0.625rem;
-	background: var(--chrome-surface-2);
-	border-right: 1px solid var(--chrome-line);
-	color: var(--chrome-text-faint);
+	background: var(--surface-2);
+	border-right: 1px solid var(--line);
+	color: var(--text-3);
 	font-family: var(--pico-font-family-monospace);
 	font-size: 0.6875rem;
 	letter-spacing: 0.04em;
@@ -786,12 +900,12 @@ dl.option-body dd {
 	width: 0.375rem;
 	height: 0.375rem;
 	border-radius: 999px;
-	background: var(--chrome-accent);
+	background: var(--accent);
 	flex-shrink: 0;
 }
 
 .lens__select {
-	color: var(--chrome-text);
+	color: var(--text);
 	font-family: var(--pico-font-family-monospace);
 	font-size: 0.78125rem;
 	font-weight: 500;
@@ -803,8 +917,8 @@ dl.option-body dd {
 	display: inline-flex;
 	align-items: center;
 	padding: 0.3125rem 0.625rem;
-	border-left: 1px solid var(--chrome-line);
-	color: var(--chrome-text-muted);
+	border-left: 1px solid var(--line);
+	color: var(--text-2);
 	font-family: var(--pico-font-family-monospace);
 	font-size: 0.71875rem;
 }
@@ -858,8 +972,8 @@ dl.option-body dd {
 		bottom: 0;
 		left: 0;
 		right: 0;
-		background: var(--chrome-bg);
-		border-top: 1px solid var(--chrome-line);
+		background: var(--bg);
+		border-top: 1px solid var(--line);
 		padding: 0.375rem 0.25rem max(0.5rem, env(safe-area-inset-bottom));
 		z-index: 50;
 	}
@@ -872,16 +986,16 @@ dl.option-body dd {
 		padding: 0.375rem 0.25rem;
 		font-size: 0.75rem;
 		font-weight: 500;
-		color: var(--chrome-text-muted);
+		color: var(--text-2);
 		border-radius: 0.5rem;
 	}
 
 	.app-mobile-tab:hover {
-		color: var(--chrome-text);
+		color: var(--text);
 	}
 
 	.app-mobile-tab.is-active {
-		color: var(--chrome-accent);
+		color: var(--accent);
 	}
 }
 
