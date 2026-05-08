@@ -38,6 +38,21 @@ defmodule Tracker.GitHub.GraphQLTest do
     end
   end
 
+  defp list_response(body, assert_variables \\ fn _ -> :ok end) do
+    fn conn ->
+      assert conn.method == "POST"
+      assert conn.request_path == "/graphql"
+
+      {:ok, raw, conn} = Plug.Conn.read_body(conn)
+      {:ok, %{"query" => _, "variables" => vars}} = Jason.decode(raw)
+      assert_variables.(vars)
+
+      conn
+      |> Plug.Conn.put_resp_content_type("application/json")
+      |> Plug.Conn.send_resp(200, Jason.encode!(body))
+    end
+  end
+
   defp pr_node(opts) do
     %{
       "__typename" => "PullRequest",
@@ -49,6 +64,10 @@ defmodule Tracker.GitHub.GraphQLTest do
       "headRefName" => opts[:headRefName] || "feature",
       "headRefOid" => opts[:headRefOid] || "abc123",
       "title" => opts[:title] || "test PR",
+      "url" => opts[:url] || "https://github.com/NixOS/nixpkgs/pull/#{opts[:number]}",
+      "author" => Keyword.get(opts, :author, %{"login" => "alice", "databaseId" => 11}),
+      "mergedBy" => Keyword.get(opts, :mergedBy, nil),
+      "createdAt" => opts[:createdAt] || "2026-03-01T12:00:00Z",
       "updatedAt" => opts[:updatedAt] || "2026-04-01T12:00:00Z",
       "closedAt" => opts[:closedAt],
       "mergedAt" => opts[:mergedAt],
@@ -58,7 +77,7 @@ defmodule Tracker.GitHub.GraphQLTest do
   end
 
   defp rate_limit(remaining \\ 4999, reset_at \\ "2030-01-01T00:00:00Z") do
-    %{"remaining" => remaining, "resetAt" => reset_at}
+    %{"cost" => 1, "remaining" => remaining, "resetAt" => reset_at}
   end
 
   describe "fetch_prs/2" do
@@ -192,6 +211,62 @@ defmodule Tracker.GitHub.GraphQLTest do
                 }
               }} =
                GraphQL.fetch_prs(["pr_refs"], call())
+    end
+
+    test "decodes author, author_github_id, merged_by_github_id, url, created_at" do
+      Req.Test.stub(
+        __MODULE__,
+        graphql_response(%{
+          "data" => %{
+            "rateLimit" => rate_limit(),
+            "nodes" => [
+              pr_node(
+                id: "pr_attrs",
+                number: 4242,
+                state: "MERGED",
+                mergedAt: "2026-04-02T10:00:00Z",
+                mergeCommitOid: "deadbeef",
+                url: "https://github.com/NixOS/nixpkgs/pull/4242",
+                author: %{"login" => "octocat", "databaseId" => 583_231},
+                mergedBy: %{"login" => "merger", "databaseId" => 100_500},
+                createdAt: "2026-03-31T01:23:45Z"
+              )
+            ]
+          }
+        })
+      )
+
+      assert {:ok, %{"pr_attrs" => pr}} = GraphQL.fetch_prs(["pr_attrs"], call())
+
+      assert %PullRequest{
+               author: "octocat",
+               author_github_id: 583_231,
+               merged_by_github_id: 100_500,
+               url: "https://github.com/NixOS/nixpkgs/pull/4242",
+               created_at: ~U[2026-03-31 01:23:45Z]
+             } = pr
+    end
+
+    test "tolerates null mergedBy (unmerged PRs) and null author (deleted user)" do
+      Req.Test.stub(
+        __MODULE__,
+        graphql_response(%{
+          "data" => %{
+            "rateLimit" => rate_limit(),
+            "nodes" => [
+              pr_node(id: "pr_n", number: 1, author: nil, mergedBy: nil)
+            ]
+          }
+        })
+      )
+
+      assert {:ok, %{"pr_n" => pr}} = GraphQL.fetch_prs(["pr_n"], call())
+
+      assert %PullRequest{
+               author: nil,
+               author_github_id: nil,
+               merged_by_github_id: nil
+             } = pr
     end
 
     test "surfaces mergeCommitOid as merge_commit_sha" do
@@ -352,6 +427,148 @@ defmodule Tracker.GitHub.GraphQLTest do
       end)
 
       assert {:error, %Error{code: 502}} = GraphQL.fetch_prs(["pr_x"], call())
+    end
+  end
+
+  describe "list_repository_prs/3" do
+    test "returns decoded pulls and the next cursor when more pages remain" do
+      Req.Test.stub(
+        __MODULE__,
+        list_response(
+          %{
+            "data" => %{
+              "rateLimit" => rate_limit(),
+              "repository" => %{
+                "pullRequests" => %{
+                  "pageInfo" => %{"endCursor" => "CURSOR_2", "hasNextPage" => true},
+                  "nodes" => [
+                    pr_node(
+                      id: "PR_a",
+                      number: 1001,
+                      mergedBy: %{"login" => "merger", "databaseId" => 42}
+                    ),
+                    pr_node(id: "PR_b", number: 1002)
+                  ]
+                }
+              }
+            }
+          },
+          fn vars ->
+            assert vars["owner"] == "NixOS"
+            assert vars["name"] == "nixpkgs"
+            assert vars["first"] == 100
+            assert vars["after"] == nil
+          end
+        )
+      )
+
+      assert {:ok, %{pulls: pulls, next_cursor: "CURSOR_2"}} =
+               GraphQL.list_repository_prs("NixOS", "nixpkgs", call())
+
+      assert [
+               %PullRequest{node_id: "PR_a", number: 1001, merged_by_github_id: 42},
+               %PullRequest{node_id: "PR_b", number: 1002}
+             ] = pulls
+    end
+
+    test "passes :cursor as the after variable" do
+      Req.Test.stub(
+        __MODULE__,
+        list_response(
+          %{
+            "data" => %{
+              "rateLimit" => rate_limit(),
+              "repository" => %{
+                "pullRequests" => %{
+                  "pageInfo" => %{"endCursor" => nil, "hasNextPage" => false},
+                  "nodes" => []
+                }
+              }
+            }
+          },
+          fn vars -> assert vars["after"] == "CURSOR_X" end
+        )
+      )
+
+      assert {:ok, %{pulls: [], next_cursor: nil}} =
+               GraphQL.list_repository_prs("NixOS", "nixpkgs", call(cursor: "CURSOR_X"))
+    end
+
+    test "returns next_cursor: nil when hasNextPage is false" do
+      Req.Test.stub(
+        __MODULE__,
+        list_response(%{
+          "data" => %{
+            "rateLimit" => rate_limit(),
+            "repository" => %{
+              "pullRequests" => %{
+                "pageInfo" => %{"endCursor" => "C", "hasNextPage" => false},
+                "nodes" => [pr_node(id: "PR_z", number: 1)]
+              }
+            }
+          }
+        })
+      )
+
+      assert {:ok, %{pulls: [%PullRequest{}], next_cursor: nil}} =
+               GraphQL.list_repository_prs("NixOS", "nixpkgs", call())
+    end
+
+    test "treats GraphQL RATE_LIMITED as :rate_limited error" do
+      Req.Test.stub(
+        __MODULE__,
+        list_response(%{
+          "data" => nil,
+          "errors" => [%{"type" => "RATE_LIMITED", "message" => "limit"}]
+        })
+      )
+
+      assert {:error, %Error{reason: :rate_limited}} =
+               GraphQL.list_repository_prs("NixOS", "nixpkgs", call())
+    end
+
+    test "low remaining updates :graphql bucket", %{table: table} do
+      reset_at_unix = System.os_time(:second) + 1800
+      reset_at = DateTime.from_unix!(reset_at_unix) |> DateTime.to_iso8601()
+
+      Req.Test.stub(
+        __MODULE__,
+        list_response(%{
+          "data" => %{
+            "rateLimit" => rate_limit(50, reset_at),
+            "repository" => %{
+              "pullRequests" => %{
+                "pageInfo" => %{"endCursor" => nil, "hasNextPage" => false},
+                "nodes" => []
+              }
+            }
+          }
+        })
+      )
+
+      assert {:ok, _} =
+               GraphQL.list_repository_prs("NixOS", "nixpkgs", call(rate_limit_table: table))
+
+      assert {:limited, seconds} = RateLimitCache.check(:graphql, table)
+      assert seconds > 0
+    end
+
+    test "HTTP 403 is treated as rate limited" do
+      Req.Test.stub(__MODULE__, fn conn ->
+        Plug.Conn.send_resp(conn, 403, ~s({"message":"rate limit"}))
+      end)
+
+      assert {:error, %Error{reason: :rate_limited}} =
+               GraphQL.list_repository_prs("NixOS", "nixpkgs", call())
+    end
+
+    test "5xx returns GitHub.Error" do
+      Req.Test.stub(__MODULE__, fn conn ->
+        Plug.Conn.send_resp(conn, 502, "Bad Gateway")
+      end)
+
+      assert {:error, %Error{code: 502}} =
+               GraphQL.list_repository_prs("NixOS", "nixpkgs", call())
     end
   end
 end
