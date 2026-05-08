@@ -79,6 +79,8 @@
       </.link>
       <form
         :if={assigns[:page_search]}
+        id="page-search"
+        phx-hook="UpdateURL"
         method="get"
         action={@page_search.action}
         phx-change={@page_search.event}

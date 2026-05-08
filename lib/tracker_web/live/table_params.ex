@@ -71,6 +71,20 @@ defmodule TrackerWeb.TableParams do
   end
 
   @doc """
+  Convert TableParams to a string-keyed map suitable for `<input type="hidden">`
+  fallbacks on a search form. Excludes `:search` (the visible input) and any
+  default-valued params; merges extras using the same omit-empty rules as
+  `to_query_params/2`.
+  """
+  @spec to_hidden_inputs(t(), map()) :: %{String.t() => String.t()}
+  def to_hidden_inputs(%__MODULE__{} = tp, extras \\ %{}) do
+    tp
+    |> to_query_params(extras)
+    |> Map.delete(:search)
+    |> Map.new(fn {k, v} -> {to_string(k), to_string(v)} end)
+  end
+
+  @doc """
   Build a URL path with query params, omitting defaults.
   """
   @spec to_path(t(), String.t(), map()) :: String.t()

@@ -99,6 +99,35 @@ defmodule TrackerWeb.LayoutsTest do
       [_chrome, page_body] = String.split(body, "<main", parts: 2)
       refute page_body =~ ~s(type="search")
     end
+
+    test "chrome search form mounts the UpdateURL hook for live URL updates", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/packages")
+
+      # Without phx-hook="UpdateURL" mounted, push_event("update-url", …) is
+      # silently dropped and the URL never reflects the search query.
+      assert html =~
+               ~r{app-header__row--bottom.*?<form[^>]*phx-hook="UpdateURL"[^>]*action="/packages"}s
+    end
+
+    test "Packages search form preserves sort via hidden inputs", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/packages?sort_by=attribute&sort_dir=asc")
+
+      [_top, bottom] = String.split(html, "app-header__row--bottom", parts: 2)
+      [chrome_form, _rest] = String.split(bottom, "</form>", parts: 2)
+
+      assert chrome_form =~ ~s(type="hidden")
+      assert chrome_form =~ ~r{<input[^>]*name="sort_by"[^>]*value="attribute"}
+      assert chrome_form =~ ~r{<input[^>]*name="sort_dir"[^>]*value="asc"}
+    end
+
+    test "Options search form preserves page via hidden input", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/options?page=3")
+
+      [_top, bottom] = String.split(html, "app-header__row--bottom", parts: 2)
+      [chrome_form, _rest] = String.split(bottom, "</form>", parts: 2)
+
+      assert chrome_form =~ ~r{<input[^>]*type="hidden"[^>]*name="page"[^>]*value="3"}
+    end
   end
 
   describe "polished chrome elements" do
