@@ -19,25 +19,47 @@ defmodule Tracker.GitHub.GraphQL do
   @max_ids 100
   @low_remaining_threshold 100
 
+  @pr_fields """
+  id
+  number
+  state
+  isDraft
+  baseRefName
+  headRefName
+  headRefOid
+  title
+  url
+  author { login ... on User { databaseId } }
+  mergedBy { login ... on User { databaseId } }
+  createdAt
+  updatedAt
+  closedAt
+  mergedAt
+  mergeCommit { oid }
+  labels(first: 50) { nodes { name } }
+  """
+
   @query """
   query($ids: [ID!]!) {
-    rateLimit { remaining resetAt }
+    rateLimit { cost remaining resetAt }
     nodes(ids: $ids) {
       __typename
       ... on PullRequest {
-        id
-        number
-        state
-        isDraft
-        baseRefName
-        headRefName
-        headRefOid
-        title
-        updatedAt
-        closedAt
-        mergedAt
-        mergeCommit { oid }
-        labels(first: 50) { nodes { name } }
+        #{@pr_fields}
+      }
+    }
+  }
+  """
+
+  @list_query """
+  query($owner: String!, $name: String!, $first: Int!, $after: String) {
+    rateLimit { cost remaining resetAt }
+    repository(owner: $owner, name: $name) {
+      pullRequests(orderBy: {field: UPDATED_AT, direction: DESC}, first: $first, after: $after) {
+        pageInfo { endCursor hasNextPage }
+        nodes {
+          #{@pr_fields}
+        }
       }
     }
   }
@@ -119,6 +141,135 @@ defmodule Tracker.GitHub.GraphQL do
     end
   end
 
+  @type page :: %{pulls: [PullRequest.t()], next_cursor: String.t() | nil}
+
+  @doc """
+  Lists pull requests for `owner/name`, ordered by `updatedAt` descending.
+
+  Returns a single page of up to `:first` results plus the cursor for the
+  next page. Callers paginate by re-invoking with `cursor: result.next_cursor`
+  until `next_cursor` is `nil`.
+  """
+  @spec list_repository_prs(String.t(), String.t(), keyword) ::
+          {:ok, page} | {:error, term}
+  def list_repository_prs(owner, name, opts \\ []) when is_binary(owner) and is_binary(name) do
+    token = Keyword.get_lazy(opts, :token, &Tracker.GitHub.installation_token!/0)
+    plug = Keyword.get(opts, :plug)
+    table = Keyword.get(opts, :rate_limit_table, RateLimitCache)
+    first = Keyword.get(opts, :first, 100)
+    cursor = Keyword.get(opts, :cursor)
+
+    variables = %{
+      "owner" => owner,
+      "name" => name,
+      "first" => first,
+      "after" => cursor
+    }
+
+    req_opts =
+      [
+        method: :post,
+        url: @endpoint,
+        headers: [
+          {"authorization", "bearer #{token}"},
+          {"accept", "application/vnd.github+json"},
+          {"user-agent", "Tracker"}
+        ],
+        json: %{query: @list_query, variables: variables},
+        decode_body: true,
+        retry: false
+      ]
+      |> maybe_add_plug(plug)
+
+    case Req.request(Req.new(), req_opts) do
+      {:ok, %Req.Response{status: 200, body: body}} ->
+        handle_list_body(body, table)
+
+      {:ok, %Req.Response{status: status}} when status in [403, 429] ->
+        {:error, rate_limit_error(status)}
+
+      {:ok, %Req.Response{status: status, body: body}} when status >= 500 ->
+        {:error,
+         Error.new(
+           code: status,
+           message: "GitHub GraphQL server error (#{status})",
+           source: body,
+           step: {__MODULE__, :list_repository_prs}
+         )}
+
+      {:ok, %Req.Response{status: status, body: body}} ->
+        {:error,
+         Error.new(
+           code: status,
+           message: "Unexpected GitHub GraphQL status (#{status})",
+           source: body,
+           step: {__MODULE__, :list_repository_prs}
+         )}
+
+      {:error, reason} ->
+        {:error,
+         Error.new(
+           message: "Error during GraphQL request",
+           source: reason,
+           step: {__MODULE__, :list_repository_prs}
+         )}
+    end
+  end
+
+  defp handle_list_body(%{"errors" => errors} = body, _table)
+       when is_list(errors) and not is_map_key(body, "data") do
+    handle_errors_only(errors)
+  end
+
+  defp handle_list_body(%{"data" => nil, "errors" => errors}, _table)
+       when is_list(errors) do
+    handle_errors_only(errors)
+  end
+
+  defp handle_list_body(
+         %{"data" => %{"repository" => %{"pullRequests" => pr_conn}} = data} = body,
+         table
+       ) do
+    if errors = Map.get(body, "errors") do
+      Logger.warning("GitHub GraphQL returned partial errors: #{inspect(errors)}")
+    end
+
+    rate_limit = Map.get(data, "rateLimit")
+    maybe_log_cost(rate_limit)
+    maybe_track_rate_limit(rate_limit, table)
+
+    nodes = Map.get(pr_conn, "nodes", [])
+    page_info = Map.get(pr_conn, "pageInfo", %{})
+
+    pulls =
+      nodes
+      |> Enum.reject(&is_nil/1)
+      |> Enum.map(&decode_pr(&1["id"], &1))
+
+    next_cursor =
+      case page_info do
+        %{"hasNextPage" => true, "endCursor" => c} when is_binary(c) -> c
+        _ -> nil
+      end
+
+    {:ok, %{pulls: pulls, next_cursor: next_cursor}}
+  end
+
+  defp handle_list_body(body, _table) do
+    {:error,
+     Error.new(
+       message: "Malformed GitHub GraphQL response",
+       source: body,
+       step: {__MODULE__, :list_repository_prs}
+     )}
+  end
+
+  defp maybe_log_cost(%{"cost" => cost}) when is_integer(cost) do
+    Logger.debug("GitHub GraphQL query cost: #{cost}")
+  end
+
+  defp maybe_log_cost(_), do: :ok
+
   defp handle_body(%{"errors" => errors} = body, _node_ids, _table)
        when is_list(errors) and not is_map_key(body, "data") do
     handle_errors_only(errors)
@@ -163,15 +314,23 @@ defmodule Tracker.GitHub.GraphQL do
 
   defp decode_node(_id, nil), do: :not_found
 
-  defp decode_node(id, %{"__typename" => "PullRequest"} = node) do
+  defp decode_node(id, %{"__typename" => "PullRequest"} = node), do: decode_pr(id, node)
+  defp decode_node(_id, _other), do: :not_found
+
+  defp decode_pr(node_id, node) do
     %PullRequest{
-      node_id: id,
+      node_id: node_id,
       number: node["number"],
       state: decode_state(node["state"], node["isDraft"]),
       base_ref: node["baseRefName"],
       head_ref: node["headRefName"],
       head_sha: node["headRefOid"],
       title: node["title"],
+      url: node["url"],
+      author: get_in(node, ["author", "login"]),
+      author_github_id: get_in(node, ["author", "databaseId"]),
+      merged_by_github_id: get_in(node, ["mergedBy", "databaseId"]),
+      created_at: parse_datetime(node["createdAt"]),
       updated_at: parse_datetime(node["updatedAt"]),
       closed_at: parse_datetime(node["closedAt"]),
       merged_at: parse_datetime(node["mergedAt"]),
@@ -179,8 +338,6 @@ defmodule Tracker.GitHub.GraphQL do
       labels: decode_labels(node["labels"])
     }
   end
-
-  defp decode_node(_id, _other), do: :not_found
 
   defp decode_state("OPEN", true), do: :draft
   defp decode_state("OPEN", _), do: :open

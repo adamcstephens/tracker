@@ -1,21 +1,23 @@
 defmodule Tracker.Nixpkgs.ChangeDiscoveryWorkerTest do
   use Tracker.DataCase, async: true
 
+  alias Tracker.GitHub.GraphQL.PullRequest
   alias Tracker.Nixpkgs.Change
+  alias Tracker.Nixpkgs.ChangeBranch
   alias Tracker.Nixpkgs.ChangeDiscoveryWorker
 
   describe "discover_pages/2" do
     test "upserts every PR on every fetched page and enqueues head_sha_changed for new open/draft" do
       fetcher = fn
-        1 ->
+        nil ->
           {:ok,
-           [
-             pr_struct(number: 5001, state: "open", merged_at: nil),
-             pr_struct(number: 5002, state: "open", draft: true, merged_at: nil)
-           ]}
-
-        2 ->
-          {:ok, []}
+           %{
+             pulls: [
+               pr_struct(number: 5001, state: :open),
+               pr_struct(number: 5002, state: :draft)
+             ],
+             next_cursor: nil
+           }}
       end
 
       watermark = ~U[2026-01-01 00:00:00Z]
@@ -50,8 +52,7 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorkerTest do
       ])
 
       fetcher = fn
-        1 -> {:ok, [pr_struct(number: 5050, state: "open", merged_at: nil)]}
-        2 -> {:ok, []}
+        nil -> {:ok, %{pulls: [pr_struct(number: 5050, state: :open)], next_cursor: nil}}
       end
 
       watermark = ~U[2026-01-01 00:00:00Z]
@@ -62,14 +63,7 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorkerTest do
 
     test "does not enqueue artifact work for newly-discovered closed (non-merged) PRs" do
       fetcher = fn
-        1 ->
-          {:ok,
-           [
-             pr_struct(number: 5099, state: "closed", merged_at: nil)
-           ]}
-
-        2 ->
-          {:ok, []}
+        nil -> {:ok, %{pulls: [pr_struct(number: 5099, state: :closed)], next_cursor: nil}}
       end
 
       watermark = ~U[2026-01-01 00:00:00Z]
@@ -83,15 +77,18 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorkerTest do
       watermark = ~U[2026-04-15 00:00:00Z]
 
       fetcher = fn
-        1 ->
+        nil ->
           {:ok,
-           [
-             pr_struct(number: 6001, updated_at: ~U[2026-04-20 00:00:00Z]),
-             pr_struct(number: 6002, updated_at: ~U[2026-04-10 00:00:00Z])
-           ]}
+           %{
+             pulls: [
+               pr_struct(number: 6001, updated_at: ~U[2026-04-20 00:00:00Z]),
+               pr_struct(number: 6002, updated_at: ~U[2026-04-10 00:00:00Z])
+             ],
+             next_cursor: "CURSOR_2"
+           }}
 
-        2 ->
-          raise "should not fetch page 2"
+        "CURSOR_2" ->
+          raise "should not fetch the next page"
       end
 
       assert {:ok, 2} = ChangeDiscoveryWorker.discover_pages(fetcher, watermark)
@@ -103,9 +100,19 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorkerTest do
       watermark = ~U[2026-04-01 00:00:00Z]
 
       fetcher = fn
-        1 -> {:ok, [pr_struct(number: 7001, updated_at: ~U[2026-04-20 00:00:00Z])]}
-        2 -> {:ok, [pr_struct(number: 7002, updated_at: ~U[2026-04-10 00:00:00Z])]}
-        3 -> {:ok, []}
+        nil ->
+          {:ok,
+           %{
+             pulls: [pr_struct(number: 7001, updated_at: ~U[2026-04-20 00:00:00Z])],
+             next_cursor: "CURSOR_2"
+           }}
+
+        "CURSOR_2" ->
+          {:ok,
+           %{
+             pulls: [pr_struct(number: 7002, updated_at: ~U[2026-04-10 00:00:00Z])],
+             next_cursor: nil
+           }}
       end
 
       assert {:ok, 2} = ChangeDiscoveryWorker.discover_pages(fetcher, watermark)
@@ -117,35 +124,103 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorkerTest do
       watermark = ~U[2026-01-01 00:00:00Z]
 
       fetcher = fn
-        1 -> {:ok, []}
-        2 -> raise "should not fetch page 2"
+        nil -> {:ok, %{pulls: [], next_cursor: nil}}
       end
 
       assert {:ok, 0} = ChangeDiscoveryWorker.discover_pages(fetcher, watermark)
+    end
+
+    test "stops when next_cursor is nil even if last PR is newer than watermark" do
+      watermark = ~U[2026-01-01 00:00:00Z]
+
+      fetcher = fn
+        nil ->
+          {:ok,
+           %{
+             pulls: [pr_struct(number: 7100, updated_at: ~U[2026-04-20 00:00:00Z])],
+             next_cursor: nil
+           }}
+      end
+
+      assert {:ok, 1} = ChangeDiscoveryWorker.discover_pages(fetcher, watermark)
     end
 
     test "does not enqueue artifact work for merged PRs" do
       watermark = ~U[2026-01-01 00:00:00Z]
 
       fetcher = fn
-        1 ->
+        nil ->
           {:ok,
-           [
-             pr_struct(
-               number: 8001,
-               state: "closed",
-               merged_at: ~U[2026-04-01 00:00:00Z],
-               merge_commit_sha: "deadbeef"
-             )
-           ]}
-
-        2 ->
-          {:ok, []}
+           %{
+             pulls: [
+               pr_struct(
+                 number: 8001,
+                 state: :merged,
+                 merged_at: ~U[2026-04-01 00:00:00Z],
+                 merge_commit_sha: "deadbeef"
+               )
+             ],
+             next_cursor: nil
+           }}
       end
 
       assert {:ok, 1} = ChangeDiscoveryWorker.discover_pages(fetcher, watermark)
       assert {:ok, %Change{state: :merged}} = Change.get_by_number(8001)
       refute_enqueued(worker: Tracker.Nixpkgs.ChangeArtifactRefreshWorker)
+    end
+
+    test "seeds base_ref ChangeBranch for newly-merged PRs" do
+      watermark = ~U[2026-01-01 00:00:00Z]
+
+      fetcher = fn
+        nil ->
+          {:ok,
+           %{
+             pulls: [
+               pr_struct(
+                 number: 8200,
+                 state: :merged,
+                 base_ref: "master",
+                 merged_at: ~U[2026-04-01 00:00:00Z],
+                 merge_commit_sha: "deadbeef"
+               )
+             ],
+             next_cursor: nil
+           }}
+      end
+
+      assert {:ok, 1} = ChangeDiscoveryWorker.discover_pages(fetcher, watermark)
+      assert {:ok, %Change{id: change_id, state: :merged}} = Change.get_by_number(8200)
+
+      branches = ChangeBranch.read!() |> Enum.filter(&(&1.change_id == change_id))
+      assert [%ChangeBranch{branch_name: "master"}] = branches
+    end
+
+    test "ignores non-propagation base_ref when seeding ChangeBranch" do
+      watermark = ~U[2026-01-01 00:00:00Z]
+
+      fetcher = fn
+        nil ->
+          {:ok,
+           %{
+             pulls: [
+               pr_struct(
+                 number: 8201,
+                 state: :merged,
+                 base_ref: "topic/random-branch",
+                 merged_at: ~U[2026-04-01 00:00:00Z],
+                 merge_commit_sha: "deadbeef"
+               )
+             ],
+             next_cursor: nil
+           }}
+      end
+
+      assert {:ok, 1} = ChangeDiscoveryWorker.discover_pages(fetcher, watermark)
+      assert {:ok, %Change{id: change_id}} = Change.get_by_number(8201)
+
+      branches = ChangeBranch.read!() |> Enum.filter(&(&1.change_id == change_id))
+      assert branches == []
     end
 
     test "propagates rate limit error" do
@@ -159,7 +234,7 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorkerTest do
         step: nil
       }
 
-      fetcher = fn 1 -> {:error, error} end
+      fetcher = fn nil -> {:error, error} end
 
       assert {:error, %GitHub.Error{reason: :rate_limited}} =
                ChangeDiscoveryWorker.discover_pages(fetcher, ~U[2026-01-01 00:00:00Z])
@@ -176,7 +251,7 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorkerTest do
         step: nil
       }
 
-      fetcher = fn 1 -> {:error, error} end
+      fetcher = fn nil -> {:error, error} end
 
       assert {:error, %GitHub.Error{reason: :server_error}} =
                ChangeDiscoveryWorker.discover_pages(fetcher, ~U[2026-01-01 00:00:00Z])
@@ -212,81 +287,31 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorkerTest do
   end
 
   describe "parse_pr_payload/1" do
-    test "maps merged_at to :merged state" do
-      pr = pr_struct(number: 1, state: "closed", merged_at: ~U[2026-04-01 00:00:00Z])
-      assert %{state: :merged} = ChangeDiscoveryWorker.parse_pr_payload(pr)
+    test "passes through state from the GraphQL struct" do
+      assert %{state: :merged} =
+               ChangeDiscoveryWorker.parse_pr_payload(pr_struct(state: :merged))
+
+      assert %{state: :closed} =
+               ChangeDiscoveryWorker.parse_pr_payload(pr_struct(state: :closed))
+
+      assert %{state: :draft} =
+               ChangeDiscoveryWorker.parse_pr_payload(pr_struct(state: :draft))
+
+      assert %{state: :open} =
+               ChangeDiscoveryWorker.parse_pr_payload(pr_struct(state: :open))
     end
 
-    test "maps state=closed without merged_at to :closed" do
-      pr = pr_struct(number: 1, state: "closed", merged_at: nil)
-      assert %{state: :closed} = ChangeDiscoveryWorker.parse_pr_payload(pr)
-    end
-
-    test "maps state=open + draft=true to :draft" do
-      pr = pr_struct(number: 1, state: "open", draft: true, merged_at: nil)
-      assert %{state: :draft} = ChangeDiscoveryWorker.parse_pr_payload(pr)
-    end
-
-    test "maps state=open + draft=false to :open" do
-      pr = pr_struct(number: 1, state: "open", draft: false, merged_at: nil)
-      assert %{state: :open} = ChangeDiscoveryWorker.parse_pr_payload(pr)
-    end
-
-    test "handles the list endpoint shape (no :merged_by key)" do
-      # GitHub.Pulls.list returns a map shaped like GitHub.PullRequest.simple()
-      # which omits :merged_by entirely. Guard against KeyError on missing key.
-      pr =
-        pr_struct(number: 1)
-        |> Map.from_struct()
-        |> Map.delete(:merged_by)
-
-      refute Map.has_key?(pr, :merged_by)
-
-      assert %{merged_by_github_id: nil} = ChangeDiscoveryWorker.parse_pr_payload(pr)
-    end
-
-    test "drops merge_commit_sha for open PRs (REST returns a test-merge SHA)" do
-      pr =
-        pr_struct(
-          number: 1,
-          state: "open",
-          merged_at: nil,
-          merge_commit_sha: "testmergesha"
-        )
-
-      assert %{merge_commit_sha: nil} = ChangeDiscoveryWorker.parse_pr_payload(pr)
-    end
-
-    test "drops merge_commit_sha for draft PRs" do
-      pr =
-        pr_struct(
-          number: 1,
-          state: "open",
-          draft: true,
-          merged_at: nil,
-          merge_commit_sha: "testmergesha"
-        )
-
-      assert %{merge_commit_sha: nil} = ChangeDiscoveryWorker.parse_pr_payload(pr)
-    end
-
-    test "drops merge_commit_sha for closed-without-merge PRs" do
-      pr =
-        pr_struct(
-          number: 1,
-          state: "closed",
-          merged_at: nil,
-          merge_commit_sha: "testmergesha"
-        )
-
-      assert %{merge_commit_sha: nil} = ChangeDiscoveryWorker.parse_pr_payload(pr)
+    test "drops merge_commit_sha for non-merged PRs (test-merge SHA leaks)" do
+      for state <- [:open, :draft, :closed] do
+        pr = pr_struct(state: state, merge_commit_sha: "testmergesha")
+        assert %{merge_commit_sha: nil} = ChangeDiscoveryWorker.parse_pr_payload(pr)
+      end
     end
 
     test "keeps merge_commit_sha for merged PRs" do
       pr =
         pr_struct(
-          number: 1,
-          state: "closed",
+          state: :merged,
           merged_at: ~U[2026-04-01 00:00:00Z],
           merge_commit_sha: "realmergesha"
         )
@@ -294,20 +319,20 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorkerTest do
       assert %{merge_commit_sha: "realmergesha"} = ChangeDiscoveryWorker.parse_pr_payload(pr)
     end
 
-    test "extracts full attribute set" do
+    test "extracts the full attribute set including merged_by/author/url" do
       pr =
         pr_struct(
           number: 9001,
           node_id: "PR_node_9001",
           title: "fix something",
-          state: "open",
-          draft: false,
-          merged_at: nil,
+          state: :open,
           updated_at: ~U[2026-04-15 09:00:00Z],
           created_at: ~U[2026-04-14 08:00:00Z],
-          closed_at: nil,
-          html_url: "https://github.com/NixOS/nixpkgs/pull/9001",
-          labels: [%GitHub.Label{name: "bug"}, %GitHub.Label{name: "10.rebuild-linux: 1"}]
+          url: "https://github.com/NixOS/nixpkgs/pull/9001",
+          author: "octocat",
+          author_github_id: 583_231,
+          merged_by_github_id: nil,
+          labels: ["bug", "10.rebuild-linux: 1"]
         )
 
       assert %{
@@ -316,6 +341,9 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorkerTest do
                title: "fix something",
                state: :open,
                url: "https://github.com/NixOS/nixpkgs/pull/9001",
+               author: "octocat",
+               author_github_id: 583_231,
+               merged_by_github_id: nil,
                labels: ["bug", "10.rebuild-linux: 1"],
                gh_created_at: ~U[2026-04-14 08:00:00Z],
                gh_updated_at: ~U[2026-04-15 09:00:00Z],
@@ -324,27 +352,44 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorkerTest do
                head_sha: "headsha1"
              } = ChangeDiscoveryWorker.parse_pr_payload(pr)
     end
+
+    test "populates merged_by_github_id when present" do
+      pr =
+        pr_struct(
+          state: :merged,
+          merged_at: ~U[2026-04-01 00:00:00Z],
+          merge_commit_sha: "realmergesha",
+          merged_by_github_id: 100_500
+        )
+
+      assert %{merged_by_github_id: 100_500} = ChangeDiscoveryWorker.parse_pr_payload(pr)
+    end
   end
 
   defp pr_struct(overrides) do
-    defaults = [
-      number: 1,
-      node_id: "PR_node_#{Keyword.get(overrides, :number, 1)}",
+    overrides = Map.new(overrides)
+    number = Map.get(overrides, :number, 1)
+
+    defaults = %{
+      node_id: "PR_node_#{number}",
+      number: number,
       title: "test PR",
-      state: "open",
-      draft: false,
-      merged_at: nil,
-      merge_commit_sha: nil,
-      closed_at: nil,
+      state: :open,
+      base_ref: "master",
+      head_ref: "feature",
+      head_sha: "headsha1",
+      url: "https://github.com/NixOS/nixpkgs/pull/#{number}",
+      author: "testuser",
+      author_github_id: 1,
+      merged_by_github_id: nil,
       created_at: ~U[2026-04-01 12:00:00Z],
       updated_at: ~U[2026-04-01 12:00:00Z],
-      html_url: "https://github.com/NixOS/nixpkgs/pull/1",
-      user: %GitHub.User{login: "testuser", id: 1},
-      base: %GitHub.PullRequest.Base{ref: "master"},
-      head: %GitHub.PullRequest.Head{ref: "feature", sha: "headsha1"},
+      closed_at: nil,
+      merged_at: nil,
+      merge_commit_sha: nil,
       labels: []
-    ]
+    }
 
-    struct!(GitHub.PullRequest, Keyword.merge(defaults, overrides))
+    struct!(PullRequest, Map.merge(defaults, overrides))
   end
 end
