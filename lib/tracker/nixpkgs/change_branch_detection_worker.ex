@@ -37,6 +37,18 @@ defmodule Tracker.Nixpkgs.ChangeBranchDetectionWorker do
   """
   def run(opts \\ []) do
     git_server = Keyword.get(opts, :git_server, Tracker.GitServer)
+
+    case GitServer.fetch(git_server) do
+      :ok ->
+        :ok
+
+      {:error, reason} ->
+        Logger.warning(
+          msg: "ChangeBranchDetectionWorker: fetch failed; proceeding with current refs",
+          reason: inspect(reason)
+        )
+    end
+
     snapshot = GitServer.state(git_server)
 
     if snapshot.ready do
