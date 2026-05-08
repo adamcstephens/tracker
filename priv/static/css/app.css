@@ -343,7 +343,496 @@ h6 {
 	}
 }
 
-/* Flash notifications */
+/* ========================================================================
+   Base element styles. Replace what Pico used to provide. Selectors here
+   use elements (low specificity) so component styles below win cleanly.
+   ======================================================================== */
+
+html {
+	font-size: var(--pico-font-size, 100%);
+	color-scheme: light dark;
+}
+
+body {
+	background: var(--bg);
+	color: var(--text);
+	font-family: var(--sans);
+	font-size: 1rem;
+	line-height: 1.5;
+	min-height: 100vh;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+	color: var(--text);
+	font-weight: 700;
+	line-height: 1.25;
+	margin: 0 0 var(--pico-typography-spacing-vertical, 0.5rem);
+}
+
+h1 {
+	font-size: 2rem;
+}
+h2 {
+	font-size: 1.625rem;
+}
+h3 {
+	font-size: 1.375rem;
+}
+h4 {
+	font-size: 1.125rem;
+}
+h5 {
+	font-size: 1.0625rem;
+}
+h6 {
+	font-size: 1rem;
+}
+
+hgroup {
+	margin: 0 0 var(--pico-typography-spacing-vertical, 0.5rem);
+}
+
+hgroup > *:not(:last-child) {
+	margin-bottom: 0.25rem;
+}
+
+hgroup > p {
+	color: var(--text-2);
+	font-size: 1rem;
+	font-weight: 400;
+}
+
+p {
+	margin: 0 0 var(--pico-typography-spacing-vertical, 0.5rem);
+}
+
+a {
+	color: var(--accent);
+	text-decoration: underline;
+	text-decoration-color: var(--accent-edge);
+	text-underline-offset: 2px;
+}
+
+a:hover {
+	text-decoration-color: var(--accent);
+}
+
+ul,
+ol {
+	margin: 0 0 var(--pico-typography-spacing-vertical, 0.5rem);
+	padding-left: 1.5rem;
+}
+
+dl {
+	margin: 0 0 var(--pico-typography-spacing-vertical, 0.5rem);
+}
+
+dt {
+	font-weight: 600;
+}
+
+dd {
+	margin-left: 0;
+}
+
+hr {
+	border: 0;
+	border-top: 1px solid var(--line);
+	margin: 1rem 0;
+}
+
+code,
+kbd,
+samp,
+pre {
+	font-family: var(--mono);
+	font-size: 0.875em;
+}
+
+code,
+kbd {
+	background: var(--surface-2);
+	color: var(--text);
+	border-radius: var(--radius-sm);
+	padding: 0.125em 0.375em;
+}
+
+pre {
+	background: var(--surface);
+	color: var(--text);
+	border: 1px solid var(--line);
+	border-radius: var(--radius-sm);
+	padding: 0.75rem 1rem;
+	margin: 0 0 1rem;
+	overflow-x: auto;
+}
+
+pre code {
+	background: transparent;
+	padding: 0;
+	font-size: 1em;
+}
+
+mark {
+	background: var(--accent-bg);
+	color: var(--text);
+	padding: 0.125em 0.25em;
+	border-radius: var(--radius-sm);
+}
+
+small {
+	font-size: 0.875em;
+}
+
+strong {
+	font-weight: 600;
+}
+
+figure {
+	margin: 0 0 1rem;
+	overflow-x: auto;
+}
+
+/* ========================================================================
+   Layout — .container
+   ======================================================================== */
+
+.container {
+	width: 100%;
+	margin-inline: auto;
+	padding-inline: 1rem;
+}
+
+@media (min-width: 576px) {
+	.container {
+		max-width: 510px;
+		padding-inline: 1.25rem;
+	}
+}
+@media (min-width: 768px) {
+	.container {
+		max-width: 700px;
+	}
+}
+@media (min-width: 1024px) {
+	.container {
+		max-width: 950px;
+	}
+}
+@media (min-width: 1280px) {
+	.container {
+		max-width: 1200px;
+	}
+}
+@media (min-width: 1536px) {
+	.container {
+		max-width: 1450px;
+	}
+}
+
+main.container {
+	padding-block: 1.5rem;
+}
+
+/* ========================================================================
+   Forms
+   ======================================================================== */
+
+button,
+input[type="button"],
+input[type="submit"],
+input[type="reset"],
+[role="button"] {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.5rem;
+	padding: 0.5rem 1rem;
+	background: var(--accent);
+	color: var(--accent-on);
+	border: 1px solid var(--accent);
+	border-radius: var(--radius-sm);
+	font: inherit;
+	font-weight: 500;
+	line-height: 1.2;
+	text-decoration: none;
+	cursor: pointer;
+	user-select: none;
+}
+
+button:hover,
+input[type="button"]:hover,
+input[type="submit"]:hover,
+input[type="reset"]:hover,
+[role="button"]:hover {
+	filter: brightness(1.1);
+	color: var(--accent-on);
+	text-decoration: none;
+}
+
+button:focus-visible,
+input[type="button"]:focus-visible,
+input[type="submit"]:focus-visible,
+input[type="reset"]:focus-visible,
+[role="button"]:focus-visible {
+	outline: 2px solid var(--accent-edge);
+	outline-offset: 2px;
+}
+
+button:disabled,
+[role="button"][aria-disabled="true"],
+button[disabled] {
+	opacity: 0.5;
+	cursor: not-allowed;
+	filter: none;
+}
+
+button.outline,
+[role="button"].outline {
+	background: transparent;
+	color: var(--accent);
+}
+
+button.outline:hover,
+[role="button"].outline:hover {
+	background: var(--accent-soft);
+	color: var(--accent);
+}
+
+button.secondary,
+[role="button"].secondary {
+	background: var(--surface-2);
+	color: var(--text);
+	border-color: var(--line);
+}
+
+button.secondary:hover,
+[role="button"].secondary:hover {
+	color: var(--text);
+}
+
+button.outline.secondary,
+[role="button"].outline.secondary {
+	background: transparent;
+	color: var(--text-2);
+	border-color: var(--line);
+}
+
+button.outline.secondary:hover,
+[role="button"].outline.secondary:hover {
+	background: var(--surface-2);
+	color: var(--text);
+}
+
+button.contrast,
+[role="button"].contrast {
+	background: var(--text);
+	color: var(--bg);
+	border-color: var(--text);
+}
+
+input,
+select,
+textarea {
+	display: block;
+	width: 100%;
+	padding: 0.5rem 0.75rem;
+	background: var(--surface);
+	color: var(--text);
+	border: 1px solid var(--line);
+	border-radius: var(--radius-sm);
+	font: inherit;
+	line-height: 1.5;
+}
+
+input::placeholder,
+textarea::placeholder {
+	color: var(--text-2);
+	opacity: 1;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+	outline: 0;
+	border-color: var(--accent);
+	box-shadow: 0 0 0 2px var(--accent-edge);
+}
+
+input[aria-invalid="true"],
+select[aria-invalid="true"],
+textarea[aria-invalid="true"] {
+	border-color: var(--pico-form-element-invalid-border-color, #a60000);
+}
+
+input[type="search"] {
+	-webkit-appearance: textfield;
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+	display: inline-block;
+	width: auto;
+	margin-right: 0.5em;
+	padding: 0;
+	vertical-align: middle;
+	accent-color: var(--accent);
+}
+
+input[type="hidden"] {
+	display: none;
+}
+
+select {
+	background-image:
+		linear-gradient(45deg, transparent 50%, var(--text-2) 50%),
+		linear-gradient(135deg, var(--text-2) 50%, transparent 50%);
+	background-position:
+		calc(100% - 14px) center,
+		calc(100% - 9px) center;
+	background-size:
+		5px 5px,
+		5px 5px;
+	background-repeat: no-repeat;
+	padding-right: 2rem;
+	-webkit-appearance: none;
+	appearance: none;
+}
+
+label {
+	display: block;
+	margin-bottom: 0.25rem;
+	font-weight: 500;
+}
+
+label > input[type="checkbox"],
+label > input[type="radio"] {
+	margin-right: 0.5em;
+}
+
+fieldset {
+	border: 0;
+	margin: 0 0 1rem;
+	padding: 0;
+}
+
+legend {
+	font-weight: 600;
+	margin-bottom: 0.5rem;
+}
+
+form {
+	margin: 0 0 1rem;
+}
+
+/* ========================================================================
+   Tables
+   ======================================================================== */
+
+table {
+	width: 100%;
+	border-collapse: collapse;
+	margin: 0 0 1rem;
+}
+
+th,
+td {
+	padding: 0.5rem 0.75rem;
+	text-align: left;
+	vertical-align: top;
+	border-bottom: 1px solid var(--line-soft);
+}
+
+th {
+	font-weight: 600;
+	color: var(--text);
+}
+
+/* ========================================================================
+   Dialog (modal)
+   ======================================================================== */
+
+dialog {
+	display: none;
+	position: fixed;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	max-width: none;
+	max-height: none;
+	margin: 0;
+	padding: 1rem;
+	border: 0;
+	background: rgba(0, 0, 0, 0.5);
+	color: var(--text);
+	z-index: 100;
+	overflow: auto;
+}
+
+dialog[open] {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+dialog > .card,
+dialog > article {
+	width: 100%;
+	max-width: 32rem;
+}
+
+/* ========================================================================
+   Card — explicit replacement for <article>-as-card
+   ======================================================================== */
+
+.card {
+	background: var(--surface);
+	color: var(--text);
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	padding: 1rem 1.25rem;
+	margin: 0 0 1rem;
+}
+
+.card > header {
+	margin: -1rem -1.25rem 1rem;
+	padding: 0.75rem 1.25rem;
+	border-bottom: 1px solid var(--line);
+}
+
+.card > footer {
+	margin: 1rem -1.25rem -1rem;
+	padding: 0.75rem 1.25rem;
+	border-top: 1px solid var(--line);
+}
+
+/* ========================================================================
+   Details / summary
+   ======================================================================== */
+
+details {
+	margin: 0 0 0.5rem;
+}
+
+summary {
+	cursor: pointer;
+}
+
+summary:focus-visible {
+	outline: 2px solid var(--accent-edge);
+	outline-offset: 2px;
+}
+
+/* ========================================================================
+   Application styles
+   ======================================================================== */
+
+/* Flash notifications — self-contained card; doesn't rely on <article>. */
 .flash {
 	position: fixed;
 	top: 0.5rem;
@@ -351,7 +840,21 @@ h6 {
 	z-index: 50;
 	width: 24rem;
 	max-width: calc(100vw - 1rem);
+	background: var(--surface);
+	color: var(--text);
+	border: 1px solid var(--line);
+	border-radius: var(--radius-sm);
+	padding: 0.75rem 2.5rem 0.75rem 1rem;
+	margin: 0;
 	cursor: pointer;
+}
+
+.flash > p {
+	margin: 0;
+}
+
+.flash > header {
+	margin-bottom: 0.25rem;
 }
 
 .flash[hidden] {
@@ -359,27 +862,27 @@ h6 {
 }
 
 .flash-info {
-	--pico-card-background-color: #ecfff5;
-	--pico-card-border-color: #006800;
+	background: #ecfff5;
+	border-color: #006800;
 	color: #006800;
 }
 
 .flash-error {
-	--pico-card-background-color: #fff0f0;
-	--pico-card-border-color: #a60000;
+	background: #fff0f0;
+	border-color: #a60000;
 	color: #a60000;
 }
 
 @media (prefers-color-scheme: dark) {
 	.flash-info {
-		--pico-card-background-color: #0a2e1f;
-		--pico-card-border-color: #36c692;
+		background: #0a2e1f;
+		border-color: #36c692;
 		color: #85dc85;
 	}
 
 	.flash-error {
-		--pico-card-background-color: #2e0a0a;
-		--pico-card-border-color: #ff5d5d;
+		background: #2e0a0a;
+		border-color: #ff5d5d;
 		color: #ff5d5d;
 	}
 }
@@ -390,6 +893,7 @@ h6 {
 	right: 0.5rem;
 	background: none;
 	border: none;
+	color: inherit;
 	font-size: 1.25rem;
 	opacity: 0.4;
 	cursor: pointer;
