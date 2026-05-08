@@ -8,7 +8,7 @@ defmodule Tracker.Ingestion.Steps.CreateRevision do
 
   @behaviour Tracker.Ingestion.Step
 
-  alias Tracker.Nixpkgs.{ChannelRevision, ReleaseCache}
+  alias Tracker.Nixpkgs.{ChangeBranchDetectionWorker, ChannelRevision, ReleaseCache}
   alias Tracker.Ingestion.Helpers
 
   @impl true
@@ -40,6 +40,8 @@ defmodule Tracker.Ingestion.Steps.CreateRevision do
       "channel_revisions:#{channel.name}",
       {:channel_revision_created, %{channel_name: channel.name, revision: pipeline.revision}}
     )
+
+    %{} |> ChangeBranchDetectionWorker.new() |> Oban.insert!()
 
     :ok
   end

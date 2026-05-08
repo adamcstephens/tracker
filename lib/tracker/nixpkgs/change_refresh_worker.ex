@@ -14,7 +14,9 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorker do
   alias Tracker.GitHub.GraphQL.PullRequest
   alias Tracker.GitHub.RateLimitCache
   alias Tracker.Nixpkgs.Change
+  alias Tracker.Nixpkgs.ChangeBranch
   alias Tracker.Nixpkgs.ChangePackage
+  alias Tracker.Nixpkgs.Propagation
 
   @impl Oban.Worker
   def perform(%Oban.Job{}) do
@@ -155,6 +157,8 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorker do
     |> Tracker.Nixpkgs.ChangeArtifactRefreshWorker.new()
     |> Oban.insert!()
 
+    if reason == :merged, do: seed_change_branch(change)
+
     :ok
   end
 
@@ -182,4 +186,19 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorker do
     Ash.Notifier.notify(notifications)
     :ok
   end
+
+  defp seed_change_branch(%Change{base_ref: base_ref} = change)
+       when is_binary(base_ref) do
+    if Propagation.valid_branch?(base_ref) do
+      ChangeBranch.create!(%{
+        change_id: change.id,
+        branch_name: base_ref,
+        arrived_at: change.merged_at || DateTime.utc_now()
+      })
+    end
+
+    :ok
+  end
+
+  defp seed_change_branch(_change), do: :ok
 end
