@@ -2,6 +2,7 @@ defmodule TrackerWeb.PackageLive.Index do
   use TrackerWeb, :live_view
 
   alias TrackerWeb.DataTable
+  alias TrackerWeb.PageSearch
   alias TrackerWeb.TableParams
 
   @table_opts [
@@ -13,16 +14,6 @@ defmodule TrackerWeb.PackageLive.Index do
   @impl true
   def render(assigns) do
     ~H"""
-    <form phx-change="search" phx-submit="search" id="package-search" phx-hook="UpdateURL">
-      <input
-        type="search"
-        name="search"
-        value={@table_params.search}
-        placeholder="Search packages..."
-        phx-debounce="300"
-      />
-    </form>
-
     <DataTable.data_table
       id="packages"
       rows={@streams.packages}
@@ -64,6 +55,11 @@ defmodule TrackerWeb.PackageLive.Index do
       socket
       |> assign(:page_title, "Packages")
       |> assign(:table_params, tp)
+      |> assign(:page_search, %PageSearch{
+        action: "/packages",
+        placeholder: "Filter packages…",
+        value: tp.search
+      })
       |> load_packages()
 
     {:noreply, socket}
