@@ -28,6 +28,7 @@ defmodule Tracker.Nixpkgs.Change do
     define :max_gh_updated_at
     define :stalest_unfinished
     define :pending_merged_backlog
+    define :in_flight_propagation
     define :updated_since, args: [:since, {:optional, :states}]
     define :refresh_from_graphql
     define :touch_last_checked
@@ -160,6 +161,16 @@ defmodule Tracker.Nixpkgs.Change do
       prepare build(sort: [merged_at: :asc_nils_first], limit: 50)
 
       filter expr(state == :merged and processing_status == :pending)
+    end
+
+    read :in_flight_propagation do
+      prepare build(sort: [merged_at: :desc_nils_last], load: [:change_branches])
+
+      filter expr(
+               state == :merged and
+                 not is_nil(merge_commit_sha) and
+                 not is_nil(base_ref)
+             )
     end
 
     read :updated_since do

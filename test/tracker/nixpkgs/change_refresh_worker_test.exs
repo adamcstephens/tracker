@@ -6,6 +6,7 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorkerTest do
   alias Tracker.GitHub.GraphQL.PullRequest
   alias Tracker.GitHub.RateLimitCache
   alias Tracker.Nixpkgs.Change
+  alias Tracker.Nixpkgs.ChangeBranch
   alias Tracker.Nixpkgs.ChangePackage
   alias Tracker.Nixpkgs.ChangeRefreshWorker
   alias Tracker.Nixpkgs.Package
@@ -310,6 +311,72 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorkerTest do
         worker: Tracker.Nixpkgs.ChangeArtifactRefreshWorker,
         args: %{"number" => 300, "reason" => "merged"}
       )
+    end
+
+    test "bootstraps ChangeBranch for base_ref on :merged transition" do
+      insert_change!(
+        number: 310,
+        state: :open,
+        node_id: "pr_def_seed",
+        head_sha: "sha_seed",
+        base_ref: "master"
+      )
+
+      ChangeRefreshWorker.run(
+        fetcher: fn _ ->
+          {:ok,
+           %{
+             "pr_def_seed" =>
+               pr(
+                 node_id: "pr_def_seed",
+                 number: 310,
+                 state: :merged,
+                 base_ref: "master",
+                 head_sha: "sha_seed",
+                 merged_at: ~U[2026-04-23 10:00:00Z],
+                 merge_commit_sha: "mcsha_seed"
+               )
+           }}
+        end
+      )
+
+      {:ok, change} = Change.get_by_number(310)
+      change = Ash.load!(change, :change_branches)
+
+      assert [%ChangeBranch{branch_name: "master", arrived_at: ~U[2026-04-23 10:00:00Z]}] =
+               change.change_branches
+    end
+
+    test "skips ChangeBranch bootstrap when base_ref is not a propagation branch" do
+      insert_change!(
+        number: 311,
+        state: :open,
+        node_id: "pr_def_skip",
+        head_sha: "sha_skip",
+        base_ref: "some-feature-branch"
+      )
+
+      ChangeRefreshWorker.run(
+        fetcher: fn _ ->
+          {:ok,
+           %{
+             "pr_def_skip" =>
+               pr(
+                 node_id: "pr_def_skip",
+                 number: 311,
+                 state: :merged,
+                 base_ref: "some-feature-branch",
+                 head_sha: "sha_skip",
+                 merged_at: ~U[2026-04-23 10:00:00Z],
+                 merge_commit_sha: "mcsha_skip"
+               )
+           }}
+        end
+      )
+
+      {:ok, change} = Change.get_by_number(311)
+      change = Ash.load!(change, :change_branches)
+      assert change.change_branches == []
     end
 
     test "enqueues ChangeArtifactRefreshWorker for :head_sha_changed transitions" do
