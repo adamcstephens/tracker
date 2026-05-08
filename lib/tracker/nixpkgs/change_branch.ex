@@ -18,10 +18,10 @@ defmodule Tracker.Nixpkgs.ChangeBranch do
 
     create :create do
       primary? true
-      accept [:change_id, :branch_name, :channel_revision_id, :arrived_at]
+      accept [:change_id, :branch_name, :channel_revision_id]
       upsert? true
       upsert_identity :unique_change_branch
-      upsert_fields [:channel_revision_id, :arrived_at, :updated_at]
+      upsert_fields [:channel_revision_id]
 
       validate {__MODULE__.ValidateBranchName, []}
     end
@@ -34,13 +34,6 @@ defmodule Tracker.Nixpkgs.ChangeBranch do
       allow_nil? false
       public? true
     end
-
-    attribute :arrived_at, :utc_datetime do
-      allow_nil? false
-      public? true
-    end
-
-    timestamps()
   end
 
   relationships do

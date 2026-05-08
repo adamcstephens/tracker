@@ -78,11 +78,7 @@ defmodule Tracker.Nixpkgs.ChangeBranchDetectionWorker do
   defp detect(change, branch, snapshot) do
     case GitServer.ancestor?(change.merge_commit_sha, "refs/heads/#{branch}", snapshot) do
       {:ok, true} ->
-        ChangeBranch.create!(%{
-          change_id: change.id,
-          branch_name: branch,
-          arrived_at: DateTime.utc_now()
-        })
+        ChangeBranch.create!(%{change_id: change.id, branch_name: branch})
 
         :ok
 
