@@ -14,6 +14,7 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorker do
   alias Tracker.GitHub.GraphQL.PullRequest
   alias Tracker.GitHub.RateLimitCache
   alias Tracker.Nixpkgs.Change
+  alias Tracker.Nixpkgs.ChangeBranch
   alias Tracker.Nixpkgs.ChangePackage
 
   @impl Oban.Worker
@@ -154,6 +155,8 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorker do
     %{"number" => change.number, "reason" => Atom.to_string(reason)}
     |> Tracker.Nixpkgs.ChangeArtifactRefreshWorker.new()
     |> Oban.insert!()
+
+    if reason == :merged, do: ChangeBranch.seed_for_base_ref(change.id, change.base_ref)
 
     :ok
   end
