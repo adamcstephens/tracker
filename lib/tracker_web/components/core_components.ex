@@ -39,7 +39,7 @@ defmodule TrackerWeb.CoreComponents do
       phx-remove={hide_modal(@id)}
       data-cancel={JS.exec(@on_cancel, "phx-remove")}
     >
-      <article>
+      <div class="card">
         <header>
           <button
             phx-click={JS.exec("data-cancel", to: "##{@id}")}
@@ -52,7 +52,7 @@ defmodule TrackerWeb.CoreComponents do
         <div id={"#{@id}-content"}>
           {render_slot(@inner_block)}
         </div>
-      </article>
+      </div>
     </dialog>
     """
   end
@@ -77,7 +77,7 @@ defmodule TrackerWeb.CoreComponents do
     assigns = assign_new(assigns, :id, fn -> "flash-#{assigns.kind}" end)
 
     ~H"""
-    <article
+    <div
       :if={msg = render_slot(@inner_block) || Phoenix.Flash.get(@flash, @kind)}
       id={@id}
       phx-click={JS.push("lv:clear-flash", value: %{key: @kind}) |> hide("##{@id}")}
@@ -96,7 +96,7 @@ defmodule TrackerWeb.CoreComponents do
       >
         &times;
       </button>
-    </article>
+    </div>
     """
   end
 
