@@ -97,3 +97,47 @@
   <.flash_group flash={@flash} />
   {@inner_content}
 </main>
+<nav class="app-mobile-tabs" aria-label="Sections">
+  <.link
+    navigate={~p"/packages"}
+    class={["app-mobile-tab", active_nav?(@socket.view, "PackageLive") && "is-active"]}
+    aria-current={active_nav?(@socket.view, "PackageLive") && "page"}
+  >
+    Pkgs
+  </.link>
+  <.link
+    navigate={~p"/channels"}
+    class={["app-mobile-tab", active_nav?(@socket.view, "ChannelLive") && "is-active"]}
+    aria-current={active_nav?(@socket.view, "ChannelLive") && "page"}
+  >
+    Chans
+  </.link>
+  <.link
+    navigate={~p"/changes"}
+    class={["app-mobile-tab", active_nav?(@socket.view, "ChangeLive") && "is-active"]}
+    aria-current={active_nav?(@socket.view, "ChangeLive") && "page"}
+  >
+    Changes
+  </.link>
+  <.link
+    navigate={~p"/options"}
+    class={["app-mobile-tab", active_nav?(@socket.view, "OptionLive") && "is-active"]}
+    aria-current={active_nav?(@socket.view, "OptionLive") && "page"}
+  >
+    Options
+  </.link>
+  <.link
+    navigate={~p"/maintainers"}
+    class={[
+      "app-mobile-tab",
+      (active_nav?(@socket.view, "MaintainerLive") || active_nav?(@socket.view, "TeamLive")) &&
+        "is-active"
+    ]}
+    aria-current={
+      (active_nav?(@socket.view, "MaintainerLive") || active_nav?(@socket.view, "TeamLive")) &&
+        "page"
+    }
+  >
+    More
+  </.link>
+</nav>

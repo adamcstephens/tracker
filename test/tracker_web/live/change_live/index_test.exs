@@ -45,8 +45,8 @@ defmodule TrackerWeb.ChangeLive.IndexTest do
 
     html =
       view
-      |> element("#change-filters")
-      |> render_change(%{"search" => "Backport", "base_ref" => ""})
+      |> element("form.app-search")
+      |> render_change(%{"search" => "Backport"})
 
     assert html =~ "5002"
     refute html =~ "5001"
@@ -57,8 +57,8 @@ defmodule TrackerWeb.ChangeLive.IndexTest do
 
     html =
       view
-      |> element("#change-filters")
-      |> render_change(%{"search" => "alice", "base_ref" => ""})
+      |> element("form.app-search")
+      |> render_change(%{"search" => "alice"})
 
     assert html =~ "5001"
     refute html =~ "5002"
