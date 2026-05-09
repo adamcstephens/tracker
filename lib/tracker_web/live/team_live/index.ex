@@ -42,7 +42,6 @@ defmodule TrackerWeb.TeamLive.Index do
      |> assign(:table_params, tp)
      |> assign(:page_search, %PageSearch{
        action: "/teams",
-       placeholder: "Filter teams…",
        value: tp.search,
        hidden: TableParams.to_hidden_inputs(tp)
      })

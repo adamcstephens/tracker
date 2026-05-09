@@ -2,6 +2,7 @@ defmodule TrackerWeb.TeamLive.Show do
   use TrackerWeb, :live_view
 
   alias TrackerWeb.DataTable
+  alias TrackerWeb.PageSearch
   alias TrackerWeb.TableParams
 
   @impl true
@@ -78,6 +79,11 @@ defmodule TrackerWeb.TeamLive.Show do
      |> assign(:page_title, team.short_name)
      |> assign(:team, team)
      |> assign(:table_params, tp)
+     |> assign(:page_search, %PageSearch{
+       mode: :passthrough,
+       action: "/teams",
+       value: Map.get(params, "search", "")
+     })
      |> reload_packages()}
   end
 

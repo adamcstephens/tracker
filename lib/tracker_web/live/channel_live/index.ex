@@ -2,6 +2,7 @@ defmodule TrackerWeb.ChannelLive.Index do
   use TrackerWeb, :live_view
 
   alias TrackerWeb.DataTable
+  alias TrackerWeb.PageSearch
   alias TrackerWeb.TableParams
 
   @table_opts [
@@ -53,6 +54,10 @@ defmodule TrackerWeb.ChannelLive.Index do
      |> assign(:page_title, "Channels")
      |> assign(:table_params, tp)
      |> assign(:lens, lens)
+     |> assign(:page_search, %PageSearch{
+       mode: :inert,
+       value: Map.get(params, "search", "")
+     })
      |> stream(:channels, channels, reset: true)}
   end
 

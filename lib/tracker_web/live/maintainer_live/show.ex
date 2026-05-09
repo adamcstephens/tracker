@@ -2,6 +2,7 @@ defmodule TrackerWeb.MaintainerLive.Show do
   use TrackerWeb, :live_view
 
   alias TrackerWeb.DataTable
+  alias TrackerWeb.PageSearch
   alias TrackerWeb.TableParams
 
   @impl true
@@ -123,6 +124,11 @@ defmodule TrackerWeb.MaintainerLive.Show do
      |> assign(:page_title, maintainer.github)
      |> assign(:maintainer, maintainer)
      |> assign(:table_params, tp)
+     |> assign(:page_search, %PageSearch{
+       mode: :passthrough,
+       action: "/maintainers",
+       value: Map.get(params, "search", "")
+     })
      |> reload_page_data()}
   end
 

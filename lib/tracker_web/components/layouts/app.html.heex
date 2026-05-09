@@ -1,7 +1,8 @@
+<% search = (assigns[:page_search] && @page_search.value) || "" %>
 <header class="app-header">
   <div class="app-header__row app-header__row--top">
     <div class="container">
-      <.link navigate={~p"/"} class="app-brand">
+      <.link navigate={nav_path(~p"/", search)} class="app-brand">
         <span class="app-brand__mark" aria-hidden="true">T</span>
         <span class="app-brand__word">Tracker</span>
       </.link>
@@ -9,7 +10,7 @@
         <ul class="app-tabs">
           <li>
             <.link
-              navigate={~p"/packages"}
+              navigate={nav_path(~p"/packages", search)}
               aria-current={active_nav?(@socket.view, "PackageLive") && "page"}
             >
               Packages
@@ -17,7 +18,7 @@
           </li>
           <li>
             <.link
-              navigate={~p"/channels"}
+              navigate={nav_path(~p"/channels", search)}
               aria-current={active_nav?(@socket.view, "ChannelLive") && "page"}
             >
               Channels
@@ -25,7 +26,7 @@
           </li>
           <li>
             <.link
-              navigate={~p"/options"}
+              navigate={nav_path(~p"/options", search)}
               aria-current={active_nav?(@socket.view, "OptionLive") && "page"}
             >
               Options
@@ -33,7 +34,7 @@
           </li>
           <li>
             <.link
-              navigate={~p"/changes"}
+              navigate={nav_path(~p"/changes", search)}
               aria-current={active_nav?(@socket.view, "ChangeLive") && "page"}
             >
               Changes
@@ -41,7 +42,7 @@
           </li>
           <li>
             <.link
-              navigate={~p"/maintainers"}
+              navigate={nav_path(~p"/maintainers", search)}
               aria-current={active_nav?(@socket.view, "MaintainerLive") && "page"}
             >
               Maintainers
@@ -49,7 +50,7 @@
           </li>
           <li>
             <.link
-              navigate={~p"/teams"}
+              navigate={nav_path(~p"/teams", search)}
               aria-current={active_nav?(@socket.view, "TeamLive") && "page"}
             >
               Teams
@@ -74,18 +75,22 @@
   </div>
   <div class="app-header__row app-header__row--bottom">
     <div class="container">
-      <.link navigate={~p"/"} class="app-brand app-brand--mobile" aria-label="Tracker home">
+      <.link
+        navigate={nav_path(~p"/", search)}
+        class="app-brand app-brand--mobile"
+        aria-label="Tracker home"
+      >
         <span class="app-brand__mark" aria-hidden="true">T</span>
       </.link>
       <form
         :if={assigns[:page_search]}
         id="page-search"
-        phx-hook="UpdateURL"
+        phx-hook={@page_search.mode == :active && "UpdateURL"}
         method="get"
         action={@page_search.action}
-        phx-change={@page_search.event}
-        phx-submit={@page_search.event}
-        class="app-search"
+        phx-change={@page_search.mode == :active && @page_search.event}
+        phx-submit={@page_search.mode == :active && @page_search.event}
+        class={["app-search", @page_search.mode == :inert && "app-search--inert"]}
       >
         <svg
           class="app-search__icon"
@@ -107,6 +112,7 @@
           placeholder={@page_search.placeholder}
           aria-label={@page_search.placeholder}
           phx-debounce="300"
+          disabled={@page_search.mode == :inert}
         />
         <span class="app-search__hint" aria-hidden="true">/</span>
       </form>
@@ -122,35 +128,35 @@
 </main>
 <nav class="app-mobile-tabs" aria-label="Sections">
   <.link
-    navigate={~p"/packages"}
+    navigate={nav_path(~p"/packages", search)}
     class={["app-mobile-tab", active_nav?(@socket.view, "PackageLive") && "is-active"]}
     aria-current={active_nav?(@socket.view, "PackageLive") && "page"}
   >
     Pkgs
   </.link>
   <.link
-    navigate={~p"/channels"}
+    navigate={nav_path(~p"/channels", search)}
     class={["app-mobile-tab", active_nav?(@socket.view, "ChannelLive") && "is-active"]}
     aria-current={active_nav?(@socket.view, "ChannelLive") && "page"}
   >
     Chans
   </.link>
   <.link
-    navigate={~p"/changes"}
+    navigate={nav_path(~p"/changes", search)}
     class={["app-mobile-tab", active_nav?(@socket.view, "ChangeLive") && "is-active"]}
     aria-current={active_nav?(@socket.view, "ChangeLive") && "page"}
   >
     Changes
   </.link>
   <.link
-    navigate={~p"/options"}
+    navigate={nav_path(~p"/options", search)}
     class={["app-mobile-tab", active_nav?(@socket.view, "OptionLive") && "is-active"]}
     aria-current={active_nav?(@socket.view, "OptionLive") && "page"}
   >
     Options
   </.link>
   <.link
-    navigate={~p"/maintainers"}
+    navigate={nav_path(~p"/maintainers", search)}
     class={[
       "app-mobile-tab",
       (active_nav?(@socket.view, "MaintainerLive") || active_nav?(@socket.view, "TeamLive")) &&

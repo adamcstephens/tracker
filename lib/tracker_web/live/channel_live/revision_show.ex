@@ -2,6 +2,7 @@ defmodule TrackerWeb.ChannelLive.RevisionShow do
   use TrackerWeb, :live_view
 
   alias Tracker.Nixpkgs.{ChannelRevision, PackageEvent}
+  alias TrackerWeb.PageSearch
 
   @impl true
   def render(assigns) do
@@ -117,7 +118,7 @@ defmodule TrackerWeb.ChannelLive.RevisionShow do
   end
 
   @impl true
-  def handle_params(%{"channel" => channel_name, "revision" => rev_hash}, _url, socket) do
+  def handle_params(%{"channel" => channel_name, "revision" => rev_hash} = params, _url, socket) do
     channel = Tracker.Nixpkgs.Channel.by_name!(channel_name)
 
     if connected?(socket) && socket.assigns.subscribed_channel != channel_name do
@@ -141,6 +142,10 @@ defmodule TrackerWeb.ChannelLive.RevisionShow do
      |> assign(:channel_id, channel.id)
      |> assign(:subscribed_channel, channel_name)
      |> assign(:lens, lens)
+     |> assign(:page_search, %PageSearch{
+       mode: :inert,
+       value: Map.get(params, "search", "")
+     })
      |> assign_revision_data(revision)}
   end
 

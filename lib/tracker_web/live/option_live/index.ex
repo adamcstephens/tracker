@@ -67,7 +67,6 @@ defmodule TrackerWeb.OptionLive.Index do
       |> assign(:page_title, "Options")
       |> assign(:page_search, %PageSearch{
         action: "/options",
-        placeholder: "Filter options…",
         value: search,
         event: "filter",
         hidden: if(page > 1, do: %{"page" => Integer.to_string(page)}, else: %{})
