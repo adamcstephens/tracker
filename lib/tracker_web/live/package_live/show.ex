@@ -2,6 +2,7 @@ defmodule TrackerWeb.PackageLive.Show do
   use TrackerWeb, :live_view
 
   alias TrackerWeb.DataTable
+  alias TrackerWeb.PageSearch
   alias TrackerWeb.TableParams
 
   @table_opts [
@@ -337,6 +338,11 @@ defmodule TrackerWeb.PackageLive.Show do
      |> assign(:table_params, tp)
      |> assign(:version_filter, version_filter)
      |> assign(:all_revisions?, all_revisions?)
+     |> assign(:page_search, %PageSearch{
+       mode: :passthrough,
+       action: "/packages",
+       value: Map.get(params, "search", "")
+     })
      |> load_revision_data()}
   end
 

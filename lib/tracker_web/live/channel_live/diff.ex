@@ -2,6 +2,7 @@ defmodule TrackerWeb.ChannelLive.Diff do
   use TrackerWeb, :live_view
 
   alias Tracker.Nixpkgs.{ChannelRevision, PackageEvent}
+  alias TrackerWeb.PageSearch
 
   @impl true
   def render(assigns) do
@@ -99,7 +100,7 @@ defmodule TrackerWeb.ChannelLive.Diff do
 
   @impl true
   def handle_params(
-        %{"channel" => channel_name, "rev_a" => rev_a_hash, "rev_b" => rev_b_hash},
+        %{"channel" => channel_name, "rev_a" => rev_a_hash, "rev_b" => rev_b_hash} = params,
         _url,
         socket
       ) do
@@ -124,7 +125,11 @@ defmodule TrackerWeb.ChannelLive.Diff do
      |> assign(:rev_b, newer)
      |> assign(:events, events)
      |> assign(:version_changes, version_changes)
-     |> assign(:lens, lens)}
+     |> assign(:lens, lens)
+     |> assign(:page_search, %PageSearch{
+       mode: :inert,
+       value: Map.get(params, "search", "")
+     })}
   end
 
   defp order_revisions(a, b) do

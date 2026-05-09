@@ -3,6 +3,8 @@ defmodule TrackerWeb.OptionLive.Show do
 
   import TrackerWeb.CodeHighlight
 
+  alias TrackerWeb.PageSearch
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -185,7 +187,12 @@ defmodule TrackerWeb.OptionLive.Show do
      |> assign(:files, files)
      |> assign(:recent_prs, recent_prs)
      |> assign(:leaf, leaf?)
-     |> assign(:nothing_here?, nothing_here?)}
+     |> assign(:nothing_here?, nothing_here?)
+     |> assign(:page_search, %PageSearch{
+       mode: :passthrough,
+       action: "/options",
+       value: Map.get(params, "search", "")
+     })}
   end
 
   defp recent_prs_for_files([]), do: []

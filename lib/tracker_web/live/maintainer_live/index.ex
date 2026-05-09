@@ -40,7 +40,6 @@ defmodule TrackerWeb.MaintainerLive.Index do
       |> assign(:page_title, "Maintainers")
       |> assign(:page_search, %PageSearch{
         action: "/maintainers",
-        placeholder: "Filter maintainers…",
         value: tp.search,
         hidden: TableParams.to_hidden_inputs(tp)
       })

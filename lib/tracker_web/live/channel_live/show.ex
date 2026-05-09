@@ -2,6 +2,7 @@ defmodule TrackerWeb.ChannelLive.Show do
   use TrackerWeb, :live_view
 
   alias TrackerWeb.DataTable
+  alias TrackerWeb.PageSearch
   alias TrackerWeb.TableParams
 
   @table_opts [
@@ -127,6 +128,10 @@ defmodule TrackerWeb.ChannelLive.Show do
      |> assign(:table_params, tp)
      |> assign(:subscribed_channel, channel_name)
      |> assign(:lens, lens)
+     |> assign(:page_search, %PageSearch{
+       mode: :inert,
+       value: Map.get(params, "search", "")
+     })
      |> assign_revisions(channel.id)}
   end
 

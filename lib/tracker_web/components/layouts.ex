@@ -33,4 +33,15 @@ defmodule TrackerWeb.Layouts do
   end
 
   def monogram(_), do: ""
+
+  @doc """
+  Decorates a chrome navigation path with the persisted `?search=` param
+  so the global search query carries across section navigations.
+  """
+  def nav_path(path, ""), do: path
+  def nav_path(path, nil), do: path
+
+  def nav_path(path, search) when is_binary(search) do
+    "#{path}?#{URI.encode_query(%{search: search})}"
+  end
 end

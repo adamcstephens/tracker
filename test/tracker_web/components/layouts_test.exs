@@ -64,7 +64,7 @@ defmodule TrackerWeb.LayoutsTest do
 
       # Search input lifted from page body into the chrome's bottom row.
       assert html =~ ~r{app-header__row--bottom.*?<form[^>]*method="get"[^>]*action="/changes"}s
-      assert html =~ ~s(placeholder="Filter changes…")
+      assert html =~ ~s(placeholder="Search…")
       assert html =~ ~s(name="search")
     end
 
@@ -72,14 +72,17 @@ defmodule TrackerWeb.LayoutsTest do
       {:ok, _view, html} = live(conn, ~p"/packages")
 
       assert html =~ ~r{app-header__row--bottom.*?action="/packages"}s
-      assert html =~ ~s(placeholder="Filter packages…")
+      assert html =~ ~s(placeholder="Search…")
     end
 
-    test "Channels page has no search slot", %{conn: conn} do
+    test "Channels page renders an inert (disabled) search box", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/channels")
 
-      # Channels has no search; the row should still render but without a form.
-      refute html =~ ~r{app-header__row--bottom.*?<form[^>]*method="get"}s
+      # Search box is still rendered as part of the chrome on every page,
+      # but on Channels it has no meaningful target — render disabled.
+      assert html =~ ~r{app-header__row--bottom.*?<form[^>]*class="[^"]*app-search[^"]*"}s
+      assert html =~ ~r{app-search--inert}
+      assert html =~ ~r{<input[^>]*type="search"[^>]*disabled}
     end
 
     test "Changes search form preserves base_ref via hidden input", %{conn: conn} do
@@ -127,6 +130,53 @@ defmodule TrackerWeb.LayoutsTest do
       [chrome_form, _rest] = String.split(bottom, "</form>", parts: 2)
 
       assert chrome_form =~ ~r{<input[^>]*type="hidden"[^>]*name="page"[^>]*value="3"}
+    end
+  end
+
+  describe "global search persistence" do
+    test "active page (Packages) seeds the input from ?search=", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/packages?search=elixir")
+
+      assert html =~ ~r{<input[^>]*type="search"[^>]*name="search"[^>]*value="elixir"}
+    end
+
+    test "chrome nav links carry the current ?search= across sections", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/packages?search=elixir")
+
+      # Top tabs and mobile tabs both append the current search to navigations,
+      # so jumping to /options keeps the query intact.
+      assert html =~ ~r{href="/options\?search=elixir"}
+      assert html =~ ~r{href="/changes\?search=elixir"}
+      assert html =~ ~r{href="/maintainers\?search=elixir"}
+      assert html =~ ~r{href="/teams\?search=elixir"}
+      assert html =~ ~r{href="/channels\?search=elixir"}
+    end
+
+    test "inert page (Channels) still echoes the persisted query", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/channels?search=elixir")
+
+      assert html =~ ~r{<input[^>]*type="search"[^>]*value="elixir"[^>]*disabled}
+    end
+  end
+
+  describe "passthrough chrome search on detail pages" do
+    setup do
+      Tracker.Nixpkgs.Package
+      |> Ash.Changeset.for_create(:create, %{attribute: "ripgrep"})
+      |> Ash.create!()
+
+      :ok
+    end
+
+    test "package detail renders an editable chrome search posting to /packages",
+         %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/packages/ripgrep?search=elixir")
+
+      # Form action goes to the parent index, value reflects the persisted query,
+      # and there's no UpdateURL hook (passthrough is a plain GET).
+      assert html =~ ~r{app-header__row--bottom.*?<form[^>]*method="get"[^>]*action="/packages"}s
+      assert html =~ ~r{<input[^>]*type="search"[^>]*value="elixir"}
+      refute html =~ ~r{app-header__row--bottom.*?phx-hook="UpdateURL"}s
     end
   end
 

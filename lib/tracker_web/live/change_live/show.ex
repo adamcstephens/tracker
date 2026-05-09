@@ -22,6 +22,7 @@ defmodule TrackerWeb.ChangeLive.Show do
   use TrackerWeb, :live_view
 
   alias TrackerWeb.DataTable
+  alias TrackerWeb.PageSearch
   alias TrackerWeb.PropagationDag
   alias TrackerWeb.TableParams
   alias Tracker.Nixpkgs.Propagation
@@ -239,6 +240,11 @@ defmodule TrackerWeb.ChangeLive.Show do
      |> assign(:landed_count, landed_count)
      |> assign(:total_branches, total_branches)
      |> assign(:table_params, tp)
+     |> assign(:page_search, %PageSearch{
+       mode: :passthrough,
+       action: "/changes",
+       value: Map.get(params, "search", "")
+     })
      |> load_packages(change.id)}
   end
 

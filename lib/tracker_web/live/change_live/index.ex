@@ -107,7 +107,6 @@ defmodule TrackerWeb.ChangeLive.Index do
   defp page_search(tp, base_ref_filter) do
     %PageSearch{
       action: "/changes",
-      placeholder: "Filter changes…",
       value: tp.search,
       event: "filter",
       hidden: TableParams.to_hidden_inputs(tp, %{base_ref: base_ref_filter})
