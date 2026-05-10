@@ -94,6 +94,7 @@ defmodule TrackerWeb.OptionLive.Index do
       socket
       |> assign(:search, search)
       |> assign(:offset, 0)
+      |> update(:page_search, fn ps -> %{ps | value: search, hidden: %{}} end)
       |> load_data()
       |> push_event("update-url", %{path: options_path(search, 1)})
 
