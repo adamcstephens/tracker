@@ -110,6 +110,44 @@ defmodule Tracker.GitServerTest do
       assert String.trim(tagopt) == "--no-tags"
     end
 
+    test "enables commit-graph configs", %{upstream: upstream, local: local} do
+      pid =
+        start_supervised!(
+          {GitServer, name: nil, repo_url: upstream, path: local, auto_start: true}
+        )
+
+      assert GitServer.ready?(pid)
+
+      assert git_config(local, "core.commitGraph") == "true"
+      assert git_config(local, "gc.writeCommitGraph") == "true"
+    end
+
+    test "writes a commit-graph after cloning", %{upstream: upstream, local: local} do
+      pid =
+        start_supervised!(
+          {GitServer, name: nil, repo_url: upstream, path: local, auto_start: true}
+        )
+
+      assert GitServer.ready?(pid)
+      assert commit_graph_present?(local)
+    end
+
+    test "writes a commit-graph when reusing an existing valid bare repo", %{
+      upstream: upstream,
+      local: local
+    } do
+      {_, 0} = System.cmd("git", ["clone", "--bare", "--quiet", upstream, local])
+      refute commit_graph_present?(local)
+
+      pid =
+        start_supervised!(
+          {GitServer, name: nil, repo_url: upstream, path: local, auto_start: true}
+        )
+
+      assert GitServer.ready?(pid)
+      assert commit_graph_present?(local)
+    end
+
     test "stays :not_ready when path is a half-cloned mirror with no refs",
          %{local: local} = ctx do
       File.mkdir_p!(local)
@@ -233,6 +271,32 @@ defmodule Tracker.GitServerTest do
       assert GitServer.ancestor?(new_sha, "refs/heads/main", GitServer.state(pid)) ==
                {:ok, true}
     end
+
+    test "refreshes commit-graph after fetch", %{
+      base: base,
+      upstream: upstream,
+      local: local
+    } do
+      pid =
+        start_supervised!(
+          {GitServer, name: nil, repo_url: upstream, path: local, auto_start: true}
+        )
+
+      assert GitServer.ready?(pid)
+      graph_before = commit_graph_fingerprint(local)
+      assert graph_before != nil
+
+      # Wait long enough that any new graph file has a strictly later mtime,
+      # since File.stat/1 mtime resolution is one second.
+      :timer.sleep(1100)
+
+      _new_sha = add_upstream_commit(Path.join(base, "upstream_work"), upstream)
+      assert GitServer.fetch(pid) == :ok
+
+      graph_after = commit_graph_fingerprint(local)
+      assert graph_after != nil
+      assert graph_after != graph_before
+    end
   end
 
   defp build_upstream(work, bare) do
@@ -276,6 +340,41 @@ defmodule Tracker.GitServerTest do
     case System.cmd("git", ["-C", cwd | args], stderr_to_stdout: true) do
       {out, 0} -> out
       {out, code} -> flunk("git #{Enum.join(args, " ")} exited #{code}: #{out}")
+    end
+  end
+
+  defp git_config(repo, key) do
+    {out, 0} = System.cmd("git", ["-C", repo, "config", "--get", key])
+    String.trim(out)
+  end
+
+  defp commit_graph_present?(repo) do
+    File.exists?(Path.join(repo, "objects/info/commit-graph")) or
+      File.dir?(Path.join(repo, "objects/info/commit-graphs"))
+  end
+
+  defp commit_graph_fingerprint(repo) do
+    info = Path.join(repo, "objects/info")
+    single = Path.join(info, "commit-graph")
+    chain_dir = Path.join(info, "commit-graphs")
+
+    cond do
+      File.exists?(single) ->
+        stat = File.stat!(single, time: :posix)
+        {single, stat.mtime, stat.size}
+
+      File.dir?(chain_dir) ->
+        chain_dir
+        |> File.ls!()
+        |> Enum.sort()
+        |> Enum.map(fn name ->
+          path = Path.join(chain_dir, name)
+          stat = File.stat!(path, time: :posix)
+          {name, stat.mtime, stat.size}
+        end)
+
+      true ->
+        nil
     end
   end
 end
