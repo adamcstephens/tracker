@@ -144,7 +144,7 @@ body {
 	background: var(--bg);
 	color: var(--text);
 	font-family: var(--sans);
-	font-size: 1rem;
+	font-size: 0.9rem;
 	line-height: 1.5;
 	min-height: 100vh;
 }
@@ -190,7 +190,6 @@ hgroup > *:not(:last-child) {
 
 hgroup > p {
 	color: var(--text-2);
-	font-size: 1rem;
 	font-weight: 400;
 }
 
@@ -238,7 +237,6 @@ kbd,
 samp,
 pre {
 	font-family: var(--mono);
-	font-size: 0.875em;
 }
 
 code,
@@ -262,7 +260,6 @@ pre {
 pre code {
 	background: transparent;
 	padding: 0;
-	font-size: 1em;
 }
 
 mark {
@@ -681,7 +678,6 @@ summary:focus-visible {
 	background: none;
 	border: none;
 	color: inherit;
-	font-size: 1.25rem;
 	opacity: 0.4;
 	cursor: pointer;
 	padding: 0.25rem;
@@ -759,7 +755,6 @@ a.revision-link {
 .revision-filters input[type="text"] {
 	margin-bottom: 0;
 	padding: 0.25rem 0.5rem;
-	font-size: 0.875rem;
 	height: auto;
 	width: auto;
 }
@@ -767,7 +762,6 @@ a.revision-link {
 .revision-filters button {
 	margin-bottom: 0;
 	padding: 0.25rem 0.5rem;
-	font-size: 0.875rem;
 	height: auto;
 	width: auto;
 }
@@ -776,7 +770,6 @@ a.revision-link {
 	display: flex;
 	align-items: center;
 	gap: 0.25rem;
-	font-size: 0.875rem;
 	margin-bottom: 0;
 	white-space: nowrap;
 	cursor: pointer;
@@ -793,7 +786,6 @@ a.revision-link {
 }
 
 .sign-in-banner-text {
-	font-size: 1.75rem;
 	font-weight: bold;
 	margin-bottom: 1.5rem;
 }
@@ -981,7 +973,6 @@ dl.option-body dd {
 	gap: 0.5625rem;
 	color: var(--text);
 	font-weight: 600;
-	font-size: 0.9375rem;
 	letter-spacing: -0.01em;
 	flex-shrink: 0;
 }
@@ -1003,7 +994,6 @@ dl.option-body dd {
 	background: var(--accent);
 	color: var(--accent-on);
 	font-family: var(--mono);
-	font-size: 0.6875rem;
 	font-weight: 600;
 }
 
@@ -1028,7 +1018,6 @@ dl.option-body dd {
 	gap: 0.375rem;
 	padding: 0.875rem;
 	color: var(--text-2);
-	font-size: 0.9375rem;
 	font-weight: 500;
 	line-height: 1;
 	border-bottom: 2px solid transparent;
@@ -1061,7 +1050,6 @@ dl.option-body dd {
 	border: 1px solid var(--line-soft);
 	border-radius: 0.5rem;
 	color: var(--text);
-	font-size: 0.8125rem;
 	font-weight: 500;
 	cursor: pointer;
 }
@@ -1085,7 +1073,6 @@ dl.option-body dd {
 
 .app-user__caret {
 	color: var(--text-3);
-	font-size: 0.6875rem;
 }
 
 /* Search input — row 2 */
@@ -1101,7 +1088,7 @@ dl.option-body dd {
 	margin-bottom: 0;
 	min-height: 2.25rem;
 	color: var(--text-3);
-	font-size: 0.875rem;
+	font-size: 1rem;
 	cursor: text;
 }
 
@@ -1140,7 +1127,6 @@ dl.option-body dd {
 	border-bottom-width: 2px;
 	border-radius: 0.25rem;
 	font-family: var(--mono);
-	font-size: 0.6875rem;
 	color: var(--text-2);
 	flex-shrink: 0;
 }
@@ -1175,7 +1161,6 @@ dl.option-body dd {
 	border-right: 1px solid var(--line);
 	color: var(--text-3);
 	font-family: var(--mono);
-	font-size: 0.6875rem;
 	letter-spacing: 0.04em;
 	text-transform: uppercase;
 }
@@ -1198,7 +1183,6 @@ dl.option-body dd {
 .lens__select {
 	color: var(--text);
 	font-family: var(--mono);
-	font-size: 0.78125rem;
 	font-weight: 500;
 	cursor: pointer;
 	padding-right: 0.875rem;
@@ -1211,7 +1195,6 @@ dl.option-body dd {
 	border-left: 1px solid var(--line);
 	color: var(--text-2);
 	font-family: var(--mono);
-	font-size: 0.71875rem;
 }
 
 /* Mobile bottom tabs — hidden on desktop */
@@ -1275,7 +1258,6 @@ dl.option-body dd {
 		justify-content: center;
 		min-height: 2.75rem;
 		padding: 0.375rem 0.25rem;
-		font-size: 0.75rem;
 		font-weight: 500;
 		color: var(--text-2);
 		border-radius: 0.5rem;
@@ -1304,7 +1286,6 @@ dl.option-body dd {
 }
 
 .change-show .change-prnum {
-	font-size: 1rem;
 	font-weight: 600;
 }
 
@@ -1314,7 +1295,6 @@ dl.option-body dd {
 	gap: 0.35rem;
 	padding: 0.2rem 0.6rem;
 	border-radius: 999px;
-	font-size: 0.8125rem;
 	font-weight: 600;
 	line-height: 1;
 	white-space: nowrap;
@@ -1388,7 +1368,6 @@ dl.option-body dd {
 
 .change-show .change-meta dt {
 	color: var(--text-2);
-	font-size: 0.8125rem;
 	text-transform: uppercase;
 	letter-spacing: 0.04em;
 	font-weight: 600;
@@ -1397,7 +1376,6 @@ dl.option-body dd {
 
 .change-show .change-meta dd {
 	margin: 0;
-	font-size: 0.9375rem;
 }
 
 .change-show .change-labels {
@@ -1409,7 +1387,6 @@ dl.option-body dd {
 
 .change-show .label-chip {
 	display: inline-block;
-	font-size: 0.75rem;
 	padding: 0.15rem 0.5rem;
 	border-radius: 999px;
 	background: var(--surface);
