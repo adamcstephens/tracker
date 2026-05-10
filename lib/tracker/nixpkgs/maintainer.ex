@@ -39,15 +39,7 @@ defmodule Tracker.Nixpkgs.Maintainer do
                  contains(github, ^arg(:search))
                else
                  true
-               end and
-                 if not is_nil(^arg(:channel_id)) do
-                   exists(
-                     packages,
-                     exists(revisions, channel_revision.channel_id == ^arg(:channel_id))
-                   )
-                 else
-                   true
-                 end
+               end
              )
     end
 

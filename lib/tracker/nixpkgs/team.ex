@@ -38,15 +38,7 @@ defmodule Tracker.Nixpkgs.Team do
                  contains(short_name, ^arg(:search)) or contains(scope, ^arg(:search))
                else
                  true
-               end and
-                 if not is_nil(^arg(:channel_id)) do
-                   exists(
-                     packages,
-                     exists(revisions, channel_revision.channel_id == ^arg(:channel_id))
-                   )
-                 else
-                   true
-                 end
+               end
              )
     end
 
