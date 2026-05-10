@@ -167,7 +167,7 @@ defmodule Tracker.GitServer do
   def handle_call(:fetch, _from, %State{} = state) do
     case run_git(state.path, ["fetch", "--prune", "origin"]) do
       {_, 0} ->
-        {:reply, :ok, state}
+        {:reply, :ok, write_commit_graph(state)}
 
       {output, code} ->
         {:reply, {:error, {:fetch_failed, code, String.trim(output)}}, state}
@@ -184,12 +184,15 @@ defmodule Tracker.GitServer do
     cond do
       not File.exists?(path) ->
         with %State{ready: true} = state <- clone(state) do
-          configure_remote(state)
+          state |> configure_remote() |> write_commit_graph()
         end
 
       healthy_repo?(path) ->
         Logger.info("GitServer: reusing existing repo at #{path}")
-        configure_remote(%State{state | ready: true})
+
+        %State{state | ready: true}
+        |> configure_remote()
+        |> write_commit_graph()
 
       true ->
         Logger.error(
@@ -228,7 +231,35 @@ defmodule Tracker.GitServer do
         stderr_to_stdout: true
       )
 
+    {_, 0} =
+      System.cmd("git", ["-C", path, "config", "core.commitGraph", "true"],
+        stderr_to_stdout: true
+      )
+
+    {_, 0} =
+      System.cmd("git", ["-C", path, "config", "gc.writeCommitGraph", "true"],
+        stderr_to_stdout: true
+      )
+
     state
+  end
+
+  # Writing the commit-graph keeps `git merge-base --is-ancestor` from
+  # walking and inflating commits out of the pack on every query. With
+  # ~800k commits in nixpkgs, the difference is roughly 1–5s vs tens of
+  # ms on the "not an ancestor" path.
+  defp write_commit_graph(%State{path: path} = state) do
+    case run_git(path, ["commit-graph", "write", "--reachable", "--changed-paths"]) do
+      {_, 0} ->
+        state
+
+      {output, code} ->
+        Logger.warning(
+          "GitServer: commit-graph write failed (#{code}) at #{path}: #{String.trim(output)}"
+        )
+
+        state
+    end
   end
 
   defp healthy_repo?(path) do
