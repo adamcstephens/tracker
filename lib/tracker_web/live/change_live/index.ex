@@ -123,6 +123,7 @@ defmodule TrackerWeb.ChangeLive.Index do
       socket
       |> assign(:table_params, tp)
       |> assign(:base_ref_filter, base_ref)
+      |> assign(:page_search, page_search(tp, base_ref))
       |> load_changes()
       |> push_event("update-url", %{
         path: TableParams.to_path(tp, "/changes", %{base_ref: base_ref})

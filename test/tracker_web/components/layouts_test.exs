@@ -157,6 +157,24 @@ defmodule TrackerWeb.LayoutsTest do
 
       assert html =~ ~r{<input[^>]*type="search"[^>]*value="elixir"[^>]*disabled}
     end
+
+    test "active page input reflects the new value after a search submit", %{conn: conn} do
+      Tracker.Nixpkgs.Package
+      |> Ash.Changeset.for_create(:create, %{attribute: "ripgrep"})
+      |> Ash.create!()
+
+      {:ok, view, _html} = live(conn, ~p"/packages?search=elixir")
+
+      html =
+        view
+        |> element("form#page-search")
+        |> render_change(%{"search" => "ripgrep"})
+
+      # If the LV doesn't sync :page_search after handling the event, the
+      # input snaps back to the previous value on re-render.
+      assert html =~ ~r{<input[^>]*type="search"[^>]*value="ripgrep"}
+      refute html =~ ~r{<input[^>]*type="search"[^>]*value="elixir"}
+    end
   end
 
   describe "passthrough chrome search on detail pages" do

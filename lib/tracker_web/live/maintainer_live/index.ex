@@ -61,6 +61,9 @@ defmodule TrackerWeb.MaintainerLive.Index do
     socket =
       socket
       |> assign(:table_params, tp)
+      |> update(:page_search, fn ps ->
+        %{ps | value: tp.search, hidden: TableParams.to_hidden_inputs(tp)}
+      end)
       |> load_maintainers()
       |> push_event("update-url", %{path: TableParams.to_path(tp, "/maintainers")})
 
