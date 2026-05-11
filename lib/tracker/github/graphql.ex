@@ -51,13 +51,15 @@ defmodule Tracker.GitHub.GraphQL do
   }
   """
 
-  @list_query """
-  query($owner: String!, $name: String!, $first: Int!, $after: String) {
+  @search_query """
+  query($q: String!, $first: Int!, $after: String) {
     rateLimit { cost remaining resetAt }
-    repository(owner: $owner, name: $name) {
-      pullRequests(orderBy: {field: UPDATED_AT, direction: DESC}, first: $first, after: $after) {
-        pageInfo { endCursor hasNextPage }
-        nodes {
+    search(query: $q, type: ISSUE, first: $first, after: $after) {
+      issueCount
+      pageInfo { endCursor hasNextPage }
+      nodes {
+        __typename
+        ... on PullRequest {
           #{@pr_fields}
         }
       }
@@ -141,18 +143,31 @@ defmodule Tracker.GitHub.GraphQL do
     end
   end
 
-  @type page :: %{pulls: [PullRequest.t()], next_cursor: String.t() | nil}
+  @type page :: %{
+          pulls: [PullRequest.t()],
+          next_cursor: String.t() | nil,
+          issue_count: non_neg_integer()
+        }
 
   @doc """
-  Lists pull requests for `owner/name`, ordered by `updatedAt` descending.
+  Searches `repo` for pull requests updated at or after `since`, sorted
+  ascending by `updatedAt`.
+
+  Anchoring on a stable lower bound (vs. a mutable upper bound) avoids the
+  cursor-drift skips inherent to descending walks of `pullRequests` ordered
+  by a mutable field.
 
   Returns a single page of up to `:first` results plus the cursor for the
-  next page. Callers paginate by re-invoking with `cursor: result.next_cursor`
-  until `next_cursor` is `nil`.
+  next page and the total `issueCount` from GitHub. Callers paginate by
+  re-invoking with `cursor: result.next_cursor` until `next_cursor` is `nil`.
+
+  Note: the GitHub Search API caps results at 1000 regardless of pagination.
+  Callers handling potentially large result sets should advance `since` and
+  re-query when `issue_count > 1000`.
   """
-  @spec list_repository_prs(String.t(), String.t(), keyword) ::
+  @spec search_repository_prs(String.t(), DateTime.t(), keyword) ::
           {:ok, page} | {:error, term}
-  def list_repository_prs(owner, name, opts \\ []) when is_binary(owner) and is_binary(name) do
+  def search_repository_prs(repo, %DateTime{} = since, opts \\ []) when is_binary(repo) do
     token = Keyword.get_lazy(opts, :token, &Tracker.GitHub.installation_token!/0)
     plug = Keyword.get(opts, :plug)
     table = Keyword.get(opts, :rate_limit_table, RateLimitCache)
@@ -160,8 +175,7 @@ defmodule Tracker.GitHub.GraphQL do
     cursor = Keyword.get(opts, :cursor)
 
     variables = %{
-      "owner" => owner,
-      "name" => name,
+      "q" => build_search_query(repo, since),
       "first" => first,
       "after" => cursor
     }
@@ -175,7 +189,7 @@ defmodule Tracker.GitHub.GraphQL do
           {"accept", "application/vnd.github+json"},
           {"user-agent", "Tracker"}
         ],
-        json: %{query: @list_query, variables: variables},
+        json: %{query: @search_query, variables: variables},
         decode_body: true,
         retry: false
       ]
@@ -183,7 +197,7 @@ defmodule Tracker.GitHub.GraphQL do
 
     case Req.request(Req.new(), req_opts) do
       {:ok, %Req.Response{status: 200, body: body}} ->
-        handle_list_body(body, table)
+        handle_search_body(body, table)
 
       {:ok, %Req.Response{status: status}} when status in [403, 429] ->
         {:error, rate_limit_error(status)}
@@ -194,7 +208,7 @@ defmodule Tracker.GitHub.GraphQL do
            code: status,
            message: "GitHub GraphQL server error (#{status})",
            source: body,
-           step: {__MODULE__, :list_repository_prs}
+           step: {__MODULE__, :search_repository_prs}
          )}
 
       {:ok, %Req.Response{status: status, body: body}} ->
@@ -203,7 +217,7 @@ defmodule Tracker.GitHub.GraphQL do
            code: status,
            message: "Unexpected GitHub GraphQL status (#{status})",
            source: body,
-           step: {__MODULE__, :list_repository_prs}
+           step: {__MODULE__, :search_repository_prs}
          )}
 
       {:error, reason} ->
@@ -211,23 +225,28 @@ defmodule Tracker.GitHub.GraphQL do
          Error.new(
            message: "Error during GraphQL request",
            source: reason,
-           step: {__MODULE__, :list_repository_prs}
+           step: {__MODULE__, :search_repository_prs}
          )}
     end
   end
 
-  defp handle_list_body(%{"errors" => errors} = body, _table)
+  defp build_search_query(repo, %DateTime{} = since) do
+    iso = since |> DateTime.truncate(:second) |> DateTime.to_iso8601()
+    "repo:#{repo} is:pr updated:>=#{iso} sort:updated-asc"
+  end
+
+  defp handle_search_body(%{"errors" => errors} = body, _table)
        when is_list(errors) and not is_map_key(body, "data") do
     handle_errors_only(errors)
   end
 
-  defp handle_list_body(%{"data" => nil, "errors" => errors}, _table)
+  defp handle_search_body(%{"data" => nil, "errors" => errors}, _table)
        when is_list(errors) do
     handle_errors_only(errors)
   end
 
-  defp handle_list_body(
-         %{"data" => %{"repository" => %{"pullRequests" => pr_conn}} = data} = body,
+  defp handle_search_body(
+         %{"data" => %{"search" => search_conn} = data} = body,
          table
        ) do
     if errors = Map.get(body, "errors") do
@@ -238,12 +257,14 @@ defmodule Tracker.GitHub.GraphQL do
     maybe_log_cost(rate_limit)
     maybe_track_rate_limit(rate_limit, table)
 
-    nodes = Map.get(pr_conn, "nodes", [])
-    page_info = Map.get(pr_conn, "pageInfo", %{})
+    nodes = Map.get(search_conn, "nodes", [])
+    page_info = Map.get(search_conn, "pageInfo", %{})
+    issue_count = Map.get(search_conn, "issueCount", 0)
 
     pulls =
       nodes
       |> Enum.reject(&is_nil/1)
+      |> Enum.filter(&(&1["__typename"] == "PullRequest"))
       |> Enum.map(&decode_pr(&1["id"], &1))
 
     next_cursor =
@@ -252,15 +273,15 @@ defmodule Tracker.GitHub.GraphQL do
         _ -> nil
       end
 
-    {:ok, %{pulls: pulls, next_cursor: next_cursor}}
+    {:ok, %{pulls: pulls, next_cursor: next_cursor, issue_count: issue_count}}
   end
 
-  defp handle_list_body(body, _table) do
+  defp handle_search_body(body, _table) do
     {:error,
      Error.new(
        message: "Malformed GitHub GraphQL response",
        source: body,
-       step: {__MODULE__, :list_repository_prs}
+       step: {__MODULE__, :search_repository_prs}
      )}
   end
 
