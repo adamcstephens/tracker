@@ -8,21 +8,21 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorkerTest do
 
   describe "discover_pages/2" do
     test "upserts every PR on every fetched page and enqueues head_sha_changed for new open/draft" do
-      fetcher = fn
-        nil ->
-          {:ok,
-           %{
-             pulls: [
-               pr_struct(number: 5001, state: :open),
-               pr_struct(number: 5002, state: :draft)
-             ],
-             next_cursor: nil
-           }}
+      fetcher = fn _since, nil ->
+        {:ok,
+         %{
+           pulls: [
+             pr_struct(number: 5001, state: :open),
+             pr_struct(number: 5002, state: :draft)
+           ],
+           next_cursor: nil,
+           issue_count: 2
+         }}
       end
 
-      watermark = ~U[2026-01-01 00:00:00Z]
+      since = ~U[2026-01-01 00:00:00Z]
 
-      assert {:ok, 2} = ChangeDiscoveryWorker.discover_pages(fetcher, watermark)
+      assert {:ok, 2} = ChangeDiscoveryWorker.discover_pages(fetcher, since)
 
       assert {:ok, %Change{state: :open}} = Change.get_by_number(5001)
       assert {:ok, %Change{state: :draft}} = Change.get_by_number(5002)
@@ -51,145 +51,159 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorkerTest do
         }
       ])
 
-      fetcher = fn
-        nil -> {:ok, %{pulls: [pr_struct(number: 5050, state: :open)], next_cursor: nil}}
+      fetcher = fn _since, nil ->
+        {:ok, %{pulls: [pr_struct(number: 5050, state: :open)], next_cursor: nil, issue_count: 1}}
       end
 
-      watermark = ~U[2026-01-01 00:00:00Z]
-
-      assert {:ok, 1} = ChangeDiscoveryWorker.discover_pages(fetcher, watermark)
+      assert {:ok, 1} = ChangeDiscoveryWorker.discover_pages(fetcher, ~U[2026-01-01 00:00:00Z])
       refute_enqueued(worker: Tracker.Nixpkgs.ChangeArtifactRefreshWorker)
     end
 
     test "does not enqueue artifact work for newly-discovered closed (non-merged) PRs" do
-      fetcher = fn
-        nil -> {:ok, %{pulls: [pr_struct(number: 5099, state: :closed)], next_cursor: nil}}
+      fetcher = fn _since, nil ->
+        {:ok,
+         %{pulls: [pr_struct(number: 5099, state: :closed)], next_cursor: nil, issue_count: 1}}
       end
 
-      watermark = ~U[2026-01-01 00:00:00Z]
-
-      assert {:ok, 1} = ChangeDiscoveryWorker.discover_pages(fetcher, watermark)
+      assert {:ok, 1} = ChangeDiscoveryWorker.discover_pages(fetcher, ~U[2026-01-01 00:00:00Z])
       assert {:ok, %Change{state: :closed}} = Change.get_by_number(5099)
       refute_enqueued(worker: Tracker.Nixpkgs.ChangeArtifactRefreshWorker)
     end
 
-    test "stops paging when last PR on page is older than watermark" do
-      watermark = ~U[2026-04-15 00:00:00Z]
-
+    test "drains all pages within a single since-window" do
       fetcher = fn
-        nil ->
+        _since, nil ->
           {:ok,
            %{
-             pulls: [
-               pr_struct(number: 6001, updated_at: ~U[2026-04-20 00:00:00Z]),
-               pr_struct(number: 6002, updated_at: ~U[2026-04-10 00:00:00Z])
-             ],
-             next_cursor: "CURSOR_2"
+             pulls: [pr_struct(number: 7001, updated_at: ~U[2026-04-10 00:00:00Z])],
+             next_cursor: "CURSOR_2",
+             issue_count: 2
            }}
 
-        "CURSOR_2" ->
-          raise "should not fetch the next page"
-      end
-
-      assert {:ok, 2} = ChangeDiscoveryWorker.discover_pages(fetcher, watermark)
-      assert {:ok, %Change{}} = Change.get_by_number(6001)
-      assert {:ok, %Change{}} = Change.get_by_number(6002)
-    end
-
-    test "continues paging while last PR on page is newer than watermark" do
-      watermark = ~U[2026-04-01 00:00:00Z]
-
-      fetcher = fn
-        nil ->
+        _since, "CURSOR_2" ->
           {:ok,
            %{
-             pulls: [pr_struct(number: 7001, updated_at: ~U[2026-04-20 00:00:00Z])],
-             next_cursor: "CURSOR_2"
-           }}
-
-        "CURSOR_2" ->
-          {:ok,
-           %{
-             pulls: [pr_struct(number: 7002, updated_at: ~U[2026-04-10 00:00:00Z])],
-             next_cursor: nil
+             pulls: [pr_struct(number: 7002, updated_at: ~U[2026-04-20 00:00:00Z])],
+             next_cursor: nil,
+             issue_count: 2
            }}
       end
 
-      assert {:ok, 2} = ChangeDiscoveryWorker.discover_pages(fetcher, watermark)
+      assert {:ok, 2} =
+               ChangeDiscoveryWorker.discover_pages(fetcher, ~U[2026-04-01 00:00:00Z])
+
       assert {:ok, %Change{}} = Change.get_by_number(7001)
       assert {:ok, %Change{}} = Change.get_by_number(7002)
     end
 
     test "stops on empty page" do
-      watermark = ~U[2026-01-01 00:00:00Z]
-
-      fetcher = fn
-        nil -> {:ok, %{pulls: [], next_cursor: nil}}
+      fetcher = fn _since, nil ->
+        {:ok, %{pulls: [], next_cursor: nil, issue_count: 0}}
       end
 
-      assert {:ok, 0} = ChangeDiscoveryWorker.discover_pages(fetcher, watermark)
+      assert {:ok, 0} = ChangeDiscoveryWorker.discover_pages(fetcher, ~U[2026-01-01 00:00:00Z])
     end
 
-    test "stops when next_cursor is nil even if last PR is newer than watermark" do
-      watermark = ~U[2026-01-01 00:00:00Z]
+    test "re-queries with advanced since when issue_count exceeds the search cap" do
+      initial_since = ~U[2026-04-01 00:00:00Z]
+      capped_last = ~U[2026-04-05 12:00:00Z]
 
-      fetcher = fn
-        nil ->
-          {:ok,
-           %{
-             pulls: [pr_struct(number: 7100, updated_at: ~U[2026-04-20 00:00:00Z])],
-             next_cursor: nil
-           }}
+      {:ok, agent} = Agent.start_link(fn -> [] end)
+
+      fetcher = fn since, cursor ->
+        Agent.update(agent, &[{since, cursor} | &1])
+
+        case {since, cursor} do
+          {^initial_since, nil} ->
+            {:ok,
+             %{
+               pulls: [
+                 pr_struct(number: 7501, updated_at: ~U[2026-04-02 00:00:00Z]),
+                 pr_struct(number: 7502, updated_at: capped_last)
+               ],
+               next_cursor: nil,
+               issue_count: 1500
+             }}
+
+          {^capped_last, nil} ->
+            {:ok,
+             %{
+               pulls: [pr_struct(number: 7503, updated_at: ~U[2026-04-06 00:00:00Z])],
+               next_cursor: nil,
+               issue_count: 1
+             }}
+        end
       end
 
-      assert {:ok, 1} = ChangeDiscoveryWorker.discover_pages(fetcher, watermark)
+      assert {:ok, 3} = ChangeDiscoveryWorker.discover_pages(fetcher, initial_since)
+
+      calls = Agent.get(agent, & &1) |> Enum.reverse()
+      assert calls == [{initial_since, nil}, {capped_last, nil}]
+
+      assert {:ok, %Change{}} = Change.get_by_number(7501)
+      assert {:ok, %Change{}} = Change.get_by_number(7502)
+      assert {:ok, %Change{}} = Change.get_by_number(7503)
+    end
+
+    test "does not re-query when issue_count is within the cap" do
+      fetcher = fn
+        _since, nil ->
+          {:ok,
+           %{
+             pulls: [pr_struct(number: 7600, updated_at: ~U[2026-04-05 00:00:00Z])],
+             next_cursor: nil,
+             issue_count: 1
+           }}
+
+        _since, _cursor ->
+          raise "should not re-query"
+      end
+
+      assert {:ok, 1} =
+               ChangeDiscoveryWorker.discover_pages(fetcher, ~U[2026-04-01 00:00:00Z])
     end
 
     test "does not enqueue artifact work for merged PRs" do
-      watermark = ~U[2026-01-01 00:00:00Z]
-
-      fetcher = fn
-        nil ->
-          {:ok,
-           %{
-             pulls: [
-               pr_struct(
-                 number: 8001,
-                 state: :merged,
-                 merged_at: ~U[2026-04-01 00:00:00Z],
-                 merge_commit_sha: "deadbeef"
-               )
-             ],
-             next_cursor: nil
-           }}
+      fetcher = fn _since, nil ->
+        {:ok,
+         %{
+           pulls: [
+             pr_struct(
+               number: 8001,
+               state: :merged,
+               merged_at: ~U[2026-04-01 00:00:00Z],
+               merge_commit_sha: "deadbeef"
+             )
+           ],
+           next_cursor: nil,
+           issue_count: 1
+         }}
       end
 
-      assert {:ok, 1} = ChangeDiscoveryWorker.discover_pages(fetcher, watermark)
+      assert {:ok, 1} = ChangeDiscoveryWorker.discover_pages(fetcher, ~U[2026-01-01 00:00:00Z])
       assert {:ok, %Change{state: :merged}} = Change.get_by_number(8001)
       refute_enqueued(worker: Tracker.Nixpkgs.ChangeArtifactRefreshWorker)
     end
 
     test "seeds base_ref ChangeBranch for newly-merged PRs" do
-      watermark = ~U[2026-01-01 00:00:00Z]
-
-      fetcher = fn
-        nil ->
-          {:ok,
-           %{
-             pulls: [
-               pr_struct(
-                 number: 8200,
-                 state: :merged,
-                 base_ref: "master",
-                 merged_at: ~U[2026-04-01 00:00:00Z],
-                 merge_commit_sha: "deadbeef"
-               )
-             ],
-             next_cursor: nil
-           }}
+      fetcher = fn _since, nil ->
+        {:ok,
+         %{
+           pulls: [
+             pr_struct(
+               number: 8200,
+               state: :merged,
+               base_ref: "master",
+               merged_at: ~U[2026-04-01 00:00:00Z],
+               merge_commit_sha: "deadbeef"
+             )
+           ],
+           next_cursor: nil,
+           issue_count: 1
+         }}
       end
 
-      assert {:ok, 1} = ChangeDiscoveryWorker.discover_pages(fetcher, watermark)
+      assert {:ok, 1} = ChangeDiscoveryWorker.discover_pages(fetcher, ~U[2026-01-01 00:00:00Z])
       assert {:ok, %Change{id: change_id, state: :merged}} = Change.get_by_number(8200)
 
       branches = ChangeBranch.read!() |> Enum.filter(&(&1.change_id == change_id))
@@ -197,26 +211,24 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorkerTest do
     end
 
     test "ignores non-propagation base_ref when seeding ChangeBranch" do
-      watermark = ~U[2026-01-01 00:00:00Z]
-
-      fetcher = fn
-        nil ->
-          {:ok,
-           %{
-             pulls: [
-               pr_struct(
-                 number: 8201,
-                 state: :merged,
-                 base_ref: "topic/random-branch",
-                 merged_at: ~U[2026-04-01 00:00:00Z],
-                 merge_commit_sha: "deadbeef"
-               )
-             ],
-             next_cursor: nil
-           }}
+      fetcher = fn _since, nil ->
+        {:ok,
+         %{
+           pulls: [
+             pr_struct(
+               number: 8201,
+               state: :merged,
+               base_ref: "topic/random-branch",
+               merged_at: ~U[2026-04-01 00:00:00Z],
+               merge_commit_sha: "deadbeef"
+             )
+           ],
+           next_cursor: nil,
+           issue_count: 1
+         }}
       end
 
-      assert {:ok, 1} = ChangeDiscoveryWorker.discover_pages(fetcher, watermark)
+      assert {:ok, 1} = ChangeDiscoveryWorker.discover_pages(fetcher, ~U[2026-01-01 00:00:00Z])
       assert {:ok, %Change{id: change_id}} = Change.get_by_number(8201)
 
       branches = ChangeBranch.read!() |> Enum.filter(&(&1.change_id == change_id))
@@ -234,7 +246,7 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorkerTest do
         step: nil
       }
 
-      fetcher = fn nil -> {:error, error} end
+      fetcher = fn _since, nil -> {:error, error} end
 
       assert {:error, %GitHub.Error{reason: :rate_limited}} =
                ChangeDiscoveryWorker.discover_pages(fetcher, ~U[2026-01-01 00:00:00Z])
@@ -251,15 +263,15 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorkerTest do
         step: nil
       }
 
-      fetcher = fn nil -> {:error, error} end
+      fetcher = fn _since, nil -> {:error, error} end
 
       assert {:error, %GitHub.Error{reason: :server_error}} =
                ChangeDiscoveryWorker.discover_pages(fetcher, ~U[2026-01-01 00:00:00Z])
     end
   end
 
-  describe "watermark/0" do
-    test "returns the max gh_updated_at when newer than the 90-day floor" do
+  describe "checkpoint/0" do
+    test "returns max gh_updated_at minus 60s overlap when newer than the 90-day floor" do
       Change.bulk_upsert_all([
         %{
           number: 9101,
@@ -275,12 +287,12 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorkerTest do
         }
       ])
 
-      assert ChangeDiscoveryWorker.watermark() == ~U[2026-04-20 00:00:00Z]
+      assert ChangeDiscoveryWorker.checkpoint() == ~U[2026-04-19 23:59:00Z]
     end
 
     test "returns the 90-day floor when the DB is empty" do
       floor = DateTime.utc_now() |> DateTime.add(-90, :day)
-      got = ChangeDiscoveryWorker.watermark()
+      got = ChangeDiscoveryWorker.checkpoint()
 
       assert DateTime.diff(got, floor) |> abs() < 5
     end

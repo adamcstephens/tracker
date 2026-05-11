@@ -38,7 +38,7 @@ defmodule Tracker.GitHub.GraphQLTest do
     end
   end
 
-  defp list_response(body, assert_variables \\ fn _ -> :ok end) do
+  defp graphql_response_with_vars(body, assert_variables \\ fn _ -> :ok end) do
     fn conn ->
       assert conn.method == "POST"
       assert conn.request_path == "/graphql"
@@ -430,40 +430,40 @@ defmodule Tracker.GitHub.GraphQLTest do
     end
   end
 
-  describe "list_repository_prs/3" do
-    test "returns decoded pulls and the next cursor when more pages remain" do
+  describe "search_repository_prs/3" do
+    test "returns decoded pulls, next cursor, and issue_count when more pages remain" do
       Req.Test.stub(
         __MODULE__,
-        list_response(
+        graphql_response_with_vars(
           %{
             "data" => %{
               "rateLimit" => rate_limit(),
-              "repository" => %{
-                "pullRequests" => %{
-                  "pageInfo" => %{"endCursor" => "CURSOR_2", "hasNextPage" => true},
-                  "nodes" => [
-                    pr_node(
-                      id: "PR_a",
-                      number: 1001,
-                      mergedBy: %{"login" => "merger", "databaseId" => 42}
-                    ),
-                    pr_node(id: "PR_b", number: 1002)
-                  ]
-                }
+              "search" => %{
+                "issueCount" => 250,
+                "pageInfo" => %{"endCursor" => "CURSOR_2", "hasNextPage" => true},
+                "nodes" => [
+                  pr_node(
+                    id: "PR_a",
+                    number: 1001,
+                    mergedBy: %{"login" => "merger", "databaseId" => 42}
+                  ),
+                  pr_node(id: "PR_b", number: 1002)
+                ]
               }
             }
           },
           fn vars ->
-            assert vars["owner"] == "NixOS"
-            assert vars["name"] == "nixpkgs"
+            assert vars["q"] ==
+                     "repo:NixOS/nixpkgs is:pr updated:>=2026-04-15T00:00:00Z sort:updated-asc"
+
             assert vars["first"] == 100
             assert vars["after"] == nil
           end
         )
       )
 
-      assert {:ok, %{pulls: pulls, next_cursor: "CURSOR_2"}} =
-               GraphQL.list_repository_prs("NixOS", "nixpkgs", call())
+      assert {:ok, %{pulls: pulls, next_cursor: "CURSOR_2", issue_count: 250}} =
+               GraphQL.search_repository_prs("NixOS/nixpkgs", ~U[2026-04-15 00:00:00Z], call())
 
       assert [
                %PullRequest{node_id: "PR_a", number: 1001, merged_by_github_id: 42},
@@ -471,18 +471,45 @@ defmodule Tracker.GitHub.GraphQLTest do
              ] = pulls
     end
 
-    test "passes :cursor as the after variable" do
+    test "truncates sub-second precision in the since timestamp" do
       Req.Test.stub(
         __MODULE__,
-        list_response(
+        graphql_response_with_vars(
           %{
             "data" => %{
               "rateLimit" => rate_limit(),
-              "repository" => %{
-                "pullRequests" => %{
-                  "pageInfo" => %{"endCursor" => nil, "hasNextPage" => false},
-                  "nodes" => []
-                }
+              "search" => %{
+                "issueCount" => 0,
+                "pageInfo" => %{"endCursor" => nil, "hasNextPage" => false},
+                "nodes" => []
+              }
+            }
+          },
+          fn vars ->
+            assert vars["q"] =~ "updated:>=2026-04-15T12:34:56Z"
+          end
+        )
+      )
+
+      assert {:ok, _} =
+               GraphQL.search_repository_prs(
+                 "NixOS/nixpkgs",
+                 ~U[2026-04-15 12:34:56.789Z],
+                 call()
+               )
+    end
+
+    test "passes :cursor as the after variable" do
+      Req.Test.stub(
+        __MODULE__,
+        graphql_response_with_vars(
+          %{
+            "data" => %{
+              "rateLimit" => rate_limit(),
+              "search" => %{
+                "issueCount" => 0,
+                "pageInfo" => %{"endCursor" => nil, "hasNextPage" => false},
+                "nodes" => []
               }
             }
           },
@@ -490,41 +517,66 @@ defmodule Tracker.GitHub.GraphQLTest do
         )
       )
 
-      assert {:ok, %{pulls: [], next_cursor: nil}} =
-               GraphQL.list_repository_prs("NixOS", "nixpkgs", call(cursor: "CURSOR_X"))
+      assert {:ok, %{pulls: [], next_cursor: nil, issue_count: 0}} =
+               GraphQL.search_repository_prs(
+                 "NixOS/nixpkgs",
+                 ~U[2026-04-15 00:00:00Z],
+                 call(cursor: "CURSOR_X")
+               )
     end
 
     test "returns next_cursor: nil when hasNextPage is false" do
       Req.Test.stub(
         __MODULE__,
-        list_response(%{
+        graphql_response_with_vars(%{
           "data" => %{
             "rateLimit" => rate_limit(),
-            "repository" => %{
-              "pullRequests" => %{
-                "pageInfo" => %{"endCursor" => "C", "hasNextPage" => false},
-                "nodes" => [pr_node(id: "PR_z", number: 1)]
-              }
+            "search" => %{
+              "issueCount" => 1,
+              "pageInfo" => %{"endCursor" => "C", "hasNextPage" => false},
+              "nodes" => [pr_node(id: "PR_z", number: 1)]
             }
           }
         })
       )
 
-      assert {:ok, %{pulls: [%PullRequest{}], next_cursor: nil}} =
-               GraphQL.list_repository_prs("NixOS", "nixpkgs", call())
+      assert {:ok, %{pulls: [%PullRequest{}], next_cursor: nil, issue_count: 1}} =
+               GraphQL.search_repository_prs("NixOS/nixpkgs", ~U[2026-04-15 00:00:00Z], call())
+    end
+
+    test "filters out non-PullRequest nodes defensively" do
+      Req.Test.stub(
+        __MODULE__,
+        graphql_response_with_vars(%{
+          "data" => %{
+            "rateLimit" => rate_limit(),
+            "search" => %{
+              "issueCount" => 2,
+              "pageInfo" => %{"endCursor" => nil, "hasNextPage" => false},
+              "nodes" => [
+                pr_node(id: "PR_ok", number: 7),
+                %{"__typename" => "Issue", "id" => "I_x"}
+              ]
+            }
+          }
+        })
+      )
+
+      assert {:ok, %{pulls: [%PullRequest{number: 7}], issue_count: 2}} =
+               GraphQL.search_repository_prs("NixOS/nixpkgs", ~U[2026-04-15 00:00:00Z], call())
     end
 
     test "treats GraphQL RATE_LIMITED as :rate_limited error" do
       Req.Test.stub(
         __MODULE__,
-        list_response(%{
+        graphql_response_with_vars(%{
           "data" => nil,
           "errors" => [%{"type" => "RATE_LIMITED", "message" => "limit"}]
         })
       )
 
       assert {:error, %Error{reason: :rate_limited}} =
-               GraphQL.list_repository_prs("NixOS", "nixpkgs", call())
+               GraphQL.search_repository_prs("NixOS/nixpkgs", ~U[2026-04-15 00:00:00Z], call())
     end
 
     test "low remaining updates :graphql bucket", %{table: table} do
@@ -533,21 +585,24 @@ defmodule Tracker.GitHub.GraphQLTest do
 
       Req.Test.stub(
         __MODULE__,
-        list_response(%{
+        graphql_response_with_vars(%{
           "data" => %{
             "rateLimit" => rate_limit(50, reset_at),
-            "repository" => %{
-              "pullRequests" => %{
-                "pageInfo" => %{"endCursor" => nil, "hasNextPage" => false},
-                "nodes" => []
-              }
+            "search" => %{
+              "issueCount" => 0,
+              "pageInfo" => %{"endCursor" => nil, "hasNextPage" => false},
+              "nodes" => []
             }
           }
         })
       )
 
       assert {:ok, _} =
-               GraphQL.list_repository_prs("NixOS", "nixpkgs", call(rate_limit_table: table))
+               GraphQL.search_repository_prs(
+                 "NixOS/nixpkgs",
+                 ~U[2026-04-15 00:00:00Z],
+                 call(rate_limit_table: table)
+               )
 
       assert {:limited, seconds} = RateLimitCache.check(:graphql, table)
       assert seconds > 0
@@ -559,7 +614,7 @@ defmodule Tracker.GitHub.GraphQLTest do
       end)
 
       assert {:error, %Error{reason: :rate_limited}} =
-               GraphQL.list_repository_prs("NixOS", "nixpkgs", call())
+               GraphQL.search_repository_prs("NixOS/nixpkgs", ~U[2026-04-15 00:00:00Z], call())
     end
 
     test "5xx returns GitHub.Error" do
@@ -568,7 +623,7 @@ defmodule Tracker.GitHub.GraphQLTest do
       end)
 
       assert {:error, %Error{code: 502}} =
-               GraphQL.list_repository_prs("NixOS", "nixpkgs", call())
+               GraphQL.search_repository_prs("NixOS/nixpkgs", ~U[2026-04-15 00:00:00Z], call())
     end
   end
 end

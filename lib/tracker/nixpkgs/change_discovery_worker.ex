@@ -7,9 +7,11 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorker do
   merges. Artifact processing is driven separately by the refresh worker
   based on state transitions.
 
-  Uses GitHub's GraphQL API so the listing response carries fields the
-  REST list endpoint omits — notably `mergedBy` (populates
-  `changes.merged_by_github_id`) and the real `mergeCommit.oid`.
+  Uses GitHub's GraphQL `search` API anchored on a stable lower bound
+  (`updated:>=since sort:updated-asc`) and drains every page. Anchoring
+  on a lower bound rather than walking `pullRequests` ordered by
+  `UPDATED_AT DESC` avoids cursor-drift skips at page boundaries when
+  PRs are re-bumped or created mid-pagination.
   """
   use Oban.Worker, queue: :changes, max_attempts: 5
 
@@ -22,8 +24,10 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorker do
   alias Tracker.Nixpkgs.ChangeBranch
 
   @repo "NixOS/nixpkgs"
-  @watermark_floor_days 90
-  @max_pages 10
+  @checkpoint_floor_days 90
+  @checkpoint_overlap_seconds 60
+  @search_result_cap 1000
+  @max_cycles 100
 
   @impl Oban.Worker
   def perform(%Oban.Job{}) do
@@ -33,11 +37,10 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorker do
         :ok
 
       :ok ->
-        [owner, repo] = String.split(@repo, "/")
         token = Tracker.GitHub.installation_token!()
-        fetcher = page_fetcher(owner, repo, token)
+        fetcher = page_fetcher(@repo, token)
 
-        case discover_pages(fetcher, watermark()) do
+        case discover_pages(fetcher, checkpoint()) do
           {:ok, _count} ->
             :ok
 
@@ -58,65 +61,88 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorker do
   end
 
   @doc """
-  Pages through the fetcher's results, upserting every PR on every fetched
-  page. Stops when:
+  Drains every PR updated at or after `since`, paginating through the
+  fetcher's results until exhausted.
 
-  - The fetcher returns no pulls
-  - The fetcher returns `next_cursor: nil`
-  - The last PR on a page has `updated_at < watermark` (all older PRs on
-    later pages have already been seen or are out of our lookback window)
-  - The maximum page limit (#{@max_pages}) is reached
+  Re-queries with an advanced lower bound when the GitHub Search API's
+  #{@search_result_cap}-result cap is hit (`issue_count > #{@search_result_cap}`),
+  so no PRs are dropped during high-volume catch-up windows.
 
-  The `fetcher` is `(cursor :: String.t() | nil) -> {:ok, page} | {:error, term}`
-  where `page` is `%{pulls: [PullRequest.t()], next_cursor: String.t() | nil}`.
+  The `fetcher` is `(since :: DateTime.t(), cursor :: String.t() | nil) ->
+    {:ok, page} | {:error, term}` where `page` is
+  `%{pulls: [PullRequest.t()], next_cursor: String.t() | nil,
+     issue_count: non_neg_integer()}`.
 
   Returns `{:ok, upserted_count}` or `{:error, reason}`.
   """
-  def discover_pages(fetcher, %DateTime{} = watermark) do
-    discover_page(fetcher, watermark, nil, 1, 0)
+  def discover_pages(fetcher, %DateTime{} = since) do
+    drain(fetcher, since, 0, 1)
   end
 
-  defp discover_page(_fetcher, _watermark, _cursor, page, total) when page > @max_pages do
-    Logger.warning(msg: "discovery hit max page limit", page: page, upserted: total)
+  defp drain(_fetcher, _since, total, cycle) when cycle > @max_cycles do
+    Logger.warning(msg: "discovery hit max cycles", cycle: cycle, upserted: total)
     {:ok, total}
   end
 
-  defp discover_page(fetcher, watermark, cursor, page, total) do
-    case fetcher.(cursor) do
-      {:ok, %{pulls: [], next_cursor: _}} ->
-        Logger.info(msg: "discovery page empty, stopping", page: page, upserted: total)
+  defp drain(fetcher, since, total, cycle) do
+    case drain_query(fetcher, since, nil, 0, nil) do
+      {:ok, {0, _last, _capped?}} ->
         {:ok, total}
 
-      {:ok, %{pulls: pulls, next_cursor: next_cursor}} ->
-        {:ok, count} = upsert_pulls(pulls)
+      {:ok, {count, last_updated_at, true}} when not is_nil(last_updated_at) ->
+        Logger.info(
+          msg: "discovery hit search result cap, advancing since",
+          cycle: cycle,
+          upserted_so_far: total + count,
+          new_since: last_updated_at
+        )
+
+        drain(fetcher, last_updated_at, total + count, cycle + 1)
+
+      {:ok, {count, _last, _capped?}} ->
+        {:ok, total + count}
+
+      {:error, _reason} = error ->
+        error
+    end
+  end
+
+  defp drain_query(fetcher, since, cursor, count, last_updated_at) do
+    case fetcher.(since, cursor) do
+      {:ok, %{pulls: pulls, next_cursor: next_cursor, issue_count: issue_count}} ->
+        {:ok, _} = upsert_pulls(pulls)
+        new_count = count + length(pulls)
+        new_last = max_updated_at(last_updated_at, pulls)
 
         Logger.info(
           msg: "discovery page processed",
-          page: page,
+          cursor: cursor || "<initial>",
           fetched: length(pulls),
-          upserted: count
+          issue_count: issue_count
         )
 
-        cond do
-          is_nil(next_cursor) ->
-            {:ok, total + count}
-
-          last_older_than_watermark?(pulls, watermark) ->
-            Logger.info(
-              msg: "discovery reached watermark, stopping",
-              page: page,
-              upserted: total + count
-            )
-
-            {:ok, total + count}
-
-          true ->
-            discover_page(fetcher, watermark, next_cursor, page + 1, total + count)
+        if is_nil(next_cursor) do
+          {:ok, {new_count, new_last, issue_count > @search_result_cap}}
+        else
+          drain_query(fetcher, since, next_cursor, new_count, new_last)
         end
 
       {:error, _reason} = error ->
         error
     end
+  end
+
+  defp max_updated_at(prev, pulls) do
+    Enum.reduce(pulls, prev, fn
+      %PullRequest{updated_at: %DateTime{} = u}, nil ->
+        u
+
+      %PullRequest{updated_at: %DateTime{} = u}, acc ->
+        if DateTime.after?(u, acc), do: u, else: acc
+
+      _, acc ->
+        acc
+    end)
   end
 
   @doc """
@@ -195,18 +221,17 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorker do
   end
 
   @doc """
-  Backfills historical PRs by paging backwards through the GitHub API
-  using the same full-lifecycle upsert path as scheduled discovery.
+  Backfills historical PRs by anchoring on the #{@checkpoint_floor_days}-day
+  floor and draining via the same `search`-based path as scheduled discovery.
 
-  Stops when it reaches PRs older than #{@watermark_floor_days} days
+  Stops when it reaches PRs older than #{@checkpoint_floor_days} days
   (artifact expiry window).
   """
   def backfill do
-    [owner, repo] = String.split(@repo, "/")
     token = Tracker.GitHub.installation_token!()
-    cutoff = DateTime.utc_now() |> DateTime.add(-@watermark_floor_days, :day)
+    cutoff = DateTime.utc_now() |> DateTime.add(-@checkpoint_floor_days, :day)
 
-    case discover_pages(page_fetcher(owner, repo, token), cutoff) do
+    case discover_pages(page_fetcher(@repo, token), cutoff) do
       {:ok, count} ->
         Logger.info("Backfill complete: upserted #{count} PRs")
         {:ok, count}
@@ -223,32 +248,32 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorker do
     end
   end
 
-  defp page_fetcher(owner, repo, token) do
-    fn cursor ->
-      GraphQL.list_repository_prs(owner, repo, token: token, cursor: cursor, first: 100)
+  defp page_fetcher(repo, token) do
+    fn since, cursor ->
+      GraphQL.search_repository_prs(repo, since, token: token, cursor: cursor, first: 100)
     end
   end
 
-  @doc false
-  def watermark do
-    floor = DateTime.utc_now() |> DateTime.add(-@watermark_floor_days, :day)
+  @doc """
+  Returns the lower bound for the next discovery walk: the most recent
+  `gh_updated_at` we've upserted, minus a #{@checkpoint_overlap_seconds}-second
+  overlap to absorb GitHub search index lag (a freshly opened PR may take
+  seconds to surface in search results).
+
+  Falls back to a #{@checkpoint_floor_days}-day floor when the DB is empty
+  or when the recorded max would otherwise put us further back than the
+  artifact expiry window.
+  """
+  def checkpoint do
+    floor = DateTime.utc_now() |> DateTime.add(-@checkpoint_floor_days, :day)
 
     case Change.max_gh_updated_at() do
       {:ok, %DateTime{} = dt} ->
-        if DateTime.before?(dt, floor), do: floor, else: dt
+        anchored = DateTime.add(dt, -@checkpoint_overlap_seconds, :second)
+        if DateTime.before?(anchored, floor), do: floor, else: anchored
 
       _ ->
         floor
-    end
-  end
-
-  defp last_older_than_watermark?(pulls, watermark) do
-    case List.last(pulls) do
-      %PullRequest{updated_at: %DateTime{} = updated_at} ->
-        DateTime.before?(updated_at, watermark)
-
-      _ ->
-        false
     end
   end
 end
