@@ -119,7 +119,7 @@ defmodule Tracker.GitServerTest do
       assert GitServer.ready?(pid)
 
       assert git_config(local, "core.commitGraph") == "true"
-      assert git_config(local, "gc.writeCommitGraph") == "true"
+      assert git_config(local, "gc.writeCommitGraph") == "false"
     end
 
     test "writes a commit-graph after cloning", %{upstream: upstream, local: local} do

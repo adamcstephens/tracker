@@ -236,8 +236,11 @@ defmodule Tracker.GitServer do
         stderr_to_stdout: true
       )
 
+    # We write the commit-graph explicitly via write_commit_graph/1 at known
+    # serialized points (post-clone, startup, post-fetch). Letting gc also
+    # write it races with us for objects/info/commit-graph.lock.
     {_, 0} =
-      System.cmd("git", ["-C", path, "config", "gc.writeCommitGraph", "true"],
+      System.cmd("git", ["-C", path, "config", "gc.writeCommitGraph", "false"],
         stderr_to_stdout: true
       )
 
