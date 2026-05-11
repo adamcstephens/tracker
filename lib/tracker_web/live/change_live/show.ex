@@ -105,10 +105,6 @@ defmodule TrackerWeb.ChangeLive.Show do
         </div>
       </dl>
 
-      <div :if={@change.labels && @change.labels != []} class="change-labels">
-        <span :for={label <- @change.labels} class="label-chip">{label}</span>
-      </div>
-
       <section class="change-section">
         <div class="change-section-head">
           <h2>
@@ -162,6 +158,10 @@ defmodule TrackerWeb.ChangeLive.Show do
           No affected packages found.
         </p>
       </section>
+
+      <div :if={@change.labels && @change.labels != []} class="change-labels">
+        <span :for={label <- @change.labels} class="label-chip">{label}</span>
+      </div>
     </div>
     """
   end
