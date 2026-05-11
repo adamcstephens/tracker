@@ -1,5 +1,9 @@
 defmodule Tracker.Nixpkgs.ChangeBranch do
-  use Ash.Resource, otp_app: :tracker, domain: Tracker.Nixpkgs, data_layer: AshPostgres.DataLayer
+  use Ash.Resource,
+    otp_app: :tracker,
+    domain: Tracker.Nixpkgs,
+    data_layer: AshPostgres.DataLayer,
+    notifiers: [Ash.Notifier.PubSub]
 
   alias Tracker.Nixpkgs.Propagation
 
@@ -25,6 +29,14 @@ defmodule Tracker.Nixpkgs.ChangeBranch do
 
       validate {__MODULE__.ValidateBranchName, []}
     end
+  end
+
+  pub_sub do
+    module Phoenix.PubSub
+    name Tracker.PubSub
+    prefix "change_branches"
+
+    publish :create, "updated"
   end
 
   attributes do

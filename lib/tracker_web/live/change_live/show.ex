@@ -207,13 +207,31 @@ defmodule TrackerWeb.ChangeLive.Show do
 
   @impl true
   def mount(_params, _session, socket) do
+    if connected?(socket) do
+      Phoenix.PubSub.subscribe(Tracker.PubSub, "changes:updated")
+      Phoenix.PubSub.subscribe(Tracker.PubSub, "change_branches:updated")
+    end
+
     {:ok, assign_new(socket, :current_user, fn -> nil end)}
   end
 
   @impl true
   def handle_params(%{"number" => number_str} = params, _url, socket) do
     number = String.to_integer(number_str)
+    tp = TableParams.from_params(params)
 
+    {:noreply,
+     socket
+     |> assign(:table_params, tp)
+     |> assign(:page_search, %PageSearch{
+       mode: :passthrough,
+       action: "/changes",
+       value: Map.get(params, "search", "")
+     })
+     |> load_change(number)}
+  end
+
+  defp load_change(socket, number) do
     change =
       number
       |> Tracker.Nixpkgs.Change.get_by_number!()
@@ -222,30 +240,21 @@ defmodule TrackerWeb.ChangeLive.Show do
     author_maintainer = find_maintainer(change.author_github_id)
     merger_maintainer = find_maintainer(change.merged_by_github_id)
 
-    tp = TableParams.from_params(params)
-
     present_branches = Enum.map(change.change_branches, & &1.branch_name)
     lifecycle_dag = Propagation.lifecycle(change.base_ref, present_branches)
 
     landed_count = Enum.count(lifecycle_dag.nodes, & &1.present)
     total_branches = length(lifecycle_dag.nodes)
 
-    {:noreply,
-     socket
-     |> assign(:page_title, "##{change.number} #{change.title}")
-     |> assign(:change, change)
-     |> assign(:author_maintainer, author_maintainer)
-     |> assign(:merger_maintainer, merger_maintainer)
-     |> assign(:lifecycle_dag, lifecycle_dag)
-     |> assign(:landed_count, landed_count)
-     |> assign(:total_branches, total_branches)
-     |> assign(:table_params, tp)
-     |> assign(:page_search, %PageSearch{
-       mode: :passthrough,
-       action: "/changes",
-       value: Map.get(params, "search", "")
-     })
-     |> load_packages(change.id)}
+    socket
+    |> assign(:page_title, "##{change.number} #{change.title}")
+    |> assign(:change, change)
+    |> assign(:author_maintainer, author_maintainer)
+    |> assign(:merger_maintainer, merger_maintainer)
+    |> assign(:lifecycle_dag, lifecycle_dag)
+    |> assign(:landed_count, landed_count)
+    |> assign(:total_branches, total_branches)
+    |> load_packages(change.id)
   end
 
   @impl true
@@ -321,5 +330,33 @@ defmodule TrackerWeb.ChangeLive.Show do
   @impl true
   def handle_info({:set_lens, channel_name, rev}, socket) do
     {:noreply, TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)}
+  end
+
+  def handle_info(
+        %Ash.Notifier.Notification{
+          resource: Tracker.Nixpkgs.Change,
+          data: %{number: number}
+        },
+        socket
+      ) do
+    if number == socket.assigns.change.number do
+      {:noreply, load_change(socket, number)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_info(
+        %Ash.Notifier.Notification{
+          resource: Tracker.Nixpkgs.ChangeBranch,
+          data: %{change_id: change_id}
+        },
+        socket
+      ) do
+    if change_id == socket.assigns.change.id do
+      {:noreply, load_change(socket, socket.assigns.change.number)}
+    else
+      {:noreply, socket}
+    end
   end
 end

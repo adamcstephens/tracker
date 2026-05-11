@@ -154,4 +154,99 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
       refute html =~ "propagation-dag"
     end
   end
+
+  describe "live updates" do
+    test "re-renders when the change is updated via notifier", %{conn: conn} do
+      Tracker.Nixpkgs.Change.bulk_upsert_all([
+        %{
+          number: 6100,
+          title: "still open",
+          state: :open,
+          author: "openauthor",
+          url: "https://github.com/NixOS/nixpkgs/pull/6100",
+          base_ref: "master",
+          processing_status: :pending
+        }
+      ])
+
+      {:ok, view, html} = live(conn, ~p"/changes/6100")
+      assert html =~ "pill-open"
+
+      change = Tracker.Nixpkgs.Change.get_by_number!(6100)
+
+      Tracker.Nixpkgs.Change.refresh_from_graphql!(change, %{
+        state: :merged,
+        merged_at: ~U[2026-04-01 12:00:00Z],
+        merge_commit_sha: "feedfacefeed"
+      })
+
+      html = render(view)
+      assert html =~ "pill-merged"
+      assert html =~ "feedfacefeed"
+    end
+
+    test "ignores notifications for other changes", %{conn: conn} do
+      Tracker.Nixpkgs.Change.bulk_upsert_all([
+        %{
+          number: 6101,
+          title: "other change",
+          state: :open,
+          author: "x",
+          url: "https://github.com/NixOS/nixpkgs/pull/6101",
+          base_ref: "master",
+          processing_status: :pending
+        }
+      ])
+
+      {:ok, view, _html} = live(conn, ~p"/changes/6001")
+
+      other = Tracker.Nixpkgs.Change.get_by_number!(6101)
+
+      Tracker.Nixpkgs.Change.refresh_from_graphql!(other, %{
+        state: :merged,
+        merged_at: ~U[2026-04-01 12:00:00Z],
+        merge_commit_sha: "deadbeefdead"
+      })
+
+      html = render(view)
+      refute html =~ "deadbeefdead"
+      refute html =~ "other change"
+    end
+
+    test "re-renders propagation DAG when a ChangeBranch is created", %{conn: conn} do
+      {:ok, view, html} = live(conn, ~p"/changes/6001")
+
+      refute html =~ ~r/class="[^"]*propagation-node-present[^"]*"[^>]*data-branch="master"/
+
+      change_id = Tracker.Nixpkgs.Change.get_by_number!(6001).id
+      Tracker.Nixpkgs.ChangeBranch.create!(%{change_id: change_id, branch_name: "master"})
+
+      html = render(view)
+      assert html =~ ~r/class="[^"]*propagation-node-present[^"]*"[^>]*data-branch="master"/
+    end
+
+    test "ignores ChangeBranch notifications for other changes", %{conn: conn} do
+      Tracker.Nixpkgs.Change.bulk_upsert_all([
+        %{
+          number: 6102,
+          title: "another change",
+          state: :merged,
+          author: "x",
+          url: "https://github.com/NixOS/nixpkgs/pull/6102",
+          base_ref: "master",
+          merge_commit_sha: "cafef00dcafe",
+          merged_at: ~U[2026-04-01 12:00:00Z],
+          processing_status: :processed
+        }
+      ])
+
+      {:ok, view, _html} = live(conn, ~p"/changes/6001")
+
+      other_id = Tracker.Nixpkgs.Change.get_by_number!(6102).id
+      Tracker.Nixpkgs.ChangeBranch.create!(%{change_id: other_id, branch_name: "master"})
+
+      html = render(view)
+      refute html =~ ~r/class="[^"]*propagation-node-present[^"]*"[^>]*data-branch="master"/
+    end
+  end
 end
