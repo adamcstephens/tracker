@@ -626,4 +626,52 @@ defmodule Tracker.GitHub.GraphQLTest do
                GraphQL.search_repository_prs("NixOS/nixpkgs", ~U[2026-04-15 00:00:00Z], call())
     end
   end
+
+  describe "fetch_numbers/3" do
+    defp numbers_response(repository) do
+      fn conn ->
+        assert conn.method == "POST"
+        {:ok, raw, conn} = Plug.Conn.read_body(conn)
+
+        {:ok, %{"query" => query, "variables" => vars}} = Jason.decode(raw)
+
+        assert vars == %{"owner" => "NixOS", "name" => "nixpkgs"}
+        assert query =~ "issueOrPullRequest"
+
+        body = %{"data" => %{"rateLimit" => rate_limit(), "repository" => repository}}
+
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(200, Jason.encode!(body))
+      end
+    end
+
+    test "classifies PR / Issue / not_found per number" do
+      Req.Test.stub(
+        __MODULE__,
+        numbers_response(%{
+          "n101" => pr_node(id: "pr_101", number: 101),
+          "n102" => %{"__typename" => "Issue"},
+          "n103" => nil
+        })
+      )
+
+      assert {:ok, result} =
+               GraphQL.fetch_numbers("NixOS/nixpkgs", [101, 102, 103], call())
+
+      assert {:pull_request, %PullRequest{number: 101, state: :open}} = result[101]
+      assert result[102] == :issue
+      assert result[103] == :not_found
+    end
+
+    test "returns empty map for empty input without making a request" do
+      Req.Test.stub(__MODULE__, fn _ -> raise "should not call" end)
+      assert {:ok, %{}} = GraphQL.fetch_numbers("NixOS/nixpkgs", [], call())
+    end
+
+    test "errors when given more than 25 numbers" do
+      assert {:error, :too_many_numbers} =
+               GraphQL.fetch_numbers("NixOS/nixpkgs", Enum.to_list(1..26), call())
+    end
+  end
 end

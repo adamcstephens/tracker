@@ -73,6 +73,11 @@ defmodule Tracker.GitHub.GraphQL do
           | {:plug, term()}
           | {:rate_limit_table, atom()}
 
+  @type number_result :: {:pull_request, PullRequest.t()} | :issue | :not_found
+  @type numbers_result :: %{pos_integer() => number_result}
+
+  @max_numbers 25
+
   @doc """
   Fetches pull request summaries for the given GraphQL node IDs.
 
@@ -229,6 +234,155 @@ defmodule Tracker.GitHub.GraphQL do
          )}
     end
   end
+
+  @doc """
+  Resolves a batch of `repo` numbers via `issueOrPullRequest(number:)`,
+  distinguishing PRs from Issues (which share the number space) and
+  deleted/transferred numbers.
+
+  Used by the gap reconciler — discovery is anchored on PR-typed search
+  results, so a number that's an Issue (or no longer exists) needs a
+  separate lookup before we can mark it permanently skippable.
+
+  Returns a map keyed by input number. Values:
+
+    * `{:pull_request, %PullRequest{}}` — the number is a PR
+    * `:issue` — the number is an Issue
+    * `:not_found` — the number does not resolve (deleted/transferred)
+
+  Caps each call at #{@max_numbers} numbers; callers chunk larger sets.
+  """
+  @spec fetch_numbers(String.t(), [pos_integer()], [opt]) ::
+          {:ok, numbers_result}
+          | {:error, Error.t() | :too_many_numbers | {:graphql_errors, list} | term}
+  def fetch_numbers(_repo, [], _opts), do: {:ok, %{}}
+
+  def fetch_numbers(_repo, numbers, _opts) when length(numbers) > @max_numbers do
+    {:error, :too_many_numbers}
+  end
+
+  def fetch_numbers(repo, numbers, opts) when is_binary(repo) and is_list(numbers) do
+    [owner, name] = String.split(repo, "/", parts: 2)
+    token = Keyword.get_lazy(opts, :token, &Tracker.GitHub.installation_token!/0)
+    plug = Keyword.get(opts, :plug)
+    table = Keyword.get(opts, :rate_limit_table, RateLimitCache)
+
+    query = build_numbers_query(numbers)
+
+    req_opts =
+      [
+        method: :post,
+        url: @endpoint,
+        headers: [
+          {"authorization", "bearer #{token}"},
+          {"accept", "application/vnd.github+json"},
+          {"user-agent", "Tracker"}
+        ],
+        json: %{query: query, variables: %{"owner" => owner, "name" => name}},
+        decode_body: true,
+        retry: false
+      ]
+      |> maybe_add_plug(plug)
+
+    case Req.request(Req.new(), req_opts) do
+      {:ok, %Req.Response{status: 200, body: body}} ->
+        handle_numbers_body(body, numbers, table)
+
+      {:ok, %Req.Response{status: status}} when status in [403, 429] ->
+        {:error, rate_limit_error(status)}
+
+      {:ok, %Req.Response{status: status, body: body}} when status >= 500 ->
+        {:error,
+         Error.new(
+           code: status,
+           message: "GitHub GraphQL server error (#{status})",
+           source: body,
+           step: {__MODULE__, :fetch_numbers}
+         )}
+
+      {:ok, %Req.Response{status: status, body: body}} ->
+        {:error,
+         Error.new(
+           code: status,
+           message: "Unexpected GitHub GraphQL status (#{status})",
+           source: body,
+           step: {__MODULE__, :fetch_numbers}
+         )}
+
+      {:error, reason} ->
+        {:error,
+         Error.new(
+           message: "Error during GraphQL request",
+           source: reason,
+           step: {__MODULE__, :fetch_numbers}
+         )}
+    end
+  end
+
+  defp build_numbers_query(numbers) do
+    aliases =
+      numbers
+      |> Enum.uniq()
+      |> Enum.map_join("\n", fn n ->
+        "n#{n}: issueOrPullRequest(number: #{n}) { __typename ... on PullRequest { #{@pr_fields} } }"
+      end)
+
+    """
+    query($owner: String!, $name: String!) {
+      rateLimit { cost remaining resetAt }
+      repository(owner: $owner, name: $name) {
+        #{aliases}
+      }
+    }
+    """
+  end
+
+  defp handle_numbers_body(%{"errors" => errors} = body, _numbers, _table)
+       when is_list(errors) and not is_map_key(body, "data") do
+    handle_errors_only(errors)
+  end
+
+  defp handle_numbers_body(%{"data" => nil, "errors" => errors}, _numbers, _table)
+       when is_list(errors) do
+    handle_errors_only(errors)
+  end
+
+  defp handle_numbers_body(
+         %{"data" => %{"repository" => repo_node} = data} = body,
+         numbers,
+         table
+       )
+       when is_map(repo_node) do
+    if errors = Map.get(body, "errors") do
+      Logger.warning("GitHub GraphQL returned partial errors: #{inspect(errors)}")
+    end
+
+    rate_limit = Map.get(data, "rateLimit")
+    maybe_log_cost(rate_limit)
+    maybe_track_rate_limit(rate_limit, table)
+
+    result =
+      Map.new(numbers, fn n -> {n, decode_number_alias(n, Map.get(repo_node, "n#{n}"))} end)
+
+    {:ok, result}
+  end
+
+  defp handle_numbers_body(body, _numbers, _table) do
+    {:error,
+     Error.new(
+       message: "Malformed GitHub GraphQL response",
+       source: body,
+       step: {__MODULE__, :fetch_numbers}
+     )}
+  end
+
+  defp decode_number_alias(_n, nil), do: :not_found
+  defp decode_number_alias(_n, %{"__typename" => "Issue"}), do: :issue
+
+  defp decode_number_alias(_n, %{"__typename" => "PullRequest"} = node),
+    do: {:pull_request, decode_pr(node["id"], node)}
+
+  defp decode_number_alias(_n, _), do: :not_found
 
   defp build_search_query(repo, %DateTime{} = since) do
     iso = since |> DateTime.truncate(:second) |> DateTime.to_iso8601()

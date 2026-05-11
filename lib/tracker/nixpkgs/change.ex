@@ -26,6 +26,8 @@ defmodule Tracker.Nixpkgs.Change do
     define :distinct_base_refs
     define :existing_numbers, args: [:numbers]
     define :max_gh_updated_at
+    define :max_number
+    define :numbers_in_range, args: [:lo, :hi]
     define :stalest_unfinished
     define :pending_merged_backlog
     define :in_flight_propagation
@@ -209,6 +211,22 @@ defmodule Tracker.Nixpkgs.Change do
       run fn _input, _context ->
         Ash.max(__MODULE__, :gh_updated_at)
       end
+    end
+
+    action :max_number, :integer do
+      allow_nil? true
+
+      run fn _input, _context ->
+        Ash.max(__MODULE__, :number)
+      end
+    end
+
+    read :numbers_in_range do
+      argument :lo, :integer, allow_nil?: false
+      argument :hi, :integer, allow_nil?: false
+
+      prepare build(select: [:number])
+      filter expr(number >= ^arg(:lo) and number <= ^arg(:hi))
     end
 
     create :bulk_upsert do

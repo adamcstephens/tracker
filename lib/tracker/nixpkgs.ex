@@ -27,5 +27,6 @@ defmodule Tracker.Nixpkgs do
     resource Tracker.Nixpkgs.ChangePackage
     resource Tracker.Nixpkgs.ChangeBranch
     resource Tracker.Nixpkgs.ChangeFile
+    resource Tracker.Nixpkgs.ChangeReconcileSkip
   end
 end
