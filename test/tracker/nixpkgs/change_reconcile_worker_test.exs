@@ -1,6 +1,10 @@
 defmodule Tracker.Nixpkgs.ChangeReconcileWorkerTest do
   use Tracker.DataCase, async: false
 
+  import ExUnit.CaptureLog
+
+  require Logger
+
   alias Tracker.GitHub.GraphQL.PullRequest
   alias Tracker.Nixpkgs.Change
   alias Tracker.Nixpkgs.ChangeReconcileSkip
@@ -150,6 +154,34 @@ defmodule Tracker.Nixpkgs.ChangeReconcileWorkerTest do
 
       {:ok, summary} = ChangeReconcileWorker.reconcile_gaps(fetcher, floor: 900, batch_size: 3)
       assert summary.gaps_found == 3
+    end
+
+    test "emits structured start/stop logs with summary fields" do
+      seed_change(1000)
+      seed_change(1002)
+
+      fetcher = fn [1001] ->
+        {:ok, %{1001 => {:pull_request, pr_struct(number: 1001, state: :open)}}}
+      end
+
+      Logger.put_module_level(ChangeReconcileWorker, :info)
+      on_exit(fn -> Logger.delete_module_level(ChangeReconcileWorker) end)
+
+      log =
+        capture_log(fn ->
+          assert {:ok, _} = ChangeReconcileWorker.reconcile_gaps(fetcher, floor: 1000)
+        end)
+
+      assert log =~ ~s(msg: "change reconcile started")
+      assert log =~ "max_number: 1002"
+      assert log =~ "floor: 1000"
+      assert log =~ ~s(msg: "change reconcile finished")
+      assert log =~ "outcome: :ok"
+      assert log =~ "gaps_found: 1"
+      assert log =~ "checked: 1"
+      assert log =~ "prs_recovered: 1"
+      assert log =~ "skipped: 0"
+      assert log =~ ~r/duration_ms: \d+/
     end
   end
 

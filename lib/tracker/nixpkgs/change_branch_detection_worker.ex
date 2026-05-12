@@ -40,37 +40,71 @@ defmodule Tracker.Nixpkgs.ChangeBranchDetectionWorker do
       (defaults to the named `Tracker.GitServer`).
   """
   def run(opts \\ []) do
+    Logger.info(msg: "branch detection started")
+    started_at = System.monotonic_time()
     git_server = Keyword.get(opts, :git_server, Tracker.GitServer)
 
-    case GitServer.fetch(git_server) do
-      :ok ->
-        :ok
+    fetch_failed? =
+      case GitServer.fetch(git_server) do
+        :ok ->
+          false
 
-      {:error, reason} ->
-        Logger.warning(
-          msg: "ChangeBranchDetectionWorker: fetch failed; proceeding with current refs",
-          reason: inspect(reason)
-        )
-    end
+        {:error, reason} ->
+          Logger.warning(
+            msg: "ChangeBranchDetectionWorker: fetch failed; proceeding with current refs",
+            reason: inspect(reason)
+          )
+
+          true
+      end
 
     snapshot = GitServer.state(git_server)
 
     if snapshot.ready do
-      Change.in_flight_propagation!()
-      |> Stream.flat_map(&pending_branches/1)
-      |> Task.async_stream(
-        fn {change, branch} -> detect(change, branch, snapshot) end,
-        max_concurrency: @max_concurrency,
-        timeout: @ancestor_timeout,
-        on_timeout: :kill_task
+      in_flight = Change.in_flight_propagation!()
+
+      pairs =
+        in_flight
+        |> Enum.flat_map(&pending_branches/1)
+
+      branches_recorded =
+        pairs
+        |> Task.async_stream(
+          fn {change, branch} -> detect(change, branch, snapshot) end,
+          max_concurrency: @max_concurrency,
+          timeout: @ancestor_timeout,
+          on_timeout: :kill_task
+        )
+        |> Enum.count(&match?({:ok, :recorded}, &1))
+
+      Logger.info(
+        msg: "branch detection finished",
+        outcome: :ok,
+        in_flight: length(in_flight),
+        branches_checked: length(pairs),
+        branches_recorded: branches_recorded,
+        fetch_failed?: fetch_failed?,
+        duration_ms: duration_ms(started_at)
       )
-      |> Stream.run()
 
       :ok
     else
       Logger.warning("ChangeBranchDetectionWorker: GitServer not ready, snoozing")
+
+      Logger.info(
+        msg: "branch detection finished",
+        outcome: :snoozed,
+        snooze_seconds: 30,
+        fetch_failed?: fetch_failed?,
+        duration_ms: duration_ms(started_at)
+      )
+
       {:snooze, 30}
     end
+  end
+
+  defp duration_ms(started_at) do
+    System.convert_time_unit(System.monotonic_time() - started_at, :native, :millisecond)
   end
 
   defp pending_branches(change) do
@@ -95,10 +129,10 @@ defmodule Tracker.Nixpkgs.ChangeBranchDetectionWorker do
       {:ok, true} ->
         ChangeBranch.create!(%{change_id: change.id, branch_name: branch})
 
-        :ok
+        :recorded
 
       {:ok, false} ->
-        :ok
+        :no_match
 
       {:error, reason} ->
         Logger.warning(
@@ -108,7 +142,7 @@ defmodule Tracker.Nixpkgs.ChangeBranchDetectionWorker do
           reason: inspect(reason)
         )
 
-        :ok
+        :ancestor_error
     end
   end
 end

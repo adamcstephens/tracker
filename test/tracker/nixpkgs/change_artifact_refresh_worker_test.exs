@@ -2,6 +2,9 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorkerTest do
   use Tracker.DataCase, async: false
 
   import Ecto.Query
+  import ExUnit.CaptureLog
+
+  require Logger
 
   alias Tracker.GitHub.RateLimitCache
   alias Tracker.Nixpkgs.Change
@@ -778,5 +781,33 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorkerTest do
         select: f.path,
         order_by: f.path
     )
+  end
+
+  describe "structured logging" do
+    test "emits start and stop logs with status and package_count", %{rate_limit_table: table} do
+      insert_change!(number: 6001, state: :merged, merge_commit_sha: "logsha")
+      attrdiff = %{"added" => ["a"], "changed" => ["b"], "removed" => []}
+      Logger.put_module_level(ChangeArtifactRefreshWorker, :info)
+      on_exit(fn -> Logger.delete_module_level(ChangeArtifactRefreshWorker) end)
+
+      log =
+        capture_log(fn ->
+          :ok =
+            ChangeArtifactRefreshWorker.run(
+              %{reason: "merged", number: 6001},
+              rate_limit_table: table,
+              attrdiff_fetcher: fn _ -> {:ok, attrdiff} end
+            )
+        end)
+
+      assert log =~ ~s(msg: "artifact refresh started")
+      assert log =~ "number: 6001"
+      assert log =~ ~s(reason: "merged")
+      assert log =~ ~s(msg: "artifact refresh finished")
+      assert log =~ "outcome: :ok"
+      assert log =~ "status: :processed"
+      assert log =~ "package_count: 2"
+      assert log =~ ~r/duration_ms: \d+/
+    end
   end
 end

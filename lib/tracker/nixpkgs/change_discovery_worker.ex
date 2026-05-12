@@ -30,34 +30,78 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorker do
   @max_cycles 100
 
   @impl Oban.Worker
-  def perform(%Oban.Job{}) do
-    case Tracker.GitHub.RateLimitCache.check(:graphql) do
-      {:limited, seconds} ->
-        Logger.info("Rate limited for #{seconds}s, skipping discovery")
-        :ok
+  def perform(%Oban.Job{}), do: run([])
 
-      :ok ->
-        token = Tracker.GitHub.installation_token!()
-        fetcher = page_fetcher(@repo, token)
+  @doc """
+  Runs discovery, paginating through new/updated PRs since the current checkpoint.
 
-        case discover_pages(fetcher, checkpoint()) do
-          {:ok, _count} ->
-            :ok
+  Options:
+    * `:rate_limit_table` — ETS table for the rate-limit cache (tests).
+    * `:fetcher` — `(since, cursor) -> {:ok, page} | {:error, term}` (tests).
+    * `:snoozer` — `() -> non_neg_integer()` (tests).
+  """
+  def run(opts \\ []) do
+    since = checkpoint()
+    Logger.info(msg: "discovery started", since: since)
+    started_at = System.monotonic_time()
+    table = Keyword.get(opts, :rate_limit_table, Tracker.GitHub.RateLimitCache)
 
-          {:error, %GitHub.Error{reason: :rate_limited}} ->
-            snooze_seconds = Tracker.GitHub.seconds_until_reset(token, :graphql)
+    {return_value, summary} =
+      case Tracker.GitHub.RateLimitCache.check(:graphql, table) do
+        {:limited, seconds} ->
+          {:ok, %{outcome: :rate_limited, skip_seconds: seconds}}
 
-            Logger.warning(
-              "GitHub GraphQL rate limited, snoozing discovery worker #{snooze_seconds}s"
-            )
+        :ok ->
+          fetcher =
+            Keyword.get_lazy(opts, :fetcher, fn ->
+              token = Tracker.GitHub.installation_token!()
+              page_fetcher(@repo, token)
+            end)
 
-            {:snooze, snooze_seconds}
+          discover_with(fetcher, since, opts)
+      end
 
-          {:error, reason} ->
-            Logger.error("Failed to discover pulls: #{inspect(reason)}")
-            {:error, reason}
-        end
+    Logger.info(
+      [msg: "discovery finished"] ++
+        Enum.to_list(summary) ++ [duration_ms: duration_ms(started_at)]
+    )
+
+    return_value
+  end
+
+  defp discover_with(fetcher, since, opts) do
+    case discover_pages(fetcher, since) do
+      {:ok, count} ->
+        {:ok, %{outcome: :ok, upserted: count}}
+
+      {:error, %GitHub.Error{reason: :rate_limited}} ->
+        snooze_seconds = snooze_seconds(opts)
+
+        Logger.warning(
+          "GitHub GraphQL rate limited, snoozing discovery worker #{snooze_seconds}s"
+        )
+
+        {{:snooze, snooze_seconds}, %{outcome: :snoozed, snooze_seconds: snooze_seconds}}
+
+      {:error, reason} ->
+        Logger.error("Failed to discover pulls: #{inspect(reason)}")
+        {{:error, reason}, %{outcome: :error, reason: inspect(reason)}}
     end
+  end
+
+  defp snooze_seconds(opts) do
+    case Keyword.fetch(opts, :snoozer) do
+      {:ok, fun} ->
+        fun.()
+
+      :error ->
+        token = Tracker.GitHub.installation_token!()
+        Tracker.GitHub.seconds_until_reset(token, :graphql)
+    end
+  end
+
+  defp duration_ms(started_at) do
+    System.convert_time_unit(System.monotonic_time() - started_at, :native, :millisecond)
   end
 
   @doc """
@@ -230,22 +274,28 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorker do
   def backfill do
     token = Tracker.GitHub.installation_token!()
     cutoff = DateTime.utc_now() |> DateTime.add(-@checkpoint_floor_days, :day)
+    Logger.info(msg: "discovery backfill started", since: cutoff)
+    started_at = System.monotonic_time()
 
-    case discover_pages(page_fetcher(@repo, token), cutoff) do
-      {:ok, count} ->
-        Logger.info("Backfill complete: upserted #{count} PRs")
-        {:ok, count}
+    {return_value, summary} =
+      case discover_pages(page_fetcher(@repo, token), cutoff) do
+        {:ok, count} ->
+          {{:ok, count}, %{outcome: :ok, upserted: count}}
 
-      {:error, %GitHub.Error{reason: :rate_limited}} ->
-        seconds = Tracker.GitHub.seconds_until_reset(token, :graphql)
-        minutes = div(seconds, 60)
-        Logger.warning("Rate limited during backfill. Reset in #{minutes}m.")
-        {:error, :rate_limited}
+        {:error, %GitHub.Error{reason: :rate_limited}} ->
+          seconds = Tracker.GitHub.seconds_until_reset(token, :graphql)
+          {{:error, :rate_limited}, %{outcome: :rate_limited, reset_seconds: seconds}}
 
-      {:error, reason} = error ->
-        Logger.error("Backfill failed: #{inspect(reason)}")
-        error
-    end
+        {:error, reason} = error ->
+          {error, %{outcome: :error, reason: inspect(reason)}}
+      end
+
+    Logger.info(
+      [msg: "discovery backfill finished"] ++
+        Enum.to_list(summary) ++ [duration_ms: duration_ms(started_at)]
+    )
+
+    return_value
   end
 
   defp page_fetcher(repo, token) do

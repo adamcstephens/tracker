@@ -284,6 +284,44 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorkerTest do
       assert {:error, %GitHub.Error{reason: :server_error}} =
                ChangeRefreshWorker.run(fetcher: fn _ -> {:error, error} end)
     end
+
+    test "emits structured start/stop logs with transition counts" do
+      insert_change!(number: 200, state: :open, node_id: "pr_x", head_sha: "old")
+      recorder = transition_recorder()
+      require Logger
+      Logger.put_module_level(ChangeRefreshWorker, :info)
+      on_exit(fn -> Logger.delete_module_level(ChangeRefreshWorker) end)
+
+      log =
+        capture_log(fn ->
+          ChangeRefreshWorker.run(
+            fetcher: fn _ ->
+              {:ok,
+               %{
+                 "pr_x" =>
+                   pr(
+                     node_id: "pr_x",
+                     number: 200,
+                     state: :merged,
+                     head_sha: "old",
+                     merged_at: ~U[2026-04-23 10:00:00Z],
+                     merge_commit_sha: "mc"
+                   )
+               }}
+            end,
+            on_transition: recorder.fn
+          )
+        end)
+
+      assert log =~ ~s(msg: "change refresh started")
+      assert log =~ ~s(msg: "change refresh finished")
+      assert log =~ "outcome: :ok"
+      assert log =~ "checked: 1"
+      assert log =~ "merged: 1"
+      assert log =~ "head_sha_changed: 0"
+      assert log =~ "not_found: 0"
+      assert log =~ ~r/duration_ms: \d+/
+    end
   end
 
   describe "default on_transition hook" do

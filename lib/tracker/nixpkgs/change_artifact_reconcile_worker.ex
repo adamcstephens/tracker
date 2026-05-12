@@ -18,7 +18,22 @@ defmodule Tracker.Nixpkgs.ChangeArtifactReconcileWorker do
   alias Tracker.Nixpkgs.ChangeArtifactRefreshWorker
 
   @impl Oban.Worker
-  def perform(%Oban.Job{}), do: run()
+  def perform(%Oban.Job{}) do
+    Logger.info(msg: "artifact reconcile started")
+    started_at = System.monotonic_time()
+
+    result = run()
+    {outcome, enqueued} = summarize(result)
+
+    Logger.info(
+      msg: "artifact reconcile finished",
+      outcome: outcome,
+      enqueued: enqueued,
+      duration_ms: duration_ms(started_at)
+    )
+
+    result
+  end
 
   @doc """
   Selects pending-merged Changes and enqueues a refresh for each.
@@ -33,12 +48,12 @@ defmodule Tracker.Nixpkgs.ChangeArtifactReconcileWorker do
       |> Oban.insert!()
     end)
 
-    count = length(backlog)
+    {:ok, length(backlog)}
+  end
 
-    if count > 0 do
-      Logger.info(msg: "reconcile enqueued merged-pending refreshes", count: count)
-    end
+  defp summarize({:ok, count}), do: {:ok, count}
 
-    {:ok, count}
+  defp duration_ms(started_at) do
+    System.convert_time_unit(System.monotonic_time() - started_at, :native, :millisecond)
   end
 end

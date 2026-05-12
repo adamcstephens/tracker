@@ -1,7 +1,12 @@
 defmodule Tracker.Nixpkgs.ChangeDiscoveryWorkerTest do
-  use Tracker.DataCase, async: true
+  use Tracker.DataCase, async: false
+
+  import ExUnit.CaptureLog
+
+  require Logger
 
   alias Tracker.GitHub.GraphQL.PullRequest
+  alias Tracker.GitHub.RateLimitCache
   alias Tracker.Nixpkgs.Change
   alias Tracker.Nixpkgs.ChangeBranch
   alias Tracker.Nixpkgs.ChangeDiscoveryWorker
@@ -267,6 +272,51 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorkerTest do
 
       assert {:error, %GitHub.Error{reason: :server_error}} =
                ChangeDiscoveryWorker.discover_pages(fetcher, ~U[2026-01-01 00:00:00Z])
+    end
+  end
+
+  describe "run/1 structured logging" do
+    setup do
+      table = :"rate_limit_cache_discovery_#{System.unique_integer([:positive])}"
+      RateLimitCache.new(table)
+      on_exit(fn -> if :ets.whereis(table) != :undefined, do: :ets.delete(table) end)
+      Logger.put_module_level(ChangeDiscoveryWorker, :info)
+      on_exit(fn -> Logger.delete_module_level(ChangeDiscoveryWorker) end)
+      %{rate_limit_table: table}
+    end
+
+    test "emits start/stop logs with upserted count on success", %{rate_limit_table: table} do
+      fetcher = fn _since, nil ->
+        {:ok, %{pulls: [pr_struct(number: 6100, state: :open)], next_cursor: nil, issue_count: 1}}
+      end
+
+      log =
+        capture_log(fn ->
+          assert :ok = ChangeDiscoveryWorker.run(rate_limit_table: table, fetcher: fetcher)
+        end)
+
+      assert log =~ ~s(msg: "discovery started")
+      assert log =~ "since:"
+      assert log =~ ~s(msg: "discovery finished")
+      assert log =~ "outcome: :ok"
+      assert log =~ "upserted: 1"
+      assert log =~ ~r/duration_ms: \d+/
+    end
+
+    test "emits stop log with rate_limited outcome when graphql bucket is limited", %{
+      rate_limit_table: table
+    } do
+      RateLimitCache.set_reset(:graphql, System.os_time(:second) + 60, table)
+      fetcher = fn _, _ -> raise "should not be called" end
+
+      log =
+        capture_log(fn ->
+          assert :ok = ChangeDiscoveryWorker.run(rate_limit_table: table, fetcher: fetcher)
+        end)
+
+      assert log =~ ~s(msg: "discovery finished")
+      assert log =~ "outcome: :rate_limited"
+      assert log =~ ~r/skip_seconds: \d+/
     end
   end
 

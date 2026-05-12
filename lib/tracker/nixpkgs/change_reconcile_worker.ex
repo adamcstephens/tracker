@@ -81,22 +81,45 @@ defmodule Tracker.Nixpkgs.ChangeReconcileWorker do
           {:ok, summary} | {:error, term}
   def reconcile_gaps(fetcher, opts) when is_function(fetcher, 1) do
     batch_size = Keyword.get(opts, :batch_size, @batch_size)
+    max_number = Change.max_number!()
+    floor = if max_number, do: resolve_floor(opts, max_number), else: nil
+    Logger.info(msg: "change reconcile started", floor: floor, max_number: max_number)
+    started_at = System.monotonic_time()
 
-    case Change.max_number!() do
-      nil ->
-        {:ok, empty_summary()}
+    result =
+      cond do
+        is_nil(max_number) -> {:ok, empty_summary()}
+        floor > max_number -> {:ok, empty_summary()}
+        true -> run(fetcher, floor, max_number, batch_size)
+      end
 
-      max_number ->
-        floor = resolve_floor(opts, max_number)
+    log_finished(result, started_at)
+    result
+  end
 
-        cond do
-          floor > max_number ->
-            {:ok, empty_summary()}
+  defp log_finished({:ok, summary}, started_at) do
+    Logger.info(
+      msg: "change reconcile finished",
+      outcome: :ok,
+      gaps_found: summary.gaps_found,
+      checked: summary.checked,
+      prs_recovered: summary.prs_recovered,
+      skipped: summary.skipped,
+      duration_ms: duration_ms(started_at)
+    )
+  end
 
-          true ->
-            run(fetcher, floor, max_number, batch_size)
-        end
-    end
+  defp log_finished({:error, reason}, started_at) do
+    Logger.info(
+      msg: "change reconcile finished",
+      outcome: :error,
+      reason: inspect(reason),
+      duration_ms: duration_ms(started_at)
+    )
+  end
+
+  defp duration_ms(started_at) do
+    System.convert_time_unit(System.monotonic_time() - started_at, :native, :millisecond)
   end
 
   defp run(fetcher, lo, hi, batch_size) do

@@ -1,6 +1,10 @@
 defmodule Tracker.Ingestion.CronWorkerTest do
   use Tracker.DataCase, async: false
 
+  import ExUnit.CaptureLog
+
+  require Logger
+
   alias Tracker.Ingestion.{CronWorker, Pipeline, IngestionRun}
   alias Tracker.Nixpkgs.{Channel, ReleaseCache}
   alias Tracker.Nixpkgs.ReleaseCache.Release
@@ -69,6 +73,24 @@ defmodule Tracker.Ingestion.CronWorkerTest do
       # The active channel should have new pipeline(s) created
       pipelines_after = length(Pipeline.for_channel!(channel.id))
       assert pipelines_after > pipelines_before
+    end
+
+    test "emits structured start/stop logs with channel and pipeline counts", %{channel: _channel} do
+      Logger.put_module_level(CronWorker, :info)
+      on_exit(fn -> Logger.delete_module_level(CronWorker) end)
+
+      log =
+        capture_log(fn ->
+          assert :ok = perform_job(CronWorker, %{}, queue: :ingestion)
+        end)
+
+      assert log =~ ~s(msg: "ingestion cron started")
+      assert log =~ "active_channels: 1"
+      assert log =~ ~s(msg: "ingestion cron finished")
+      assert log =~ "outcome: :ok"
+      assert log =~ ~r/created: \d+/
+      assert log =~ ~r/noop: \d+/
+      assert log =~ ~r/duration_ms: \d+/
     end
 
     test "succeeds with no active channels" do

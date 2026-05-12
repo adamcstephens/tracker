@@ -7,7 +7,7 @@ defmodule Tracker.Application do
 
   @impl true
   def start(_type, _args) do
-    Oban.Telemetry.attach_default_logger()
+    Oban.Telemetry.attach_default_logger(:debug)
 
     children = [
       Tracker.Repo,

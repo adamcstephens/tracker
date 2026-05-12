@@ -45,26 +45,59 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
 
   def run(%{reason: reason, number: number}, opts)
       when reason in ["merged", "head_sha_changed"] do
+    Logger.info(msg: "artifact refresh started", number: number, reason: reason)
+    started_at = System.monotonic_time()
     table = Keyword.get(opts, :rate_limit_table, RateLimitCache)
 
-    case RateLimitCache.check(:rest, table) do
-      {:limited, seconds} ->
-        Logger.info("REST rate limited for #{seconds}s, snoozing artifact refresh")
-        {:snooze, seconds}
+    {return_value, summary} =
+      case RateLimitCache.check(:rest, table) do
+        {:limited, seconds} ->
+          Logger.info("REST rate limited for #{seconds}s, snoozing artifact refresh")
+          {{:snooze, seconds}, %{outcome: :rate_limited, snooze_seconds: seconds}}
 
-      :ok ->
-        do_run(reason, number, opts)
-    end
+        :ok ->
+          do_run(reason, number, opts)
+      end
+
+    log_finished(number, reason, summary, started_at)
+    return_value
   end
 
   def run(%{reason: reason, number: number}, _opts) do
-    Logger.info(
+    Logger.info(msg: "artifact refresh started", number: number, reason: reason)
+
+    Logger.warning(
       msg: "ChangeArtifactRefreshWorker: reason not yet implemented",
       number: number,
       reason: reason
     )
 
+    Logger.info(
+      msg: "artifact refresh finished",
+      number: number,
+      reason: reason,
+      outcome: :unsupported_reason,
+      duration_ms: 0
+    )
+
     :ok
+  end
+
+  defp log_finished(number, reason, summary, started_at) do
+    fields =
+      [
+        msg: "artifact refresh finished",
+        number: number,
+        reason: reason,
+        duration_ms: duration_ms(started_at)
+      ]
+      |> Keyword.merge(Enum.to_list(summary))
+
+    Logger.info(fields)
+  end
+
+  defp duration_ms(started_at) do
+    System.convert_time_unit(System.monotonic_time() - started_at, :native, :millisecond)
   end
 
   defp do_run(reason, number, opts) do
@@ -75,17 +108,24 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
 
         case fetcher.(change) do
           {:ok, attrdiff} ->
-            with :ok <- apply_refresh(change, attrdiff) do
-              refresh_changed_files(change, opts)
-            end
+            {status, package_count} = apply_refresh(change, attrdiff)
+            changed_files = refresh_changed_files(change, opts)
 
-          {:snooze, _} = snooze ->
-            snooze
+            {:ok,
+             %{
+               outcome: :ok,
+               status: status,
+               package_count: package_count,
+               changed_files: changed_files
+             }}
+
+          {:snooze, seconds} = snooze ->
+            {snooze, %{outcome: :snoozed, snooze_seconds: seconds}}
 
           {:error, :rate_limited} ->
             snooze = snooze_seconds_for(:rest)
             Logger.warning("Artifact refresh rate limited, snoozing #{snooze}s")
-            {:snooze, snooze}
+            {{:snooze, snooze}, %{outcome: :rate_limited, snooze_seconds: snooze}}
 
           {:error, :no_workflow_run} when reason == "head_sha_changed" ->
             Logger.info(
@@ -93,7 +133,7 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
               number: number
             )
 
-            {:error, :no_workflow_run}
+            {{:error, :no_workflow_run}, %{outcome: :error, status: :no_workflow_run_retry}}
 
           {:error, terminal}
           when terminal in ~w(artifact_expired no_workflow_run no_comparison_artifact)a ->
@@ -104,7 +144,7 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
             )
 
             Change.update_processing_status!(change, %{processing_status: terminal})
-            :ok
+            {:ok, %{outcome: :ok, status: terminal}}
 
           {:error, reason} ->
             Logger.error(
@@ -114,12 +154,12 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
             )
 
             Change.update_processing_status!(change, %{processing_status: :failed})
-            {:error, reason}
+            {{:error, reason}, %{outcome: :error, status: :failed, reason: inspect(reason)}}
         end
 
       _ ->
         Logger.warning(msg: "ChangeArtifactRefreshWorker: change not found", number: number)
-        :ok
+        {:ok, %{outcome: :ok, status: :change_not_found}}
     end
   end
 
@@ -129,13 +169,13 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
   defp refresh_changed_files(change, opts) do
     case Keyword.get_lazy(opts, :files_fetcher, &configured_files_fetcher/0) do
       nil ->
-        :ok
+        0
 
       fetcher ->
         case fetcher.(change) do
           {:ok, paths} when is_list(paths) ->
             replace_change_files!(change, paths)
-            :ok
+            length(paths)
 
           {:error, reason} ->
             Logger.warning(
@@ -144,7 +184,7 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
               reason: inspect(reason)
             )
 
-            :ok
+            0
         end
     end
   end
@@ -225,23 +265,29 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
 
     total = length(typed_entries)
 
-    cond do
-      staging?(change) ->
-        write_refresh!(change, [], :base_ref_skipped, total)
+    status =
+      cond do
+        staging?(change) ->
+          write_refresh!(change, [], :base_ref_skipped, total)
+          :base_ref_skipped
 
-      total > @link_cap ->
-        Logger.warning(
-          msg: "link cap exceeded, marking too_large",
-          number: change.number,
-          total: total,
-          cap: @link_cap
-        )
+        total > @link_cap ->
+          Logger.warning(
+            msg: "link cap exceeded, marking too_large",
+            number: change.number,
+            total: total,
+            cap: @link_cap
+          )
 
-        write_refresh!(change, [], :too_large, total)
+          write_refresh!(change, [], :too_large, total)
+          :too_large
 
-      true ->
-        write_refresh!(change, build_link_records(change, typed_entries), :processed, total)
-    end
+        true ->
+          write_refresh!(change, build_link_records(change, typed_entries), :processed, total)
+          :processed
+      end
+
+    {status, total}
   end
 
   # Staging-targeted PRs (base_ref starting with "staging") get
@@ -284,7 +330,6 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
       end)
 
     Ash.Notifier.notify(notifications)
-    :ok
   end
 
   @ignored_packages [
