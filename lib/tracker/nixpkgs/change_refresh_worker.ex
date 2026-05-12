@@ -11,11 +11,12 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorker do
 
   require Logger
 
+  @dormancy_threshold_days 30
+
   alias Tracker.GitHub.GraphQL.PullRequest
   alias Tracker.GitHub.RateLimitCache
   alias Tracker.Nixpkgs.Change
-  alias Tracker.Nixpkgs.ChangeBranch
-  alias Tracker.Nixpkgs.ChangePackage
+  alias Tracker.Nixpkgs.ChangeTransitions
 
   @impl Oban.Worker
   def perform(%Oban.Job{}) do
@@ -43,7 +44,7 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorker do
     table = Keyword.get(opts, :rate_limit_table, RateLimitCache)
     fetcher = Keyword.get_lazy(opts, :fetcher, &default_fetcher/0)
     snoozer = Keyword.get_lazy(opts, :snoozer, fn -> &default_snoozer/0 end)
-    on_transition = Keyword.get(opts, :on_transition, &log_transition/2)
+    on_transition = Keyword.get(opts, :on_transition, &ChangeTransitions.emit/2)
 
     result =
       case RateLimitCache.check(:graphql, table) do
@@ -52,6 +53,7 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorker do
           {:rate_limited, seconds}
 
         :ok ->
+          sweep_dormant!()
           do_run(fetcher, snoozer, on_transition)
       end
 
@@ -112,6 +114,11 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorker do
     fn ids -> Tracker.GitHub.GraphQL.fetch_prs(ids, []) end
   end
 
+  defp sweep_dormant! do
+    cutoff = DateTime.utc_now() |> DateTime.add(-@dormancy_threshold_days, :day)
+    Change.mark_stale_dormant!(cutoff)
+  end
+
   defp default_snoozer do
     token = Tracker.GitHub.installation_token!()
     Tracker.GitHub.seconds_until_reset(token, :graphql)
@@ -152,7 +159,7 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorker do
               node_id: change.node_id
             )
 
-            Change.touch_last_checked!(change)
+            Change.mark_not_found!(change)
             increment(acc, [:checked, :not_found])
 
           %PullRequest{} = pr ->
@@ -181,7 +188,7 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorker do
     }
 
     updated = Change.refresh_from_graphql!(change, attrs)
-    transitions = detect_transitions(change, pr)
+    transitions = ChangeTransitions.detect(change, pr)
     Enum.each(transitions, &on_transition.(updated, &1))
     transitions
   end
@@ -191,63 +198,5 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorker do
 
   defp increment(summary, keys) do
     Enum.reduce(keys, summary, fn key, acc -> Map.update!(acc, key, &(&1 + 1)) end)
-  end
-
-  defp detect_transitions(%{state: prior_state, head_sha: prior_sha}, %PullRequest{} = pr) do
-    []
-    |> maybe_add(prior_state != :merged and pr.state == :merged, :merged)
-    |> maybe_add(
-      pr.state in [:open, :draft] and prior_sha != pr.head_sha,
-      :head_sha_changed
-    )
-    |> maybe_add(
-      prior_state in [:open, :draft] and pr.state == :closed and is_nil(pr.merged_at),
-      :closed_no_merge
-    )
-  end
-
-  defp maybe_add(list, true, tag), do: [tag | list]
-  defp maybe_add(list, false, _), do: list
-
-  defp log_transition(change, reason) when reason in [:merged, :head_sha_changed] do
-    Logger.info(
-      msg: "artifact_refresh transition detected",
-      number: change.number,
-      node_id: change.node_id,
-      reason: reason
-    )
-
-    %{"number" => change.number, "reason" => Atom.to_string(reason)}
-    |> Tracker.Nixpkgs.ChangeArtifactRefreshWorker.new()
-    |> Oban.insert!()
-
-    if reason == :merged, do: ChangeBranch.seed_for_base_ref(change.id, change.base_ref)
-
-    :ok
-  end
-
-  defp log_transition(change, :closed_no_merge) do
-    Logger.info(
-      msg: "clearing ChangePackage links for closed-without-merge PR",
-      number: change.number,
-      node_id: change.node_id
-    )
-
-    {:ok, notifications} =
-      Tracker.Repo.transaction(fn ->
-        ChangePackage.clear_for_change!(change.id)
-
-        {_, notifications} =
-          Change.update_package_count!(
-            change,
-            %{package_count: 0},
-            return_notifications?: true
-          )
-
-        notifications
-      end)
-
-    Ash.Notifier.notify(notifications)
-    :ok
   end
 end

@@ -24,7 +24,7 @@ defmodule Tracker.Nixpkgs.Change do
     define :list_missing_node_ids
     define :bulk_upsert, args: [:number]
     define :distinct_base_refs
-    define :existing_numbers, args: [:numbers]
+    define :preexisting_for_diff, args: [:numbers]
     define :max_gh_updated_at
     define :max_number
     define :numbers_in_range, args: [:lo, :hi]
@@ -34,6 +34,8 @@ defmodule Tracker.Nixpkgs.Change do
     define :updated_since, args: [:since, {:optional, :states}]
     define :refresh_from_graphql
     define :touch_last_checked
+    define :mark_dormant
+    define :mark_not_found
   end
 
   actions do
@@ -150,13 +152,23 @@ defmodule Tracker.Nixpkgs.Change do
       change set_attribute(:last_checked_at, &DateTime.utc_now/0)
     end
 
+    update :mark_dormant do
+      accept []
+      change set_attribute(:polling_status, :dormant)
+    end
+
+    update :mark_not_found do
+      accept []
+      change set_attribute(:polling_status, :not_found)
+    end
+
     read :stalest_unfinished do
       prepare build(
                 sort: [last_checked_at: :asc_nils_first],
                 limit: 100
               )
 
-      filter expr(state in [:draft, :open] and not is_nil(node_id))
+      filter expr(state in [:draft, :open] and not is_nil(node_id) and polling_status == :active)
     end
 
     read :pending_merged_backlog do
@@ -198,10 +210,10 @@ defmodule Tracker.Nixpkgs.Change do
       prepare build(distinct: [:base_ref], select: [:base_ref], sort: [:base_ref])
     end
 
-    read :existing_numbers do
+    read :preexisting_for_diff do
       argument :numbers, {:array, :integer}, allow_nil?: false
 
-      prepare build(select: [:number])
+      prepare build(select: [:id, :number, :state, :head_sha, :base_ref, :polling_status])
       filter expr(number in ^arg(:numbers))
     end
 
@@ -341,6 +353,12 @@ defmodule Tracker.Nixpkgs.Change do
         ]
       ]
 
+    attribute :polling_status, :atom,
+      allow_nil?: false,
+      public?: true,
+      default: :active,
+      constraints: [one_of: [:active, :dormant, :not_found]]
+
     timestamps()
   end
 
@@ -367,11 +385,31 @@ defmodule Tracker.Nixpkgs.Change do
     identity :unique_node_id, [:node_id], nils_distinct?: true
   end
 
-  # 21 columns: number, node_id, title, state, author, author_github_id, merged_by_github_id,
+  # 22 columns: number, node_id, title, state, author, author_github_id, merged_by_github_id,
   # url, base_ref, head_ref, head_sha, labels, gh_created_at, gh_updated_at, last_checked_at,
-  # closed_at, merged_at, merge_commit_sha, processing_status, inserted_at, updated_at
-  @insert_cols 21
+  # closed_at, merged_at, merge_commit_sha, processing_status, polling_status,
+  # inserted_at, updated_at
+  @insert_cols 22
   @max_rows div(65_535, @insert_cols)
+
+  @doc """
+  Marks every active, non-terminal Change whose `gh_updated_at` predates the
+  given cutoff as `polling_status: :dormant`. Used by `ChangeRefreshWorker`
+  to drop GitHub-side-quiet PRs out of the polling rotation; discovery will
+  flip them back to `:active` if they show up again.
+  """
+  def mark_stale_dormant!(%DateTime{} = cutoff) do
+    require Ash.Query
+
+    __MODULE__
+    |> Ash.Query.filter(
+      state in [:draft, :open] and polling_status == :active and
+        not is_nil(gh_updated_at) and gh_updated_at < ^cutoff
+    )
+    |> Ash.bulk_update!(:mark_dormant, %{}, strategy: :atomic, return_errors?: true)
+
+    :ok
+  end
 
   @doc """
   Bulk upsert changes using raw Ecto insert_all for performance.
@@ -389,6 +427,7 @@ defmodule Tracker.Nixpkgs.Change do
       |> Map.update(:state, :open, &to_string/1)
       |> Map.put_new(:processing_status, "pending")
       |> Map.update!(:processing_status, &to_string/1)
+      |> Map.put(:polling_status, "active")
     end)
     |> Stream.chunk_every(@max_rows)
     |> Enum.reduce(%{}, fn chunk, acc ->
@@ -416,6 +455,7 @@ defmodule Tracker.Nixpkgs.Change do
                :closed_at,
                :merged_at,
                :merge_commit_sha,
+               :polling_status,
                :updated_at
              ]},
           conflict_target: :number,

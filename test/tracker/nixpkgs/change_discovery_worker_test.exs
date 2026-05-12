@@ -10,6 +10,8 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorkerTest do
   alias Tracker.Nixpkgs.Change
   alias Tracker.Nixpkgs.ChangeBranch
   alias Tracker.Nixpkgs.ChangeDiscoveryWorker
+  alias Tracker.Nixpkgs.ChangePackage
+  alias Tracker.Nixpkgs.Package
 
   describe "discover_pages/2" do
     test "upserts every PR on every fetched page and enqueues head_sha_changed for new open/draft" do
@@ -238,6 +240,201 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorkerTest do
 
       branches = ChangeBranch.read!() |> Enum.filter(&(&1.change_id == change_id))
       assert branches == []
+    end
+
+    test "resurrects a dormant record to polling_status :active on upsert" do
+      Change.bulk_upsert_all([
+        %{
+          number: 9500,
+          title: "dormant pr",
+          state: :open,
+          author: "tester",
+          url: "https://github.com/NixOS/nixpkgs/pull/9500",
+          base_ref: "master",
+          head_sha: "shadormant"
+        }
+      ])
+
+      {:ok, change} = Change.get_by_number(9500)
+      Change.mark_dormant!(change)
+
+      fetcher = fn _since, nil ->
+        {:ok,
+         %{
+           pulls: [
+             pr_struct(number: 9500, state: :open, head_sha: "shadormant")
+           ],
+           next_cursor: nil,
+           issue_count: 1
+         }}
+      end
+
+      assert {:ok, 1} = ChangeDiscoveryWorker.discover_pages(fetcher, ~U[2026-01-01 00:00:00Z])
+      assert {:ok, %Change{polling_status: :active}} = Change.get_by_number(9500)
+
+      refute_enqueued(worker: Tracker.Nixpkgs.ChangeArtifactRefreshWorker)
+    end
+
+    test "dormant → merged emits :merged transition (artifact refresh + branch seed)" do
+      Change.bulk_upsert_all([
+        %{
+          number: 9501,
+          title: "dormant merging",
+          state: :open,
+          author: "tester",
+          url: "https://github.com/NixOS/nixpkgs/pull/9501",
+          base_ref: "master",
+          head_sha: "shadm"
+        }
+      ])
+
+      {:ok, change} = Change.get_by_number(9501)
+      Change.mark_dormant!(change)
+
+      fetcher = fn _since, nil ->
+        {:ok,
+         %{
+           pulls: [
+             pr_struct(
+               number: 9501,
+               state: :merged,
+               base_ref: "master",
+               head_sha: "shadm",
+               merged_at: ~U[2026-04-23 10:00:00Z],
+               merge_commit_sha: "mcsha9501"
+             )
+           ],
+           next_cursor: nil,
+           issue_count: 1
+         }}
+      end
+
+      assert {:ok, 1} = ChangeDiscoveryWorker.discover_pages(fetcher, ~U[2026-01-01 00:00:00Z])
+      assert {:ok, %Change{state: :merged, polling_status: :active}} = Change.get_by_number(9501)
+
+      assert_enqueued(
+        worker: Tracker.Nixpkgs.ChangeArtifactRefreshWorker,
+        args: %{"number" => 9501, "reason" => "merged"}
+      )
+
+      {:ok, change} = Change.get_by_number(9501)
+      change = Ash.load!(change, :change_branches)
+      assert [%ChangeBranch{branch_name: "master"}] = change.change_branches
+    end
+
+    test "dormant → closed_no_merge clears ChangePackage links and resets package_count" do
+      Change.bulk_upsert_all([
+        %{
+          number: 9502,
+          title: "dormant closing",
+          state: :open,
+          author: "tester",
+          url: "https://github.com/NixOS/nixpkgs/pull/9502",
+          base_ref: "master",
+          head_sha: "shadc",
+          package_count: 2
+        }
+      ])
+
+      {:ok, change} = Change.get_by_number(9502)
+      Change.mark_dormant!(change)
+
+      Package.bulk_upsert_all([%{attribute: "foo9502"}])
+
+      require Ash.Query
+
+      package =
+        Package
+        |> Ash.Query.filter(attribute == "foo9502")
+        |> Ash.read_one!()
+
+      ChangePackage.bulk_create_all([
+        %{change_id: change.id, package_id: package.id, type: :added}
+      ])
+
+      fetcher = fn _since, nil ->
+        {:ok,
+         %{
+           pulls: [
+             pr_struct(
+               number: 9502,
+               state: :closed,
+               head_sha: "shadc",
+               closed_at: ~U[2026-04-23 09:00:00Z]
+             )
+           ],
+           next_cursor: nil,
+           issue_count: 1
+         }}
+      end
+
+      assert {:ok, 1} = ChangeDiscoveryWorker.discover_pages(fetcher, ~U[2026-01-01 00:00:00Z])
+
+      assert {:ok, %Change{state: :closed, package_count: 0, polling_status: :active}} =
+               Change.get_by_number(9502)
+
+      import Ecto.Query
+
+      assert Tracker.Repo.one(
+               from(cp in ChangePackage, where: cp.change_id == ^change.id, select: count(cp.id))
+             ) == 0
+    end
+
+    test "existing open PR with new head_sha emits :head_sha_changed via discovery" do
+      Change.bulk_upsert_all([
+        %{
+          number: 9503,
+          title: "existing pr",
+          state: :open,
+          author: "tester",
+          url: "https://github.com/NixOS/nixpkgs/pull/9503",
+          base_ref: "master",
+          head_sha: "old_sha"
+        }
+      ])
+
+      fetcher = fn _since, nil ->
+        {:ok,
+         %{
+           pulls: [pr_struct(number: 9503, state: :open, head_sha: "new_sha")],
+           next_cursor: nil,
+           issue_count: 1
+         }}
+      end
+
+      assert {:ok, 1} = ChangeDiscoveryWorker.discover_pages(fetcher, ~U[2026-01-01 00:00:00Z])
+      assert {:ok, %Change{head_sha: "new_sha"}} = Change.get_by_number(9503)
+
+      assert_enqueued(
+        worker: Tracker.Nixpkgs.ChangeArtifactRefreshWorker,
+        args: %{"number" => 9503, "reason" => "head_sha_changed"}
+      )
+    end
+
+    test "existing open PR with no state or sha change emits no transition" do
+      Change.bulk_upsert_all([
+        %{
+          number: 9504,
+          title: "stable pr",
+          state: :open,
+          author: "tester",
+          url: "https://github.com/NixOS/nixpkgs/pull/9504",
+          base_ref: "master",
+          head_sha: "stable_sha"
+        }
+      ])
+
+      fetcher = fn _since, nil ->
+        {:ok,
+         %{
+           pulls: [pr_struct(number: 9504, state: :open, head_sha: "stable_sha")],
+           next_cursor: nil,
+           issue_count: 1
+         }}
+      end
+
+      assert {:ok, 1} = ChangeDiscoveryWorker.discover_pages(fetcher, ~U[2026-01-01 00:00:00Z])
+      refute_enqueued(worker: Tracker.Nixpkgs.ChangeArtifactRefreshWorker)
     end
 
     test "propagates rate limit error" do
