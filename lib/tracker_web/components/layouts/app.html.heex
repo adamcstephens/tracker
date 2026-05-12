@@ -106,6 +106,7 @@
         </svg>
         <input :for={{k, v} <- @page_search.hidden} type="hidden" name={k} value={v} />
         <input
+          id="page-search-input"
           type="search"
           name={@page_search.param}
           value={@page_search.value}
