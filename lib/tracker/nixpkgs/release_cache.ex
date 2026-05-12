@@ -145,7 +145,7 @@ defmodule Tracker.Nixpkgs.ReleaseCache do
   end
 
   def handle_info({:DOWN, _ref, :process, _pid, reason}, state) do
-    Logger.error("ReleaseCache refresh task failed: #{inspect(reason)}")
+    Logger.error(msg: "ReleaseCache refresh task failed", reason: inspect(reason))
     {:noreply, %{state | refreshing: false}}
   end
 

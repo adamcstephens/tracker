@@ -75,10 +75,15 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCache do
     source = Keyword.get(opts, :source, :merge_group)
 
     if run_cached?(m_key, run_id) do
-      Logger.debug("All artifacts cached for PR ##{pr_number}, run #{run_id}")
+      Logger.debug(msg: "all artifacts cached", pr_number: pr_number, run_id: run_id)
       :ok
     else
-      Logger.debug("Caching #{length(artifacts)} artifacts for PR ##{pr_number}, run #{run_id}")
+      Logger.debug(
+        msg: "caching artifacts",
+        pr_number: pr_number,
+        run_id: run_id,
+        count: length(artifacts)
+      )
 
       names = Enum.map(artifacts, & &1.name)
 

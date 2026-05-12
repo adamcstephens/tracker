@@ -52,7 +52,7 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
     {return_value, summary} =
       case RateLimitCache.check(:rest, table) do
         {:limited, seconds} ->
-          Logger.info("REST rate limited for #{seconds}s, snoozing artifact refresh")
+          Logger.info(msg: "REST rate limited, snoozing artifact refresh", seconds: seconds)
           {{:snooze, seconds}, %{outcome: :rate_limited, snooze_seconds: seconds}}
 
         :ok ->
@@ -124,7 +124,7 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
 
           {:error, :rate_limited} ->
             snooze = snooze_seconds_for(:rest)
-            Logger.warning("Artifact refresh rate limited, snoozing #{snooze}s")
+            Logger.warning(msg: "artifact refresh rate limited, snoozing", seconds: snooze)
             {{:snooze, snooze}, %{outcome: :rate_limited, snooze_seconds: snooze}}
 
           {:error, :no_workflow_run} when reason == "head_sha_changed" ->
@@ -444,7 +444,12 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
         case Enum.find(runs, &(&1.name == name && &1.status == "completed")) do
           nil ->
             if Enum.find(runs, &(&1.name == name)) do
-              Logger.info("#{name} run not yet complete for #{sha}, snoozing")
+              Logger.info(
+                msg: "workflow run not yet complete, snoozing",
+                workflow: name,
+                sha: sha
+              )
+
               {:snooze, 120}
             else
               {:error, :no_workflow_run}

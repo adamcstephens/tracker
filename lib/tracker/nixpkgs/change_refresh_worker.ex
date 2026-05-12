@@ -48,7 +48,7 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorker do
     result =
       case RateLimitCache.check(:graphql, table) do
         {:limited, seconds} ->
-          Logger.info("GraphQL rate limited for #{seconds}s, skipping refresh")
+          Logger.info(msg: "GraphQL rate limited, skipping refresh", seconds: seconds)
           {:rate_limited, seconds}
 
         :ok ->
@@ -131,11 +131,11 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorker do
 
           {:error, %GitHub.Error{reason: :rate_limited}} ->
             snooze = snoozer.()
-            Logger.warning("GraphQL rate limited, snoozing refresh worker #{snooze}s")
+            Logger.warning(msg: "GraphQL rate limited, snoozing refresh worker", seconds: snooze)
             {:snooze, snooze}
 
           {:error, reason} = error ->
-            Logger.error("ChangeRefreshWorker fetch failed: #{inspect(reason)}")
+            Logger.error(msg: "ChangeRefreshWorker fetch failed", reason: inspect(reason))
             error
         end
     end

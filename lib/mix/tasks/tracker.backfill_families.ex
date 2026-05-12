@@ -25,7 +25,7 @@ defmodule Mix.Tasks.Tracker.BackfillFamilies do
     # Step 1: Read all package attributes
     packages = Tracker.Nixpkgs.Package.read!()
 
-    Logger.info("Backfilling families for #{length(packages)} packages")
+    Logger.info(msg: "backfilling families", packages: length(packages))
 
     # Step 2: Parse all attributes
     parsed =
@@ -49,7 +49,7 @@ defmodule Mix.Tasks.Tracker.BackfillFamilies do
       )
     end)
 
-    Logger.info("Upserted #{length(families)} package families")
+    Logger.info(msg: "upserted package families", count: length(families))
 
     # Step 4: Build family lookup
     family_id_map =
@@ -77,7 +77,7 @@ defmodule Mix.Tasks.Tracker.BackfillFamilies do
       )
     end)
 
-    Logger.info("Backfill complete")
+    Logger.info(msg: "backfill complete")
   end
 
   defp maybe_put(map, _key, nil), do: map
