@@ -8,7 +8,7 @@ defmodule Tracker.Nixpkgs.Team do
 
   code_interface do
     define :read
-    define :list, args: [{:optional, :search}, {:optional, :channel_id}]
+    define :list, args: [{:optional, :search}]
     define :bulk_upsert
     define :get_by_short_name, action: :read, get_by: [:short_name]
     define :id_map, action: :id_map
@@ -23,7 +23,6 @@ defmodule Tracker.Nixpkgs.Team do
 
     read :list do
       argument :search, :ci_string
-      argument :channel_id, :integer
 
       pagination do
         offset? true

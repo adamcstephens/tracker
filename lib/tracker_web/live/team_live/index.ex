@@ -86,10 +86,9 @@ defmodule TrackerWeb.TeamLive.Index do
 
   defp load_teams(socket) do
     tp = socket.assigns.table_params
-    channel_id = TrackerWeb.Lens.channel_id(socket.assigns.lens)
 
     result =
-      Tracker.Nixpkgs.Team.list!(tp.search, channel_id,
+      Tracker.Nixpkgs.Team.list!(tp.search,
         page: [offset: tp.offset, count: true, limit: tp.page_size]
       )
 

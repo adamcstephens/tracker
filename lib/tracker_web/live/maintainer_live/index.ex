@@ -90,12 +90,9 @@ defmodule TrackerWeb.MaintainerLive.Index do
 
   defp load_maintainers(socket) do
     tp = socket.assigns.table_params
-    channel_id = TrackerWeb.Lens.channel_id(socket.assigns.lens)
 
     page =
-      Tracker.Nixpkgs.Maintainer.list!(tp.search, channel_id,
-        page: [offset: tp.offset, count: true]
-      )
+      Tracker.Nixpkgs.Maintainer.list!(tp.search, page: [offset: tp.offset, count: true])
 
     pagination = TableParams.apply_pagination(tp, page, :maintainers)
 
