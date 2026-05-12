@@ -78,13 +78,14 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorker do
         snooze_seconds = snooze_seconds(opts)
 
         Logger.warning(
-          "GitHub GraphQL rate limited, snoozing discovery worker #{snooze_seconds}s"
+          msg: "GitHub GraphQL rate limited, snoozing discovery worker",
+          seconds: snooze_seconds
         )
 
         {{:snooze, snooze_seconds}, %{outcome: :snoozed, snooze_seconds: snooze_seconds}}
 
       {:error, reason} ->
-        Logger.error("Failed to discover pulls: #{inspect(reason)}")
+        Logger.error(msg: "Failed to discover pulls", reason: inspect(reason))
         {{:error, reason}, %{outcome: :error, reason: inspect(reason)}}
     end
   end

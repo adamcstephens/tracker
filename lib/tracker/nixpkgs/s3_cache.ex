@@ -210,13 +210,16 @@ defmodule Tracker.Nixpkgs.S3Cache do
 
       {:ok, %Req.Response{status: status, body: resp_body}} ->
         Logger.error(
-          "Failed to delete S3 object #{key}: status #{status}, body: #{inspect(resp_body)}"
+          msg: "failed to delete S3 object",
+          key: key,
+          status: status,
+          body: inspect(resp_body)
         )
 
         :error
 
       {:error, reason} ->
-        Logger.error("Failed to delete S3 object #{key}: #{inspect(reason)}")
+        Logger.error(msg: "failed to delete S3 object", key: key, reason: inspect(reason))
         :error
     end
   end
@@ -234,13 +237,16 @@ defmodule Tracker.Nixpkgs.S3Cache do
 
       {:ok, %Req.Response{status: status, body: resp_body}} ->
         Logger.error(
-          "Failed to write S3 cache #{key}: status #{status}, body: #{inspect(resp_body)}"
+          msg: "failed to write S3 cache",
+          key: key,
+          status: status,
+          body: inspect(resp_body)
         )
 
         :error
 
       {:error, reason} ->
-        Logger.error("Failed to write S3 cache #{key}: #{inspect(reason)}")
+        Logger.error(msg: "failed to write S3 cache", key: key, reason: inspect(reason))
         :error
     end
   end

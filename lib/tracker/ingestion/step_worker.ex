@@ -43,7 +43,10 @@ defmodule Tracker.Ingestion.StepWorker do
         {:ok, pipeline} ->
           if pipeline.status != :running do
             Logger.info(
-              "Pipeline #{pipeline_id} not running (#{pipeline.status}), skipping #{step_name}"
+              msg: "pipeline not running, skipping step",
+              pipeline_id: pipeline_id,
+              pipeline_status: pipeline.status,
+              step: step_name
             )
 
             {:ok, %{outcome: :skipped, pipeline_status: pipeline.status}}
@@ -53,7 +56,7 @@ defmodule Tracker.Ingestion.StepWorker do
           end
 
         {:error, _} ->
-          Logger.error("Pipeline #{pipeline_id} not found")
+          Logger.error(msg: "pipeline not found", pipeline_id: pipeline_id)
           {{:error, :pipeline_not_found}, %{outcome: :error, status: :pipeline_not_found}}
       end
 
@@ -126,7 +129,12 @@ defmodule Tracker.Ingestion.StepWorker do
 
         Pipeline.mark_failed!(pipeline, step, error_msg)
 
-        Logger.error("Pipeline #{pipeline.id} failed at step #{step}: #{error_msg}")
+        Logger.error(
+          msg: "pipeline failed at step",
+          pipeline_id: pipeline.id,
+          step: step,
+          error: error_msg
+        )
 
         {:failed, true}
       else

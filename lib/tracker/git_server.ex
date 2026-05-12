@@ -188,7 +188,7 @@ defmodule Tracker.GitServer do
         end
 
       healthy_repo?(path) ->
-        Logger.info("GitServer: reusing existing repo at #{path}")
+        Logger.info(msg: "GitServer: reusing existing repo", path: path)
 
         %State{state | ready: true}
         |> configure_remote()
@@ -196,7 +196,8 @@ defmodule Tracker.GitServer do
 
       true ->
         Logger.error(
-          "GitServer: #{path} exists but is not a healthy git repo; refusing to clone over it"
+          msg: "GitServer: path exists but is not a healthy git repo; refusing to clone over it",
+          path: path
         )
 
         state
@@ -204,18 +205,23 @@ defmodule Tracker.GitServer do
   end
 
   defp clone(%State{repo_url: url, path: path} = state) do
-    Logger.info("GitServer: cloning #{url} into #{path}")
+    Logger.info(msg: "GitServer: cloning", url: url, path: path)
     File.mkdir_p!(Path.dirname(path))
 
     args = ["clone", "--bare", "--quiet", "--no-tags", url, path]
 
     case System.cmd("git", args, stderr_to_stdout: true) do
       {_, 0} ->
-        Logger.info("GitServer: clone complete")
+        Logger.info(msg: "GitServer: clone complete")
         %State{state | ready: true}
 
       {output, code} ->
-        Logger.error("GitServer: clone failed (#{code}): #{String.trim(output)}")
+        Logger.error(
+          msg: "GitServer: clone failed",
+          exit_code: code,
+          output: String.trim(output)
+        )
+
         state
     end
   end
@@ -258,7 +264,10 @@ defmodule Tracker.GitServer do
 
       {output, code} ->
         Logger.warning(
-          "GitServer: commit-graph write failed (#{code}) at #{path}: #{String.trim(output)}"
+          msg: "GitServer: commit-graph write failed",
+          exit_code: code,
+          path: path,
+          output: String.trim(output)
         )
 
         state

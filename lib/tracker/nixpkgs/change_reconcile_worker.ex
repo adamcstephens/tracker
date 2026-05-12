@@ -36,7 +36,7 @@ defmodule Tracker.Nixpkgs.ChangeReconcileWorker do
   def perform(%Oban.Job{}) do
     case Tracker.GitHub.RateLimitCache.check(:graphql) do
       {:limited, seconds} ->
-        Logger.info("Rate limited for #{seconds}s, skipping reconcile")
+        Logger.info(msg: "rate limited, skipping reconcile", seconds: seconds)
         :ok
 
       :ok ->
@@ -50,13 +50,14 @@ defmodule Tracker.Nixpkgs.ChangeReconcileWorker do
             snooze_seconds = Tracker.GitHub.seconds_until_reset(token, :graphql)
 
             Logger.warning(
-              "GitHub GraphQL rate limited, snoozing reconcile worker #{snooze_seconds}s"
+              msg: "GitHub GraphQL rate limited, snoozing reconcile worker",
+              seconds: snooze_seconds
             )
 
             {:snooze, snooze_seconds}
 
           {:error, reason} ->
-            Logger.error("Reconcile failed: #{inspect(reason)}")
+            Logger.error(msg: "reconcile failed", reason: inspect(reason))
             {:error, reason}
         end
     end

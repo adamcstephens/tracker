@@ -354,7 +354,7 @@ defmodule Tracker.GitHub.GraphQL do
        )
        when is_map(repo_node) do
     if errors = Map.get(body, "errors") do
-      Logger.warning("GitHub GraphQL returned partial errors: #{inspect(errors)}")
+      Logger.warning(msg: "GitHub GraphQL returned partial errors", errors: inspect(errors))
     end
 
     rate_limit = Map.get(data, "rateLimit")
@@ -404,7 +404,7 @@ defmodule Tracker.GitHub.GraphQL do
          table
        ) do
     if errors = Map.get(body, "errors") do
-      Logger.warning("GitHub GraphQL returned partial errors: #{inspect(errors)}")
+      Logger.warning(msg: "GitHub GraphQL returned partial errors", errors: inspect(errors))
     end
 
     rate_limit = Map.get(data, "rateLimit")
@@ -440,7 +440,7 @@ defmodule Tracker.GitHub.GraphQL do
   end
 
   defp maybe_log_cost(%{"cost" => cost}) when is_integer(cost) do
-    Logger.debug("GitHub GraphQL query cost: #{cost}")
+    Logger.debug(msg: "GitHub GraphQL query cost", cost: cost)
   end
 
   defp maybe_log_cost(_), do: :ok
@@ -457,7 +457,7 @@ defmodule Tracker.GitHub.GraphQL do
 
   defp handle_body(%{"data" => %{"nodes" => nodes} = data} = body, node_ids, table) do
     if errors = Map.get(body, "errors") do
-      Logger.warning("GitHub GraphQL returned partial errors: #{inspect(errors)}")
+      Logger.warning(msg: "GitHub GraphQL returned partial errors", errors: inspect(errors))
     end
 
     maybe_track_rate_limit(Map.get(data, "rateLimit"), table)

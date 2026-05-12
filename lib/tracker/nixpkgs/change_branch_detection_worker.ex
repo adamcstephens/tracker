@@ -89,7 +89,7 @@ defmodule Tracker.Nixpkgs.ChangeBranchDetectionWorker do
 
       :ok
     else
-      Logger.warning("ChangeBranchDetectionWorker: GitServer not ready, snoozing")
+      Logger.warning(msg: "ChangeBranchDetectionWorker: GitServer not ready, snoozing")
 
       Logger.info(
         msg: "branch detection finished",
