@@ -25,26 +25,51 @@ defmodule Tracker.Ingestion.StepWorker do
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"pipeline_id" => pipeline_id, "step" => step_name}} = job) do
+    Logger.info(
+      msg: "step started",
+      pipeline_id: pipeline_id,
+      step: step_name,
+      channel_id: job.meta["channel_id"],
+      revision: job.meta["revision"],
+      attempt: job.attempt
+    )
+
+    started_at = System.monotonic_time()
     step = String.to_existing_atom(step_name)
     step_module = StepGraph.step_module(step)
 
-    case Ash.get(Pipeline, pipeline_id) do
-      {:ok, pipeline} ->
-        if pipeline.status != :running do
-          Logger.info(
-            "Pipeline #{pipeline_id} not running (#{pipeline.status}), skipping #{step_name}"
-          )
+    {return_value, summary} =
+      case Ash.get(Pipeline, pipeline_id) do
+        {:ok, pipeline} ->
+          if pipeline.status != :running do
+            Logger.info(
+              "Pipeline #{pipeline_id} not running (#{pipeline.status}), skipping #{step_name}"
+            )
 
-          :ok
-        else
-          ctx = build_context(pipeline)
-          execute_step(step_module, step, ctx, job)
-        end
+            {:ok, %{outcome: :skipped, pipeline_status: pipeline.status}}
+          else
+            ctx = build_context(pipeline)
+            execute_step(step_module, step, ctx, job)
+          end
 
-      {:error, _} ->
-        Logger.error("Pipeline #{pipeline_id} not found")
-        {:error, :pipeline_not_found}
-    end
+        {:error, _} ->
+          Logger.error("Pipeline #{pipeline_id} not found")
+          {{:error, :pipeline_not_found}, %{outcome: :error, status: :pipeline_not_found}}
+      end
+
+    Logger.info(
+      [
+        msg: "step finished",
+        pipeline_id: pipeline_id,
+        step: step_name
+      ] ++ Enum.to_list(summary) ++ [duration_ms: duration_ms(started_at)]
+    )
+
+    return_value
+  end
+
+  defp duration_ms(started_at) do
+    System.convert_time_unit(System.monotonic_time() - started_at, :native, :millisecond)
   end
 
   defp build_context(pipeline) do
@@ -78,30 +103,44 @@ defmodule Tracker.Ingestion.StepWorker do
         atomize_list(updated_pipeline.completed_steps)
       )
 
-    if ready == [] and all_complete?(updated_pipeline) do
-      Pipeline.mark_completed!(updated_pipeline)
-      start_next_pipeline(updated_pipeline)
-    else
-      Enum.each(ready, fn next_step ->
-        enqueue(updated_pipeline, next_step)
-      end)
-    end
+    {pipeline_status, next_steps} =
+      if ready == [] and all_complete?(updated_pipeline) do
+        Pipeline.mark_completed!(updated_pipeline)
+        start_next_pipeline(updated_pipeline)
+        {:completed, 0}
+      else
+        Enum.each(ready, fn next_step ->
+          enqueue(updated_pipeline, next_step)
+        end)
 
-    :ok
+        {updated_pipeline.status, length(ready)}
+      end
+
+    {:ok, %{outcome: :ok, next_steps: next_steps, pipeline_status: pipeline_status}}
   end
 
   defp handle_step_failure(pipeline, step, reason, job) do
-    if job.attempt >= job.max_attempts do
-      error_msg = inspect(reason, limit: 500)
+    {pipeline_status, final?} =
+      if job.attempt >= job.max_attempts do
+        error_msg = inspect(reason, limit: 500)
 
-      Pipeline.mark_failed!(pipeline, step, error_msg)
+        Pipeline.mark_failed!(pipeline, step, error_msg)
 
-      Logger.error("Pipeline #{pipeline.id} failed at step #{step}: #{error_msg}")
+        Logger.error("Pipeline #{pipeline.id} failed at step #{step}: #{error_msg}")
 
-      {:error, reason}
-    else
-      {:error, reason}
-    end
+        {:failed, true}
+      else
+        {pipeline.status, false}
+      end
+
+    summary = %{
+      outcome: :error,
+      pipeline_status: pipeline_status,
+      reason: inspect(reason),
+      final?: final?
+    }
+
+    {{:error, reason}, summary}
   end
 
   defp all_complete?(pipeline) do

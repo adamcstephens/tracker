@@ -1,6 +1,10 @@
 defmodule Tracker.Nixpkgs.ChangeArtifactReconcileWorkerTest do
   use Tracker.DataCase, async: false
 
+  import ExUnit.CaptureLog
+
+  require Logger
+
   alias Tracker.Nixpkgs.Change
   alias Tracker.Nixpkgs.ChangeArtifactReconcileWorker
   alias Tracker.Nixpkgs.ChangeArtifactRefreshWorker
@@ -72,6 +76,23 @@ defmodule Tracker.Nixpkgs.ChangeArtifactReconcileWorkerTest do
         |> Enum.filter(&(&1.args["number"] == 9001))
 
       assert length(jobs) == 1
+    end
+
+    test "emits structured start/stop logs with outcome and enqueued count" do
+      insert_change!(number: 7001, state: :merged, processing_status: :pending)
+      Logger.put_module_level(ChangeArtifactReconcileWorker, :info)
+      on_exit(fn -> Logger.delete_module_level(ChangeArtifactReconcileWorker) end)
+
+      log =
+        capture_log(fn ->
+          assert {:ok, 1} = perform_job(ChangeArtifactReconcileWorker, %{}, queue: :changes)
+        end)
+
+      assert log =~ ~s(msg: "artifact reconcile started")
+      assert log =~ ~s(msg: "artifact reconcile finished")
+      assert log =~ "outcome: :ok"
+      assert log =~ "enqueued: 1"
+      assert log =~ ~r/duration_ms: \d+/
     end
   end
 

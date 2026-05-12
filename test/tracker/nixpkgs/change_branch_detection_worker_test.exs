@@ -1,6 +1,10 @@
 defmodule Tracker.Nixpkgs.ChangeBranchDetectionWorkerTest do
   use Tracker.DataCase, async: false
 
+  import ExUnit.CaptureLog
+
+  require Logger
+
   alias Tracker.GitServer
   alias Tracker.Nixpkgs.Change
   alias Tracker.Nixpkgs.ChangeBranch
@@ -91,6 +95,26 @@ defmodule Tracker.Nixpkgs.ChangeBranchDetectionWorkerTest do
       :ok = ChangeBranchDetectionWorker.run(git_server: ctx.git_server)
 
       assert "nixos-unstable" in recorded_branches(change)
+    end
+
+    test "emits structured start/stop logs with branch counts", ctx do
+      insert_change!(base_ref: "master", merge_commit_sha: ctx.sha_mc)
+      Logger.put_module_level(ChangeBranchDetectionWorker, :info)
+      on_exit(fn -> Logger.delete_module_level(ChangeBranchDetectionWorker) end)
+
+      log =
+        capture_log(fn ->
+          assert :ok = ChangeBranchDetectionWorker.run(git_server: ctx.git_server)
+        end)
+
+      assert log =~ ~s(msg: "branch detection started")
+      assert log =~ ~s(msg: "branch detection finished")
+      assert log =~ "outcome: :ok"
+      assert log =~ ~r/in_flight: \d+/
+      assert log =~ ~r/branches_checked: \d+/
+      assert log =~ ~r/branches_recorded: [1-9]\d*/
+      assert log =~ "fetch_failed?: false"
+      assert log =~ ~r/duration_ms: \d+/
     end
 
     test "handles unknown_ref gracefully (logs and continues)", ctx do
