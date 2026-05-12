@@ -85,6 +85,27 @@ let liveSocket = new LiveSocket("/live", Socket, {
   hooks: Hooks
 })
 
+// Focus the header search input when "/" is pressed outside of an editable element.
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "/") return
+  if (event.ctrlKey || event.metaKey || event.altKey) return
+
+  let target = event.target
+  if (target && (target.isContentEditable ||
+      target.tagName === "INPUT" ||
+      target.tagName === "TEXTAREA" ||
+      target.tagName === "SELECT")) {
+    return
+  }
+
+  let input = document.getElementById("page-search-input")
+  if (!input) return
+
+  event.preventDefault()
+  input.focus()
+  input.select()
+})
+
 // Show progress bar on live navigation and form submits
 topbar.config({barColors: {0: "#29d"}, shadowColor: "rgba(0, 0, 0, .3)"})
 window.addEventListener("phx:page-loading-start", _info => topbar.show(300))
