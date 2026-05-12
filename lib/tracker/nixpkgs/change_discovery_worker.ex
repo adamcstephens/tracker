@@ -22,6 +22,7 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorker do
   alias Tracker.Nixpkgs.Change
   alias Tracker.Nixpkgs.ChangeArtifactRefreshWorker
   alias Tracker.Nixpkgs.ChangeBranch
+  alias Tracker.Nixpkgs.ChangeTransitions
 
   @repo "NixOS/nixpkgs"
   @checkpoint_floor_days 90
@@ -205,38 +206,86 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorker do
 
       _ ->
         records = Enum.map(pulls, &parse_pr_payload/1)
-        preexisting = preexisting_numbers(records)
+        prior_by_number = prior_state_lookup(records)
         number_to_id = Change.bulk_upsert_all(records)
-        enqueue_artifact_refresh_for_new_open_drafts(records, preexisting)
-        seed_base_ref_for_merged(records, number_to_id)
+        emit_changes(records, prior_by_number, number_to_id)
         {:ok, length(records)}
     end
   end
 
-  defp preexisting_numbers(records) do
+  defp prior_state_lookup(records) do
     records
     |> Enum.map(& &1.number)
-    |> Change.existing_numbers!()
-    |> MapSet.new(& &1.number)
+    |> Change.preexisting_for_diff!()
+    |> Map.new(&{&1.number, &1})
   end
 
-  defp enqueue_artifact_refresh_for_new_open_drafts(records, preexisting) do
+  defp emit_changes(records, prior_by_number, number_to_id) do
     Enum.each(records, fn record ->
-      if record.state in [:open, :draft] and record.number not in preexisting do
-        %{"number" => record.number, "reason" => "head_sha_changed"}
-        |> ChangeArtifactRefreshWorker.new()
-        |> Oban.insert!()
+      case Map.fetch(prior_by_number, record.number) do
+        :error ->
+          handle_new_record(record, number_to_id)
+
+        {:ok, prior} ->
+          handle_existing_record(record, prior, number_to_id)
       end
     end)
   end
 
-  defp seed_base_ref_for_merged(records, number_to_id) do
-    Enum.each(records, fn record ->
-      with :merged <- record.state,
-           {:ok, change_id} <- Map.fetch(number_to_id, record.number) do
-        ChangeBranch.seed_for_base_ref(change_id, record.base_ref)
-      end
-    end)
+  defp handle_new_record(record, number_to_id) do
+    if record.state in [:open, :draft] do
+      %{"number" => record.number, "reason" => "head_sha_changed"}
+      |> ChangeArtifactRefreshWorker.new()
+      |> Oban.insert!()
+    end
+
+    if record.state == :merged do
+      seed_base_ref(record, number_to_id)
+    end
+  end
+
+  defp handle_existing_record(record, prior, number_to_id) do
+    pr_like = struct!(PullRequest, pr_like_from_record(record))
+
+    case ChangeTransitions.detect(prior, pr_like) do
+      [] ->
+        :ok
+
+      transitions ->
+        change = build_change_for_emit(record, prior, number_to_id)
+        Enum.each(transitions, &ChangeTransitions.emit(change, &1))
+    end
+  end
+
+  defp pr_like_from_record(record) do
+    %{
+      node_id: record.node_id,
+      number: record.number,
+      title: record.title,
+      state: record.state,
+      head_sha: record.head_sha,
+      updated_at: record.gh_updated_at,
+      merged_at: record.merged_at,
+      closed_at: record.closed_at,
+      merge_commit_sha: record.merge_commit_sha
+    }
+  end
+
+  defp build_change_for_emit(record, prior, number_to_id) do
+    %Change{
+      id: prior.id || Map.fetch!(number_to_id, record.number),
+      number: record.number,
+      node_id: record.node_id,
+      base_ref: record.base_ref,
+      state: record.state
+    }
+  end
+
+  defp seed_base_ref(record, number_to_id) do
+    case Map.fetch(number_to_id, record.number) do
+      {:ok, change_id} -> ChangeBranch.seed_for_base_ref(change_id, record.base_ref)
+      :error -> :ok
+    end
   end
 
   @doc """

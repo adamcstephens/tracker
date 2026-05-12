@@ -45,6 +45,44 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorkerTest do
       assert ids == ["pr_old", "pr_newer"]
     end
 
+    test "excludes :dormant and :not_found polling_status from the refresh queue" do
+      insert_change!(
+        number: 400,
+        state: :open,
+        node_id: "pr_active",
+        last_checked_at: hours_ago(5)
+      )
+
+      insert_change!(
+        number: 401,
+        state: :open,
+        node_id: "pr_dormant",
+        last_checked_at: hours_ago(10)
+      )
+
+      insert_change!(
+        number: 402,
+        state: :open,
+        node_id: "pr_gone",
+        last_checked_at: hours_ago(20)
+      )
+
+      {:ok, dormant} = Change.get_by_number(401)
+      {:ok, gone} = Change.get_by_number(402)
+      Change.mark_dormant!(dormant)
+      Change.mark_not_found!(gone)
+
+      captured =
+        fetcher_returning(fn ids ->
+          for id <- ids, into: %{}, do: {id, pr(node_id: id, number: 99_000)}
+        end)
+
+      {:ok, count} = ChangeRefreshWorker.run(fetcher: captured.fn)
+      assert count == 1
+      [ids] = captured.calls.()
+      assert ids == ["pr_active"]
+    end
+
     test "open → merged transition updates state and emits :merged transition" do
       insert_change!(number: 100, state: :open, node_id: "pr_m", head_sha: "sha_old")
       recorder = transition_recorder()
@@ -165,7 +203,7 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorkerTest do
       assert [{%Change{number: 109}, :closed_no_merge}] = recorder.calls.()
     end
 
-    test ":not_found bumps last_checked_at, keeps state, and warns" do
+    test ":not_found terminalizes the record via polling_status and warns" do
       insert_change!(number: 104, state: :open, node_id: "pr_gone", last_checked_at: nil)
 
       log =
@@ -173,11 +211,46 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorkerTest do
           ChangeRefreshWorker.run(fetcher: fn _ -> {:ok, %{"pr_gone" => :not_found}} end)
         end)
 
-      assert {:ok, %Change{state: :open, last_checked_at: %DateTime{}}} =
+      assert {:ok, %Change{state: :open, polling_status: :not_found, last_checked_at: nil}} =
                Change.get_by_number(104)
 
       assert log =~ "not_found"
       assert log =~ "pr_gone"
+    end
+
+    test "marks gh_updated_at-stale rows dormant before fetching" do
+      stale_at = DateTime.utc_now() |> DateTime.add(-31, :day)
+      fresh_at = DateTime.utc_now() |> DateTime.add(-1, :day)
+
+      insert_change!(
+        number: 500,
+        state: :open,
+        node_id: "pr_stale",
+        gh_updated_at: stale_at,
+        last_checked_at: hours_ago(50)
+      )
+
+      insert_change!(
+        number: 501,
+        state: :open,
+        node_id: "pr_fresh",
+        gh_updated_at: fresh_at,
+        last_checked_at: hours_ago(50)
+      )
+
+      captured =
+        fetcher_returning(fn ids ->
+          for id <- ids, into: %{}, do: {id, pr(node_id: id, number: 99_999)}
+        end)
+
+      {:ok, count} = ChangeRefreshWorker.run(fetcher: captured.fn)
+      assert count == 1
+
+      [ids] = captured.calls.()
+      assert ids == ["pr_fresh"]
+
+      assert {:ok, %Change{polling_status: :dormant}} = Change.get_by_number(500)
+      assert {:ok, %Change{polling_status: :active}} = Change.get_by_number(501)
     end
 
     test "last_checked_at is bumped even when nothing else changes" do
