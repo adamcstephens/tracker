@@ -166,8 +166,17 @@ defmodule TrackerWeb.ChangeLive.Show do
         </p>
       </section>
 
+      <p :if={@change.files_over_limit} class="change-files-over-limit muted">
+        This PR touched too many files to track per-file links — the affected
+        options view is disabled. (Usually means the branch is far out of date
+        with the base and GitHub's file diff ballooned.)
+      </p>
+
       <section
-        :if={@change.processing_status == :processed and @option_prefixes_top != []}
+        :if={
+          @change.processing_status == :processed and not @change.files_over_limit and
+            @option_prefixes_top != []
+        }
         class="change-section"
       >
         <div class="change-section-head">

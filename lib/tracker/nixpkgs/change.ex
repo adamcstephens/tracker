@@ -20,6 +20,7 @@ defmodule Tracker.Nixpkgs.Change do
     define :by_maintainer_github_id, args: [:github_id, {:optional, :channel_name}]
     define :update_package_count
     define :update_processing_status
+    define :set_files_over_limit
     define :set_node_id
     define :list_missing_node_ids
     define :bulk_upsert, args: [:number]
@@ -126,6 +127,10 @@ defmodule Tracker.Nixpkgs.Change do
 
     update :update_processing_status do
       accept [:processing_status]
+    end
+
+    update :set_files_over_limit do
+      accept [:files_over_limit]
     end
 
     update :set_node_id do
@@ -350,6 +355,12 @@ defmodule Tracker.Nixpkgs.Change do
     attribute :merged_at, :utc_datetime, public?: true
     attribute :merge_commit_sha, :string, public?: true
     attribute :package_count, :integer, public?: true, default: 0
+
+    attribute :files_over_limit, :boolean do
+      allow_nil? false
+      public? true
+      default false
+    end
 
     attribute :processing_status, :atom,
       public?: true,

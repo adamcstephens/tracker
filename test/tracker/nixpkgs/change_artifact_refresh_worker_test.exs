@@ -566,6 +566,104 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorkerTest do
       assert refreshed.processing_status == :artifact_expired
       assert change_file_paths(change.id) == []
     end
+
+    test "marks files_over_limit and skips link writes when paths exceed the cap", %{
+      rate_limit_table: table
+    } do
+      change = insert_change!(number: 9450, state: :merged, merge_commit_sha: "overlimsha")
+      attrdiff = %{"added" => ["pkg-x"], "changed" => [], "removed" => []}
+      paths = for i <- 1..501, do: "pkgs/over/limit-#{i}/default.nix"
+
+      :ok =
+        ChangeArtifactRefreshWorker.run(
+          %{reason: "merged", number: 9450},
+          rate_limit_table: table,
+          attrdiff_fetcher: fn _ -> {:ok, attrdiff} end,
+          files_fetcher: fn _ -> {:ok, paths} end
+        )
+
+      {:ok, refreshed} = Change.get_by_number(9450)
+      assert refreshed.files_over_limit == true
+      assert change_file_paths(change.id) == []
+    end
+
+    test "clears prior change_files when a subsequent refresh trips the cap", %{
+      rate_limit_table: table
+    } do
+      change = insert_change!(number: 9451, state: :open, head_sha: "trip0")
+      attrdiff = %{"added" => ["pkg-y"], "changed" => [], "removed" => []}
+
+      :ok =
+        ChangeArtifactRefreshWorker.run(
+          %{reason: "head_sha_changed", number: 9451},
+          rate_limit_table: table,
+          attrdiff_fetcher: fn _ -> {:ok, attrdiff} end,
+          files_fetcher: fn _ -> {:ok, ["pkgs/old/default.nix"]} end
+        )
+
+      :ok =
+        ChangeArtifactRefreshWorker.run(
+          %{reason: "head_sha_changed", number: 9451},
+          rate_limit_table: table,
+          attrdiff_fetcher: fn _ -> {:ok, attrdiff} end,
+          files_fetcher: fn _ ->
+            {:ok, for(i <- 1..501, do: "pkgs/over/path-#{i}/default.nix")}
+          end
+        )
+
+      {:ok, refreshed} = Change.get_by_number(9451)
+      assert refreshed.files_over_limit == true
+      assert change_file_paths(change.id) == []
+    end
+
+    test "sub-cap refresh clears files_over_limit and writes links", %{rate_limit_table: table} do
+      change = insert_change!(number: 9452, state: :open, head_sha: "back0")
+      attrdiff = %{"added" => ["pkg-z"], "changed" => [], "removed" => []}
+
+      # First refresh: trip the cap.
+      :ok =
+        ChangeArtifactRefreshWorker.run(
+          %{reason: "head_sha_changed", number: 9452},
+          rate_limit_table: table,
+          attrdiff_fetcher: fn _ -> {:ok, attrdiff} end,
+          files_fetcher: fn _ ->
+            {:ok, for(i <- 1..501, do: "pkgs/over/back-#{i}/default.nix")}
+          end
+        )
+
+      # Subsequent refresh under the cap.
+      :ok =
+        ChangeArtifactRefreshWorker.run(
+          %{reason: "head_sha_changed", number: 9452},
+          rate_limit_table: table,
+          attrdiff_fetcher: fn _ -> {:ok, attrdiff} end,
+          files_fetcher: fn _ -> {:ok, ["pkgs/back/default.nix"]} end
+        )
+
+      {:ok, refreshed} = Change.get_by_number(9452)
+      assert refreshed.files_over_limit == false
+      assert change_file_paths(change.id) == ["pkgs/back/default.nix"]
+    end
+
+    test "exactly at the cap writes all links and keeps files_over_limit false", %{
+      rate_limit_table: table
+    } do
+      change = insert_change!(number: 9453, state: :merged, merge_commit_sha: "atlimitsha")
+      attrdiff = %{"added" => ["pkg-a"], "changed" => [], "removed" => []}
+      paths = for i <- 1..500, do: "pkgs/atlimit/path-#{i}/default.nix"
+
+      :ok =
+        ChangeArtifactRefreshWorker.run(
+          %{reason: "merged", number: 9453},
+          rate_limit_table: table,
+          attrdiff_fetcher: fn _ -> {:ok, attrdiff} end,
+          files_fetcher: fn _ -> {:ok, paths} end
+        )
+
+      {:ok, refreshed} = Change.get_by_number(9453)
+      assert refreshed.files_over_limit == false
+      assert length(change_file_paths(change.id)) == 500
+    end
   end
 
   describe "run/2 with unknown reason" do
