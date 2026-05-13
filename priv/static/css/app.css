@@ -1348,6 +1348,10 @@ dl.option-body dd {
 	max-width: 100%;
 }
 
+.change-show .change-card .propagation-dag a {
+	text-decoration: none;
+}
+
 .change-show .change-meta {
 	display: grid;
 	grid-template-columns: 1fr 1fr;
