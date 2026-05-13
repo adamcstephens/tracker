@@ -149,16 +149,14 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
       :ok
     end
 
-    test "renders affected options as folded prefixes linking to /options/<prefix>", %{
-      conn: conn
-    } do
+    test "renders affected options as a Namespace table linking to /options/<prefix>",
+         %{conn: conn} do
       {:ok, _view, html} =
         live(conn, ~p"/changes/6001?lens_channel=nixos-unstable-opts")
 
       assert html =~ "Affected options"
-      assert html =~ "services.nginx"
+      assert html =~ ">Namespace<"
       assert html =~ ~s|href="/options/services.nginx"|
-      assert html =~ "2 options"
       # The full option name is no longer rendered as its own row.
       refute html =~ ~s|href="/options/services.nginx.enable"|
     end

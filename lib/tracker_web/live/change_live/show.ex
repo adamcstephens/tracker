@@ -113,35 +113,35 @@ defmodule TrackerWeb.ChangeLive.Show do
       </dl>
 
       <section class="change-section">
-        <div class="change-section-head">
-          <h2>
-            Affected packages <small class="muted">({@package_count})</small>
-          </h2>
-
-          <form
-            :if={@package_count > 15 && @change.processing_status == :processed}
-            phx-change="search-packages"
-            phx-submit="search-packages"
-            id="package-search"
-            phx-hook="UpdateURL"
-            method="get"
-            action={~p"/changes/#{@change.number}"}
-          >
-            <input
-              type="search"
-              name="search"
-              value={@table_params.search}
-              placeholder="Filter packages…"
-              phx-debounce="300"
-            />
-          </form>
-        </div>
-
-        <p :if={@change.processing_status != :processed}>
-          {processing_status_explanation(@change.processing_status, @change)}
-        </p>
-
         <%= if @change.processing_status == :processed and @package_count > 0 do %>
+          <div class="change-section-head">
+            <h2>
+              Affected packages <small class="muted">({@package_count})</small>
+            </h2>
+
+            <form
+              :if={@package_count > 15 && @change.processing_status == :processed}
+              phx-change="search-packages"
+              phx-submit="search-packages"
+              id="package-search"
+              phx-hook="UpdateURL"
+              method="get"
+              action={~p"/changes/#{@change.number}"}
+            >
+              <input
+                type="search"
+                name="search"
+                value={@table_params.search}
+                placeholder="Filter packages…"
+                phx-debounce="300"
+              />
+            </form>
+          </div>
+
+          <p :if={@change.processing_status != :processed}>
+            {processing_status_explanation(@change.processing_status, @change)}
+          </p>
+
           <.table id="affected-packages" rows={@streams.packages}>
             <:col :let={{_id, pkg}} label="Package">
               <.link navigate={~p"/packages/#{pkg.attribute}"} class="mono">
@@ -160,10 +160,6 @@ defmodule TrackerWeb.ChangeLive.Show do
             has_next_page?={@pkg_has_next?}
           />
         <% end %>
-
-        <p :if={@change.processing_status == :processed and @package_count == 0}>
-          No affected packages found.
-        </p>
       </section>
 
       <p :if={@change.files_over_limit} class="change-files-over-limit muted">
@@ -181,16 +177,15 @@ defmodule TrackerWeb.ChangeLive.Show do
       >
         <div class="change-section-head">
           <h2>
-            Affected options <small class="muted">({@option_prefix_total})</small>
+            Affected options <small class="muted">({@option_total})</small>
           </h2>
         </div>
 
-        <ul class="change-option-prefixes">
-          <li :for={{prefix, count} <- @option_prefixes_top}>
+        <.table id="affected-options" rows={@option_prefixes_top}>
+          <:col :let={{prefix, _count}} label="Namespace">
             <.link navigate={~p"/options/#{prefix}"} class="mono">{prefix}</.link>
-            <small class="muted">({count} {pluralize_options(count)})</small>
-          </li>
-        </ul>
+          </:col>
+        </.table>
 
         <p :if={@option_prefix_more > 0} class="muted">
           …and {@option_prefix_more} more {pluralize_namespaces(@option_prefix_more)}
@@ -206,9 +201,6 @@ defmodule TrackerWeb.ChangeLive.Show do
 
   defp format_datetime(nil), do: "—"
   defp format_datetime(dt), do: Calendar.strftime(dt, "%Y-%m-%d %H:%M")
-
-  defp pluralize_options(1), do: "option"
-  defp pluralize_options(_), do: "options"
 
   defp pluralize_namespaces(1), do: "namespace"
   defp pluralize_namespaces(_), do: "namespaces"
@@ -390,12 +382,13 @@ defmodule TrackerWeb.ChangeLive.Show do
       |> Enum.sort_by(fn {prefix, count} -> {-count, prefix} end)
       |> Enum.take(@option_prefix_cap)
 
-    total = length(prefixes)
+    namespace_total = length(prefixes)
+    option_total = Enum.reduce(prefixes, 0, fn {_p, count}, acc -> acc + count end)
 
     socket
     |> assign(:option_prefixes_top, top)
-    |> assign(:option_prefix_total, total)
-    |> assign(:option_prefix_more, max(total - length(top), 0))
+    |> assign(:option_total, option_total)
+    |> assign(:option_prefix_more, max(namespace_total - length(top), 0))
   end
 
   defp lens_channel_revision_id(nil), do: nil
