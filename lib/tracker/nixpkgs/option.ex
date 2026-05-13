@@ -78,6 +78,36 @@ defmodule Tracker.Nixpkgs.Option do
   @max_rows div(65_535, @insert_cols)
 
   @doc """
+  Returns a sorted `[{prefix, count}, ...]` list of two-segment prefixes
+  covering every option affected by the given change *as seen in the given
+  channel revision*.
+
+  Scoping to a single channel revision is what keeps this query tractable
+  on changes that touch foundational files — without it the join fans out
+  across every channel revision each option has ever appeared in.
+
+  An option with no dots in its name is returned under its bare name as
+  the prefix. Otherwise the prefix is the first two dot-separated segments
+  (e.g. `services.nginx.virtualHosts` → `services.nginx`).
+  """
+  def prefix_counts_by_change_and_channel_revision(change_id, channel_revision_id) do
+    Tracker.Nixpkgs.OptionRevision.list_by_change_and_channel_revision!(
+      change_id,
+      channel_revision_id
+    )
+    |> Enum.map(&fold_to_prefix(&1.option.name))
+    |> Enum.frequencies()
+    |> Enum.sort_by(fn {prefix, _count} -> prefix end)
+  end
+
+  defp fold_to_prefix(name) do
+    case String.split(name, ".") do
+      [single] -> single
+      [a, b | _] -> a <> "." <> b
+    end
+  end
+
+  @doc """
   Bulk upsert options using raw Ecto insert_all for performance.
 
   Returns a map of name => id.

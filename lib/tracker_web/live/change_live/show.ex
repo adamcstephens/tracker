@@ -11,12 +11,19 @@ defmodule TrackerWeb.ChangeLive.Show do
       built-in events; the search form falls back to a regular GET.
 
   Compared to the previous version this:
-    * Drops the affected option prefixes section.
     * Drops the inline "timeline" strip below the DAG.
     * Hides propagation entirely until the change is merged.
     * Replaces the dl + <mark> state with a status pill.
     * Renders the DAG without column headers (the labels were
       cluttering and not helping comprehension).
+
+  Affected options are folded to two-segment prefixes
+  (e.g. `services.nginx.virtualHosts` → `services.nginx`) with a count,
+  so large PRs don't drown the page in individual option names. The set
+  is scoped to the current lens's channel revision (defaulting to the
+  channel's latest revision when the lens has no explicit revision) —
+  without that scope the join fans out across every channel revision an
+  option has ever appeared in.
   """
 
   use TrackerWeb, :live_view
@@ -159,6 +166,28 @@ defmodule TrackerWeb.ChangeLive.Show do
         </p>
       </section>
 
+      <section
+        :if={@change.processing_status == :processed and @option_prefixes_top != []}
+        class="change-section"
+      >
+        <div class="change-section-head">
+          <h2>
+            Affected options <small class="muted">({@option_prefix_total})</small>
+          </h2>
+        </div>
+
+        <ul class="change-option-prefixes">
+          <li :for={{prefix, count} <- @option_prefixes_top}>
+            <.link navigate={~p"/options/#{prefix}"} class="mono">{prefix}</.link>
+            <small class="muted">({count} {pluralize_options(count)})</small>
+          </li>
+        </ul>
+
+        <p :if={@option_prefix_more > 0} class="muted">
+          …and {@option_prefix_more} more {pluralize_namespaces(@option_prefix_more)}
+        </p>
+      </section>
+
       <div :if={@change.labels && @change.labels != []} class="change-labels">
         <span :for={label <- @change.labels} class="label-chip">{label}</span>
       </div>
@@ -168,6 +197,12 @@ defmodule TrackerWeb.ChangeLive.Show do
 
   defp format_datetime(nil), do: "—"
   defp format_datetime(dt), do: Calendar.strftime(dt, "%Y-%m-%d %H:%M")
+
+  defp pluralize_options(1), do: "option"
+  defp pluralize_options(_), do: "options"
+
+  defp pluralize_namespaces(1), do: "namespace"
+  defp pluralize_namespaces(_), do: "namespaces"
 
   defp processing_status_explanation(:pending, _),
     do: "This change hasn't been processed yet."
@@ -257,6 +292,7 @@ defmodule TrackerWeb.ChangeLive.Show do
     |> assign(:landed_count, landed_count)
     |> assign(:total_branches, total_branches)
     |> load_packages(change.id)
+    |> load_options(change.id)
   end
 
   defp build_branch_links(change_branches) do
@@ -328,6 +364,41 @@ defmodule TrackerWeb.ChangeLive.Show do
     |> assign(:pkg_current_page, tp.page)
   end
 
+  @option_prefix_cap 20
+
+  defp load_options(socket, change_id) do
+    prefixes =
+      case lens_channel_revision_id(socket.assigns[:lens]) do
+        nil ->
+          []
+
+        cr_id ->
+          Tracker.Nixpkgs.Option.prefix_counts_by_change_and_channel_revision(change_id, cr_id)
+      end
+
+    top =
+      prefixes
+      |> Enum.sort_by(fn {prefix, count} -> {-count, prefix} end)
+      |> Enum.take(@option_prefix_cap)
+
+    total = length(prefixes)
+
+    socket
+    |> assign(:option_prefixes_top, top)
+    |> assign(:option_prefix_total, total)
+    |> assign(:option_prefix_more, max(total - length(top), 0))
+  end
+
+  defp lens_channel_revision_id(nil), do: nil
+  defp lens_channel_revision_id(%{revision: %{id: id}}), do: id
+
+  defp lens_channel_revision_id(%{channel: %{id: channel_id}}) do
+    case Tracker.Nixpkgs.ChannelRevision.latest_by_channel(channel_id) do
+      {:ok, cr} -> cr.id
+      _ -> nil
+    end
+  end
+
   defp find_maintainer(nil), do: nil
 
   defp find_maintainer(github_id) do
@@ -339,7 +410,8 @@ defmodule TrackerWeb.ChangeLive.Show do
 
   @impl true
   def handle_info({:set_lens, channel_name, rev}, socket) do
-    {:noreply, TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)}
+    socket = TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)
+    {:noreply, load_options(socket, socket.assigns.change.id)}
   end
 
   def handle_info(
