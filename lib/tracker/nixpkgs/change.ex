@@ -31,6 +31,7 @@ defmodule Tracker.Nixpkgs.Change do
     define :stalest_unfinished
     define :pending_merged_backlog
     define :in_flight_propagation
+    define :for_channel_link, args: [:branch_name]
     define :updated_since, args: [:since, {:optional, :states}]
     define :refresh_from_graphql
     define :touch_last_checked
@@ -184,6 +185,19 @@ defmodule Tracker.Nixpkgs.Change do
                state == :merged and
                  not is_nil(merge_commit_sha) and
                  not is_nil(base_ref)
+             )
+    end
+
+    read :for_channel_link do
+      argument :branch_name, :string, allow_nil?: false
+
+      filter expr(
+               state == :merged and
+                 not is_nil(merge_commit_sha) and
+                 not exists(
+                   change_branches,
+                   branch_name == ^arg(:branch_name) and not is_nil(channel_revision_id)
+                 )
              )
     end
 

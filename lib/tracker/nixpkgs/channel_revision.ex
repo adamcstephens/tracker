@@ -18,6 +18,7 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
     define :find_by_channel_hash, args: [:channel_id, :hash]
     define :latest_by_channel, args: [:channel_id]
     define :without_options, args: [:channel_id]
+    define :by_channel_asc, args: [:channel_id]
   end
 
   actions do
@@ -73,6 +74,13 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
         allow_nil? false
       end
 
+      filter expr(channel_id == ^arg(:channel_id))
+    end
+
+    read :by_channel_asc do
+      argument :channel_id, :integer, allow_nil?: false
+
+      prepare build(sort: [{:released_at, :asc}])
       filter expr(channel_id == ^arg(:channel_id))
     end
 
