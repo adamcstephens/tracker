@@ -54,7 +54,7 @@ defmodule TrackerWeb.ChangeLive.Show do
             <strong>{@landed_count}</strong> of {@total_branches} channels reached
           </small>
         </div>
-        <PropagationDag.dag dag={@lifecycle_dag} />
+        <PropagationDag.dag dag={@lifecycle_dag} branch_links={@branch_links} />
       </section>
 
       <dl class="change-meta">
@@ -235,13 +235,14 @@ defmodule TrackerWeb.ChangeLive.Show do
     change =
       number
       |> Tracker.Nixpkgs.Change.get_by_number!()
-      |> Ash.load!(:change_branches)
+      |> Ash.load!(change_branches: [channel_revision: [:channel]])
 
     author_maintainer = find_maintainer(change.author_github_id)
     merger_maintainer = find_maintainer(change.merged_by_github_id)
 
     present_branches = Enum.map(change.change_branches, & &1.branch_name)
     lifecycle_dag = Propagation.lifecycle(change.base_ref, present_branches)
+    branch_links = build_branch_links(change.change_branches)
 
     landed_count = Enum.count(lifecycle_dag.nodes, & &1.present)
     total_branches = length(lifecycle_dag.nodes)
@@ -252,9 +253,18 @@ defmodule TrackerWeb.ChangeLive.Show do
     |> assign(:author_maintainer, author_maintainer)
     |> assign(:merger_maintainer, merger_maintainer)
     |> assign(:lifecycle_dag, lifecycle_dag)
+    |> assign(:branch_links, branch_links)
     |> assign(:landed_count, landed_count)
     |> assign(:total_branches, total_branches)
     |> load_packages(change.id)
+  end
+
+  defp build_branch_links(change_branches) do
+    for %{branch_name: name, channel_revision: %{revision: rev, channel: %{name: ch_name}}} <-
+          change_branches,
+        into: %{} do
+      {name, %PropagationDag.BranchLink{channel_name: ch_name, revision: rev}}
+    end
   end
 
   @impl true

@@ -135,6 +135,37 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
                ~r/class="[^"]*propagation-node-pending[^"]*"[^>]*data-branch="nixos-unstable"/
     end
 
+    test "links present branches with a channel_revision to the revision show page", %{
+      conn: conn
+    } do
+      change_id = Tracker.Nixpkgs.Change.get_by_number!(6001).id
+
+      channel =
+        Tracker.Nixpkgs.Channel.create!(%{
+          name: "nixpkgs-unstable",
+          display_name: "nixpkgs-unstable",
+          status: :active
+        })
+
+      revision =
+        Tracker.Nixpkgs.ChannelRevision.create!(%{
+          channel_id: channel.id,
+          revision: "deadbeefcafef00d1234567890abcdef12345678",
+          released_at: ~U[2026-04-01 12:00:00Z]
+        })
+
+      Tracker.Nixpkgs.ChangeBranch.create!(%{
+        change_id: change_id,
+        branch_name: "nixpkgs-unstable",
+        channel_revision_id: revision.id
+      })
+
+      {:ok, _view, html} = live(conn, ~p"/changes/6001")
+
+      assert html =~
+               ~s|href="/channels/nixpkgs-unstable/revisions/deadbeefcafef00d1234567890abcdef12345678"|
+    end
+
     test "hides the section when base_ref is not a known propagation branch", %{conn: conn} do
       Tracker.Nixpkgs.Change.bulk_upsert_all([
         %{

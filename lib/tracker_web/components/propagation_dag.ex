@@ -6,9 +6,22 @@ defmodule TrackerWeb.PropagationDag do
   filled; pending nodes are shown in muted styling. Edges connect each
   node to its direct successors per `Tracker.Nixpkgs.Propagation`.
   """
-  use Phoenix.Component
+  use TrackerWeb, :html
 
   alias Tracker.Nixpkgs.Propagation.Dag
+
+  defmodule BranchLink do
+    @moduledoc """
+    URL components for linking a propagation node to its associated
+    channel-revision show page.
+    """
+    use TypedStruct
+
+    typedstruct enforce: true do
+      field :channel_name, String.t()
+      field :revision, String.t()
+    end
+  end
 
   @node_w 170
   @node_h 28
@@ -17,6 +30,7 @@ defmodule TrackerWeb.PropagationDag do
   @padding 8
 
   attr :dag, Dag, required: true
+  attr :branch_links, :map, default: %{}
 
   def dag(assigns) do
     layout = layout(assigns.dag)
@@ -44,30 +58,57 @@ defmodule TrackerWeb.PropagationDag do
         stroke={edge.stroke}
         stroke-width="1.5"
       />
-      <g :for={node <- @layout.nodes} class={node_class(node)} data-branch={node.name}>
-        <rect
-          x={node.x}
-          y={node.y}
-          width={node.width}
-          height={node.height}
-          rx="4"
-          ry="4"
-          fill={node.fill}
-          stroke={node.stroke}
-          stroke-width="1.5"
-        />
-        <text
-          x={node.x + node.width / 2}
-          y={node.y + node.height / 2 + 4}
-          text-anchor="middle"
-          font-size="12"
-          font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
-          fill={node.text_fill}
-        >
-          {node.name}
-        </text>
-      </g>
+      <.dag_node :for={node <- @layout.nodes} node={node} link={Map.get(@branch_links, node.name)} />
     </svg>
+    """
+  end
+
+  attr :node, :map, required: true
+  attr :link, BranchLink, default: nil
+
+  defp dag_node(%{link: nil} = assigns) do
+    ~H"""
+    <g class={node_class(@node)} data-branch={@node.name}>
+      <.node_shape node={@node} />
+    </g>
+    """
+  end
+
+  defp dag_node(assigns) do
+    ~H"""
+    <a href={~p"/channels/#{@link.channel_name}/revisions/#{@link.revision}"}>
+      <g class={node_class(@node)} data-branch={@node.name}>
+        <.node_shape node={@node} />
+      </g>
+    </a>
+    """
+  end
+
+  attr :node, :map, required: true
+
+  defp node_shape(assigns) do
+    ~H"""
+    <rect
+      x={@node.x}
+      y={@node.y}
+      width={@node.width}
+      height={@node.height}
+      rx="4"
+      ry="4"
+      fill={@node.fill}
+      stroke={@node.stroke}
+      stroke-width="1.5"
+    />
+    <text
+      x={@node.x + @node.width / 2}
+      y={@node.y + @node.height / 2 + 4}
+      text-anchor="middle"
+      font-size="12"
+      font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
+      fill={@node.text_fill}
+    >
+      {@node.name}
+    </text>
     """
   end
 
