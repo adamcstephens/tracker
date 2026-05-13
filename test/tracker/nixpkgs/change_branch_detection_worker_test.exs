@@ -37,23 +37,22 @@ defmodule Tracker.Nixpkgs.ChangeBranchDetectionWorkerTest do
   end
 
   describe "run/1" do
-    test "creates ChangeBranch for base_ref and downstream branches that contain merge_commit_sha",
-         ctx do
+    test "creates ChangeBranch for base_ref but skips channel-kind branches", ctx do
       change = insert_change!(base_ref: "master", merge_commit_sha: ctx.sha_mc)
 
       :ok = ChangeBranchDetectionWorker.run(git_server: ctx.git_server)
 
-      assert recorded_branches(change) == ["master", "nixpkgs-unstable"]
+      assert recorded_branches(change) == ["master"]
     end
 
     test "does not duplicate ChangeBranch rows already present", ctx do
       change = insert_change!(base_ref: "master", merge_commit_sha: ctx.sha_mc)
 
-      ChangeBranch.create!(%{change_id: change.id, branch_name: "nixpkgs-unstable"})
+      ChangeBranch.create!(%{change_id: change.id, branch_name: "master"})
 
       :ok = ChangeBranchDetectionWorker.run(git_server: ctx.git_server)
 
-      assert recorded_branches(change) == ["master", "nixpkgs-unstable"]
+      assert recorded_branches(change) == ["master"]
     end
 
     test "skips Changes whose recorded set covers base_ref and all terminal channels", ctx do
@@ -86,15 +85,15 @@ defmodule Tracker.Nixpkgs.ChangeBranchDetectionWorkerTest do
     end
 
     test "fetches upstream before detecting so newly-pushed branch tips are visible", ctx do
-      change = insert_change!(base_ref: "master", merge_commit_sha: ctx.sha_mc)
+      change = insert_change!(base_ref: "staging", merge_commit_sha: ctx.sha_mc)
 
-      # Local clone currently has nixos-unstable @ sha_a (no MC). Advance the
+      # Local clone currently has staging-next @ sha_a (no MC). Advance the
       # upstream branch to MC; only a fetch will surface this to the worker.
-      advance_branch_on_upstream(ctx.upstream_work, ctx.upstream, "nixos-unstable", ctx.sha_mc)
+      advance_branch_on_upstream(ctx.upstream_work, ctx.upstream, "staging-next", ctx.sha_mc)
 
       :ok = ChangeBranchDetectionWorker.run(git_server: ctx.git_server)
 
-      assert "nixos-unstable" in recorded_branches(change)
+      assert "staging-next" in recorded_branches(change)
     end
 
     test "emits structured start/stop logs with branch counts", ctx do
@@ -161,11 +160,16 @@ defmodule Tracker.Nixpkgs.ChangeBranchDetectionWorkerTest do
   # Builds a tiny propagation-shaped repo:
   #
   #   master:               A -- B -- MC -- C
+  #   staging:                         MC          (MC is ancestor)
+  #   staging-next:          A                     (MC is NOT ancestor)
   #   nixpkgs-unstable:                MC          (MC is ancestor)
-  #   nixos-unstable-small:       B               (MC is NOT ancestor)
-  #   nixos-unstable:        A                    (MC is NOT ancestor)
+  #   nixos-unstable-small:       B                (MC is NOT ancestor)
+  #   nixos-unstable:        A                     (MC is NOT ancestor)
   #
-  # Worker should record only `nixpkgs-unstable` for a change with
+  # `staging-next` is set behind so the "fetch surfaces new tips" test
+  # can advance it to MC without the local clone already having it.
+  # With channel-kind branches now owned by ChannelRevisionLinkWorker,
+  # this worker should record only `master` for a change with
   # base_ref="master" and merge_commit_sha=MC.
   defp build_upstream(work, bare) do
     File.mkdir_p!(work)
@@ -193,6 +197,8 @@ defmodule Tracker.Nixpkgs.ChangeBranchDetectionWorkerTest do
     git!(work, ["add", "c.txt"])
     git!(work, ["commit", "--quiet", "--message", "C"])
 
+    git!(work, ["branch", "staging", sha_mc])
+    git!(work, ["branch", "staging-next", sha_a])
     git!(work, ["branch", "nixpkgs-unstable", sha_mc])
     git!(work, ["branch", "nixos-unstable-small", sha_b])
     git!(work, ["branch", "nixos-unstable", sha_a])

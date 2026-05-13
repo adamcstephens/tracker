@@ -1,7 +1,13 @@
 defmodule Tracker.Nixpkgs.ChangeBranchDetectionWorker do
   @moduledoc """
-  Detects when merged Changes have propagated into downstream branches and
-  records the arrival as `ChangeBranch` rows.
+  Detects when merged Changes have propagated into intermediate
+  downstream branches (`staging`, `staging-next`, `master`,
+  `release-X.Y`, …) and records the arrival as `ChangeBranch` rows.
+
+  Channel-kind branches (`nixos-*`, `nixpkgs-*`) are owned by
+  `Tracker.Nixpkgs.ChannelRevisionLinkWorker`, which links them against
+  a specific `ChannelRevision` rather than a moving branch tip. This
+  worker explicitly excludes them from its check list.
 
   Enqueued from `Tracker.Ingestion.Steps.CreateRevision` once a fresh
   `ChannelRevision` lands. Ingestion implies a recent `git fetch`, so
@@ -10,8 +16,8 @@ defmodule Tracker.Nixpkgs.ChangeBranchDetectionWorker do
   For each in-flight Change (merged, with a `merge_commit_sha` and
   `base_ref` in the propagation graph, not yet covering `base_ref` and
   every terminal channel reachable from it), the worker fans out
-  per-change using `Task.async_stream` over
-  `[base_ref | Propagation.downstream(base_ref)]`, reusing a single
+  per-change using `Task.async_stream` over the non-channel branches
+  in `[base_ref | Propagation.downstream(base_ref)]`, reusing a single
   `GitServer` snapshot. The `base_ref` itself is included so the merge
   target is seeded on the first run, even when the open→merged
   transition was applied via `bulk_upsert_all` (which bypasses Ash
@@ -116,6 +122,7 @@ defmodule Tracker.Nixpkgs.ChangeBranchDetectionWorker do
         []
       else
         [change.base_ref | Propagation.downstream(change.base_ref)]
+        |> Enum.reject(&(Propagation.kind(&1) == :channel))
         |> Enum.reject(&MapSet.member?(recorded, &1))
         |> Enum.map(&{change, &1})
       end
