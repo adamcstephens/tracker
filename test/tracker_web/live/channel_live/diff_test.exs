@@ -86,6 +86,52 @@ defmodule TrackerWeb.ChannelLive.DiffTest do
     })
     |> Ash.create!()
 
+    %{"diff.opt.changed" => opt_changed_id, "diff.opt.added" => opt_added_id} =
+      Tracker.Nixpkgs.Option.bulk_upsert_all([
+        %{name: "diff.opt.changed"},
+        %{name: "diff.opt.added"}
+      ])
+
+    # opt_changed: present in both, with differing description
+    Tracker.Nixpkgs.OptionRevision.load!(%{
+      option_id: opt_changed_id,
+      channel_revision_id: cr1.id,
+      description: "Old description.",
+      type: "boolean",
+      default: "false",
+      example: nil,
+      read_only: false
+    })
+
+    Tracker.Nixpkgs.OptionRevision.load!(%{
+      option_id: opt_changed_id,
+      channel_revision_id: cr2.id,
+      description: "New description.",
+      type: "boolean",
+      default: "false",
+      example: nil,
+      read_only: false
+    })
+
+    # opt_added: only in cr2
+    Tracker.Nixpkgs.OptionRevision.load!(%{
+      option_id: opt_added_id,
+      channel_revision_id: cr2.id,
+      description: "Just added.",
+      type: "boolean",
+      default: "false",
+      example: nil,
+      read_only: false
+    })
+
+    Tracker.Nixpkgs.OptionEvent
+    |> Ash.Changeset.for_create(:create, %{
+      type: :added,
+      option_id: opt_added_id,
+      channel_revision_id: cr2.id
+    })
+    |> Ash.create!()
+
     %{
       cr1: cr1,
       cr2: cr2,
@@ -149,6 +195,32 @@ defmodule TrackerWeb.ChannelLive.DiffTest do
     assert_raise Ash.Error.Invalid, fn ->
       live(conn, ~p"/channels/nixos-unstable/diff/#{cr1.revision}/fffffff")
     end
+  end
+
+  test "shows option events between revisions", %{conn: conn, cr1: cr1, cr2: cr2} do
+    {:ok, _view, html} =
+      live(conn, ~p"/channels/nixos-unstable/diff/#{cr1.revision}/#{cr2.revision}")
+
+    assert html =~ "diff.opt.added"
+    assert html =~ ~s|href="/options/diff.opt.added"|
+  end
+
+  test "shows option metadata changes between revisions", %{conn: conn, cr1: cr1, cr2: cr2} do
+    {:ok, _view, html} =
+      live(conn, ~p"/channels/nixos-unstable/diff/#{cr1.revision}/#{cr2.revision}")
+
+    assert html =~ "diff.opt.changed"
+    assert html =~ "Old description."
+    assert html =~ "New description."
+  end
+
+  test "does not list unchanged options in metadata changes", %{conn: conn, cr1: cr1, cr2: cr2} do
+    {:ok, _view, html} =
+      live(conn, ~p"/channels/nixos-unstable/diff/#{cr1.revision}/#{cr2.revision}")
+
+    # opt_added exists only in cr2; it should appear in option events,
+    # not the metadata-changes section.
+    refute html =~ ~r/Option Metadata.*diff\.opt\.added/s
   end
 
   test "links to github compare", %{conn: conn, cr1: cr1, cr2: cr2} do

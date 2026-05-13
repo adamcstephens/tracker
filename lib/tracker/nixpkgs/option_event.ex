@@ -9,6 +9,7 @@ defmodule Tracker.Nixpkgs.OptionEvent do
   code_interface do
     define :list
     define :list_by_option, args: [:option_id]
+    define :list_between_revisions, args: [:channel_id, :from_date, :to_date]
   end
 
   actions do
@@ -29,6 +30,28 @@ defmodule Tracker.Nixpkgs.OptionEvent do
 
       prepare build(load: [:channel_revision], sort: [{:inserted_at, :desc}])
       filter expr(option_id == ^arg(:option_id))
+    end
+
+    read :list_between_revisions do
+      argument :channel_id, :integer do
+        allow_nil? false
+      end
+
+      argument :from_date, :utc_datetime do
+        allow_nil? false
+      end
+
+      argument :to_date, :utc_datetime do
+        allow_nil? false
+      end
+
+      prepare build(load: [:option, :channel_revision], sort: [{:inserted_at, :asc}])
+
+      filter expr(
+               channel_revision.channel_id == ^arg(:channel_id) and
+                 channel_revision.released_at > ^arg(:from_date) and
+                 channel_revision.released_at <= ^arg(:to_date)
+             )
     end
   end
 
