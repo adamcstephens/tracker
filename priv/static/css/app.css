@@ -1352,6 +1352,11 @@ dl.option-body dd {
 	text-decoration: none;
 }
 
+.change-show .change-card .propagation-dag text {
+	font-size: 12px;
+	font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
 .change-show .change-meta {
 	display: grid;
 	grid-template-columns: 1fr 1fr;

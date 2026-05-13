@@ -103,8 +103,6 @@ defmodule TrackerWeb.PropagationDag do
       x={@node.x + @node.width / 2}
       y={@node.y + @node.height / 2 + 4}
       text-anchor="middle"
-      font-size="12"
-      font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
       fill={@node.text_fill}
     >
       {@node.name}
