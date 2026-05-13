@@ -13,6 +13,7 @@ defmodule Tracker.Nixpkgs.OptionRevision do
     define :list_by_channel_revision, args: [:channel_revision_id, {:optional, :search}]
     define :list_by_channel_revision_and_prefix, args: [:channel_revision_id, :prefix]
     define :list_by_change_and_channel_revision, args: [:change_id, :channel_revision_id]
+    define :all_by_channel_revision, args: [:channel_revision_id]
   end
 
   actions do
@@ -75,6 +76,14 @@ defmodule Tracker.Nixpkgs.OptionRevision do
                    exists(file.change_files, change_id == ^arg(:change_id))
                  )
              )
+    end
+
+    read :all_by_channel_revision do
+      argument :channel_revision_id, :integer, allow_nil?: false
+
+      prepare build(load: [:option_name])
+
+      filter expr(channel_revision_id == ^arg(:channel_revision_id))
     end
 
     create :load do
@@ -154,6 +163,61 @@ defmodule Tracker.Nixpkgs.OptionRevision do
   #             read_only, loc, related_packages, inserted_at, updated_at
   @insert_cols 11
   @max_rows div(65_535, @insert_cols)
+
+  defmodule MetadataDiff do
+    use TypedStruct
+
+    @type field_name :: :description | :type | :default | :example | :read_only
+
+    typedstruct enforce: true do
+      field :option_name, String.t()
+      field :field, field_name()
+      field :old, String.t() | boolean() | nil
+      field :new, String.t() | boolean() | nil
+    end
+  end
+
+  @metadata_fields [:description, :type, :default, :example, :read_only]
+
+  @doc """
+  Returns metadata changes between two channel revisions as a list of
+  `MetadataDiff` structs.
+
+  Only options present in both revisions are considered. Emits one struct per
+  changed field (description, type, default, example, read_only).
+  """
+  def metadata_diff(old_rev_id, new_rev_id) do
+    old_by_option = all_by_channel_revision!(old_rev_id) |> Map.new(&{&1.option_id, &1})
+    new_by_option = all_by_channel_revision!(new_rev_id) |> Map.new(&{&1.option_id, &1})
+
+    old_by_option
+    |> Enum.flat_map(fn {option_id, old_rev} ->
+      case Map.fetch(new_by_option, option_id) do
+        :error ->
+          []
+
+        {:ok, new_rev} ->
+          Enum.flat_map(@metadata_fields, fn field ->
+            old = Map.fetch!(old_rev, field)
+            new = Map.fetch!(new_rev, field)
+
+            if old == new do
+              []
+            else
+              [
+                %MetadataDiff{
+                  option_name: old_rev.option_name,
+                  field: field,
+                  old: old,
+                  new: new
+                }
+              ]
+            end
+          end)
+      end
+    end)
+    |> Enum.sort_by(&{&1.option_name, &1.field})
+  end
 
   @doc """
   Computes the set difference of option_ids between two channel revisions.

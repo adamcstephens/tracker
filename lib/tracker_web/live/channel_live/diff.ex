@@ -1,7 +1,7 @@
 defmodule TrackerWeb.ChannelLive.Diff do
   use TrackerWeb, :live_view
 
-  alias Tracker.Nixpkgs.{ChannelRevision, PackageEvent}
+  alias Tracker.Nixpkgs.{ChannelRevision, OptionEvent, OptionRevision, PackageEvent}
   alias TrackerWeb.PageSearch
 
   @impl true
@@ -72,11 +72,72 @@ defmodule TrackerWeb.ChannelLive.Diff do
       </figure>
     </section>
 
-    <p :if={@events == [] and @version_changes == []}>
+    <section :if={@option_events != []}>
+      <h3>Option Events</h3>
+      <figure>
+        <table role="grid">
+          <thead>
+            <tr>
+              <th>Option</th>
+              <th>Event</th>
+              <th>Revision</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr :for={event <- @option_events}>
+              <td>
+                <a href={~p"/options/#{event.option.name}"}>{event.option.name}</a>
+              </td>
+              <td>{format_event_type(event.type)}</td>
+              <td>
+                <.revision_link revision={event.channel_revision.revision} channel={@channel} />
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </figure>
+    </section>
+
+    <section :if={@option_metadata_changes != []}>
+      <h3>Option Metadata Changes</h3>
+      <figure>
+        <table role="grid">
+          <thead>
+            <tr>
+              <th>Option</th>
+              <th>Field</th>
+              <th>Old</th>
+              <th>New</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr :for={change <- @option_metadata_changes}>
+              <td>
+                <a href={~p"/options/#{change.option_name}"}>{change.option_name}</a>
+              </td>
+              <td>{change.field}</td>
+              <td>{format_metadata_value(change.old)}</td>
+              <td>{format_metadata_value(change.new)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </figure>
+    </section>
+
+    <p :if={
+      @events == [] and @version_changes == [] and @option_events == [] and
+        @option_metadata_changes == []
+    }>
       No changes between these revisions.
     </p>
     """
   end
+
+  defp format_metadata_value(nil), do: "—"
+  defp format_metadata_value(true), do: "true"
+  defp format_metadata_value(false), do: "false"
+  defp format_metadata_value(value) when is_binary(value), do: value
+  defp format_metadata_value(value), do: inspect(value)
 
   defp revision_link(assigns) do
     ~H"""
@@ -115,6 +176,11 @@ defmodule TrackerWeb.ChannelLive.Diff do
 
     version_changes = compute_version_changes(older.id, newer.id)
 
+    option_events =
+      OptionEvent.list_between_revisions!(channel.id, older.released_at, newer.released_at)
+
+    option_metadata_changes = OptionRevision.metadata_diff(older.id, newer.id)
+
     lens = socket.assigns.lens && %{socket.assigns.lens | disabled?: true}
 
     {:noreply,
@@ -125,6 +191,8 @@ defmodule TrackerWeb.ChannelLive.Diff do
      |> assign(:rev_b, newer)
      |> assign(:events, events)
      |> assign(:version_changes, version_changes)
+     |> assign(:option_events, option_events)
+     |> assign(:option_metadata_changes, option_metadata_changes)
      |> assign(:lens, lens)
      |> assign(:page_search, %PageSearch{
        mode: :inert,
