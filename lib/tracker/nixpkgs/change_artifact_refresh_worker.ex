@@ -30,7 +30,10 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
   @repo "NixOS/nixpkgs"
   @link_cap 1000
   @files_per_page 100
-  @files_hard_cap 3000
+  @file_link_cap 500
+  # One page above the link cap so we can reliably distinguish ≤cap from >cap
+  # without paying for more pagination round-trips than needed.
+  @files_hard_cap @file_link_cap + @files_per_page
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"number" => number, "reason" => reason}}) do
@@ -195,14 +198,28 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
       |> Enum.map(&NixFile.normalize_path/1)
       |> Enum.uniq()
 
+    over_limit? = length(normalized) > @file_link_cap
+
+    if over_limit? do
+      Logger.warning(
+        msg: "file link cap exceeded, skipping change_files writes",
+        number: change.number,
+        total: length(normalized),
+        cap: @file_link_cap
+      )
+    end
+
     Tracker.Repo.transaction(fn ->
       ChangeFile.clear_for_change!(change.id)
 
-      case normalized do
-        [] ->
+      case {over_limit?, normalized} do
+        {true, _} ->
           :ok
 
-        paths ->
+        {_, []} ->
+          :ok
+
+        {_, paths} ->
           file_id_map = NixFile.bulk_upsert_all(paths)
 
           records =
@@ -213,6 +230,10 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
           ChangeFile.bulk_insert_all(records)
       end
     end)
+
+    if change.files_over_limit != over_limit? do
+      Change.set_files_over_limit!(change, %{files_over_limit: over_limit?})
+    end
 
     :ok
   end

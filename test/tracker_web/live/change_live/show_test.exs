@@ -242,6 +242,46 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
     refute html =~ "Affected options"
   end
 
+  describe "files_over_limit notice" do
+    setup do
+      Tracker.Nixpkgs.Change.get_by_number!(6001)
+      |> Tracker.Nixpkgs.Change.set_files_over_limit!(%{files_over_limit: true})
+
+      :ok
+    end
+
+    test "renders a too-many-files notice when files_over_limit is true", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/changes/6001")
+
+      assert html =~ "too many files"
+    end
+
+    test "hides the affected options section even when a lens revision is resolvable", %{
+      conn: conn
+    } do
+      Tracker.Nixpkgs.Channel.create!(%{
+        name: "nixos-lens-channel",
+        display_name: "nixos-lens-channel",
+        status: :active,
+        is_stable: false
+      })
+      |> then(fn channel ->
+        cr =
+          Tracker.Nixpkgs.ChannelRevision.create!(%{
+            channel_id: channel.id,
+            revision: "limnotice0011",
+            released_at: ~U[2026-04-01 10:00:00Z]
+          })
+
+        Tracker.Nixpkgs.ChannelRevision.record_options_result!(cr, %{options_result: :success})
+      end)
+
+      {:ok, _view, html} = live(conn, ~p"/changes/6001?lens_channel=nixos-lens-channel")
+
+      refute html =~ "Affected options"
+    end
+  end
+
   test "links to github PR", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/changes/6001")
 
