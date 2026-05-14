@@ -86,4 +86,105 @@ defmodule Tracker.Nixpkgs.ChannelRevisionTest do
       assert rev.revision == "abc123def456"
     end
   end
+
+  describe "diff_between/2" do
+    setup do
+      channel = create_channel!("nixos-unstable")
+
+      from_rev =
+        ChannelRevision.create!(%{
+          channel_id: channel.id,
+          revision: "from1aaa",
+          released_at: ~U[2026-04-01 10:00:00Z]
+        })
+
+      to_rev =
+        ChannelRevision.create!(%{
+          channel_id: channel.id,
+          revision: "to2bbb",
+          released_at: ~U[2026-04-15 10:00:00Z],
+          previous_channel_revision_id: from_rev.id
+        })
+
+      pkg =
+        Tracker.Nixpkgs.Package
+        |> Ash.Changeset.for_create(:create, %{attribute: "diff-between-pkg"})
+        |> Ash.create!()
+
+      Tracker.Nixpkgs.PackageRevision.load!(%{
+        version: "1.0.0",
+        package_id: pkg.id,
+        channel_revision_id: from_rev.id
+      })
+
+      Tracker.Nixpkgs.PackageRevision.load!(%{
+        version: "1.1.0",
+        package_id: pkg.id,
+        channel_revision_id: to_rev.id
+      })
+
+      Tracker.Nixpkgs.PackageEvent
+      |> Ash.Changeset.for_create(:create, %{
+        type: :added,
+        package_id: pkg.id,
+        channel_revision_id: to_rev.id
+      })
+      |> Ash.create!()
+
+      %{"diff-between.opt" => opt_id} =
+        Tracker.Nixpkgs.Option.bulk_upsert_all([%{name: "diff-between.opt"}])
+
+      Tracker.Nixpkgs.OptionRevision.load!(%{
+        option_id: opt_id,
+        channel_revision_id: from_rev.id,
+        description: "old",
+        type: "boolean",
+        default: "false",
+        example: nil,
+        read_only: false
+      })
+
+      Tracker.Nixpkgs.OptionRevision.load!(%{
+        option_id: opt_id,
+        channel_revision_id: to_rev.id,
+        description: "new",
+        type: "boolean",
+        default: "false",
+        example: nil,
+        read_only: false
+      })
+
+      Tracker.Nixpkgs.OptionEvent
+      |> Ash.Changeset.for_create(:create, %{
+        type: :added,
+        option_id: opt_id,
+        channel_revision_id: to_rev.id
+      })
+      |> Ash.create!()
+
+      %{from_rev: from_rev, to_rev: to_rev}
+    end
+
+    test "returns a RevisionDiff populated from the four sources", %{
+      from_rev: from_rev,
+      to_rev: to_rev
+    } do
+      diff = ChannelRevision.diff_between(from_rev, to_rev)
+
+      assert %ChannelRevision.RevisionDiff{} = diff
+      assert [pkg_event] = diff.package_events
+      assert pkg_event.type == :added
+
+      assert [version_change] = diff.version_changes
+      assert version_change.attribute == "diff-between-pkg"
+      assert version_change.old_version == "1.0.0"
+      assert version_change.new_version == "1.1.0"
+
+      assert [opt_event] = diff.option_events
+      assert opt_event.type == :added
+
+      assert [metadata_change] = diff.option_metadata_changes
+      assert metadata_change.option_name == "diff-between.opt"
+    end
+  end
 end

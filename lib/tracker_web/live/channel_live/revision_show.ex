@@ -1,7 +1,10 @@
 defmodule TrackerWeb.ChannelLive.RevisionShow do
   use TrackerWeb, :live_view
 
-  alias Tracker.Nixpkgs.{ChannelRevision, OptionEvent, OptionRevision, PackageEvent}
+  import TrackerWeb.ChannelLive.DiffSections
+
+  alias Tracker.Nixpkgs.ChannelRevision
+  alias Tracker.Nixpkgs.ChannelRevision.RevisionDiff
   alias TrackerWeb.PageSearch
 
   @impl true
@@ -30,106 +33,13 @@ defmodule TrackerWeb.ChannelLive.RevisionShow do
         </a>
       </p>
 
-      <section :if={@events != []}>
-        <h4>Package Events</h4>
-        <figure>
-          <table role="grid">
-            <thead>
-              <tr>
-                <th>Package</th>
-                <th>Event</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr :for={event <- @events}>
-                <td>
-                  <a href={~p"/packages/#{event.package.attribute}"}>{event.package.attribute}</a>
-                </td>
-                <td>{format_event_type(event.type)}</td>
-              </tr>
-            </tbody>
-          </table>
-        </figure>
-      </section>
-
-      <section :if={@version_changes != []}>
-        <h4>Version Changes</h4>
-        <figure>
-          <table role="grid">
-            <thead>
-              <tr>
-                <th>Package</th>
-                <th>Old Version</th>
-                <th>New Version</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr :for={change <- @version_changes}>
-                <td>
-                  <a href={~p"/packages/#{change.attribute}"}>{change.attribute}</a>
-                </td>
-                <td>{change.old_version || "—"}</td>
-                <td>{change.new_version || "—"}</td>
-              </tr>
-            </tbody>
-          </table>
-        </figure>
-      </section>
-
-      <section :if={@option_events != []}>
-        <h4>Option Events</h4>
-        <figure>
-          <table role="grid">
-            <thead>
-              <tr>
-                <th>Option</th>
-                <th>Event</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr :for={event <- @option_events}>
-                <td>
-                  <a href={~p"/options/#{event.option.name}"}>{event.option.name}</a>
-                </td>
-                <td>{format_event_type(event.type)}</td>
-              </tr>
-            </tbody>
-          </table>
-        </figure>
-      </section>
-
-      <section :if={@option_metadata_changes != []}>
-        <h4>Option Metadata Changes</h4>
-        <figure>
-          <table role="grid">
-            <thead>
-              <tr>
-                <th>Option</th>
-                <th>Field</th>
-                <th>Old</th>
-                <th>New</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr :for={change <- @option_metadata_changes}>
-                <td>
-                  <a href={~p"/options/#{change.option_name}"}>{change.option_name}</a>
-                </td>
-                <td>{change.field}</td>
-                <td>{format_metadata_value(change.old)}</td>
-                <td>{format_metadata_value(change.new)}</td>
-              </tr>
-            </tbody>
-          </table>
-        </figure>
-      </section>
-
-      <p :if={
-        @events == [] and @version_changes == [] and @option_events == [] and
-          @option_metadata_changes == []
-      }>
-        No changes from previous revision.
-      </p>
+      <.revision_diff_sections
+        diff={@diff}
+        channel={@channel}
+        heading_level={:h4}
+        show_revision_column={false}
+        empty_message="No changes from previous revision."
+      />
     </section>
 
     <p :if={!@previous_revision}>
@@ -156,15 +66,6 @@ defmodule TrackerWeb.ChannelLive.RevisionShow do
   defp format_result(:success), do: "Success"
   defp format_result(:partial_success), do: "Partial"
   defp format_result(:error), do: "Error"
-
-  defp format_event_type(:added), do: "added"
-  defp format_event_type(:removed), do: "removed"
-
-  defp format_metadata_value(nil), do: "—"
-  defp format_metadata_value(true), do: "true"
-  defp format_metadata_value(false), do: "false"
-  defp format_metadata_value(value) when is_binary(value), do: value
-  defp format_metadata_value(value), do: inspect(value)
 
   @impl true
   def mount(_params, _session, socket) do
@@ -229,29 +130,16 @@ defmodule TrackerWeb.ChannelLive.RevisionShow do
         Ash.load!(revision, :previous_channel_revision).previous_channel_revision
       end
 
-    {events, version_changes, option_events, option_metadata_changes} =
+    diff =
       if previous_revision do
-        events =
-          PackageEvent.list_between_revisions!(
-            revision.channel_id,
-            previous_revision.released_at,
-            revision.released_at
-          )
-
-        version_changes = ChannelRevision.version_diff(previous_revision.id, revision.id)
-
-        option_events =
-          OptionEvent.list_between_revisions!(
-            revision.channel_id,
-            previous_revision.released_at,
-            revision.released_at
-          )
-
-        option_metadata_changes = OptionRevision.metadata_diff(previous_revision.id, revision.id)
-
-        {events, version_changes, option_events, option_metadata_changes}
+        ChannelRevision.diff_between(previous_revision, revision)
       else
-        {[], [], [], []}
+        %RevisionDiff{
+          package_events: [],
+          version_changes: [],
+          option_events: [],
+          option_metadata_changes: []
+        }
       end
 
     socket
@@ -259,9 +147,6 @@ defmodule TrackerWeb.ChannelLive.RevisionShow do
     |> assign(:revision, revision)
     |> assign(:previous_revision, previous_revision)
     |> assign(:formatted_released_at, Calendar.strftime(revision.released_at, "%Y-%m-%d %H:%M"))
-    |> assign(:events, events)
-    |> assign(:version_changes, version_changes)
-    |> assign(:option_events, option_events)
-    |> assign(:option_metadata_changes, option_metadata_changes)
+    |> assign(:diff, diff)
   end
 end
