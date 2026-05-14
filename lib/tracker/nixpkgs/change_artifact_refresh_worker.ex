@@ -36,8 +36,12 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
   @files_hard_cap @file_link_cap + @files_per_page
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: %{"number" => number, "reason" => reason}}) do
-    run(%{number: number, reason: reason})
+  def perform(%Oban.Job{
+        args: %{"number" => number, "reason" => reason},
+        attempt: attempt,
+        max_attempts: max_attempts
+      }) do
+    run(%{number: number, reason: reason}, attempt: attempt, max_attempts: max_attempts)
   end
 
   @doc """
@@ -104,6 +108,9 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
   end
 
   defp do_run(reason, number, opts) do
+    attempt = Keyword.get(opts, :attempt, 1)
+    max_attempts = Keyword.get(opts, :max_attempts, 1)
+
     case Change.get_by_number(number) do
       {:ok, change} ->
         fetcher =
@@ -138,8 +145,18 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
 
             {{:error, :no_workflow_run}, %{outcome: :error, status: :no_workflow_run_retry}}
 
+          {:error, :no_workflow_run} when reason == "merged" and attempt < max_attempts ->
+            Logger.info(
+              msg: "merge group run not yet present, retrying artifact refresh",
+              number: number,
+              attempt: attempt,
+              max_attempts: max_attempts
+            )
+
+            {{:error, :no_workflow_run}, %{outcome: :error, status: :no_workflow_run_retry}}
+
           {:error, terminal}
-          when terminal in ~w(artifact_expired no_workflow_run no_comparison_artifact)a ->
+          when terminal in ~w(artifact_expired no_workflow_run no_comparison_artifact failed_workflow_run)a ->
             Logger.warning(
               msg: "terminal artifact refresh outcome",
               number: number,
@@ -462,29 +479,44 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
            auth: token
          ) do
       {:ok, %{workflow_runs: runs}} ->
-        case Enum.find(runs, &(&1.name == name && &1.status == "completed")) do
-          nil ->
-            if Enum.find(runs, &(&1.name == name)) do
-              Logger.info(
-                msg: "workflow run not yet complete, snoozing",
-                workflow: name,
-                sha: sha
-              )
-
-              {:snooze, 120}
-            else
-              {:error, :no_workflow_run}
-            end
-
-          run ->
-            {:ok, run.id}
-        end
+        classify_runs(runs, name, sha)
 
       {:error, %GitHub.Error{reason: :rate_limited}} ->
         {:error, :rate_limited}
 
       {:error, reason} ->
         {:error, reason}
+    end
+  end
+
+  defp classify_runs(runs, name, sha) do
+    case Enum.find(runs, &(&1.name == name && &1.status == "completed")) do
+      nil ->
+        if Enum.find(runs, &(&1.name == name)) do
+          Logger.info(
+            msg: "workflow run not yet complete, snoozing",
+            workflow: name,
+            sha: sha
+          )
+
+          {:snooze, 120}
+        else
+          {:error, :no_workflow_run}
+        end
+
+      %{conclusion: "success"} = run ->
+        {:ok, run.id}
+
+      %{conclusion: conclusion, id: id} ->
+        Logger.warning(
+          msg: "workflow run completed unsuccessfully",
+          workflow: name,
+          sha: sha,
+          run_id: id,
+          conclusion: conclusion
+        )
+
+        {:error, :failed_workflow_run}
     end
   end
 

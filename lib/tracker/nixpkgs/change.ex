@@ -374,7 +374,8 @@ defmodule Tracker.Nixpkgs.Change do
           :artifact_expired,
           :no_workflow_run,
           :no_comparison_artifact,
-          :failed
+          :failed,
+          :failed_workflow_run
         ]
       ]
 
