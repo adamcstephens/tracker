@@ -226,6 +226,9 @@ defmodule TrackerWeb.ChangeLive.Show do
   defp processing_status_explanation(:no_comparison_artifact, _),
     do: "No comparison artifact was found in the workflow run."
 
+  defp processing_status_explanation(:failed_workflow_run, _),
+    do: "The upstream nixpkgs-review workflow run completed unsuccessfully for this change."
+
   defp processing_status_explanation(:failed, _),
     do: "Processing failed for this change."
 

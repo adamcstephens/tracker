@@ -124,8 +124,8 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorkerTest do
     } do
       for {reason, number} <- [
             {:artifact_expired, 9005},
-            {:no_workflow_run, 9015},
-            {:no_comparison_artifact, 9025}
+            {:no_comparison_artifact, 9025},
+            {:failed_workflow_run, 9035}
           ] do
         insert_change!(number: number, state: :merged, merge_commit_sha: "sha#{number}")
 
@@ -139,6 +139,41 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorkerTest do
         {:ok, refreshed} = Change.get_by_number(number)
         assert refreshed.processing_status == reason
       end
+    end
+
+    test ":no_workflow_run is retryable before the final attempt", %{rate_limit_table: table} do
+      insert_change!(number: 9015, state: :merged, merge_commit_sha: "sha9015")
+
+      assert {:error, :no_workflow_run} =
+               ChangeArtifactRefreshWorker.run(
+                 %{reason: "merged", number: 9015},
+                 rate_limit_table: table,
+                 attempt: 1,
+                 max_attempts: 10,
+                 attrdiff_fetcher: fn _ -> {:error, :no_workflow_run} end
+               )
+
+      {:ok, refreshed} = Change.get_by_number(9015)
+      refute refreshed.processing_status == :no_workflow_run
+      refute refreshed.processing_status == :failed
+    end
+
+    test ":no_workflow_run falls through to terminal status on the final attempt", %{
+      rate_limit_table: table
+    } do
+      insert_change!(number: 9016, state: :merged, merge_commit_sha: "sha9016")
+
+      :ok =
+        ChangeArtifactRefreshWorker.run(
+          %{reason: "merged", number: 9016},
+          rate_limit_table: table,
+          attempt: 10,
+          max_attempts: 10,
+          attrdiff_fetcher: fn _ -> {:error, :no_workflow_run} end
+        )
+
+      {:ok, refreshed} = Change.get_by_number(9016)
+      assert refreshed.processing_status == :no_workflow_run
     end
 
     test "fetcher generic error sets :failed and returns {:error, reason}", %{
@@ -315,7 +350,8 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorkerTest do
     } do
       for {reason, number} <- [
             {:artifact_expired, 9203},
-            {:no_comparison_artifact, 9223}
+            {:no_comparison_artifact, 9223},
+            {:failed_workflow_run, 9233}
           ] do
         insert_change!(number: number, state: :open, head_sha: "sha#{number}")
 
