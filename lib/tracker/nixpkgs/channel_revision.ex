@@ -180,6 +180,42 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
     end
   end
 
+  defmodule RevisionDiff do
+    use TypedStruct
+
+    typedstruct enforce: true do
+      field :package_events, list()
+      field :version_changes, list(Tracker.Nixpkgs.ChannelRevision.VersionDiff.t())
+      field :option_events, list()
+      field :option_metadata_changes, list()
+    end
+  end
+
+  @doc """
+  Computes the four diff lists between two channel revisions on the same
+  channel: package events, version changes, option events, and option
+  metadata changes.
+  """
+  def diff_between(from_rev, to_rev) do
+    %RevisionDiff{
+      package_events:
+        Tracker.Nixpkgs.PackageEvent.list_between_revisions!(
+          to_rev.channel_id,
+          from_rev.released_at,
+          to_rev.released_at
+        ),
+      version_changes: version_diff(from_rev.id, to_rev.id),
+      option_events:
+        Tracker.Nixpkgs.OptionEvent.list_between_revisions!(
+          to_rev.channel_id,
+          from_rev.released_at,
+          to_rev.released_at
+        ),
+      option_metadata_changes:
+        Tracker.Nixpkgs.OptionRevision.metadata_diff(from_rev.id, to_rev.id)
+    }
+  end
+
   @doc """
   Returns version changes between two channel revisions as a list of
   `VersionDiff` structs.
