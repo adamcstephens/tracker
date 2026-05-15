@@ -31,6 +31,7 @@ defmodule TrackerWeb.ChangeLive.Show do
   alias TrackerWeb.DataTable
   alias TrackerWeb.PageSearch
   alias TrackerWeb.PropagationDag
+  alias TrackerWeb.PropagationTree
   alias TrackerWeb.TableParams
   alias Tracker.Nixpkgs.Propagation
 
@@ -39,7 +40,7 @@ defmodule TrackerWeb.ChangeLive.Show do
     ~H"""
     <div class="change-show">
       <header class="change-head">
-        <div class="change-head-row">
+        <div class="change-head-row cm-headrow">
           <span class={"pill pill-#{@change.state}"}>
             <span class="dot" aria-hidden="true"></span>
             {@change.state}
@@ -47,157 +48,244 @@ defmodule TrackerWeb.ChangeLive.Show do
           <a href={@change.url} target="_blank" rel="noopener noreferrer" class="change-prnum mono">
             #{@change.number}
           </a>
-          <span class="muted">→ <code>{@change.base_ref}</code></span>
+          <span class="cm-arrow muted">→</span>
+          <code class="cm-base">{@change.base_ref}</code>
         </div>
-        <h1>{@change.title}</h1>
+        <h1 class="cm-title">{@change.title}</h1>
       </header>
 
       <section
         :if={@change.state == :merged and @lifecycle_dag.nodes != []}
-        class="change-card change-card-prop"
+        class="change-card change-card-prop m4-prop"
       >
-        <div class="change-card-head">
-          <small class="muted">
-            <strong>{@landed_count}</strong> of {@total_branches} channels reached
-          </small>
+        <div class="change-card-head m4-prop-side">
+          <div class="m4-prop-num">
+            {@landed_count}<small>/{@total_branches}</small>
+          </div>
+          <div class="m4-prop-label">
+            <small class="muted">
+              <strong>{@landed_count}</strong> of {@total_branches} channels reached
+            </small>
+            <span class="m4-prop-label-mobile">channels reached</span>
+          </div>
         </div>
-        <PropagationDag.dag dag={@lifecycle_dag} branch_links={@branch_links} />
+        <div class="m4-prop-track">
+          <div class="m4-prop-bar">
+            <i style={"width: #{progress_pct(@landed_count, @total_branches)}%"}></i>
+          </div>
+          <div class="m4-prop-foot">
+            merged {merged_ago_text(@change.merged_at)}
+          </div>
+        </div>
+        <div class="change-dag-desktop">
+          <PropagationDag.dag dag={@lifecycle_dag} branch_links={@branch_links} />
+        </div>
       </section>
 
-      <dl class="change-meta">
-        <div>
-          <dt>Link</dt>
-          <dd>
-            <a href={@change.url} target="_blank" rel="noopener noreferrer">
-              #{@change.number}
-            </a>
-          </dd>
+      <div class="m3-tabs">
+        <input
+          type="radio"
+          name={"cmtab-#{@change.number}"}
+          id={"cmtab-chans-#{@change.number}"}
+          class="m4tab m4tab-chans"
+          checked
+        />
+        <input
+          type="radio"
+          name={"cmtab-#{@change.number}"}
+          id={"cmtab-pkgs-#{@change.number}"}
+          class="m4tab m4tab-pkgs"
+        />
+        <input
+          type="radio"
+          name={"cmtab-#{@change.number}"}
+          id={"cmtab-opts-#{@change.number}"}
+          class="m4tab m4tab-opts"
+        />
+        <input
+          type="radio"
+          name={"cmtab-#{@change.number}"}
+          id={"cmtab-info-#{@change.number}"}
+          class="m4tab m4tab-info"
+        />
+        <div class="m3-tabs-bar" role="tablist">
+          <label for={"cmtab-chans-#{@change.number}"} class="m3-tab m3-tab-chans">Channels</label>
+          <label for={"cmtab-pkgs-#{@change.number}"} class="m3-tab m3-tab-pkgs">Packages</label>
+          <label for={"cmtab-opts-#{@change.number}"} class="m3-tab m3-tab-opts">Options</label>
+          <label for={"cmtab-info-#{@change.number}"} class="m3-tab m3-tab-info">Info</label>
         </div>
-        <div>
-          <dt>Author</dt>
-          <dd>{author_display(@change, @author_maintainer)}</dd>
-        </div>
-        <div :if={@merger_maintainer}>
-          <dt>Merged by</dt>
-          <dd>
-            <.link navigate={~p"/maintainers/#{@merger_maintainer.github}"}>
-              {@merger_maintainer.github}
-            </.link>
-          </dd>
-        </div>
-        <div :if={@change.gh_created_at}>
-          <dt>Created</dt>
-          <dd>{format_datetime(@change.gh_created_at)} <small>UTC</small></dd>
-        </div>
-        <div :if={@change.merged_at}>
-          <dt>Merged</dt>
-          <dd>{format_datetime(@change.merged_at)} <small>UTC</small></dd>
-        </div>
-        <div>
-          <dt>Base branch</dt>
-          <dd><code>{@change.base_ref}</code></dd>
-        </div>
-        <div :if={@change.merge_commit_sha}>
-          <dt>Merge commit</dt>
-          <dd>
-            <a
-              href={"https://github.com/NixOS/nixpkgs/commit/#{@change.merge_commit_sha}"}
-              target="_blank"
-              rel="noopener noreferrer"
-              class="mono"
-            >
-              {String.slice(@change.merge_commit_sha, 0, 12)}
-            </a>
-          </dd>
-        </div>
-      </dl>
 
-      <section class="change-section">
-        <%= if @change.processing_status == :processed and @package_count > 0 do %>
-          <div class="change-section-head">
-            <h2>
-              Affected packages <small class="muted">({@package_count})</small>
-            </h2>
-
-            <form
-              :if={@package_count > 15 && @change.processing_status == :processed}
-              phx-change="search-packages"
-              phx-submit="search-packages"
-              id="package-search"
-              phx-hook="UpdateURL"
-              method="get"
-              action={~p"/changes/#{@change.number}"}
-            >
-              <input
-                type="search"
-                name="search"
-                value={@table_params.search}
-                placeholder="Filter packages…"
-                phx-debounce="300"
-              />
-            </form>
+        <div class="m3-panel m3-panel-chans">
+          <PropagationTree.tree
+            :if={@propagation_tree}
+            tree={@propagation_tree}
+            branch_links={@branch_links}
+          />
+          <div :if={@propagation_tree} class="m4-legend">
+            <span><i class="m4-legend-dot is-done" aria-hidden="true"></i> Landed</span>
+            <span><i class="m4-legend-dot" aria-hidden="true"></i> Pending</span>
+            <span><i class="m4-legend-dot is-mine" aria-hidden="true"></i> Your channel</span>
           </div>
+        </div>
 
-          <p :if={@change.processing_status != :processed}>
-            {processing_status_explanation(@change.processing_status, @change)}
+        <div class="m3-panel m3-panel-pkgs">
+          <section class="change-section">
+            <%= if @change.processing_status == :processed and @package_count > 0 do %>
+              <div class="change-section-head">
+                <h2>
+                  Affected packages <small class="muted">({@package_count})</small>
+                </h2>
+
+                <form
+                  :if={@package_count > 15 && @change.processing_status == :processed}
+                  phx-change="search-packages"
+                  phx-submit="search-packages"
+                  id="package-search"
+                  phx-hook="UpdateURL"
+                  method="get"
+                  action={~p"/changes/#{@change.number}"}
+                >
+                  <input
+                    type="search"
+                    name="search"
+                    value={@table_params.search}
+                    placeholder="Filter packages…"
+                    phx-debounce="300"
+                  />
+                </form>
+              </div>
+
+              <p :if={@change.processing_status != :processed}>
+                {processing_status_explanation(@change.processing_status, @change)}
+              </p>
+
+              <.table id="affected-packages" rows={@streams.packages}>
+                <:col :let={{_id, pkg}} label="Package">
+                  <.link navigate={~p"/packages/#{pkg.attribute}"} class="mono">
+                    {pkg.attribute}
+                  </.link>
+                </:col>
+                <:col :let={{_id, pkg}} label="Description">
+                  <span class="change-desc">{pkg.description}</span>
+                </:col>
+              </.table>
+
+              <DataTable.pagination
+                total_pages={@pkg_total_pages}
+                current_page={@pkg_current_page}
+                has_prev_page?={@pkg_has_prev?}
+                has_next_page?={@pkg_has_next?}
+              />
+            <% end %>
+          </section>
+        </div>
+
+        <div class="m3-panel m3-panel-opts">
+          <p :if={@change.files_over_limit} class="change-files-over-limit muted">
+            This PR touched too many files to track per-file links — the affected
+            options view is disabled. (Usually means the branch is far out of date
+            with the base and GitHub's file diff ballooned.)
           </p>
 
-          <.table id="affected-packages" rows={@streams.packages}>
-            <:col :let={{_id, pkg}} label="Package">
-              <.link navigate={~p"/packages/#{pkg.attribute}"} class="mono">
-                {pkg.attribute}
-              </.link>
-            </:col>
-            <:col :let={{_id, pkg}} label="Description">
-              <span class="change-desc">{pkg.description}</span>
-            </:col>
-          </.table>
+          <section
+            :if={
+              @change.processing_status == :processed and not @change.files_over_limit and
+                @option_prefixes_top != []
+            }
+            class="change-section"
+          >
+            <div class="change-section-head">
+              <h2>
+                Affected options <small class="muted">({@option_total})</small>
+              </h2>
+            </div>
 
-          <DataTable.pagination
-            total_pages={@pkg_total_pages}
-            current_page={@pkg_current_page}
-            has_prev_page?={@pkg_has_prev?}
-            has_next_page?={@pkg_has_next?}
-          />
-        <% end %>
-      </section>
+            <.table id="affected-options" rows={@option_prefixes_top}>
+              <:col :let={{prefix, _count}} label="Namespace">
+                <.link navigate={~p"/options/#{prefix}"} class="mono">{prefix}</.link>
+              </:col>
+            </.table>
 
-      <p :if={@change.files_over_limit} class="change-files-over-limit muted">
-        This PR touched too many files to track per-file links — the affected
-        options view is disabled. (Usually means the branch is far out of date
-        with the base and GitHub's file diff ballooned.)
-      </p>
-
-      <section
-        :if={
-          @change.processing_status == :processed and not @change.files_over_limit and
-            @option_prefixes_top != []
-        }
-        class="change-section"
-      >
-        <div class="change-section-head">
-          <h2>
-            Affected options <small class="muted">({@option_total})</small>
-          </h2>
+            <p :if={@option_prefix_more > 0} class="muted">
+              …and {@option_prefix_more} more {pluralize_namespaces(@option_prefix_more)}
+            </p>
+          </section>
         </div>
 
-        <.table id="affected-options" rows={@option_prefixes_top}>
-          <:col :let={{prefix, _count}} label="Namespace">
-            <.link navigate={~p"/options/#{prefix}"} class="mono">{prefix}</.link>
-          </:col>
-        </.table>
+        <div class="m3-panel m3-panel-info">
+          <dl class="change-meta">
+            <div>
+              <dt>Link</dt>
+              <dd>
+                <a href={@change.url} target="_blank" rel="noopener noreferrer">
+                  #{@change.number}
+                </a>
+              </dd>
+            </div>
+            <div>
+              <dt>Author</dt>
+              <dd>{author_display(@change, @author_maintainer)}</dd>
+            </div>
+            <div :if={@merger_maintainer}>
+              <dt>Merged by</dt>
+              <dd>
+                <.link navigate={~p"/maintainers/#{@merger_maintainer.github}"}>
+                  {@merger_maintainer.github}
+                </.link>
+              </dd>
+            </div>
+            <div :if={@change.gh_created_at}>
+              <dt>Created</dt>
+              <dd>{format_datetime(@change.gh_created_at)} <small>UTC</small></dd>
+            </div>
+            <div :if={@change.merged_at}>
+              <dt>Merged</dt>
+              <dd>{format_datetime(@change.merged_at)} <small>UTC</small></dd>
+            </div>
+            <div>
+              <dt>Base branch</dt>
+              <dd><code>{@change.base_ref}</code></dd>
+            </div>
+            <div :if={@change.merge_commit_sha}>
+              <dt>Merge commit</dt>
+              <dd>
+                <a
+                  href={"https://github.com/NixOS/nixpkgs/commit/#{@change.merge_commit_sha}"}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="mono"
+                >
+                  {String.slice(@change.merge_commit_sha, 0, 12)}
+                </a>
+              </dd>
+            </div>
+          </dl>
 
-        <p :if={@option_prefix_more > 0} class="muted">
-          …and {@option_prefix_more} more {pluralize_namespaces(@option_prefix_more)}
-        </p>
-      </section>
-
-      <div :if={@change.labels && @change.labels != []} class="change-labels">
-        <span :for={label <- @change.labels} class="label-chip">{label}</span>
+          <div :if={@change.labels && @change.labels != []} class="change-labels">
+            <span :for={label <- @change.labels} class="label-chip">{label}</span>
+          </div>
+        </div>
       </div>
     </div>
     """
   end
+
+  defp progress_pct(_, 0), do: 0
+  defp progress_pct(landed, total), do: round(landed / total * 100)
+
+  defp merged_ago_text(nil), do: "—"
+
+  defp merged_ago_text(%DateTime{} = dt) do
+    diff = DateTime.diff(DateTime.utc_now(), dt, :second)
+    relative(diff)
+  end
+
+  defp relative(s) when s < 60, do: "just now"
+  defp relative(s) when s < 3600, do: "#{div(s, 60)}m ago"
+  defp relative(s) when s < 86_400, do: "#{div(s, 3600)}h ago"
+  defp relative(s) when s < 86_400 * 30, do: "#{div(s, 86_400)}d ago"
+  defp relative(s) when s < 86_400 * 365, do: "#{div(s, 86_400 * 30)}mo ago"
+  defp relative(s), do: "#{div(s, 86_400 * 365)}y ago"
 
   defp format_datetime(nil), do: "—"
   defp format_datetime(dt), do: Calendar.strftime(dt, "%Y-%m-%d %H:%M")
@@ -286,6 +374,9 @@ defmodule TrackerWeb.ChangeLive.Show do
     landed_count = Enum.count(lifecycle_dag.nodes, & &1.present)
     total_branches = length(lifecycle_dag.nodes)
 
+    propagation_tree =
+      PropagationTree.build(lifecycle_dag, mine_branch: lens_branch_name(socket.assigns[:lens]))
+
     socket
     |> assign(:page_title, "##{change.number} #{change.title}")
     |> assign(:change, change)
@@ -295,9 +386,14 @@ defmodule TrackerWeb.ChangeLive.Show do
     |> assign(:branch_links, branch_links)
     |> assign(:landed_count, landed_count)
     |> assign(:total_branches, total_branches)
+    |> assign(:propagation_tree, propagation_tree)
     |> load_packages(change.id)
     |> load_options(change.id)
   end
+
+  defp lens_branch_name(nil), do: nil
+  defp lens_branch_name(%{channel: %{name: name}}), do: name
+  defp lens_branch_name(_), do: nil
 
   defp build_branch_links(change_branches) do
     for %{branch_name: name, channel_revision: %{revision: rev, channel: %{name: ch_name}}} <-
