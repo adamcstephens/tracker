@@ -303,6 +303,20 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
       assert html =~ ~s|data-branch="nixos-unstable"|
     end
 
+    test "renders the mobile branch tree alongside the desktop DAG", %{conn: conn} do
+      change_id = Tracker.Nixpkgs.Change.get_by_number!(6001).id
+
+      Tracker.Nixpkgs.ChangeBranch.create!(%{change_id: change_id, branch_name: "master"})
+
+      {:ok, _view, html} = live(conn, ~p"/changes/6001")
+
+      assert html =~ ~s|class="m4-tree"|
+      assert html =~ ~r/<li[^>]*class="is-done"[^>]*data-branch="master"/
+
+      assert html =~ ~s|data-branch="nixos-unstable"|
+      refute html =~ ~r/<li[^>]*class="is-done"[^>]*data-branch="nixos-unstable"/
+    end
+
     test "marks branches with a ChangeBranch as present", %{conn: conn} do
       change_id = Tracker.Nixpkgs.Change.get_by_number!(6001).id
 
@@ -372,6 +386,44 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
 
       refute html =~ "Propagation"
       refute html =~ "propagation-dag"
+    end
+  end
+
+  describe "mobile M4 chrome" do
+    test "renders chip row + title with mobile classes", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/changes/6001")
+
+      assert html =~ ~s|class="change-head-row cm-headrow"|
+      assert html =~ ~s|<code class="cm-base">master</code>|
+      assert html =~ ~s|class="cm-title"|
+    end
+
+    test "renders the m4 progress band with landed counts and merged-ago text", %{conn: conn} do
+      change_id = Tracker.Nixpkgs.Change.get_by_number!(6001).id
+      Tracker.Nixpkgs.ChangeBranch.create!(%{change_id: change_id, branch_name: "master"})
+
+      {:ok, _view, html} = live(conn, ~p"/changes/6001")
+
+      assert html =~ ~s|class="m4-prop-num"|
+      assert html =~ "channels reached"
+      assert html =~ ~s|class="m4-prop-bar"|
+      assert html =~ ~r/class="m4-prop-foot"[^>]*>\s*merged/
+    end
+
+    test "renders the segmented tabs with four panels", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/changes/6001")
+
+      assert html =~ ~s|class="m3-tabs"|
+      assert html =~ ~s|class="m3-panel m3-panel-chans"|
+      assert html =~ ~s|class="m3-panel m3-panel-pkgs"|
+      assert html =~ ~s|class="m3-panel m3-panel-opts"|
+      assert html =~ ~s|class="m3-panel m3-panel-info"|
+
+      tab_labels = Regex.scan(~r/<label[^>]*for="cmtab-[^"]+"/, html) |> length()
+      assert tab_labels == 4
+
+      assert html =~
+               ~r/<input type="radio" name="cmtab-6001"[^>]*class="m4tab m4tab-chans"[^>]*checked/
     end
   end
 
