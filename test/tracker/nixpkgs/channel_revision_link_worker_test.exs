@@ -169,6 +169,22 @@ defmodule Tracker.Nixpkgs.ChannelRevisionLinkWorkerTest do
       assert change_branches_for(change, "nixos-unstable") == []
     end
 
+    test "ignores changes whose base_ref is not a propagation ancestor", ctx do
+      # sha_b is an ancestor of R2, so a naive candidate filter would link
+      # this change. But base_ref="wip-home-assistant" never propagates into
+      # nixos-unstable, so the change must be filtered out before the
+      # ancestor check runs.
+      change = insert_change!(base_ref: "wip-home-assistant", merge_commit_sha: ctx.sha_b)
+
+      :ok =
+        ChannelRevisionLinkWorker.run(
+          channel_revision_id: ctx.r2.id,
+          git_server: ctx.git_server
+        )
+
+      assert change_branches_for(change, "nixos-unstable") == []
+    end
+
     test "emits structured start/stop logs", ctx do
       insert_change!(base_ref: "master", merge_commit_sha: ctx.sha_b)
       Logger.put_module_level(ChannelRevisionLinkWorker, :info)

@@ -196,6 +196,14 @@ defmodule Tracker.Nixpkgs.Change do
     read :for_channel_link do
       argument :branch_name, :string, allow_nil?: false
 
+      prepare fn query, _ ->
+        require Ash.Query
+
+        branch_name = Ash.Query.get_argument(query, :branch_name)
+        base_refs = [branch_name | Tracker.Nixpkgs.Propagation.ancestors_of(branch_name)]
+        Ash.Query.filter(query, base_ref in ^base_refs)
+      end
+
       filter expr(
                state == :merged and
                  not is_nil(merge_commit_sha) and
