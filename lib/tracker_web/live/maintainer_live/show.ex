@@ -67,10 +67,10 @@ defmodule TrackerWeb.MaintainerLive.Show do
 
     <h2>Packages ({@package_count})</h2>
 
-    <form phx-change="search" phx-submit="search">
+    <form phx-change="search-packages" phx-submit="search-packages">
       <input
         type="search"
-        name="search"
+        name="package_search"
         value={@table_params.search}
         placeholder="Filter packages..."
         phx-debounce="300"
@@ -117,7 +117,7 @@ defmodule TrackerWeb.MaintainerLive.Show do
   def handle_params(%{"github" => github} = params, _url, socket) do
     maintainer = Tracker.Nixpkgs.Maintainer.get_by_github!(github, load: [:teams])
 
-    tp = TableParams.from_params(params)
+    tp = TableParams.from_params(params, search_key: :package_search)
 
     {:noreply,
      socket
@@ -133,7 +133,7 @@ defmodule TrackerWeb.MaintainerLive.Show do
   end
 
   @impl true
-  def handle_event("search", %{"search" => search}, socket) do
+  def handle_event("search-packages", %{"package_search" => search}, socket) do
     tp = %{socket.assigns.table_params | search: search, page: 1, offset: 0}
 
     {:noreply,

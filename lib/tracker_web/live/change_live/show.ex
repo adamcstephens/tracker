@@ -147,7 +147,7 @@ defmodule TrackerWeb.ChangeLive.Show do
                 >
                   <input
                     type="search"
-                    name="search"
+                    name="package_search"
                     value={@table_params.search}
                     placeholder="Filter packages…"
                     phx-debounce="300"
@@ -345,7 +345,7 @@ defmodule TrackerWeb.ChangeLive.Show do
   @impl true
   def handle_params(%{"number" => number_str} = params, _url, socket) do
     number = String.to_integer(number_str)
-    tp = TableParams.from_params(params)
+    tp = TableParams.from_params(params, search_key: :package_search)
 
     {:noreply,
      socket
@@ -404,7 +404,7 @@ defmodule TrackerWeb.ChangeLive.Show do
   end
 
   @impl true
-  def handle_event("search-packages", %{"search" => search}, socket) do
+  def handle_event("search-packages", %{"package_search" => search}, socket) do
     tp = %{socket.assigns.table_params | search: search, page: 1, offset: 0}
 
     socket =

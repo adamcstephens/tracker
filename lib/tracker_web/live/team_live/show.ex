@@ -36,10 +36,10 @@ defmodule TrackerWeb.TeamLive.Show do
 
     <h2>Packages</h2>
 
-    <form phx-change="search" phx-submit="search">
+    <form phx-change="search-packages" phx-submit="search-packages">
       <input
         type="search"
-        name="search"
+        name="package_search"
         value={@table_params.search}
         placeholder="Filter packages..."
         phx-debounce="300"
@@ -72,7 +72,7 @@ defmodule TrackerWeb.TeamLive.Show do
   def handle_params(%{"short_name" => short_name} = params, _url, socket) do
     team = Tracker.Nixpkgs.Team.get_by_short_name!(short_name, load: [:members])
 
-    tp = TableParams.from_params(params)
+    tp = TableParams.from_params(params, search_key: :package_search)
 
     {:noreply,
      socket
@@ -88,7 +88,7 @@ defmodule TrackerWeb.TeamLive.Show do
   end
 
   @impl true
-  def handle_event("search", %{"search" => search}, socket) do
+  def handle_event("search-packages", %{"package_search" => search}, socket) do
     tp = %{socket.assigns.table_params | search: search, page: 1, offset: 0}
 
     {:noreply,
