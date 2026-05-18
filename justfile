@@ -1,8 +1,11 @@
 default:
     just -l
 
+pc *ARGS:
+    process-compose --use-uds {{ARGS}}
+
 services:
-    process-compose up --detached
+    just pc up --detached
     mix ecto.setup
 
 dev:
