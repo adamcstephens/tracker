@@ -43,10 +43,17 @@ defmodule TrackerWeb.MaintainerLive.ShowTest do
     assert html =~ "maint-pkg-two"
   end
 
-  test "search filters packages", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/maintainers/testmaint?search=one")
+  test "package_search filters packages", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/maintainers/testmaint?package_search=one")
 
     assert html =~ "maint-pkg-one"
     refute html =~ "maint-pkg-two"
+  end
+
+  test "global search param does not filter the inner packages table", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/maintainers/testmaint?search=one")
+
+    assert html =~ "maint-pkg-one"
+    assert html =~ "maint-pkg-two"
   end
 end

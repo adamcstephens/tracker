@@ -19,6 +19,22 @@ defmodule TrackerWeb.TableParamsTest do
       assert tp.search == "hello"
     end
 
+    test "reads search from a custom URL key when :search_key is given" do
+      tp =
+        TableParams.from_params(
+          %{"package_search" => "hello", "search" => "ignored"},
+          search_key: :package_search
+        )
+
+      assert tp.search == "hello"
+      assert tp.search_key == :package_search
+    end
+
+    test "defaults search_key to :search" do
+      tp = TableParams.from_params(%{})
+      assert tp.search_key == :search
+    end
+
     test "parses page and calculates offset" do
       tp = TableParams.from_params(%{"page" => "3"})
       assert tp.page == 3
@@ -102,6 +118,16 @@ defmodule TrackerWeb.TableParamsTest do
       assert TableParams.to_query_params(tp) == %{search: "hello"}
     end
 
+    test "writes search under the custom :search_key" do
+      tp =
+        TableParams.from_params(
+          %{"package_search" => "hello"},
+          search_key: :package_search
+        )
+
+      assert TableParams.to_query_params(tp) == %{package_search: "hello"}
+    end
+
     test "includes page when > 1" do
       tp = TableParams.from_params(%{"page" => "2"})
       assert TableParams.to_query_params(tp) == %{page: 2}
@@ -155,6 +181,18 @@ defmodule TrackerWeb.TableParamsTest do
       assert String.starts_with?(path, "/changes?")
       query = path |> URI.parse() |> Map.get(:query) |> URI.decode_query()
       assert query == %{"base_ref" => "main", "search" => "hello"}
+    end
+
+    test "uses the custom :search_key when building the path" do
+      tp =
+        TableParams.from_params(
+          %{"package_search" => "hello"},
+          search_key: :package_search
+        )
+
+      path = TableParams.to_path(tp, "/teams/foo")
+      query = path |> URI.parse() |> Map.get(:query) |> URI.decode_query()
+      assert query == %{"package_search" => "hello"}
     end
   end
 

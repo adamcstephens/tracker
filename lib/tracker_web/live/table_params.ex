@@ -7,6 +7,7 @@ defmodule TrackerWeb.TableParams do
 
   typedstruct do
     field :search, String.t(), default: ""
+    field :search_key, atom(), default: :search
     field :page, pos_integer(), default: 1
     field :offset, non_neg_integer(), default: 0
     field :page_size, pos_integer(), default: 15
@@ -25,6 +26,9 @@ defmodule TrackerWeb.TableParams do
     * `:default_sort` - default sort field atom (default: nil)
     * `:default_sort_dir` - default sort direction, :asc or :desc (default: :asc)
     * `:page_size` - number of items per page (default: 15)
+    * `:search_key` - atom URL key the search input writes to (default: `:search`).
+      Set to e.g. `:package_search` when an inner table shares a page with the
+      global `?search=` so the two inputs don't fight over one URL slot.
   """
   @spec from_params(map(), keyword()) :: t()
   def from_params(params, opts \\ []) do
@@ -32,8 +36,9 @@ defmodule TrackerWeb.TableParams do
     allowed_sorts = Keyword.get(opts, :allowed_sorts, [])
     default_sort = Keyword.get(opts, :default_sort, nil)
     default_sort_dir = Keyword.get(opts, :default_sort_dir, :asc)
+    search_key = Keyword.get(opts, :search_key, :search)
 
-    search = Map.get(params, "search", "")
+    search = Map.get(params, Atom.to_string(search_key), "")
     page = parse_page(params["page"])
     offset = (page - 1) * page_size
     sort_by = parse_sort_by(params["sort_by"], allowed_sorts, default_sort)
@@ -41,6 +46,7 @@ defmodule TrackerWeb.TableParams do
 
     %__MODULE__{
       search: search,
+      search_key: search_key,
       page: page,
       offset: offset,
       page_size: page_size,
@@ -59,7 +65,7 @@ defmodule TrackerWeb.TableParams do
   def to_query_params(%__MODULE__{} = tp, extras \\ %{}) do
     params =
       %{}
-      |> maybe_put(:search, tp.search, "")
+      |> maybe_put(tp.search_key, tp.search, "")
       |> maybe_put(:page, tp.page, 1)
       |> maybe_put(:sort_by, tp.sort_by, tp.default_sort)
       |> maybe_put(:sort_dir, tp.sort_dir, tp.default_sort_dir)
@@ -80,7 +86,7 @@ defmodule TrackerWeb.TableParams do
   def to_hidden_inputs(%__MODULE__{} = tp, extras \\ %{}) do
     tp
     |> to_query_params(extras)
-    |> Map.delete(:search)
+    |> Map.delete(tp.search_key)
     |> Map.new(fn {k, v} -> {to_string(k), to_string(v)} end)
   end
 
