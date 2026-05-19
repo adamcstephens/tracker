@@ -56,4 +56,26 @@ defmodule TrackerWeb.ChannelLive.IndexTest do
     view |> element("th[phx-value-field=name]") |> render_click()
     assert_patched(view, ~p"/channels?sort_by=name&sort_dir=asc")
   end
+
+  test "renders a Build problem badge for channels whose hydra job failed", %{conn: conn} do
+    channel = Channel.by_name!("nixos-unstable")
+
+    {:ok, _} =
+      Channel.update_hydra_status(channel, %{
+        hydra_build_failed?: true,
+        hydra_project: "nixos",
+        hydra_jobset: "unstable",
+        hydra_exported_job: "tested"
+      })
+
+    {:ok, _view, html} = live(conn, ~p"/channels")
+
+    assert html =~ "Build problem"
+    assert html =~ "https://hydra.nixos.org/jobset/nixos/unstable"
+  end
+
+  test "does not render Build problem for healthy channels", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/channels")
+    refute html =~ "Build problem"
+  end
 end

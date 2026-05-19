@@ -202,6 +202,140 @@ defmodule Tracker.Nixpkgs.ChannelTest do
     end
   end
 
+  describe "update_hydra_status/2" do
+    setup do
+      channel =
+        Channel.create!(%{
+          name: "nixos-unstable-#{System.unique_integer([:positive])}",
+          display_name: "NixOS Unstable",
+          status: :active,
+          is_stable: false
+        })
+
+      %{channel: channel}
+    end
+
+    test "stores hydra fields and stamps hydra_checked_at", %{channel: channel} do
+      {:ok, updated} =
+        Channel.update_hydra_status(channel, %{
+          hydra_build_failed?: true,
+          hydra_project: "nixos",
+          hydra_jobset: "unstable",
+          hydra_exported_job: "tested"
+        })
+
+      assert updated.hydra_build_failed? == true
+      assert updated.hydra_project == "nixos"
+      assert updated.hydra_jobset == "unstable"
+      assert updated.hydra_exported_job == "tested"
+      assert %DateTime{} = updated.hydra_checked_at
+    end
+
+    test "overwrites previously stored values", %{channel: channel} do
+      {:ok, _} =
+        Channel.update_hydra_status(channel, %{
+          hydra_build_failed?: true,
+          hydra_project: "nixos",
+          hydra_jobset: "unstable",
+          hydra_exported_job: "tested"
+        })
+
+      {:ok, updated} =
+        Channel.update_hydra_status(channel, %{
+          hydra_build_failed?: false,
+          hydra_project: "nixos",
+          hydra_jobset: "unstable",
+          hydra_exported_job: "tested"
+        })
+
+      assert updated.hydra_build_failed? == false
+    end
+  end
+
+  describe "build_problem? calculation" do
+    test "is true when the latest hydra job failed and channel is active" do
+      channel =
+        Channel.create!(%{
+          name: "nixos-unstable-#{System.unique_integer([:positive])}",
+          display_name: "NixOS Unstable",
+          status: :active,
+          is_stable: false
+        })
+
+      {:ok, _} =
+        Channel.update_hydra_status(channel, %{
+          hydra_build_failed?: true,
+          hydra_project: "nixos",
+          hydra_jobset: "unstable",
+          hydra_exported_job: "tested"
+        })
+
+      {:ok, loaded} =
+        Channel.by_name(channel.name, load: [:build_problem?])
+
+      assert loaded.build_problem? == true
+    end
+
+    test "is false when the latest hydra job succeeded" do
+      channel =
+        Channel.create!(%{
+          name: "nixos-unstable-#{System.unique_integer([:positive])}",
+          display_name: "NixOS Unstable",
+          status: :active,
+          is_stable: false
+        })
+
+      {:ok, _} =
+        Channel.update_hydra_status(channel, %{
+          hydra_build_failed?: false,
+          hydra_project: "nixos",
+          hydra_jobset: "unstable",
+          hydra_exported_job: "tested"
+        })
+
+      {:ok, loaded} =
+        Channel.by_name(channel.name, load: [:build_problem?])
+
+      assert loaded.build_problem? == false
+    end
+
+    test "is suppressed for retired channels even when hydra reports failure" do
+      channel =
+        Channel.create!(%{
+          name: "nixos-old-#{System.unique_integer([:positive])}",
+          display_name: "Old",
+          status: :retired,
+          is_stable: true
+        })
+
+      {:ok, _} =
+        Channel.update_hydra_status(channel, %{
+          hydra_build_failed?: true,
+          hydra_project: "nixos",
+          hydra_jobset: "release-old",
+          hydra_exported_job: "tested"
+        })
+
+      {:ok, loaded} =
+        Channel.by_name(channel.name, load: [:build_problem?])
+
+      assert loaded.build_problem? == false
+    end
+
+    test "is false when hydra status hasn't been fetched yet" do
+      channel =
+        Channel.create!(%{
+          name: "nixos-fresh-#{System.unique_integer([:positive])}",
+          display_name: "Fresh",
+          status: :active,
+          is_stable: false
+        })
+
+      {:ok, loaded} = Channel.by_name(channel.name, load: [:build_problem?])
+      assert loaded.build_problem? == false
+    end
+  end
+
   # seed!/0 tests live in channel_seed_test.exs (async: false)
   # because seed! uses hardcoded channel names that conflict with
   # other async tests doing upserts on the same names.

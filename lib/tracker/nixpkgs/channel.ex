@@ -13,6 +13,7 @@ defmodule Tracker.Nixpkgs.Channel do
     define :active
     define :nixos_channels
     define :default_stable
+    define :update_hydra_status
   end
 
   actions do
@@ -54,6 +55,14 @@ defmodule Tracker.Nixpkgs.Channel do
 
       prepare build(sort: [{:name, :desc}], limit: 1)
     end
+
+    update :update_hydra_status do
+      require_atomic? true
+
+      accept [:hydra_build_failed?, :hydra_project, :hydra_jobset, :hydra_exported_job]
+
+      change set_attribute(:hydra_checked_at, &DateTime.utc_now/0)
+    end
   end
 
   attributes do
@@ -85,11 +94,40 @@ defmodule Tracker.Nixpkgs.Channel do
       public? true
     end
 
+    attribute :hydra_build_failed?, :boolean do
+      public? true
+    end
+
+    attribute :hydra_project, :string do
+      public? true
+    end
+
+    attribute :hydra_jobset, :string do
+      public? true
+    end
+
+    attribute :hydra_exported_job, :string do
+      public? true
+    end
+
+    attribute :hydra_checked_at, :utc_datetime_usec do
+      public? true
+    end
+
     timestamps()
   end
 
   relationships do
     has_many :channel_revisions, Tracker.Nixpkgs.ChannelRevision
+  end
+
+  calculations do
+    calculate :build_problem?,
+              :boolean,
+              expr(
+                not is_nil(hydra_build_failed?) and hydra_build_failed? == true and
+                  status != :retired
+              )
   end
 
   identities do

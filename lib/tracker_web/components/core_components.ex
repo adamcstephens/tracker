@@ -364,6 +364,27 @@ defmodule TrackerWeb.CoreComponents do
     """
   end
 
+  @doc """
+  Renders an inline status badge.
+
+  ## Examples
+
+      <.badge variant={:danger}>Build problem</.badge>
+      <.badge variant={:ok}>Healthy</.badge>
+  """
+  attr :variant, :atom, default: :neutral, values: [:danger, :warn, :ok, :neutral]
+  attr :rest, :global
+
+  slot :inner_block, required: true
+
+  def badge(assigns) do
+    ~H"""
+    <span class={"badge badge--#{@variant}"} {@rest}>
+      {render_slot(@inner_block)}
+    </span>
+    """
+  end
+
   @doc ~S"""
   Renders a table with generic styling.
 

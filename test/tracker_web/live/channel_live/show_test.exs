@@ -151,4 +151,25 @@ defmodule TrackerWeb.ChannelLive.ShowTest do
     assert html =~ ~p"/channels/nixos-unstable/diff/#{cr2.revision}/#{cr3.revision}"
     refute html =~ ~s|checked="checked" phx-value-revision="#{cr1.revision}"|
   end
+
+  test "renders a Build problem badge in the header when hydra reports failure",
+       %{conn: conn, channel: channel} do
+    {:ok, _} =
+      Channel.update_hydra_status(channel, %{
+        hydra_build_failed?: true,
+        hydra_project: "nixos",
+        hydra_jobset: "unstable",
+        hydra_exported_job: "tested"
+      })
+
+    {:ok, _view, html} = live(conn, ~p"/channels/nixos-unstable")
+
+    assert html =~ "Build problem"
+    assert html =~ "https://hydra.nixos.org/jobset/nixos/unstable"
+  end
+
+  test "does not render Build problem badge by default", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/channels/nixos-unstable")
+    refute html =~ "Build problem"
+  end
 end
