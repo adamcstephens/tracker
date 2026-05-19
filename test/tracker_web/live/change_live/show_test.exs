@@ -579,5 +579,34 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
       html = render(view)
       refute html =~ ~r/class="[^"]*propagation-node-present[^"]*"[^>]*data-branch="master"/
     end
+
+    test "rebuilds the mobile propagation tree when the lens changes", %{conn: conn} do
+      Tracker.Nixpkgs.Channel.create!(%{
+        name: "nixpkgs-unstable",
+        display_name: "nixpkgs-unstable",
+        status: :active,
+        is_stable: false
+      })
+
+      Tracker.Nixpkgs.Channel.create!(%{
+        name: "nixos-unstable",
+        display_name: "nixos-unstable",
+        status: :active,
+        is_stable: false
+      })
+
+      {:ok, view, html} =
+        live(conn, ~p"/changes/6001?lens_channel=nixpkgs-unstable")
+
+      assert html =~ ~r/<li[^>]*class="[^"]*is-mine[^"]*"[^>]*data-branch="nixpkgs-unstable"/
+      refute html =~ ~r/<li[^>]*class="[^"]*is-mine[^"]*"[^>]*data-branch="nixos-unstable"/
+
+      send(view.pid, {:set_lens, "nixos-unstable", ""})
+
+      html = render(view)
+
+      assert html =~ ~r/<li[^>]*class="[^"]*is-mine[^"]*"[^>]*data-branch="nixos-unstable"/
+      refute html =~ ~r/<li[^>]*class="[^"]*is-mine[^"]*"[^>]*data-branch="nixpkgs-unstable"/
+    end
   end
 end
