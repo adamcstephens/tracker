@@ -121,11 +121,6 @@ defmodule TrackerWeb.ChangeLive.Show do
             tree={@propagation_tree}
             branch_links={@branch_links}
           />
-          <div :if={@propagation_tree} class="m4-legend">
-            <span><i class="m4-legend-dot is-done" aria-hidden="true"></i> Landed</span>
-            <span><i class="m4-legend-dot" aria-hidden="true"></i> Pending</span>
-            <span><i class="m4-legend-dot is-mine" aria-hidden="true"></i> Your channel</span>
-          </div>
         </div>
 
         <div class="m3-panel m3-panel-pkgs">
@@ -375,7 +370,9 @@ defmodule TrackerWeb.ChangeLive.Show do
     total_branches = length(lifecycle_dag.nodes)
 
     propagation_tree =
-      PropagationTree.build(lifecycle_dag, mine_branch: lens_branch_name(socket.assigns[:lens]))
+      if change.state == :merged do
+        PropagationTree.build(lifecycle_dag, mine_branch: lens_branch_name(socket.assigns[:lens]))
+      end
 
     socket
     |> assign(:page_title, "##{change.number} #{change.title}")
