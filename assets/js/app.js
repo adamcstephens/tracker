@@ -57,6 +57,18 @@ Hooks.AnchorExpand = {
   }
 }
 
+Hooks.ChangeTabs = {
+  mounted() { this.sync() },
+  updated() { this.sync() },
+  sync() {
+    const radios = [...this.el.querySelectorAll('input[type="radio"]')]
+    const current = radios.find(r => r.checked)
+    if (current && !current.disabled) return
+    const fallback = radios.find(r => !r.disabled)
+    if (fallback) fallback.checked = true
+  }
+}
+
 Hooks.LensCookie = {
   mounted() {
     this.handleEvent("set_lens_cookie", ({value, max_age, lens_channel, lens_rev}) => {
