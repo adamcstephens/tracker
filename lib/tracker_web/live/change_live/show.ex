@@ -82,36 +82,55 @@ defmodule TrackerWeb.ChangeLive.Show do
         </div>
       </section>
 
-      <div class="m3-tabs">
+      <div class="m3-tabs" id={"cmtabs-#{@change.number}"} phx-hook="ChangeTabs">
         <input
           type="radio"
           name={"cmtab-#{@change.number}"}
           id={"cmtab-chans-#{@change.number}"}
           class="m4tab m4tab-chans"
-          checked
+          checked={@channels_enabled?}
+          disabled={not @channels_enabled?}
         />
         <input
           type="radio"
           name={"cmtab-#{@change.number}"}
           id={"cmtab-pkgs-#{@change.number}"}
           class="m4tab m4tab-pkgs"
+          disabled={not @packages_enabled?}
         />
         <input
           type="radio"
           name={"cmtab-#{@change.number}"}
           id={"cmtab-opts-#{@change.number}"}
           class="m4tab m4tab-opts"
+          disabled={not @options_enabled?}
         />
         <input
           type="radio"
           name={"cmtab-#{@change.number}"}
           id={"cmtab-info-#{@change.number}"}
           class="m4tab m4tab-info"
+          checked={not @channels_enabled?}
         />
         <div class="m3-tabs-bar" role="tablist">
-          <label for={"cmtab-chans-#{@change.number}"} class="m3-tab m3-tab-chans">Channels</label>
-          <label for={"cmtab-pkgs-#{@change.number}"} class="m3-tab m3-tab-pkgs">Packages</label>
-          <label for={"cmtab-opts-#{@change.number}"} class="m3-tab m3-tab-opts">Options</label>
+          <label
+            for={"cmtab-chans-#{@change.number}"}
+            class={["m3-tab m3-tab-chans", not @channels_enabled? && "is-disabled"]}
+          >
+            Channels
+          </label>
+          <label
+            for={"cmtab-pkgs-#{@change.number}"}
+            class={["m3-tab m3-tab-pkgs", not @packages_enabled? && "is-disabled"]}
+          >
+            Packages
+          </label>
+          <label
+            for={"cmtab-opts-#{@change.number}"}
+            class={["m3-tab m3-tab-opts", not @options_enabled? && "is-disabled"]}
+          >
+            Options
+          </label>
           <label for={"cmtab-info-#{@change.number}"} class="m3-tab m3-tab-info">Info</label>
         </div>
 
@@ -125,7 +144,7 @@ defmodule TrackerWeb.ChangeLive.Show do
 
         <div class="m3-panel m3-panel-pkgs">
           <section class="change-section">
-            <%= if @change.processing_status == :processed and @package_count > 0 do %>
+            <%= if @packages_enabled? do %>
               <div class="change-section-head">
                 <h2>
                   Affected packages <small class="muted">({@package_count})</small>
@@ -182,13 +201,7 @@ defmodule TrackerWeb.ChangeLive.Show do
             with the base and GitHub's file diff ballooned.)
           </p>
 
-          <section
-            :if={
-              @change.processing_status == :processed and not @change.files_over_limit and
-                @option_prefixes_top != []
-            }
-            class="change-section"
-          >
+          <section :if={@options_enabled?} class="change-section">
             <div class="change-section-head">
               <h2>
                 Affected options <small class="muted">({@option_total})</small>
@@ -374,6 +387,8 @@ defmodule TrackerWeb.ChangeLive.Show do
         PropagationTree.build(lifecycle_dag, mine_branch: lens_branch_name(socket.assigns[:lens]))
       end
 
+    channels_enabled? = change.state == :merged and lifecycle_dag.nodes != []
+
     socket
     |> assign(:page_title, "##{change.number} #{change.title}")
     |> assign(:change, change)
@@ -384,6 +399,7 @@ defmodule TrackerWeb.ChangeLive.Show do
     |> assign(:landed_count, landed_count)
     |> assign(:total_branches, total_branches)
     |> assign(:propagation_tree, propagation_tree)
+    |> assign(:channels_enabled?, channels_enabled?)
     |> load_packages(change.id)
     |> load_options(change.id)
   end
@@ -455,6 +471,10 @@ defmodule TrackerWeb.ChangeLive.Show do
     socket
     |> stream(:packages, page.results, reset: true)
     |> assign(:package_count, package_count)
+    |> assign(
+      :packages_enabled?,
+      socket.assigns.change.processing_status == :processed and package_count > 0
+    )
     |> assign(:pkg_has_prev?, tp.offset > 0)
     |> assign(:pkg_has_next?, page.more?)
     |> assign(:pkg_total_pages, total_pages)
@@ -481,10 +501,16 @@ defmodule TrackerWeb.ChangeLive.Show do
     namespace_total = length(prefixes)
     option_total = Enum.reduce(prefixes, 0, fn {_p, count}, acc -> acc + count end)
 
+    change = socket.assigns.change
+
+    options_enabled? =
+      change.processing_status == :processed and not change.files_over_limit and top != []
+
     socket
     |> assign(:option_prefixes_top, top)
     |> assign(:option_total, option_total)
     |> assign(:option_prefix_more, max(namespace_total - length(top), 0))
+    |> assign(:options_enabled?, options_enabled?)
   end
 
   defp lens_channel_revision_id(nil), do: nil
