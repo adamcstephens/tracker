@@ -427,6 +427,65 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
     end
   end
 
+  describe "default tab selection" do
+    test "defaults to Info when the PR is not merged", %{conn: conn} do
+      Tracker.Nixpkgs.Change.bulk_upsert_all([
+        %{
+          number: 6201,
+          title: "open pr",
+          state: :open,
+          author: "x",
+          url: "https://github.com/NixOS/nixpkgs/pull/6201",
+          base_ref: "master",
+          processing_status: :pending
+        }
+      ])
+
+      {:ok, _view, html} = live(conn, ~p"/changes/6201")
+
+      assert html =~
+               ~r/<input type="radio" name="cmtab-6201"[^>]*class="m4tab m4tab-info"[^>]*checked/
+
+      refute html =~
+               ~r/<input type="radio" name="cmtab-6201"[^>]*class="m4tab m4tab-chans"[^>]*checked/
+    end
+
+    test "defaults to Packages when package_search is in the URL", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/changes/6001?package_search=show")
+
+      assert html =~
+               ~r/<input type="radio" name="cmtab-6001"[^>]*class="m4tab m4tab-pkgs"[^>]*checked/
+
+      refute html =~
+               ~r/<input type="radio" name="cmtab-6001"[^>]*class="m4tab m4tab-chans"[^>]*checked/
+    end
+
+    test "ignores package_search default when packages are disabled", %{conn: conn} do
+      Tracker.Nixpkgs.Change.bulk_upsert_all([
+        %{
+          number: 6202,
+          title: "merged but no packages",
+          state: :merged,
+          author: "x",
+          url: "https://github.com/NixOS/nixpkgs/pull/6202",
+          base_ref: "master",
+          merge_commit_sha: "abc",
+          merged_at: ~U[2026-04-01 12:00:00Z],
+          package_count: 0,
+          processing_status: :processed
+        }
+      ])
+
+      {:ok, _view, html} = live(conn, ~p"/changes/6202?package_search=show")
+
+      refute html =~
+               ~r/<input type="radio" name="cmtab-6202"[^>]*class="m4tab m4tab-pkgs"[^>]*checked/
+
+      assert html =~
+               ~r/<input type="radio" name="cmtab-6202"[^>]*class="m4tab m4tab-chans"[^>]*checked/
+    end
+  end
+
   describe "live updates" do
     test "re-renders when the change is updated via notifier", %{conn: conn} do
       Tracker.Nixpkgs.Change.bulk_upsert_all([

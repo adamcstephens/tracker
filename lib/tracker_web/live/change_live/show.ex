@@ -88,7 +88,7 @@ defmodule TrackerWeb.ChangeLive.Show do
           name={"cmtab-#{@change.number}"}
           id={"cmtab-chans-#{@change.number}"}
           class="m4tab m4tab-chans"
-          checked={@channels_enabled?}
+          checked={@default_tab == :channels}
           disabled={not @channels_enabled?}
         />
         <input
@@ -96,6 +96,7 @@ defmodule TrackerWeb.ChangeLive.Show do
           name={"cmtab-#{@change.number}"}
           id={"cmtab-pkgs-#{@change.number}"}
           class="m4tab m4tab-pkgs"
+          checked={@default_tab == :packages}
           disabled={not @packages_enabled?}
         />
         <input
@@ -110,7 +111,7 @@ defmodule TrackerWeb.ChangeLive.Show do
           name={"cmtab-#{@change.number}"}
           id={"cmtab-info-#{@change.number}"}
           class="m4tab m4tab-info"
-          checked={not @channels_enabled?}
+          checked={@default_tab == :info}
         />
         <div class="m3-tabs-bar" role="tablist">
           <label
@@ -479,6 +480,20 @@ defmodule TrackerWeb.ChangeLive.Show do
     |> assign(:pkg_has_next?, page.more?)
     |> assign(:pkg_total_pages, total_pages)
     |> assign(:pkg_current_page, tp.page)
+    |> assign_default_tab()
+  end
+
+  defp assign_default_tab(socket) do
+    search_active? = (socket.assigns.table_params.search || "") != ""
+
+    default_tab =
+      cond do
+        search_active? and socket.assigns.packages_enabled? -> :packages
+        socket.assigns.channels_enabled? -> :channels
+        true -> :info
+      end
+
+    assign(socket, :default_tab, default_tab)
   end
 
   @option_prefix_cap 20
