@@ -1504,7 +1504,6 @@ dl.option-body dd {
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
-		background: linear-gradient(180deg, #f7faff 0%, var(--bg) 100%);
 		padding: 0.75rem 0.875rem;
 		margin-bottom: 0.75rem;
 	}
