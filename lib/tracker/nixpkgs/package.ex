@@ -38,7 +38,8 @@ defmodule Tracker.Nixpkgs.Package do
 
       filter expr(
                if not is_nil(^arg(:search)) and ^arg(:search) != "" do
-                 contains(attribute, ^arg(:search))
+                 fragment("word_similarity(?, ?) > 0.4", ^arg(:search), attribute) or
+                   contains(attribute, ^arg(:search))
                else
                  true
                end and
@@ -69,7 +70,8 @@ defmodule Tracker.Nixpkgs.Package do
       filter expr(
                exists(package_maintainers, maintainer_id == ^arg(:maintainer_id)) and
                  if not is_nil(^arg(:search)) and ^arg(:search) != "" do
-                   contains(attribute, ^arg(:search))
+                   fragment("word_similarity(?, ?) > 0.4", ^arg(:search), attribute) or
+                     contains(attribute, ^arg(:search))
                  else
                    true
                  end and
@@ -100,7 +102,8 @@ defmodule Tracker.Nixpkgs.Package do
       filter expr(
                exists(package_teams, team_id == ^arg(:team_id)) and
                  if not is_nil(^arg(:search)) and ^arg(:search) != "" do
-                   contains(attribute, ^arg(:search))
+                   fragment("word_similarity(?, ?) > 0.4", ^arg(:search), attribute) or
+                     contains(attribute, ^arg(:search))
                  else
                    true
                  end and
@@ -157,7 +160,8 @@ defmodule Tracker.Nixpkgs.Package do
       filter expr(
                exists(change_packages, change_id == ^arg(:change_id)) and
                  if not is_nil(^arg(:search)) and ^arg(:search) != "" do
-                   contains(attribute, ^arg(:search))
+                   fragment("word_similarity(?, ?) > 0.4", ^arg(:search), attribute) or
+                     contains(attribute, ^arg(:search))
                  else
                    true
                  end

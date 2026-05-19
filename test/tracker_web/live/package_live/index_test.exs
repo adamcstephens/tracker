@@ -185,6 +185,30 @@ defmodule TrackerWeb.PackageLive.IndexTest do
     assert dot_segment_idx < substring_idx
   end
 
+  describe "fuzzy matching" do
+    setup do
+      for name <- ["python311", "python312", "numpy", "numpy-stubs"] do
+        Tracker.Nixpkgs.Package
+        |> Ash.Changeset.for_create(:create, %{attribute: name})
+        |> Ash.create!()
+      end
+
+      :ok
+    end
+
+    test "period-separated version finds dot-stripped attribute (trk-211)", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/packages?search=python3.11")
+
+      assert html =~ "python311"
+    end
+
+    test "typo finds intended attribute", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/packages?search=nuympy")
+
+      assert html =~ "numpy"
+    end
+  end
+
   describe "discovered column" do
     test "renders 'Discovered' column header", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/packages")
