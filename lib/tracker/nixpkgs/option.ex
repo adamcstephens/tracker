@@ -29,7 +29,8 @@ defmodule Tracker.Nixpkgs.Option do
 
       filter expr(
                if not is_nil(^arg(:search)) and ^arg(:search) != "" do
-                 contains(name, ^arg(:search))
+                 fragment("word_similarity(?, ?) > 0.4", ^arg(:search), name) or
+                   contains(name, ^arg(:search))
                else
                  true
                end

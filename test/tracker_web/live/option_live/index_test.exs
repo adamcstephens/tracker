@@ -87,6 +87,13 @@ defmodule TrackerWeb.OptionLive.IndexTest do
     refute html =~ "programs.vim.enable"
   end
 
+  test "fuzzy search tolerates typos", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/options?search=nginxx")
+
+    assert html =~ "services.nginx.enable"
+    refute html =~ "programs.vim.enable"
+  end
+
   test "lens change reloads data", %{conn: conn} do
     channel2 =
       Channel.create!(%{
