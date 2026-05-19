@@ -15,7 +15,7 @@ defmodule Tracker.Nixpkgs.Change do
     define :list, args: [{:optional, :search}, {:optional, :base_ref}, {:optional, :channel_name}]
     define :get_by_number, action: :read, get_by: [:number]
     define :get_by_node_id, action: :read, get_by: [:node_id]
-    define :by_package, args: [:package_id]
+    define :by_package, args: [:package_id, {:optional, :channel_name}]
     define :by_files, args: [:file_ids, {:optional, :limit}]
     define :by_maintainer_github_id, args: [:github_id, {:optional, :channel_name}]
     define :update_package_count
@@ -75,6 +75,7 @@ defmodule Tracker.Nixpkgs.Change do
 
     read :by_package do
       argument :package_id, :integer, allow_nil?: false
+      argument :channel_name, :string
 
       pagination do
         offset? true
@@ -83,7 +84,15 @@ defmodule Tracker.Nixpkgs.Change do
       end
 
       prepare build(sort: [number: :desc])
-      filter expr(exists(change_packages, package_id == ^arg(:package_id)))
+
+      filter expr(
+               exists(change_packages, package_id == ^arg(:package_id)) and
+                 if not is_nil(^arg(:channel_name)) do
+                   exists(change_branches, branch_name == ^arg(:channel_name))
+                 else
+                   true
+                 end
+             )
     end
 
     read :by_files do
