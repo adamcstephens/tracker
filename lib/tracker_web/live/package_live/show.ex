@@ -302,7 +302,6 @@ defmodule TrackerWeb.PackageLive.Show do
         load: [:maintainers, :teams, :options]
       )
 
-    recent_changes = load_recent_changes(package.id)
     family_siblings = load_family_siblings(package)
     variant_siblings = load_variant_siblings(package)
     option_ids = Enum.map(package.options, & &1.id)
@@ -331,7 +330,6 @@ defmodule TrackerWeb.PackageLive.Show do
      socket
      |> assign(:page_title, package.attribute)
      |> assign(:package, package)
-     |> assign(:recent_changes, recent_changes)
      |> assign(:family_siblings, family_siblings)
      |> assign(:variant_siblings, variant_siblings)
      |> assign(:option_revisions, option_revisions)
@@ -348,7 +346,7 @@ defmodule TrackerWeb.PackageLive.Show do
 
   @impl true
   def handle_info(%Ash.Notifier.Notification{resource: Tracker.Nixpkgs.Change}, socket) do
-    {:noreply, assign(socket, :recent_changes, load_recent_changes(socket.assigns.package.id))}
+    {:noreply, load_revision_data(socket)}
   end
 
   @impl true
@@ -384,8 +382,10 @@ defmodule TrackerWeb.PackageLive.Show do
     version_filter = socket.assigns.version_filter
     all_revisions? = socket.assigns.all_revisions?
     channel_id = TrackerWeb.Lens.channel_id(socket.assigns.lens)
+    channel_name = TrackerWeb.Lens.channel_name(socket.assigns.lens)
 
-    package_events = load_package_events(package_id)
+    recent_changes = load_recent_changes(package_id, channel_name)
+    package_events = load_package_events(package_id, channel_id)
 
     {revisions, total_count, has_more?} =
       if all_revisions? do
@@ -417,6 +417,7 @@ defmodule TrackerWeb.PackageLive.Show do
     total_pages = ceil(total_count / tp.page_size)
 
     socket
+    |> assign(:recent_changes, recent_changes)
     |> assign(:package_events, package_events)
     |> assign(:revisions, revisions)
     |> assign(:has_prev_page?, tp.offset > 0)
@@ -498,8 +499,8 @@ defmodule TrackerWeb.PackageLive.Show do
     %{result | results: loaded_results}
   end
 
-  defp load_recent_changes(package_id) do
-    Tracker.Nixpkgs.Change.by_package!(package_id, page: [limit: 10]).results
+  defp load_recent_changes(package_id, channel_name) do
+    Tracker.Nixpkgs.Change.by_package!(package_id, channel_name, page: [limit: 10]).results
   end
 
   defp load_family_siblings(%{package_family_id: nil}), do: []
@@ -514,8 +515,8 @@ defmodule TrackerWeb.PackageLive.Show do
     Tracker.Nixpkgs.Package.variant_siblings!(package.package_variant_group_id, package.id)
   end
 
-  defp load_package_events(package_id) do
-    Tracker.Nixpkgs.PackageEvent.list_by_package!(package_id)
+  defp load_package_events(package_id, channel_id) do
+    Tracker.Nixpkgs.PackageEvent.list_by_package!(package_id, channel_id)
     |> Ash.load!(channel_revision: [:channel])
   end
 end

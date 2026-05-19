@@ -453,6 +453,129 @@ defmodule TrackerWeb.PackageLive.ShowTest do
     end
   end
 
+  describe "recent changes lens filtering" do
+    setup %{package: package} do
+      change_in =
+        Tracker.Nixpkgs.Change
+        |> Ash.Changeset.for_create(:bulk_upsert, %{
+          number: 70001,
+          title: "in-lens change",
+          state: :merged,
+          author: "alice"
+        })
+        |> Ash.create!()
+
+      change_out =
+        Tracker.Nixpkgs.Change
+        |> Ash.Changeset.for_create(:bulk_upsert, %{
+          number: 70002,
+          title: "out-of-lens change",
+          state: :merged,
+          author: "bob"
+        })
+        |> Ash.create!()
+
+      Tracker.Nixpkgs.ChangePackage
+      |> Ash.Changeset.for_create(:load, %{
+        change_id: change_in.id,
+        package_id: package.id,
+        type: :changed
+      })
+      |> Ash.create!()
+
+      Tracker.Nixpkgs.ChangePackage
+      |> Ash.Changeset.for_create(:load, %{
+        change_id: change_out.id,
+        package_id: package.id,
+        type: :changed
+      })
+      |> Ash.create!()
+
+      Tracker.Nixpkgs.ChangeBranch.create!(%{
+        change_id: change_in.id,
+        branch_name: "nixos-unstable"
+      })
+
+      Tracker.Nixpkgs.ChangeBranch.create!(%{
+        change_id: change_out.id,
+        branch_name: "nixos-24.11"
+      })
+
+      %{change_in: change_in, change_out: change_out}
+    end
+
+    test "default lens filters recent changes to the lens channel", %{
+      conn: conn,
+      package: package
+    } do
+      {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}")
+
+      assert html =~ "in-lens change"
+      refute html =~ "out-of-lens change"
+    end
+
+    test "lens swap reloads recent changes for the new channel", %{
+      conn: conn,
+      package: package,
+      channel_stable: channel_stable
+    } do
+      {:ok, view, _html} = live(conn, ~p"/packages/#{package.attribute}")
+
+      send(view.pid, {:set_lens, channel_stable.name, ""})
+      html = render(view)
+
+      assert html =~ "out-of-lens change"
+      refute html =~ "in-lens change"
+    end
+  end
+
+  describe "lifecycle events lens filtering" do
+    setup %{package: package, cr1: cr1, cr2: cr2} do
+      Tracker.Nixpkgs.PackageEvent
+      |> Ash.Changeset.for_create(:create, %{
+        type: :added,
+        package_id: package.id,
+        channel_revision_id: cr1.id
+      })
+      |> Ash.create!()
+
+      Tracker.Nixpkgs.PackageEvent
+      |> Ash.Changeset.for_create(:create, %{
+        type: :removed,
+        package_id: package.id,
+        channel_revision_id: cr2.id
+      })
+      |> Ash.create!()
+
+      :ok
+    end
+
+    test "default lens filters lifecycle events to the lens channel", %{
+      conn: conn,
+      package: package
+    } do
+      {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}")
+
+      assert html =~ "Lifecycle Events"
+      assert html =~ "added"
+      refute html =~ "removed"
+    end
+
+    test "lens swap reloads lifecycle events for the new channel", %{
+      conn: conn,
+      package: package,
+      channel_stable: channel_stable
+    } do
+      {:ok, view, _html} = live(conn, ~p"/packages/#{package.attribute}")
+
+      send(view.pid, {:set_lens, channel_stable.name, ""})
+      html = render(view)
+
+      assert html =~ "removed"
+      refute html =~ "added"
+    end
+  end
+
   defp version_order(html) do
     ~r/<td[^>]*>\s*(\d+\.\d+\.\d+)\s*<\/td>/
     |> Regex.scan(html)
