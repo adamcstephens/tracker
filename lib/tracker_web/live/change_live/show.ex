@@ -409,6 +409,17 @@ defmodule TrackerWeb.ChangeLive.Show do
   defp lens_branch_name(%{channel: %{name: name}}), do: name
   defp lens_branch_name(_), do: nil
 
+  defp rebuild_propagation_tree(socket) do
+    tree =
+      if socket.assigns.change.state == :merged do
+        PropagationTree.build(socket.assigns.lifecycle_dag,
+          mine_branch: lens_branch_name(socket.assigns[:lens])
+        )
+      end
+
+    assign(socket, :propagation_tree, tree)
+  end
+
   defp build_branch_links(change_branches) do
     for %{branch_name: name, channel_revision: %{revision: rev, channel: %{name: ch_name}}} <-
           change_branches,
@@ -550,7 +561,13 @@ defmodule TrackerWeb.ChangeLive.Show do
   @impl true
   def handle_info({:set_lens, channel_name, rev}, socket) do
     socket = TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)
-    {:noreply, load_options(socket, socket.assigns.change.id)}
+
+    socket =
+      socket
+      |> rebuild_propagation_tree()
+      |> load_options(socket.assigns.change.id)
+
+    {:noreply, socket}
   end
 
   def handle_info(
