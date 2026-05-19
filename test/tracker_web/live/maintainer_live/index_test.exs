@@ -33,4 +33,11 @@ defmodule TrackerWeb.MaintainerLive.IndexTest do
     assert html =~ "charlie"
     refute html =~ "alice"
   end
+
+  test "fuzzy search tolerates github handle typos", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/maintainers?search=chrlie")
+
+    assert html =~ "charlie"
+    refute html =~ "bob"
+  end
 end

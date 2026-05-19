@@ -35,7 +35,8 @@ defmodule Tracker.Nixpkgs.Maintainer do
 
       filter expr(
                if not is_nil(^arg(:search)) and ^arg(:search) != "" do
-                 contains(github, ^arg(:search))
+                 fragment("word_similarity(?, ?) > 0.4", ^arg(:search), github) or
+                   contains(github, ^arg(:search))
                else
                  true
                end
