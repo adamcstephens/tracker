@@ -30,6 +30,7 @@ defmodule Tracker.Nixpkgs.OptionRevision do
       end
 
       prepare build(sort: [option_name: :asc], load: [:option])
+      prepare Tracker.Nixpkgs.Preparations.OptionRevisionSortByRelevance
 
       filter expr(channel_revision_id == ^arg(:channel_revision_id))
 

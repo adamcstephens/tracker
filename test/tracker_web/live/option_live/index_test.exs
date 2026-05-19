@@ -94,6 +94,49 @@ defmodule TrackerWeb.OptionLive.IndexTest do
     refute html =~ "programs.vim.enable"
   end
 
+  test "dot-segment match outranks fuzzy substring matches", %{conn: conn, channel_revision: cr} do
+    inc_options = %{
+      "services.incron.enable" => %{
+        "declarations" => ["x"],
+        "description" => "",
+        "loc" => ["services", "incron", "enable"],
+        "readOnly" => false,
+        "type" => "boolean"
+      },
+      "services.discourse.mail.incoming.enable" => %{
+        "declarations" => ["x"],
+        "description" => "",
+        "loc" => ["services", "discourse", "mail", "incoming", "enable"],
+        "readOnly" => false,
+        "type" => "boolean"
+      },
+      "virtualisation.incus.enable" => %{
+        "declarations" => ["x"],
+        "description" => "",
+        "loc" => ["virtualisation", "incus", "enable"],
+        "readOnly" => false,
+        "type" => "boolean"
+      }
+    }
+
+    Fixtures.load_options(inc_options, cr)
+
+    {:ok, _view, html} = live(conn, ~p"/options?search=incus")
+
+    order = option_order(html)
+    incus_idx = Enum.find_index(order, &(&1 == "virtualisation.incus.enable"))
+    incron_idx = Enum.find_index(order, &(&1 == "services.incron.enable"))
+
+    assert incus_idx, "virtualisation.incus.enable not in results"
+    assert incron_idx == nil or incus_idx < incron_idx
+  end
+
+  defp option_order(html) do
+    ~r{<a[^>]*href="/options/([^"#]+)"[^>]*>\1</a>}
+    |> Regex.scan(html)
+    |> Enum.map(fn [_, name] -> name end)
+  end
+
   test "lens change reloads data", %{conn: conn} do
     channel2 =
       Channel.create!(%{
