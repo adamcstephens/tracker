@@ -1762,7 +1762,7 @@ dl.option-body dd {
 	}
 
 	.change-show .m4-tree li.is-mine > .m4-row .m4-node-name::after {
-		content: " · YOU";
+		content: " · Lens";
 		color: var(--accent);
 		font-family: var(--sans);
 		font-size: 0.59375rem;
