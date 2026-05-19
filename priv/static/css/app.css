@@ -107,6 +107,7 @@ h6 {
 	--accent-edge: rgba(58, 58, 204, 0.45);
 	--good: #007a3d;
 	--warn: #c46e1f;
+	--danger: #b3261e;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -128,6 +129,7 @@ h6 {
 		--accent-edge: rgba(128, 160, 255, 0.3);
 		--good: #36c692;
 		--warn: #f0a868;
+		--danger: #f28a82;
 	}
 }
 
@@ -1835,4 +1837,45 @@ dl.option-body dd {
 		overflow-wrap: anywhere;
 		min-width: 0;
 	}
+}
+
+/* ========================================================================
+   Badges — inline status pills.
+   ======================================================================== */
+
+.badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.25rem;
+	padding: 0.0625rem 0.5rem;
+	border-radius: 999px;
+	font-size: 0.75rem;
+	font-weight: 500;
+	line-height: 1.4;
+	border: 1px solid transparent;
+	white-space: nowrap;
+}
+
+.badge--neutral {
+	background: var(--surface-2);
+	color: var(--text-2);
+	border-color: var(--line);
+}
+
+.badge--ok {
+	background: color-mix(in srgb, var(--good) 12%, transparent);
+	color: var(--good);
+	border-color: color-mix(in srgb, var(--good) 35%, transparent);
+}
+
+.badge--warn {
+	background: color-mix(in srgb, var(--warn) 12%, transparent);
+	color: var(--warn);
+	border-color: color-mix(in srgb, var(--warn) 35%, transparent);
+}
+
+.badge--danger {
+	background: color-mix(in srgb, var(--danger) 12%, transparent);
+	color: var(--danger);
+	border-color: color-mix(in srgb, var(--danger) 35%, transparent);
 }

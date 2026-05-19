@@ -22,6 +22,14 @@ defmodule TrackerWeb.ChannelLive.Index do
     >
       <:col :let={{_id, channel}} field={:name} label="Channel" sortable>
         <.link navigate={~p"/channels/#{channel.name}"}>{channel.name}</.link>
+        <.link
+          :if={channel.build_problem?}
+          href={hydra_jobset_url(channel)}
+          target="_blank"
+          rel="noopener"
+        >
+          <.badge variant={:danger}>Build problem</.badge>
+        </.link>
       </:col>
       <:col :let={{_id, channel}} field={:count} label="Revisions" sortable>
         {channel.count}
@@ -75,7 +83,7 @@ defmodule TrackerWeb.ChannelLive.Index do
   end
 
   defp load_channels(sort_by, sort_dir) do
-    Tracker.Nixpkgs.Channel.read!()
+    Tracker.Nixpkgs.Channel.read!(load: [:build_problem?])
     |> Enum.map(fn channel ->
       revisions = Tracker.Nixpkgs.ChannelRevision.by_channel!(channel.id)
       latest = revisions |> Enum.max_by(& &1.released_at, DateTime, fn -> nil end)
@@ -84,11 +92,20 @@ defmodule TrackerWeb.ChannelLive.Index do
         id: channel.name,
         name: channel.name,
         count: length(revisions),
-        latest_release: latest && latest.released_at
+        latest_release: latest && latest.released_at,
+        build_problem?: channel.build_problem?,
+        hydra_project: channel.hydra_project,
+        hydra_jobset: channel.hydra_jobset
       }
     end)
     |> sort_channels(sort_by, sort_dir)
   end
+
+  defp hydra_jobset_url(%{hydra_project: project, hydra_jobset: jobset})
+       when is_binary(project) and is_binary(jobset),
+       do: "https://hydra.nixos.org/jobset/#{project}/#{jobset}"
+
+  defp hydra_jobset_url(_), do: "https://hydra.nixos.org/"
 
   defp sort_channels(channels, :name, dir), do: sort_by_field(channels, & &1.name, dir)
   defp sort_channels(channels, :count, dir), do: sort_by_field(channels, & &1.count, dir)

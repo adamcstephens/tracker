@@ -18,6 +18,14 @@ defmodule TrackerWeb.ChannelLive.Show do
       {@channel}
       <:subtitle>Channel revisions</:subtitle>
       <:actions>
+        <.link
+          :if={@channel_resource.build_problem?}
+          href={"https://hydra.nixos.org/jobset/#{@channel_resource.hydra_project}/#{@channel_resource.hydra_jobset}"}
+          target="_blank"
+          rel="noopener"
+        >
+          <.badge variant={:danger}>Build problem</.badge>
+        </.link>
         <a href={"/feeds/channels/#{@channel}"} title="Atom feed">
           <img src="/images/feed.svg" alt="Atom feed" width="20" height="20" />
         </a>
@@ -103,7 +111,7 @@ defmodule TrackerWeb.ChannelLive.Show do
 
   @impl true
   def handle_params(%{"channel" => channel_name} = params, _url, socket) do
-    channel = Tracker.Nixpkgs.Channel.by_name!(channel_name)
+    channel = Tracker.Nixpkgs.Channel.by_name!(channel_name, load: [:build_problem?])
 
     if connected?(socket) && socket.assigns.subscribed_channel != channel_name do
       if socket.assigns.subscribed_channel do
