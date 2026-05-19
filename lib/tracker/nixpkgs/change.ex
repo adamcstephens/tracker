@@ -56,7 +56,9 @@ defmodule Tracker.Nixpkgs.Change do
 
       filter expr(
                if not is_nil(^arg(:search)) and ^arg(:search) != "" do
-                 contains(title, ^arg(:search)) or contains(author, ^arg(:search))
+                 fragment("word_similarity(?, ?) > 0.4", ^arg(:search), title) or
+                   fragment("word_similarity(?, ?) > 0.4", ^arg(:search), author) or
+                   contains(title, ^arg(:search)) or contains(author, ^arg(:search))
                else
                  true
                end and
