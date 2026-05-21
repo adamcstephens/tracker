@@ -36,7 +36,7 @@ defmodule Tracker.Nixpkgs.OptionRevision do
 
       filter expr(
                if ^arg(:search) != "" do
-                 fragment("word_similarity(?, ?) > 0.4", ^arg(:search), option.name) or
+                 fragment("strict_word_similarity(?, ?) > 0.4", ^arg(:search), option.name) or
                    contains(option.name, ^arg(:search))
                else
                  true

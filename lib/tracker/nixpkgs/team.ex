@@ -34,8 +34,8 @@ defmodule Tracker.Nixpkgs.Team do
 
       filter expr(
                if not is_nil(^arg(:search)) and ^arg(:search) != "" do
-                 fragment("word_similarity(?, ?) > 0.4", ^arg(:search), short_name) or
-                   fragment("word_similarity(?, ?) > 0.4", ^arg(:search), scope) or
+                 fragment("strict_word_similarity(?, ?) > 0.4", ^arg(:search), short_name) or
+                   fragment("strict_word_similarity(?, ?) > 0.4", ^arg(:search), scope) or
                    contains(short_name, ^arg(:search)) or contains(scope, ^arg(:search))
                else
                  true
