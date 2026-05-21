@@ -32,29 +32,25 @@ defmodule TrackerWeb.ChannelLive.ShowTest do
     %{cr1: cr1, cr2: cr2, channel: channel}
   end
 
-  test "updates when a new revision is broadcast", %{conn: conn, channel: channel} do
+  test "updates when a revision result is recorded", %{conn: conn, channel: channel} do
     {:ok, view, html} = live(conn, ~p"/channels/nixos-unstable")
 
     refute html =~ "fff999"
 
-    Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
-      channel_id: channel.id,
-      revision: "fff999ggg000111",
-      released_at: ~U[2026-03-20 10:00:00Z]
-    })
+    cr =
+      Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
+        channel_id: channel.id,
+        revision: "fff999ggg000111",
+        released_at: ~U[2026-03-20 10:00:00Z]
+      })
 
-    Phoenix.PubSub.broadcast(
-      Tracker.PubSub,
-      "channel_revisions:nixos-unstable",
-      {:channel_revision_completed,
-       %{channel_name: "nixos-unstable", revision: "fff999ggg000111"}}
-    )
+    Tracker.Nixpkgs.ChannelRevision.record_result!(cr, %{result: :success})
 
     html = render(view)
     assert html =~ "fff999g"
   end
 
-  test "updates when a revision creation is broadcast", %{conn: conn, channel: channel} do
+  test "updates when a new revision is created", %{conn: conn, channel: channel} do
     {:ok, view, html} = live(conn, ~p"/channels/nixos-unstable")
 
     refute html =~ "ccc888"
@@ -64,12 +60,6 @@ defmodule TrackerWeb.ChannelLive.ShowTest do
       revision: "ccc888ddd999eee",
       released_at: ~U[2026-03-22 10:00:00Z]
     })
-
-    Phoenix.PubSub.broadcast(
-      Tracker.PubSub,
-      "channel_revisions:nixos-unstable",
-      {:channel_revision_created, %{channel_name: "nixos-unstable", revision: "ccc888ddd999eee"}}
-    )
 
     html = render(view)
     assert html =~ "ccc888d"

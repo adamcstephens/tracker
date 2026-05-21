@@ -95,5 +95,47 @@ defmodule Tracker.Nixpkgs.HydraStatusFetcherTest do
       fetch = fn -> {:error, :boom} end
       assert {:error, :boom} = HydraStatusFetcher.run(fetch: fetch)
     end
+
+    test "skips the update when fetched values match stored attrs" do
+      channel =
+        Channel.create!(%{
+          name: "nixos-noop-#{System.unique_integer([:positive])}",
+          display_name: "NoOp",
+          status: :active,
+          is_stable: false
+        })
+
+      {:ok, _} =
+        Channel.update_hydra_status(channel, %{
+          hydra_build_failed?: true,
+          hydra_project: "nixpkgs",
+          hydra_jobset: "unstable",
+          hydra_exported_job: "tested"
+        })
+
+      {:ok, after_first} = Channel.by_name(channel.name)
+      first_checked_at = after_first.hydra_checked_at
+
+      Phoenix.PubSub.subscribe(Tracker.PubSub, "channels:hydra_status_updated")
+
+      fetch = fn ->
+        {:ok, [channel_status(channel.name)],
+         [
+           build_failure(channel.name, %{
+             failed?: true,
+             project: "nixpkgs",
+             jobset: "unstable",
+             exported_job: "tested"
+           })
+         ]}
+      end
+
+      assert {:ok, %{updated: 0, skipped: 1}} = HydraStatusFetcher.run(fetch: fetch)
+
+      refute_receive %Ash.Notifier.Notification{resource: Channel}, 50
+
+      {:ok, after_second} = Channel.by_name(channel.name)
+      assert after_second.hydra_checked_at == first_checked_at
+    end
   end
 end
