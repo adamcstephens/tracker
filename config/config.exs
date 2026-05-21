@@ -33,7 +33,7 @@ config :tracker, Oban,
        {"*/2 * * * *", Tracker.Nixpkgs.ChangeArtifactReconcileWorker},
        {"15 * * * *", Tracker.Nixpkgs.ChangeReconcileWorker},
        {"*/5 * * * *", Tracker.Nixpkgs.HydraStatusFetcher},
-       {"0 */4 * * *", Tracker.Ingestion.CronWorker, queue: :ingestion}
+       {"*/5 * * * *", Tracker.Ingestion.CronWorker, queue: :ingestion}
      ]}
   ]
 

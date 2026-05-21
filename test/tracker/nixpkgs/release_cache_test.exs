@@ -196,6 +196,84 @@ defmodule Tracker.Nixpkgs.ReleaseCacheTest do
                "zzz999" <> String.duplicate("0", 34)
              ) == nil
     end
+
+    test "put_pointer and get_pointer round-trip", %{pid: pid} do
+      pointer = %{
+        etag: ~s("abc"),
+        last_modified: "Wed, 21 May 2026 12:00:00 GMT",
+        revision: "rev1"
+      }
+
+      assert :ok = ReleaseCache.put_pointer(pid, "nixos-unstable", pointer)
+      assert ReleaseCache.get_pointer(pid, "nixos-unstable") == pointer
+    end
+
+    test "get_pointer returns nil for unknown channel", %{pid: pid} do
+      assert ReleaseCache.get_pointer(pid, "nonexistent") == nil
+    end
+
+    test "newest_revision returns the revision of the first release", %{pid: pid} do
+      newest = "ccc" <> String.duplicate("0", 37)
+
+      releases = [
+        %Release{
+          base_url: "https://example.com/c",
+          released_at: ~U[2025-03-03 10:00:00Z],
+          revision: newest
+        },
+        %Release{
+          base_url: "https://example.com/b",
+          released_at: ~U[2025-03-02 10:00:00Z],
+          revision: "bbb" <> String.duplicate("0", 37)
+        }
+      ]
+
+      ReleaseCache.put_releases(pid, "nixos-unstable", releases)
+      assert ReleaseCache.newest_revision(pid, "nixos-unstable") == newest
+    end
+
+    test "newest_revision returns nil for unknown or empty channel", %{pid: pid} do
+      assert ReleaseCache.newest_revision(pid, "nonexistent") == nil
+      ReleaseCache.put_releases(pid, "empty", [])
+      assert ReleaseCache.newest_revision(pid, "empty") == nil
+    end
+  end
+
+  describe "refresh_channel/2" do
+    setup do
+      pid = start_supervised!({ReleaseCache, name: nil})
+      %{pid: pid}
+    end
+
+    test "fetches a single channel's releases without touching others", %{pid: pid} do
+      preexisting = [
+        %Release{
+          base_url: "https://example.com/other",
+          released_at: ~U[2025-03-01 10:00:00Z],
+          revision: "other" <> String.duplicate("0", 35)
+        }
+      ]
+
+      ReleaseCache.put_releases(pid, "other-channel", preexisting)
+
+      fresh = [
+        %Release{
+          base_url: "https://releases.nixos.org/nixos/unstable/nixos-25.05pre-zzz",
+          released_at: ~U[2025-06-15 10:00:00Z],
+          revision: "zzz" <> String.duplicate("0", 37)
+        }
+      ]
+
+      releases_fetcher = fn "nixos-unstable" -> fresh end
+
+      assert :ok =
+               ReleaseCache.refresh_channel(pid, "nixos-unstable",
+                 releases_fetcher: releases_fetcher
+               )
+
+      assert ReleaseCache.get_releases(pid, "nixos-unstable") == fresh
+      assert ReleaseCache.get_releases(pid, "other-channel") == preexisting
+    end
   end
 
   describe "parse_releases/1" do

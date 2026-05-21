@@ -30,7 +30,8 @@ defmodule Tracker.Nixpkgs.Preparations.OptionRevisionSortByRelevance do
              ),
              type: :integer
            ), :asc},
-          {calc(fragment("strict_word_similarity(?, ?)", ^search, option.name), type: :float), :desc},
+          {calc(fragment("strict_word_similarity(?, ?)", ^search, option.name), type: :float),
+           :desc},
           {calc(fragment("LENGTH(?)", option.name), type: :integer), :asc}
         ],
         prepend?: true
