@@ -72,8 +72,41 @@ defmodule Tracker.Nixpkgs.ReleaseCache do
     GenServer.cast(server, :refresh)
   end
 
+  @doc """
+  Synchronously refreshes a single channel's release listing.
+
+  Options:
+    - `releases_fetcher` - 1-arity function from channel name to a list of
+      `%Release{}`. Defaults to fetching from S3. Useful in tests.
+  """
+  def refresh_channel(server \\ __MODULE__, channel, opts \\ []) do
+    GenServer.call(server, {:refresh_channel, channel, opts}, :timer.minutes(2))
+  end
+
   def put_releases(server \\ __MODULE__, channel, releases) do
     GenServer.call(server, {:put_releases, channel, releases})
+  end
+
+  @doc """
+  Returns the most recently released revision for `channel`, or `nil` if
+  the cache holds no releases for it.
+  """
+  def newest_revision(server \\ __MODULE__, channel) do
+    GenServer.call(server, {:newest_revision, channel})
+  end
+
+  @doc """
+  Returns the stored conditional-GET pointer for `channel`, or `nil`.
+
+  The pointer is a map of `%{etag, last_modified, revision}` populated by
+  the lightweight channel poll.
+  """
+  def get_pointer(server \\ __MODULE__, channel) do
+    GenServer.call(server, {:get_pointer, channel})
+  end
+
+  def put_pointer(server \\ __MODULE__, channel, pointer) do
+    GenServer.call(server, {:put_pointer, channel, pointer})
   end
 
   # S3 listing (extracted from ChannelWorker)
@@ -120,9 +153,9 @@ defmodule Tracker.Nixpkgs.ReleaseCache do
       Keyword.get(opts, :load, Application.get_env(:tracker, :release_cache_load, true))
 
     if load? do
-      {:ok, %{releases: %{}, refreshing: false}, {:continue, :load}}
+      {:ok, %{releases: %{}, pointers: %{}, refreshing: false}, {:continue, :load}}
     else
-      {:ok, %{releases: %{}, refreshing: false}}
+      {:ok, %{releases: %{}, pointers: %{}, refreshing: false}}
     end
   end
 
@@ -197,6 +230,31 @@ defmodule Tracker.Nixpkgs.ReleaseCache do
     {:reply, :ok, %{state | releases: Map.put(state.releases, channel, releases)}}
   end
 
+  def handle_call({:newest_revision, channel}, _from, state) do
+    revision =
+      case Map.get(state.releases, channel, []) do
+        [%Release{revision: rev} | _] -> rev
+        _ -> nil
+      end
+
+    {:reply, revision, state}
+  end
+
+  def handle_call({:get_pointer, channel}, _from, state) do
+    {:reply, Map.get(state.pointers, channel), state}
+  end
+
+  def handle_call({:put_pointer, channel, pointer}, _from, state) do
+    {:reply, :ok, %{state | pointers: Map.put(state.pointers, channel, pointer)}}
+  end
+
+  def handle_call({:refresh_channel, channel, opts}, _from, state) do
+    fetcher = Keyword.get(opts, :releases_fetcher, &fetch_and_parse/1)
+    existing = Map.get(state.releases, channel, [])
+    releases = channel |> fetcher.() |> merge_revisions(existing)
+    {:reply, :ok, %{state | releases: Map.put(state.releases, channel, releases)}}
+  end
+
   # Private
 
   defp start_async_refresh(state) do
@@ -223,16 +281,14 @@ defmodule Tracker.Nixpkgs.ReleaseCache do
     all_channels = Enum.uniq(active_names ++ Map.keys(current_releases))
 
     Map.new(all_channels, fn channel ->
-      releases =
-        channel
-        |> fetch_releases()
-        |> parse_releases()
-
       existing = Map.get(current_releases, channel, [])
-      releases = merge_revisions(releases, existing)
-
+      releases = channel |> fetch_and_parse() |> merge_revisions(existing)
       {channel, releases}
     end)
+  end
+
+  defp fetch_and_parse(channel) do
+    channel |> fetch_releases() |> parse_releases()
   end
 
   defp merge_revisions(fresh_releases, existing_releases) do
@@ -243,9 +299,10 @@ defmodule Tracker.Nixpkgs.ReleaseCache do
 
     Enum.map(fresh_releases, fn %Release{} = release ->
       revision =
-        case Map.get(existing_by_url, release.base_url) do
-          nil -> fetch_revision(req, release.base_url)
-          rev -> rev
+        cond do
+          release.revision != nil -> release.revision
+          rev = Map.get(existing_by_url, release.base_url) -> rev
+          true -> fetch_revision(req, release.base_url)
         end
 
       %Release{release | revision: revision}

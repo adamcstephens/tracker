@@ -5,11 +5,15 @@ defmodule Tracker.Ingestion.CronWorkerTest do
 
   require Logger
 
-  alias Tracker.Ingestion.{CronWorker, Pipeline, IngestionRun}
+  alias Tracker.Ingestion.{CronWorker, IngestionRun, Pipeline}
   alias Tracker.Nixpkgs.{Channel, ReleaseCache}
   alias Tracker.Nixpkgs.ReleaseCache.Release
 
   @cache_name :cron_worker_test_cache
+  @stub __MODULE__.Pointer
+
+  @old_revision "aaa1111" <> String.duplicate("0", 33)
+  @new_revision "ccc2222" <> String.duplicate("0", 33)
 
   setup do
     {:ok, _pid} = ReleaseCache.start_link(name: @cache_name, load: false)
@@ -22,12 +26,12 @@ defmodule Tracker.Ingestion.CronWorkerTest do
         is_stable: false
       })
 
-    # Seed a completed pipeline so sync_channel doesn't return :noop
+    # Seed a completed pipeline so PipelineStarter.sync_channel does not :noop
     run = IngestionRun.create!(%{type: :cron_update, started_at: DateTime.utc_now()})
 
     Pipeline.create!(%{
       channel_id: channel.id,
-      revision: "aaa1111" <> String.duplicate("0", 33),
+      revision: @old_revision,
       base_url: "https://releases.nixos.org/nixos/unstable/nixos-25.05pre-aaa1111",
       released_at: ~U[2025-06-01 00:00:00Z],
       active_steps: [:create_revision, :load_packages, :detect_package_events, :finalize],
@@ -37,66 +41,130 @@ defmodule Tracker.Ingestion.CronWorkerTest do
     |> Pipeline.start!()
     |> Pipeline.mark_completed!()
 
-    releases = [
-      %Release{
-        base_url: "https://releases.nixos.org/nixos/unstable/nixos-25.05pre-bbb2222",
-        released_at: ~U[2025-06-10 00:00:00Z],
-        revision: "bbb2222" <> String.duplicate("0", 33)
-      },
-      %Release{
-        base_url: "https://releases.nixos.org/nixos/unstable/nixos-25.05pre-aaa1111",
-        released_at: ~U[2025-06-01 00:00:00Z],
-        revision: "aaa1111" <> String.duplicate("0", 33)
-      }
-    ]
+    old_release = %Release{
+      base_url: "https://releases.nixos.org/nixos/unstable/nixos-25.05pre-aaa1111",
+      released_at: ~U[2025-06-01 00:00:00Z],
+      revision: @old_revision
+    }
 
-    ReleaseCache.put_releases(@cache_name, "nixos-unstable", releases)
+    ReleaseCache.put_releases(@cache_name, "nixos-unstable", [old_release])
 
-    {:ok, channel: channel}
+    Application.put_env(:tracker, :release_cache_name, @cache_name)
+    Application.put_env(:tracker, :channel_pointer_req_options, plug: {Req.Test, @stub})
+
+    on_exit(fn ->
+      Application.delete_env(:tracker, :release_cache_name)
+      Application.delete_env(:tracker, :channel_pointer_req_options)
+      Application.delete_env(:tracker, :release_cache_fetcher)
+    end)
+
+    {:ok, channel: channel, old_release: old_release}
   end
 
   describe "perform/1" do
-    test "syncs all active channels from the database", %{channel: channel} do
-      # Also create a retired channel that should NOT be synced
-      Channel.create!(%{
-        name: "nixos-retired",
-        display_name: "NixOS Retired",
-        status: :retired,
-        is_stable: false
-      })
+    test "304 from pointer is a noop", %{channel: channel} do
+      Req.Test.stub(@stub, fn conn ->
+        conn
+        |> Plug.Conn.put_resp_header("etag", ~s("etag-v1"))
+        |> Plug.Conn.send_resp(304, "")
+      end)
 
-      pipelines_before = length(Pipeline.for_channel!(channel.id))
-
-      assert :ok =
-               perform_job(CronWorker, %{}, queue: :ingestion)
-
-      # The active channel should have new pipeline(s) created
-      pipelines_after = length(Pipeline.for_channel!(channel.id))
-      assert pipelines_after > pipelines_before
+      before = length(Pipeline.for_channel!(channel.id))
+      assert :ok = perform_job(CronWorker, %{}, queue: :ingestion)
+      assert length(Pipeline.for_channel!(channel.id)) == before
     end
 
-    test "emits structured start/stop logs with channel and pipeline counts", %{channel: _channel} do
+    test "200 with unchanged revision updates pointer but does not sync", %{
+      channel: channel,
+      old_release: old_release
+    } do
+      Req.Test.stub(@stub, fn conn ->
+        conn
+        |> Plug.Conn.put_resp_header("etag", ~s("etag-v1"))
+        |> Plug.Conn.put_resp_header("last-modified", "Wed, 21 May 2026 12:00:00 GMT")
+        |> Plug.Conn.send_resp(200, old_release.revision <> "\n")
+      end)
+
+      before = length(Pipeline.for_channel!(channel.id))
+      assert :ok = perform_job(CronWorker, %{}, queue: :ingestion)
+      assert length(Pipeline.for_channel!(channel.id)) == before
+
+      pointer = ReleaseCache.get_pointer(@cache_name, "nixos-unstable")
+      assert pointer.revision == old_release.revision
+      assert pointer.etag == ~s("etag-v1")
+      assert pointer.last_modified == "Wed, 21 May 2026 12:00:00 GMT"
+    end
+
+    test "200 with new revision triggers refresh and creates a pipeline", %{channel: channel} do
+      new_release = %Release{
+        base_url: "https://releases.nixos.org/nixos/unstable/nixos-25.05pre-ccc2222",
+        released_at: ~U[2025-06-20 00:00:00Z],
+        revision: @new_revision
+      }
+
+      Application.put_env(
+        :tracker,
+        :release_cache_fetcher,
+        fn "nixos-unstable" -> [new_release] end
+      )
+
+      Req.Test.stub(@stub, fn conn ->
+        conn
+        |> Plug.Conn.put_resp_header("etag", ~s("etag-v2"))
+        |> Plug.Conn.send_resp(200, @new_revision <> "\n")
+      end)
+
+      before = length(Pipeline.for_channel!(channel.id))
+      assert :ok = perform_job(CronWorker, %{}, queue: :ingestion)
+      assert length(Pipeline.for_channel!(channel.id)) == before + 1
+
+      assert ReleaseCache.get_pointer(@cache_name, "nixos-unstable").revision == @new_revision
+    end
+
+    test "sends If-None-Match and If-Modified-Since from stored pointer" do
+      ReleaseCache.put_pointer(@cache_name, "nixos-unstable", %{
+        etag: ~s("prev-etag"),
+        last_modified: "Tue, 20 May 2026 00:00:00 GMT",
+        revision: @old_revision
+      })
+
+      test_pid = self()
+
+      Req.Test.stub(@stub, fn conn ->
+        send(test_pid, {:headers, conn.req_headers})
+        Plug.Conn.send_resp(conn, 304, "")
+      end)
+
+      assert :ok = perform_job(CronWorker, %{}, queue: :ingestion)
+
+      assert_receive {:headers, headers}
+      assert {"if-none-match", ~s("prev-etag")} in headers
+      assert {"if-modified-since", "Tue, 20 May 2026 00:00:00 GMT"} in headers
+    end
+
+    test "logs summary counts", %{old_release: old_release} do
       Logger.put_module_level(CronWorker, :info)
       on_exit(fn -> Logger.delete_module_level(CronWorker) end)
+
+      Req.Test.stub(@stub, fn conn ->
+        Plug.Conn.send_resp(conn, 200, old_release.revision <> "\n")
+      end)
 
       log =
         capture_log(fn ->
           assert :ok = perform_job(CronWorker, %{}, queue: :ingestion)
         end)
 
-      assert log =~ ~s(msg: "ingestion cron started")
+      assert log =~ ~s(msg: "channel poll started")
       assert log =~ "active_channels: 1"
-      assert log =~ ~s(msg: "ingestion cron finished")
-      assert log =~ "outcome: :ok"
+      assert log =~ ~s(msg: "channel poll finished")
+      assert log =~ ~r/unchanged: \d+/
+      assert log =~ ~r/changed: \d+/
       assert log =~ ~r/created: \d+/
-      assert log =~ ~r/noop: \d+/
       assert log =~ ~r/duration_ms: \d+/
     end
 
     test "succeeds with no active channels" do
-      # Delete the channel created in setup by retiring it
-      # We can't easily delete Ash resources, so create a fresh test
-      # Just verify the worker doesn't crash with empty results
       Tracker.Repo.delete_all(Tracker.Ingestion.Pipeline)
       Tracker.Repo.delete_all(Tracker.Ingestion.IngestionRun)
       Tracker.Repo.delete_all(Tracker.Nixpkgs.Channel)
