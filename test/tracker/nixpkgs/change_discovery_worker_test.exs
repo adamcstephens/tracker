@@ -517,6 +517,24 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorkerTest do
     end
   end
 
+  describe "to_oban_result/1" do
+    test "translates an error tuple into a cancel tuple so Oban does not retry" do
+      reason = %GitHub.Error{
+        reason: :error,
+        code: 502,
+        message: "GitHub GraphQL server error (502)"
+      }
+
+      assert {:cancel, ^reason} = ChangeDiscoveryWorker.to_oban_result({:error, reason})
+    end
+
+    test "passes :ok, {:ok, _}, and {:snooze, _} through unchanged" do
+      assert :ok = ChangeDiscoveryWorker.to_oban_result(:ok)
+      assert {:ok, 7} = ChangeDiscoveryWorker.to_oban_result({:ok, 7})
+      assert {:snooze, 30} = ChangeDiscoveryWorker.to_oban_result({:snooze, 30})
+    end
+  end
+
   describe "checkpoint/0" do
     test "returns max gh_updated_at minus 60s overlap when newer than the 90-day floor" do
       Change.bulk_upsert_all([

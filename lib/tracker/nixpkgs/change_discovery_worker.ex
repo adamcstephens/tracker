@@ -31,7 +31,11 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorker do
   @max_cycles 100
 
   @impl Oban.Worker
-  def perform(%Oban.Job{}), do: run([])
+  def perform(%Oban.Job{}), do: run([]) |> to_oban_result()
+
+  @doc false
+  def to_oban_result({:error, reason}), do: {:cancel, reason}
+  def to_oban_result(other), do: other
 
   @doc """
   Runs discovery, paginating through new/updated PRs since the current checkpoint.
