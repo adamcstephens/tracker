@@ -39,14 +39,6 @@ defmodule Tracker.Ingestion.Steps.CreateRevision do
 
     Tracker.Ingestion.Pipeline.set_channel_revision_id!(pipeline, channel_revision.id)
 
-    channel = Ash.get!(Tracker.Nixpkgs.Channel, pipeline.channel_id)
-
-    Phoenix.PubSub.broadcast(
-      Tracker.PubSub,
-      "channel_revisions:#{channel.name}",
-      {:channel_revision_created, %{channel_name: channel.name, revision: pipeline.revision}}
-    )
-
     %{} |> ChangeBranchDetectionWorker.new() |> Oban.insert!()
 
     %{channel_revision_id: channel_revision.id}

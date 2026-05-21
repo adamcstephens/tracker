@@ -46,7 +46,38 @@ defmodule TrackerWeb.ChannelLive.Index do
 
   @impl true
   def mount(_params, _session, socket) do
+    if connected?(socket) do
+      Phoenix.PubSub.subscribe(Tracker.PubSub, "channels:hydra_status_updated")
+      Phoenix.PubSub.subscribe(Tracker.PubSub, "channel_revisions:any:created")
+      Phoenix.PubSub.subscribe(Tracker.PubSub, "channel_revisions:any:completed")
+    end
+
     {:ok, assign_new(socket, :current_user, fn -> nil end)}
+  end
+
+  @impl true
+  def handle_info(
+        %Ash.Notifier.Notification{resource: Tracker.Nixpkgs.Channel, data: channel},
+        socket
+      ) do
+    {:noreply, stream_insert(socket, :channels, channel_row(channel))}
+  end
+
+  def handle_info(
+        %Ash.Notifier.Notification{
+          resource: Tracker.Nixpkgs.ChannelRevision,
+          data: %{channel_id: channel_id}
+        },
+        socket
+      ) do
+    case Ash.get(Tracker.Nixpkgs.Channel, channel_id, load: [:build_problem?]) do
+      {:ok, channel} -> {:noreply, stream_insert(socket, :channels, channel_row(channel))}
+      _ -> {:noreply, socket}
+    end
+  end
+
+  def handle_info({:set_lens, channel_name, rev}, socket) do
+    {:noreply, TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)}
   end
 
   @impl true
@@ -84,21 +115,23 @@ defmodule TrackerWeb.ChannelLive.Index do
 
   defp load_channels(sort_by, sort_dir) do
     Tracker.Nixpkgs.Channel.read!(load: [:build_problem?])
-    |> Enum.map(fn channel ->
-      revisions = Tracker.Nixpkgs.ChannelRevision.by_channel!(channel.id)
-      latest = revisions |> Enum.max_by(& &1.released_at, DateTime, fn -> nil end)
-
-      %{
-        id: channel.name,
-        name: channel.name,
-        count: length(revisions),
-        latest_release: latest && latest.released_at,
-        build_problem?: channel.build_problem?,
-        hydra_project: channel.hydra_project,
-        hydra_jobset: channel.hydra_jobset
-      }
-    end)
+    |> Enum.map(&channel_row/1)
     |> sort_channels(sort_by, sort_dir)
+  end
+
+  defp channel_row(channel) do
+    revisions = Tracker.Nixpkgs.ChannelRevision.by_channel!(channel.id)
+    latest = Enum.max_by(revisions, & &1.released_at, DateTime, fn -> nil end)
+
+    %{
+      id: channel.name,
+      name: channel.name,
+      count: length(revisions),
+      latest_release: latest && latest.released_at,
+      build_problem?: channel.build_problem?,
+      hydra_project: channel.hydra_project,
+      hydra_jobset: channel.hydra_jobset
+    }
   end
 
   defp hydra_jobset_url(%{hydra_project: project, hydra_jobset: jobset})
@@ -115,9 +148,4 @@ defmodule TrackerWeb.ChannelLive.Index do
 
   defp sort_by_field(channels, fun, :asc), do: Enum.sort_by(channels, fun, &<=/2)
   defp sort_by_field(channels, fun, :desc), do: Enum.sort_by(channels, fun, &>=/2)
-
-  @impl true
-  def handle_info({:set_lens, channel_name, rev}, socket) do
-    {:noreply, TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)}
-  end
 end

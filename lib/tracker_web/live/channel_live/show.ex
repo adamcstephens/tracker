@@ -106,22 +106,28 @@ defmodule TrackerWeb.ChannelLive.Show do
      socket
      |> assign_new(:current_user, fn -> nil end)
      |> assign(:selected_revisions, [])
-     |> assign(:subscribed_channel, nil)}
+     |> assign(:subscribed_channel_id, nil)}
   end
 
   @impl true
   def handle_params(%{"channel" => channel_name} = params, _url, socket) do
     channel = Tracker.Nixpkgs.Channel.by_name!(channel_name, load: [:build_problem?])
 
-    if connected?(socket) && socket.assigns.subscribed_channel != channel_name do
-      if socket.assigns.subscribed_channel do
+    if connected?(socket) && socket.assigns.subscribed_channel_id != channel.id do
+      if socket.assigns.subscribed_channel_id do
         Phoenix.PubSub.unsubscribe(
           Tracker.PubSub,
-          "channel_revisions:#{socket.assigns.subscribed_channel}"
+          "channel_revisions:#{socket.assigns.subscribed_channel_id}:created"
+        )
+
+        Phoenix.PubSub.unsubscribe(
+          Tracker.PubSub,
+          "channel_revisions:#{socket.assigns.subscribed_channel_id}:completed"
         )
       end
 
-      Phoenix.PubSub.subscribe(Tracker.PubSub, "channel_revisions:#{channel_name}")
+      Phoenix.PubSub.subscribe(Tracker.PubSub, "channel_revisions:#{channel.id}:created")
+      Phoenix.PubSub.subscribe(Tracker.PubSub, "channel_revisions:#{channel.id}:completed")
     end
 
     tp = TableParams.from_params(params, @table_opts)
@@ -134,7 +140,7 @@ defmodule TrackerWeb.ChannelLive.Show do
      |> assign(:channel, channel_name)
      |> assign(:channel_resource, channel)
      |> assign(:table_params, tp)
-     |> assign(:subscribed_channel, channel_name)
+     |> assign(:subscribed_channel_id, channel.id)
      |> assign(:lens, lens)
      |> assign(:page_search, %PageSearch{
        mode: :inert,
@@ -144,8 +150,10 @@ defmodule TrackerWeb.ChannelLive.Show do
   end
 
   @impl true
-  def handle_info({event, _payload}, socket)
-      when event in [:channel_revision_created, :channel_revision_completed] do
+  def handle_info(
+        %Ash.Notifier.Notification{resource: Tracker.Nixpkgs.ChannelRevision},
+        socket
+      ) do
     {:noreply, assign_revisions(socket, socket.assigns.channel_resource.id)}
   end
 

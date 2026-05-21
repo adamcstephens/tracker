@@ -72,22 +72,22 @@ defmodule TrackerWeb.ChannelLive.RevisionShow do
     {:ok,
      socket
      |> assign_new(:current_user, fn -> nil end)
-     |> assign(:subscribed_channel, nil)}
+     |> assign(:subscribed_channel_id, nil)}
   end
 
   @impl true
   def handle_params(%{"channel" => channel_name, "revision" => rev_hash} = params, _url, socket) do
     channel = Tracker.Nixpkgs.Channel.by_name!(channel_name)
 
-    if connected?(socket) && socket.assigns.subscribed_channel != channel_name do
-      if socket.assigns.subscribed_channel do
+    if connected?(socket) && socket.assigns.subscribed_channel_id != channel.id do
+      if socket.assigns.subscribed_channel_id do
         Phoenix.PubSub.unsubscribe(
           Tracker.PubSub,
-          "channel_revisions:#{socket.assigns.subscribed_channel}"
+          "channel_revisions:#{socket.assigns.subscribed_channel_id}:completed"
         )
       end
 
-      Phoenix.PubSub.subscribe(Tracker.PubSub, "channel_revisions:#{channel_name}")
+      Phoenix.PubSub.subscribe(Tracker.PubSub, "channel_revisions:#{channel.id}:completed")
     end
 
     revision = ChannelRevision.find_by_channel_hash!(channel.id, rev_hash)
@@ -98,7 +98,7 @@ defmodule TrackerWeb.ChannelLive.RevisionShow do
      socket
      |> assign(:channel, channel_name)
      |> assign(:channel_id, channel.id)
-     |> assign(:subscribed_channel, channel_name)
+     |> assign(:subscribed_channel_id, channel.id)
      |> assign(:lens, lens)
      |> assign(:page_search, %PageSearch{
        mode: :inert,
@@ -108,7 +108,10 @@ defmodule TrackerWeb.ChannelLive.RevisionShow do
   end
 
   @impl true
-  def handle_info({:channel_revision_completed, _payload}, socket) do
+  def handle_info(
+        %Ash.Notifier.Notification{resource: ChannelRevision, action: %{name: :record_result}},
+        socket
+      ) do
     revision =
       ChannelRevision.find_by_channel_hash!(
         socket.assigns.channel_id,

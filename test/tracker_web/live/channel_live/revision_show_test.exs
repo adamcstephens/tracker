@@ -193,7 +193,7 @@ defmodule TrackerWeb.ChannelLive.RevisionShowTest do
     assert html =~ "https://github.com/NixOS/nixpkgs/commit/#{cr2.revision}"
   end
 
-  test "updates result when channel_revision_completed is broadcast", %{
+  test "updates result when the revision result is recorded", %{
     conn: conn,
     cr2: cr2
   } do
@@ -204,14 +204,7 @@ defmodule TrackerWeb.ChannelLive.RevisionShowTest do
     refute html =~ "Success"
     assert html =~ "Result: -"
 
-    # Simulate finalize setting the result
-    Ash.update!(Ash.Changeset.for_update(cr2, :record_result, %{result: :success}))
-
-    Phoenix.PubSub.broadcast(
-      Tracker.PubSub,
-      "channel_revisions:nixos-unstable",
-      {:channel_revision_completed, %{channel_name: "nixos-unstable", revision: cr2.revision}}
-    )
+    Tracker.Nixpkgs.ChannelRevision.record_result!(cr2, %{result: :success})
 
     html = render(view)
     assert html =~ "Result: Success"

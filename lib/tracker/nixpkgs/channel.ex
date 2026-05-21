@@ -1,5 +1,9 @@
 defmodule Tracker.Nixpkgs.Channel do
-  use Ash.Resource, otp_app: :tracker, domain: Tracker.Nixpkgs, data_layer: AshPostgres.DataLayer
+  use Ash.Resource,
+    otp_app: :tracker,
+    domain: Tracker.Nixpkgs,
+    data_layer: AshPostgres.DataLayer,
+    notifiers: [Ash.Notifier.PubSub]
 
   postgres do
     table "channels"
@@ -63,6 +67,14 @@ defmodule Tracker.Nixpkgs.Channel do
 
       change set_attribute(:hydra_checked_at, &DateTime.utc_now/0)
     end
+  end
+
+  pub_sub do
+    module Phoenix.PubSub
+    name Tracker.PubSub
+    prefix "channels"
+
+    publish :update_hydra_status, "hydra_status_updated"
   end
 
   attributes do

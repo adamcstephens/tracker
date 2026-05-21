@@ -321,7 +321,7 @@ defmodule TrackerWeb.PackageLive.Show do
       if socket.assigns.lens do
         Phoenix.PubSub.subscribe(
           Tracker.PubSub,
-          "channel_revisions:#{socket.assigns.lens.channel.name}"
+          "channel_revisions:#{socket.assigns.lens.channel.id}:completed"
         )
       end
     end
@@ -350,7 +350,13 @@ defmodule TrackerWeb.PackageLive.Show do
   end
 
   @impl true
-  def handle_info({:channel_revision_completed, _payload}, socket) do
+  def handle_info(
+        %Ash.Notifier.Notification{
+          resource: Tracker.Nixpkgs.ChannelRevision,
+          action: %{name: :record_result}
+        },
+        socket
+      ) do
     {:noreply, load_revision_data(socket)}
   end
 

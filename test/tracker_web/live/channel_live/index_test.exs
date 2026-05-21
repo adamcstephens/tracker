@@ -78,4 +78,39 @@ defmodule TrackerWeb.ChannelLive.IndexTest do
     {:ok, _view, html} = live(conn, ~p"/channels")
     refute html =~ "Build problem"
   end
+
+  test "Build problem badge appears live without a reload", %{conn: conn} do
+    {:ok, view, html} = live(conn, ~p"/channels")
+    refute html =~ "Build problem"
+
+    channel = Channel.by_name!("nixos-unstable")
+
+    {:ok, _} =
+      Channel.update_hydra_status(channel, %{
+        hydra_build_failed?: true,
+        hydra_project: "nixos",
+        hydra_jobset: "unstable",
+        hydra_exported_job: "tested"
+      })
+
+    html = render(view)
+    assert html =~ "Build problem"
+    assert html =~ "https://hydra.nixos.org/jobset/nixos/unstable"
+  end
+
+  test "revision count and latest release update live when a revision is created", %{conn: conn} do
+    {:ok, view, html} = live(conn, ~p"/channels")
+    refute html =~ "2026-04-02"
+
+    channel = Channel.by_name!("nixos-unstable")
+
+    Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
+      channel_id: channel.id,
+      revision: "live111aaa222333",
+      released_at: ~U[2026-04-02 09:00:00Z]
+    })
+
+    html = render(view)
+    assert html =~ "2026-04-02"
+  end
 end

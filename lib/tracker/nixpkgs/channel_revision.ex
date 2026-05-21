@@ -1,5 +1,9 @@
 defmodule Tracker.Nixpkgs.ChannelRevision do
-  use Ash.Resource, otp_app: :tracker, domain: Tracker.Nixpkgs, data_layer: AshPostgres.DataLayer
+  use Ash.Resource,
+    otp_app: :tracker,
+    domain: Tracker.Nixpkgs,
+    data_layer: AshPostgres.DataLayer,
+    notifiers: [Ash.Notifier.PubSub]
 
   postgres do
     table "channel_revisions"
@@ -131,6 +135,15 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
 
       filter expr(fragment("? LIKE ? || '%'", revision, ^arg(:hash)))
     end
+  end
+
+  pub_sub do
+    module Phoenix.PubSub
+    name Tracker.PubSub
+    prefix "channel_revisions"
+
+    publish :create, [[:channel_id, "any"], "created"]
+    publish :record_result, [[:channel_id, "any"], "completed"]
   end
 
   attributes do

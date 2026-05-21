@@ -66,7 +66,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
     }
   end
 
-  test "updates when a new revision is broadcast", %{
+  test "updates when a revision result is recorded for the lens channel", %{
     conn: conn,
     package: package,
     channel_unstable: channel_unstable
@@ -90,12 +90,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
     })
     |> Ash.create!()
 
-    Phoenix.PubSub.broadcast(
-      Tracker.PubSub,
-      "channel_revisions:nixos-unstable",
-      {:channel_revision_completed,
-       %{channel_name: "nixos-unstable", revision: "new111aaa222333"}}
-    )
+    Tracker.Nixpkgs.ChannelRevision.record_result!(cr3, %{result: :success})
 
     html = render(view)
     assert html =~ "3.0.0"

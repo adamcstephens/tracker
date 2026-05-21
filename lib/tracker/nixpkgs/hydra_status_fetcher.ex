@@ -43,15 +43,19 @@ defmodule Tracker.Nixpkgs.HydraStatusFetcher do
         Enum.reduce(failures_by_channel, {0, 0}, fn {channel_name, failure}, {u, s} ->
           case Channel.by_name(channel_name) do
             {:ok, channel} ->
-              {:ok, _} =
-                Channel.update_hydra_status(channel, %{
-                  hydra_build_failed?: failure.failed?,
-                  hydra_project: failure.project,
-                  hydra_jobset: failure.jobset,
-                  hydra_exported_job: failure.exported_job
-                })
+              if changed?(channel, failure) do
+                {:ok, _} =
+                  Channel.update_hydra_status(channel, %{
+                    hydra_build_failed?: failure.failed?,
+                    hydra_project: failure.project,
+                    hydra_jobset: failure.jobset,
+                    hydra_exported_job: failure.exported_job
+                  })
 
-              {u + 1, s}
+                {u + 1, s}
+              else
+                {u, s + 1}
+              end
 
             {:error, _} ->
               {u, s + 1}
@@ -61,6 +65,13 @@ defmodule Tracker.Nixpkgs.HydraStatusFetcher do
       Logger.info(msg: "hydra status fetch complete", updated: updated, skipped: skipped)
       {:ok, %{updated: updated, skipped: skipped}}
     end
+  end
+
+  defp changed?(channel, failure) do
+    channel.hydra_build_failed? != failure.failed? or
+      channel.hydra_project != failure.project or
+      channel.hydra_jobset != failure.jobset or
+      channel.hydra_exported_job != failure.exported_job
   end
 
   defp default_fetch do
