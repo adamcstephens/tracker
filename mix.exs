@@ -104,7 +104,7 @@ defmodule Tracker.MixProject do
         "esbuild tracker --minify",
         "phx.digest"
       ],
-      "phx.routes": ["phx.routes", "ash_json_api.routes", "ash_authentication.phoenix.routes"]
+      "phx.routes": ["phx.routes", "ash_authentication.phoenix.routes"]
     ]
   end
 

@@ -3,7 +3,8 @@ defmodule Tracker.Nixpkgs.Channel do
     otp_app: :tracker,
     domain: Tracker.Nixpkgs,
     data_layer: AshPostgres.DataLayer,
-    notifiers: [Ash.Notifier.PubSub]
+    notifiers: [Ash.Notifier.PubSub],
+    extensions: [AshAdmin.Resource]
 
   postgres do
     table "channels"

@@ -80,6 +80,14 @@
               Teams
             </.link>
           </li>
+          <li :if={@current_user && @current_user.role == :admin}>
+            <.link
+              navigate={nav_path(~p"/admin", search)}
+              aria-current={active_nav?(@socket.view, "TeamLive") && "page"}
+            >
+              Admin
+            </.link>
+          </li>
         </ul>
       </nav>
       <div class="app-user">

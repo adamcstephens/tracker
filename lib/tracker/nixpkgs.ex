@@ -1,8 +1,12 @@
 defmodule Tracker.Nixpkgs do
-  use Ash.Domain,
-    otp_app: :tracker
+  use Ash.Domain, otp_app: :tracker, extensions: [AshAdmin.Domain]
 
   require Logger
+
+  admin do
+    show? true
+    show_resources [Tracker.Nixpkgs.Channel]
+  end
 
   resources do
     resource Tracker.Nixpkgs.Channel
@@ -30,3 +34,4 @@ defmodule Tracker.Nixpkgs do
     resource Tracker.Nixpkgs.ChangeReconcileSkip
   end
 end
+
