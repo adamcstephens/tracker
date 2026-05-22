@@ -86,16 +86,39 @@ defmodule Tracker.Accounts.User do
     end
   end
 
+  changes do
+    change fn changeset, _ ->
+      Ash.Changeset.before_action(changeset, fn cs ->
+        case Ash.Changeset.get_attribute(cs, :roles) do
+          roles when is_list(roles) ->
+            Ash.Changeset.force_change_attribute(cs, :roles, Enum.uniq(roles))
+
+          _ ->
+            cs
+        end
+      end)
+    end
+  end
+
   attributes do
     uuid_v7_primary_key :id
 
     attribute :github_username, :string
     attribute :github_id, :integer
-    attribute :role, Tracker.Accounts.User.Role, default: :user
+
+    attribute :roles, {:array, Tracker.Accounts.User.Role} do
+      default [:user]
+      allow_nil? false
+      constraints min_length: 1
+    end
   end
 
   identities do
     identity :unique_github_id, [:github_id]
     identity :unique_github_username, [:github_username]
+  end
+
+  def has_role?(%{roles: roles}, role) when is_list(roles) and is_atom(role) do
+    role in roles
   end
 end
