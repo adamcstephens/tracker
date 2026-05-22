@@ -67,6 +67,7 @@ defmodule TrackerWeb.CoreComponents do
   attr :flash, :map, default: %{}, doc: "the map of flash messages to display"
   attr :title, :string, default: nil
   attr :kind, :atom, values: [:info, :error], doc: "used for styling and flash lookup"
+  attr :auto_dismiss, :boolean, default: true, doc: "whether the flash should auto-dismiss"
   attr :rest, :global, doc: "the arbitrary HTML attributes to add to the flash container"
 
   slot :inner_block, doc: "the optional inner block that renders the flash message"
@@ -80,7 +81,12 @@ defmodule TrackerWeb.CoreComponents do
       id={@id}
       phx-click={JS.push("lv:clear-flash", value: %{key: @kind}) |> hide("##{@id}")}
       role="alert"
-      class={["flash", @kind == :info && "flash-info", @kind == :error && "flash-error"]}
+      class={[
+        "flash",
+        @kind == :info && "flash-info",
+        @kind == :error && "flash-error",
+        @auto_dismiss && "flash-auto-dismiss"
+      ]}
       {@rest}
     >
       <header :if={@title}>
@@ -110,13 +116,14 @@ defmodule TrackerWeb.CoreComponents do
 
   def flash_group(assigns) do
     ~H"""
-    <div id={@id}>
+    <div id={@id} class="flash-stack">
       <.flash kind={:info} title={gettext("Success!")} flash={@flash} />
       <.flash kind={:error} title={gettext("Error!")} flash={@flash} />
       <.flash
         id="client-error"
         kind={:error}
         title={gettext("We can't find the internet")}
+        auto_dismiss={false}
         phx-disconnected={show(".phx-client-error #client-error")}
         phx-connected={hide("#client-error")}
         hidden
@@ -129,6 +136,7 @@ defmodule TrackerWeb.CoreComponents do
         id="server-error"
         kind={:error}
         title={gettext("Something went wrong!")}
+        auto_dismiss={false}
         phx-disconnected={show(".phx-server-error #server-error")}
         phx-connected={hide("#server-error")}
         hidden
