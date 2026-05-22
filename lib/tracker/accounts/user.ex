@@ -53,6 +53,7 @@ defmodule Tracker.Accounts.User do
       argument :oauth_tokens, :map, allow_nil?: false
       upsert? true
       upsert_identity :unique_github_id
+      upsert_fields [:github_username]
 
       change AshAuthentication.GenerateTokenChange
 
