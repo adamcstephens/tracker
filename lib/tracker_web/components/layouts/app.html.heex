@@ -3,7 +3,31 @@
   <div class="app-header__row app-header__row--top">
     <div class="container">
       <.link navigate={nav_path(~p"/", search)} class="app-brand">
-        <span class="app-brand__mark" aria-hidden="true">T</span>
+        <svg
+          class="app-brand__mark"
+          aria-hidden="true"
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="-27 -27 54 54"
+        >
+          <circle cx="0" cy="0" r="18" fill="none" stroke="#5b8fc9" stroke-width="1.5" />
+          <circle
+            cx="0"
+            cy="0"
+            r="25"
+            fill="none"
+            stroke="#5b8fc9"
+            stroke-width="1"
+            opacity="0.5"
+          />
+          <g transform="scale(0.0139)" fill="#5b8fc9">
+            <polygon points="-624,249 -496,27 64,997 -192,997 -320,775 -448,997 -576,997 -640,886 -448,554" />
+            <polygon points="-528,-415 -272,-415 -832,554 -960,332 -832,110 -1088,110 -1152,0 -1088,-110 -704,-110" />
+            <polygon points="96,-665 224,-443 -896,-443 -768,-665 -512,-665 -640,-886 -576,-997 -448,-997 -256,-665" />
+            <polygon points="624,-249 496,-27 -64,-997 192,-997 320,-775 448,-997 576,-997 640,-886 448,-554" />
+            <polygon points="528,415 272,415 832,-554 960,-332 832,-110 1088,-110 1152,0 1088,110 704,110" />
+            <polygon points="-96,665 -224,443 896,443 768,665 512,665 640,886 576,997 448,997 256,665" />
+          </g>
+        </svg>
         <span class="app-brand__word">Tracker</span>
       </.link>
       <nav aria-label="Primary">
@@ -80,7 +104,31 @@
         class="app-brand app-brand--mobile"
         aria-label="Tracker home"
       >
-        <span class="app-brand__mark" aria-hidden="true">T</span>
+        <svg
+          class="app-brand__mark"
+          aria-hidden="true"
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="-27 -27 54 54"
+        >
+          <circle cx="0" cy="0" r="18" fill="none" stroke="#5b8fc9" stroke-width="1.5" />
+          <circle
+            cx="0"
+            cy="0"
+            r="25"
+            fill="none"
+            stroke="#5b8fc9"
+            stroke-width="1"
+            opacity="0.5"
+          />
+          <g transform="scale(0.0139)" fill="#5b8fc9">
+            <polygon points="-624,249 -496,27 64,997 -192,997 -320,775 -448,997 -576,997 -640,886 -448,554" />
+            <polygon points="-528,-415 -272,-415 -832,554 -960,332 -832,110 -1088,110 -1152,0 -1088,-110 -704,-110" />
+            <polygon points="96,-665 224,-443 -896,-443 -768,-665 -512,-665 -640,-886 -576,-997 -448,-997 -256,-665" />
+            <polygon points="624,-249 496,-27 -64,-997 192,-997 320,-775 448,-997 576,-997 640,-886 448,-554" />
+            <polygon points="528,415 272,415 832,-554 960,-332 832,-110 1088,-110 1152,0 1088,110 704,110" />
+            <polygon points="-96,665 -224,443 896,443 768,665 512,665 640,886 576,997 448,997 256,665" />
+          </g>
+        </svg>
       </.link>
       <form
         :if={assigns[:page_search]}

@@ -17,7 +17,7 @@ defmodule TrackerWeb do
   those modules here.
   """
 
-  def static_paths, do: ~w(assets css fonts images robots.txt)
+  def static_paths, do: ~w(assets css fonts images manifest.webmanifest robots.txt)
 
   def router do
     quote do
