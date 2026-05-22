@@ -4,6 +4,58 @@ defmodule TrackerWeb.ChannelLive.DiffSections do
   alias Tracker.Nixpkgs.ChannelRevision.RevisionDiff
 
   attr :diff, RevisionDiff, required: true
+
+  def revision_diff_summary(assigns) do
+    counts = diff_counts(assigns.diff)
+    assigns = assign(assigns, :counts, counts)
+
+    ~H"""
+    <dl class="diff-summary">
+      <div>
+        <dt>Packages:</dt>
+        <dd>
+          {@counts.packages_added} added &middot; {@counts.packages_removed} removed &middot; {pluralize(
+            @counts.version_changes,
+            "version change",
+            "version changes"
+          )}
+        </dd>
+      </div>
+      <div>
+        <dt>Options:</dt>
+        <dd>
+          {@counts.options_added} added &middot; {@counts.options_removed} removed &middot; {pluralize(
+            @counts.option_metadata_changes,
+            "metadata change",
+            "metadata changes"
+          )}
+        </dd>
+      </div>
+    </dl>
+    """
+  end
+
+  defp diff_counts(%RevisionDiff{} = diff) do
+    %{
+      packages_added: Enum.count(diff.package_events, &(&1.type == :added)),
+      packages_removed: Enum.count(diff.package_events, &(&1.type == :removed)),
+      version_changes:
+        Enum.count(diff.version_changes, &(&1.old_version != nil and &1.new_version != nil)),
+      options_added: Enum.count(diff.option_events, &(&1.type == :added)),
+      options_removed: Enum.count(diff.option_events, &(&1.type == :removed)),
+      option_metadata_changes: length(diff.option_metadata_changes)
+    }
+  end
+
+  defp pluralize(1, singular, _plural), do: "1 #{singular}"
+  defp pluralize(n, _singular, plural), do: "#{n} #{plural}"
+
+  defp diff_empty?(%RevisionDiff{} = diff) do
+    diff.package_events == [] and diff.version_changes == [] and
+      diff.option_events == [] and diff.option_metadata_changes == []
+  end
+
+  attr :diff, RevisionDiff, required: true
   attr :channel, :string, required: true
   attr :heading_level, :atom, default: :h3, values: [:h3, :h4]
   attr :show_revision_column, :boolean, default: false
@@ -11,6 +63,8 @@ defmodule TrackerWeb.ChannelLive.DiffSections do
 
   def revision_diff_sections(assigns) do
     ~H"""
+    <.revision_diff_summary :if={not diff_empty?(@diff)} diff={@diff} />
+
     <section :if={@diff.package_events != []}>
       <.section_heading level={@heading_level}>Package Events</.section_heading>
       <figure>
