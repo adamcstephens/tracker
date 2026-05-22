@@ -1127,12 +1127,17 @@ dl.option-body dd {
 }
 
 .app-user__avatar {
-	display: inline-grid;
-	place-items: center;
+	display: block;
 	width: 1.5rem;
 	height: 1.5rem;
 	border-radius: 999px;
 	background: var(--surface-2);
+	object-fit: cover;
+}
+
+.app-user__avatar--monogram {
+	display: inline-grid;
+	place-items: center;
 	color: var(--text);
 	font-family: var(--mono);
 	font-size: 0.625rem;

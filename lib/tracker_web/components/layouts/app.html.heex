@@ -94,9 +94,18 @@
         <%= if @current_user do %>
           <details class="app-user__menu" id="app-user-menu" phx-update="ignore">
             <summary class="app-user__chip">
-              <span class="app-user__avatar" aria-hidden="true">
-                {monogram(@current_user.github_username)}
-              </span>
+              <%= if @current_user.github_id do %>
+                <img
+                  class="app-user__avatar"
+                  src={"https://avatars.githubusercontent.com/u/#{@current_user.github_id}?v=4&s=64"}
+                  alt=""
+                  aria-hidden="true"
+                />
+              <% else %>
+                <span class="app-user__avatar app-user__avatar--monogram" aria-hidden="true">
+                  {monogram(@current_user.github_username)}
+                </span>
+              <% end %>
               <span class="app-user__name">{@current_user.github_username}</span>
               <span class="app-user__caret" aria-hidden="true">▾</span>
             </summary>

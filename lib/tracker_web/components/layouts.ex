@@ -23,7 +23,7 @@ defmodule TrackerWeb.Layouts do
 
   @doc """
   Returns up to two uppercase initials for a given name, used as the
-  monogram in the user chip avatar.
+  monogram in the user chip avatar when a GitHub avatar is unavailable.
   """
   def monogram(name) when is_binary(name) and byte_size(name) > 0 do
     name
