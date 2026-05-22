@@ -223,6 +223,19 @@ defmodule TrackerWeb.ChannelLive.DiffTest do
     refute html =~ ~r/Option Metadata.*diff\.opt\.added/s
   end
 
+  test "shows diff summary counts", %{conn: conn, cr1: cr1, cr2: cr2} do
+    {:ok, _view, html} =
+      live(conn, ~p"/channels/nixos-unstable/diff/#{cr1.revision}/#{cr2.revision}")
+
+    [summary] = html |> Floki.parse_document!() |> Floki.find("dl.diff-summary")
+    text = summary |> Floki.text() |> String.replace(~r/\s+/, " ") |> String.trim()
+
+    assert text =~ "Packages: 1 added"
+    assert text =~ "1 version change"
+    assert text =~ "Options: 1 added"
+    assert text =~ "1 metadata change"
+  end
+
   test "links to github compare", %{conn: conn, cr1: cr1, cr2: cr2} do
     {:ok, _view, html} =
       live(conn, ~p"/channels/nixos-unstable/diff/#{cr1.revision}/#{cr2.revision}")

@@ -284,6 +284,26 @@ figure {
 	overflow-x: auto;
 }
 
+.diff-summary {
+	margin: 0 0 1rem;
+	color: var(--text-2);
+}
+
+.diff-summary > div {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+}
+
+.diff-summary dt {
+	font-weight: 600;
+	margin: 0;
+}
+
+.diff-summary dd {
+	margin: 0;
+}
+
 /* ========================================================================
    Layout — .container
    ======================================================================== */
