@@ -34,7 +34,7 @@ defmodule TrackerWeb.LiveUserAuth do
     # If the user is logged in, check the user role is admin.  Continue if so,
     # otherwise redirect to main page or a 403 page
     if socket.assigns[:current_user] do
-      if socket.assigns[:current_user].role == :admin do
+      if Tracker.Accounts.User.has_role?(socket.assigns[:current_user], :admin) do
         {:cont, socket}
       else
         {:halt, Phoenix.LiveView.redirect(socket, to: ~p"/")}
