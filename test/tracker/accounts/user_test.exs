@@ -25,6 +25,17 @@ defmodule Tracker.Accounts.UserTest do
 
       assert user.roles == [:user]
     end
+
+    test "re-registering the same github user preserves existing roles" do
+      user_info = %{"id" => 1001, "login" => "octocat"}
+      register_via_github!(user_info)
+
+      Tracker.Repo.update_all("users", set: [roles: ["user", "admin"]])
+
+      reregistered = register_via_github!(user_info)
+
+      assert Enum.sort(reregistered.roles) == [:admin, :user]
+    end
   end
 
   describe "roles invariants" do
