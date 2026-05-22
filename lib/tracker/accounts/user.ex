@@ -1,3 +1,7 @@
+defmodule Tracker.Accounts.User.Role do
+  use Ash.Type.Enum, values: [:user, :admin, :maintainer, :committer]
+end
+
 defmodule Tracker.Accounts.User do
   use Ash.Resource,
     otp_app: :tracker,
@@ -85,13 +89,9 @@ defmodule Tracker.Accounts.User do
   attributes do
     uuid_v7_primary_key :id
 
-    attribute :github_username, :string do
-      allow_nil? false
-    end
-
-    attribute :github_id, :integer do
-      allow_nil? false
-    end
+    attribute :github_username, :string
+    attribute :github_id, :integer
+    attribute :role, Tracker.Accounts.User.Role, default: :user
   end
 
   identities do

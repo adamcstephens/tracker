@@ -113,7 +113,10 @@ defmodule TrackerWeb.Router do
     scope "/admin" do
       pipe_through :browser
 
-      ash_admin "/"
+      ash_admin "/",
+                AshAuthentication.Phoenix.LiveSession.opts(
+                  on_mount: [{TrackerWeb.LiveUserAuth, :admin_only}]
+                )
     end
   end
 end
