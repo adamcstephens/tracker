@@ -34,4 +34,3 @@ defmodule Tracker.Nixpkgs do
     resource Tracker.Nixpkgs.ChangeReconcileSkip
   end
 end
-

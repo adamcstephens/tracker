@@ -97,6 +97,14 @@ let liveSocket = new LiveSocket("/live", Socket, {
   hooks: Hooks
 })
 
+// Close the user menu <details> when clicking outside of it.
+document.addEventListener("click", (event) => {
+  let menu = document.getElementById("app-user-menu")
+  if (!menu || !menu.open) return
+  if (menu.contains(event.target)) return
+  menu.open = false
+})
+
 // Focus the header search input when "/" is pressed outside of an editable element.
 document.addEventListener("keydown", (event) => {
   if (event.key !== "/") return

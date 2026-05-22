@@ -92,13 +92,25 @@
       </nav>
       <div class="app-user">
         <%= if @current_user do %>
-          <button type="button" class="app-user__chip">
-            <span class="app-user__avatar" aria-hidden="true">
-              {monogram(@current_user.github_username)}
-            </span>
-            <span class="app-user__name">{@current_user.github_username}</span>
-            <span class="app-user__caret" aria-hidden="true">▾</span>
-          </button>
+          <details class="app-user__menu" id="app-user-menu" phx-update="ignore">
+            <summary class="app-user__chip">
+              <span class="app-user__avatar" aria-hidden="true">
+                {monogram(@current_user.github_username)}
+              </span>
+              <span class="app-user__name">{@current_user.github_username}</span>
+              <span class="app-user__caret" aria-hidden="true">▾</span>
+            </summary>
+            <div class="app-user__panel" role="menu">
+              <.link
+                href={~p"/sign-out"}
+                method="delete"
+                class="app-user__menu-item"
+                role="menuitem"
+              >
+                Sign out
+              </.link>
+            </div>
+          </details>
         <% else %>
           <.link navigate={~p"/sign-in"} class="app-user__chip">Sign in</.link>
         <% end %>
