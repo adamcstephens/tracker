@@ -35,6 +35,7 @@ defmodule Tracker.MixProject do
   # Type `mix help deps` for examples and options.
   defp deps do
     [
+      {:mix_audit, "~> 2.0", only: [:test, :dev]},
       {:usage_rules, "~> 1.0", only: [:dev]},
       {:tidewave, "~> 0.5", only: [:dev]},
       {:ash, "~> 3.0"},
