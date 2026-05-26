@@ -41,7 +41,7 @@ defmodule Tracker.Nixpkgs.Channel do
     end
 
     read :active do
-      filter expr(status == :active)
+      filter expr(status != :retired)
       prepare build(sort: [:name])
     end
 
