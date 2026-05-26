@@ -65,12 +65,19 @@ defmodule Tracker.Nixpkgs.ChannelTest do
   end
 
   describe "active/0" do
-    test "returns only active channels" do
+    test "returns active and pre_release channels but excludes retired" do
       Channel.create!(%{
         name: "nixos-unstable",
         display_name: "NixOS Unstable",
         status: :active,
         is_stable: false
+      })
+
+      Channel.create!(%{
+        name: "nixos-26.05",
+        display_name: "NixOS 26.05",
+        status: :pre_release,
+        is_stable: true
       })
 
       Channel.create!(%{
@@ -80,9 +87,10 @@ defmodule Tracker.Nixpkgs.ChannelTest do
         is_stable: true
       })
 
-      active = Channel.active!()
-      assert length(active) == 1
-      assert hd(active).name == "nixos-unstable"
+      names = Channel.active!() |> Enum.map(& &1.name)
+      assert "nixos-unstable" in names
+      assert "nixos-26.05" in names
+      refute "nixos-24.05" in names
     end
   end
 
