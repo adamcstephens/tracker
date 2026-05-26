@@ -59,7 +59,7 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
     {return_value, summary} =
       case RateLimitCache.check(:rest, table) do
         {:limited, seconds} ->
-          Logger.info(msg: "REST rate limited, snoozing artifact refresh", seconds: seconds)
+          Logger.warning(msg: "REST rate limited, snoozing artifact refresh", seconds: seconds)
           {{:snooze, seconds}, %{outcome: :rate_limited, snooze_seconds: seconds}}
 
         :ok ->
