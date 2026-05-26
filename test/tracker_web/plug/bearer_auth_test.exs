@@ -1,13 +1,13 @@
 defmodule TrackerWeb.Plug.BearerAuthTest do
   use TrackerWeb.ConnCase, async: true
 
-  alias Tracker.Accounts.{Token, User}
+  alias Tracker.Accounts.{ApiToken, User}
   alias TrackerWeb.Plug.BearerAuth
 
   describe "call/2" do
     test "valid api token assigns current_user and current_user_token" do
       user = register_via_github!()
-      {:ok, %{token: jwt, jti: jti}} = User.issue_api_token(user.id, %{}, actor: user)
+      {:ok, %{token: jwt, jti: jti}} = ApiToken.issue(user.id, %{}, actor: user)
 
       conn =
         build_conn(:get, "/")
@@ -56,8 +56,8 @@ defmodule TrackerWeb.Plug.BearerAuthTest do
 
     test "revoked token returns 401" do
       user = register_via_github!()
-      {:ok, %{token: jwt, jti: jti}} = User.issue_api_token(user.id, %{}, actor: user)
-      {:ok, _} = Token.revoke_own_token(jti, actor: user)
+      {:ok, %{token: jwt, jti: jti}} = ApiToken.issue(user.id, %{}, actor: user)
+      {:ok, _} = ApiToken.revoke(jti, actor: user)
 
       conn =
         build_conn(:get, "/")
@@ -70,7 +70,7 @@ defmodule TrackerWeb.Plug.BearerAuthTest do
 
     test "expired token returns 401" do
       user = register_via_github!()
-      {:ok, %{token: jwt}} = User.issue_api_token(user.id, %{expires_in: 1}, actor: user)
+      {:ok, %{token: jwt}} = ApiToken.issue(user.id, %{expires_in: 1}, actor: user)
 
       Process.sleep(1100)
 

@@ -1,7 +1,7 @@
 defmodule TrackerWeb.AccountLive.Tokens do
   use TrackerWeb, :live_view
 
-  alias Tracker.Accounts.{Token, User}
+  alias Tracker.Accounts.ApiToken
 
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
@@ -53,7 +53,7 @@ defmodule TrackerWeb.AccountLive.Tokens do
       <:col :let={t} label="JTI"><code>{t.jti}</code></:col>
       <:action :let={t}>
         <button
-          :if={t.purpose == "api"}
+          :if={is_nil(t.revoked_at)}
           type="button"
           phx-click="revoke"
           phx-value-jti={t.jti}
@@ -76,9 +76,7 @@ defmodule TrackerWeb.AccountLive.Tokens do
       |> maybe_put(:expires_in, expires_in)
       |> maybe_put(:label, label)
 
-    case User.issue_api_token(socket.assigns.current_user.id, args,
-           actor: socket.assigns.current_user
-         ) do
+    case ApiToken.issue(socket.assigns.current_user.id, args, actor: socket.assigns.current_user) do
       {:ok, %{token: jwt}} ->
         {:noreply,
          socket
@@ -93,7 +91,7 @@ defmodule TrackerWeb.AccountLive.Tokens do
   end
 
   def handle_event("revoke", %{"jti" => jti}, socket) do
-    case Token.revoke_own_token(jti, actor: socket.assigns.current_user) do
+    case ApiToken.revoke(jti, actor: socket.assigns.current_user) do
       {:ok, _} ->
         {:noreply,
          socket
@@ -110,11 +108,7 @@ defmodule TrackerWeb.AccountLive.Tokens do
   end
 
   defp load_tokens(socket) do
-    subject = AshAuthentication.user_to_subject(socket.assigns.current_user)
-
-    tokens =
-      Token.list_api_tokens_for_subject!(subject, actor: socket.assigns.current_user)
-
+    tokens = ApiToken.list_for_actor!(actor: socket.assigns.current_user)
     assign(socket, :tokens, tokens)
   end
 
@@ -139,12 +133,9 @@ defmodule TrackerWeb.AccountLive.Tokens do
   defp maybe_put(map, _key, nil), do: map
   defp maybe_put(map, key, value), do: Map.put(map, key, value)
 
-  defp label_for(%{extra_data: %{"label" => label}}) when is_binary(label) and label != "",
-    do: label
-
+  defp label_for(%{label: label}) when is_binary(label) and label != "", do: label
   defp label_for(_), do: "—"
 
-  defp status_for(%{purpose: "api"}), do: "active"
-  defp status_for(%{purpose: "revocation"}), do: "revoked"
-  defp status_for(_), do: "—"
+  defp status_for(%{revoked_at: nil}), do: "active"
+  defp status_for(%{revoked_at: %DateTime{}}), do: "revoked"
 end

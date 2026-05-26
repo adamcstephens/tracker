@@ -19,7 +19,7 @@ defmodule Mix.Tasks.Tracker.ApiToken.Issue do
   use Mix.Task
 
   alias Mix.Tasks.Tracker.ApiToken.Support
-  alias Tracker.Accounts.User
+  alias Tracker.Accounts.ApiToken
 
   @switches [actor: :string, user: :string, expires_in: :integer, label: :string]
 
@@ -36,7 +36,7 @@ defmodule Mix.Tasks.Tracker.ApiToken.Issue do
       |> maybe_put(:expires_in, opts[:expires_in])
       |> maybe_put(:label, opts[:label])
 
-    case User.issue_api_token(subject.id, params, actor: actor) do
+    case ApiToken.issue(subject.id, params, actor: actor) do
       {:ok, %{token: jwt, jti: jti, expires_at: expires_at}} ->
         Mix.shell().info("jti=#{jti} expires_at=#{DateTime.to_iso8601(expires_at)}")
         Mix.shell().info("This token will not be shown again:")

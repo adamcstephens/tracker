@@ -1,14 +1,14 @@
 defmodule TrackerWeb.ApiTokenIntegrationTest do
   use TrackerWeb.ConnCase, async: true
 
-  alias Tracker.Accounts.{Token, User}
+  alias Tracker.Accounts.{ApiToken, User}
   alias TrackerWeb.Plug.{BearerAuth, RequireRole}
 
   describe "full bearer auth flow" do
     test "admin creates a service account, issues a token, and a request guarded by BearerAuth+RequireRole succeeds" do
       admin = register_via_github!() |> grant_admin!()
       service = User.create_service_account!("ingest", [:user, :admin], actor: admin)
-      {:ok, %{token: jwt}} = User.issue_api_token(service.id, %{label: "robot"}, actor: admin)
+      {:ok, %{token: jwt}} = ApiToken.issue(service.id, %{label: "robot"}, actor: admin)
 
       conn = call_guarded(jwt, :admin)
 
@@ -27,8 +27,8 @@ defmodule TrackerWeb.ApiTokenIntegrationTest do
     test "revoked token is rejected with 401" do
       admin = register_via_github!() |> grant_admin!()
       service = User.create_service_account!("ingest", [:user, :admin], actor: admin)
-      {:ok, %{token: jwt, jti: jti}} = User.issue_api_token(service.id, %{}, actor: admin)
-      {:ok, _} = Token.revoke_token_admin(jti, actor: admin)
+      {:ok, %{token: jwt, jti: jti}} = ApiToken.issue(service.id, %{}, actor: admin)
+      {:ok, _} = ApiToken.revoke(jti, actor: admin)
 
       conn = call_guarded(jwt, :admin)
 
@@ -39,7 +39,7 @@ defmodule TrackerWeb.ApiTokenIntegrationTest do
     test "token whose user lacks the required role is rejected with 403" do
       admin = register_via_github!() |> grant_admin!()
       service = User.create_service_account!("plain", [:user], actor: admin)
-      {:ok, %{token: jwt}} = User.issue_api_token(service.id, %{}, actor: admin)
+      {:ok, %{token: jwt}} = ApiToken.issue(service.id, %{}, actor: admin)
 
       conn = call_guarded(jwt, :admin)
 
@@ -52,7 +52,7 @@ defmodule TrackerWeb.ApiTokenIntegrationTest do
       bob = register_via_github!()
 
       assert {:error, %Ash.Error.Forbidden{}} =
-               User.issue_api_token(bob.id, %{}, actor: alice)
+               ApiToken.issue(bob.id, %{}, actor: alice)
     end
   end
 

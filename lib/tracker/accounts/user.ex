@@ -47,20 +47,10 @@ defmodule Tracker.Accounts.User do
 
   code_interface do
     define :create_service_account, args: [:name, :roles]
-    define :issue_api_token, args: [:subject_id]
   end
 
   actions do
     defaults [:read]
-
-    action :issue_api_token, :map do
-      description "Mint a JWT with purpose=api for a subject user."
-      argument :subject_id, :uuid, allow_nil?: false
-      argument :expires_in, :integer
-      argument :label, :string
-
-      run Tracker.Accounts.User.IssueApiToken
-    end
 
     create :create_service_account do
       description "Create a non-human user with no GitHub identity."
@@ -113,12 +103,6 @@ defmodule Tracker.Accounts.User do
 
     bypass action(:create_service_account) do
       authorize_if {Tracker.Accounts.Checks.ActorHasRole, role: :admin}
-    end
-
-    bypass action(:issue_api_token) do
-      authorize_if {Tracker.Accounts.Checks.ActorIdEqualsArg, arg: :subject_id}
-
-      authorize_if {Tracker.Accounts.Checks.AdminIssuingForServiceAccount, arg: :subject_id}
     end
 
     policy always() do

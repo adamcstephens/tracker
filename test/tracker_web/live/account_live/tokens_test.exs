@@ -4,7 +4,7 @@ defmodule TrackerWeb.AccountLive.TokensTest do
   import Phoenix.LiveViewTest
 
   alias AshAuthentication.Plug.Helpers
-  alias Tracker.Accounts.User
+  alias Tracker.Accounts.{ApiToken, User}
 
   describe "/account/tokens" do
     test "redirects to sign-in when not logged in", %{conn: conn} do
@@ -13,7 +13,7 @@ defmodule TrackerWeb.AccountLive.TokensTest do
 
     test "lists the user's own active tokens", %{conn: conn} do
       user = register_via_github!()
-      {:ok, _} = User.issue_api_token(user.id, %{label: "my-ci"}, actor: user)
+      {:ok, _} = ApiToken.issue(user.id, %{label: "my-ci"}, actor: user)
       conn = log_in(conn, user)
 
       {:ok, _view, html} = live(conn, ~p"/account/tokens")
@@ -69,7 +69,7 @@ defmodule TrackerWeb.AccountLive.TokensTest do
 
     test "revokes own token", %{conn: conn} do
       user = register_via_github!()
-      {:ok, %{jti: jti}} = User.issue_api_token(user.id, %{label: "x"}, actor: user)
+      {:ok, %{jti: jti}} = ApiToken.issue(user.id, %{label: "x"}, actor: user)
       conn = log_in(conn, user)
 
       {:ok, view, _html} = live(conn, ~p"/account/tokens")
