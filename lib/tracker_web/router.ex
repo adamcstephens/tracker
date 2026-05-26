@@ -28,6 +28,13 @@ defmodule TrackerWeb.Router do
     get "/feeds/packages/:name", FeedController, :package
     post "/lens", LensController, :update
 
+    ash_authentication_live_session :account_routes,
+      on_mount: [
+        {TrackerWeb.LiveUserAuth, :live_user_required}
+      ] do
+      live "/account/tokens", AccountLive.Tokens, :index
+    end
+
     ash_authentication_live_session :authenticated_routes,
       on_mount: [
         {TrackerWeb.LiveUserAuth, :live_user_optional},

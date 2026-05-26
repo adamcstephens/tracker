@@ -11,6 +11,10 @@ defmodule Tracker.Accounts.Token do
     repo Tracker.Repo
   end
 
+  code_interface do
+    define :list_api_tokens_for_subject, args: [:subject]
+  end
+
   actions do
     defaults [:read]
 
@@ -18,6 +22,13 @@ defmodule Tracker.Accounts.Token do
       description "Mark an API token row as revoked by setting purpose=revocation."
       require_atomic? false
       change set_attribute(:purpose, "revocation")
+    end
+
+    read :list_api_tokens_for_subject do
+      description "List api/revocation token rows for a given subject, newest first."
+      argument :subject, :string, allow_nil?: false
+      filter expr(subject == ^arg(:subject) and purpose in ["api", "revocation"])
+      prepare build(sort: [inserted_at: :desc])
     end
 
     read :expired do
@@ -80,6 +91,11 @@ defmodule Tracker.Accounts.Token do
     bypass action(:revoke_api_token) do
       authorize_if {Tracker.Accounts.Checks.ActorOwnsToken, []}
       authorize_if {Tracker.Accounts.Checks.AdminRevokingServiceAccountToken, []}
+    end
+
+    bypass action(:list_api_tokens_for_subject) do
+      authorize_if {Tracker.Accounts.Checks.ActorSubjectEqualsArg, arg: :subject}
+      authorize_if {Tracker.Accounts.Checks.AdminListingServiceAccountTokens, arg: :subject}
     end
 
     policy always() do
