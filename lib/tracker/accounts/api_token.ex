@@ -138,6 +138,11 @@ defmodule Tracker.Accounts.ApiToken do
     identity :unique_jti, [:jti]
   end
 
+  @token_prefix "trk_"
+
+  @doc "Prefix prepended to every issued JWT, recognised by secret scanners."
+  def token_prefix, do: @token_prefix
+
   def revoked?(%{revoked_at: nil}), do: false
   def revoked?(%{revoked_at: %DateTime{}}), do: true
 

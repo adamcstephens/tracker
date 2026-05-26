@@ -18,6 +18,8 @@ defmodule TrackerWeb.Plug.BearerAuth do
   alias AshAuthentication.Jwt
   alias Tracker.Accounts.{ApiToken, User}
 
+  @token_prefix Tracker.Accounts.ApiToken.token_prefix()
+
   @impl Plug
   def init(opts), do: Keyword.put_new(opts, :purpose, "api")
 
@@ -43,7 +45,8 @@ defmodule TrackerWeb.Plug.BearerAuth do
 
   defp extract_bearer(conn) do
     case get_req_header(conn, "authorization") do
-      ["Bearer " <> jwt] when byte_size(jwt) > 0 -> {:ok, jwt}
+      ["Bearer " <> @token_prefix <> jwt] when byte_size(jwt) > 0 -> {:ok, jwt}
+      ["Bearer " <> _] -> {:error, :invalid_token}
       [] -> {:error, :missing_bearer_token}
       _ -> {:error, :invalid_authorization_header}
     end

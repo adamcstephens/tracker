@@ -41,8 +41,11 @@ mix tracker.api_token.issue \
 
 `--user` accepts either a UUID or a `github_username` (including the
 `service:*` form). `--label` and `--expires-in` are optional (default
-lifetime is one year). The JWT is printed to stdout once — it cannot be
-retrieved later, only revoked.
+lifetime is one year). The token is printed to stdout once — it cannot
+be retrieved later, only revoked.
+
+Issued tokens are prefixed with `trk_` so they're easy to grep for in
+logs and recognisable by secret scanners.
 
 ### Revoke a token
 
@@ -64,10 +67,11 @@ management is admin-only and only available via the mix tasks above.
 
 ```
 GET /your/api/endpoint
-Authorization: Bearer <jwt>
+Authorization: Bearer trk_<jwt>
 ```
 
-Pipe a route through `TrackerWeb.Plug.BearerAuth` to authenticate and
+Send the full prefixed token in the `Authorization` header. Pipe a route
+through `TrackerWeb.Plug.BearerAuth` to authenticate and
 `TrackerWeb.Plug.RequireRole, role: :some_role` to gate by role.
 
 ## Learn more

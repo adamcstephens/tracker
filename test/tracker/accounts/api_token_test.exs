@@ -11,7 +11,10 @@ defmodule Tracker.Accounts.ApiTokenTest do
                ApiToken.issue(user.id, %{label: "ci", expires_in: 3600}, actor: user)
 
       assert is_binary(jwt)
-      {:ok, claims, _} = AshAuthentication.Jwt.verify(jwt, :tracker)
+      assert String.starts_with?(jwt, ApiToken.token_prefix())
+
+      raw = String.replace_prefix(jwt, ApiToken.token_prefix(), "")
+      {:ok, claims, _} = AshAuthentication.Jwt.verify(raw, :tracker)
       assert claims["purpose"] == "api"
       assert claims["jti"] == jti
 

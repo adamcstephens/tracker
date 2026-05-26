@@ -3,6 +3,7 @@ defmodule Tracker.Accounts.ApiToken.Issue do
   use Ash.Resource.Actions.Implementation
 
   alias AshAuthentication.Jwt
+  alias Tracker.Accounts.ApiToken
 
   @one_year_seconds 365 * 24 * 60 * 60
 
@@ -18,7 +19,7 @@ defmodule Tracker.Accounts.ApiToken.Issue do
          {:ok, _record} <- store(claims, subject_user_id, actor, label) do
       {:ok,
        %{
-         token: jwt,
+         token: ApiToken.token_prefix() <> jwt,
          jti: claims["jti"],
          expires_at: DateTime.from_unix!(trunc(claims["exp"]))
        }}

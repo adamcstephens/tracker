@@ -40,13 +40,29 @@ defmodule TrackerWeb.Plug.BearerAuthTest do
       assert conn.resp_body =~ "invalid_token"
     end
 
-    test "non-api purpose returns 401" do
+    test "missing prefix returns 401 even for an otherwise-valid JWT" do
       user = register_via_github!()
-      {:ok, jwt, _claims} = AshAuthentication.Jwt.token_for_user(user)
+      {:ok, %{token: jwt}} = ApiToken.issue(user.id, %{}, actor: user)
+      raw = String.replace_prefix(jwt, ApiToken.token_prefix(), "")
 
       conn =
         build_conn(:get, "/")
-        |> put_req_header("authorization", "Bearer " <> jwt)
+        |> put_req_header("authorization", "Bearer " <> raw)
+        |> BearerAuth.call(BearerAuth.init([]))
+
+      assert conn.halted
+      assert conn.status == 401
+      assert conn.resp_body =~ "invalid_token"
+    end
+
+    test "prefixed session token (non-api purpose) is rejected with invalid_purpose" do
+      user = register_via_github!()
+      {:ok, session_jwt, _} = AshAuthentication.Jwt.token_for_user(user)
+      prefixed = ApiToken.token_prefix() <> session_jwt
+
+      conn =
+        build_conn(:get, "/")
+        |> put_req_header("authorization", "Bearer " <> prefixed)
         |> BearerAuth.call(BearerAuth.init([]))
 
       assert conn.halted
