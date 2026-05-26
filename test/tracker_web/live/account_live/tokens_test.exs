@@ -45,9 +45,10 @@ defmodule TrackerWeb.AccountLive.TokensTest do
 
       assert has_element?(view, "#fresh-token")
       jwt = view |> element("#fresh-token-value") |> render() |> strip_tags()
-      assert String.starts_with?(jwt, "eyJ")
+      assert String.starts_with?(jwt, ApiToken.token_prefix())
 
-      assert {:ok, _claims, _} = AshAuthentication.Jwt.verify(jwt, :tracker)
+      raw = String.replace_prefix(jwt, ApiToken.token_prefix(), "")
+      assert {:ok, _claims, _} = AshAuthentication.Jwt.verify(raw, :tracker)
     end
 
     test "dismissing the fresh token hides it", %{conn: conn} do
