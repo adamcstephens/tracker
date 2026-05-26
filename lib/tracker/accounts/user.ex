@@ -116,8 +116,9 @@ defmodule Tracker.Accounts.User do
     end
 
     bypass action(:issue_api_token) do
-      authorize_if {Tracker.Accounts.Checks.ActorHasRole, role: :admin}
       authorize_if {Tracker.Accounts.Checks.ActorIdEqualsArg, arg: :subject_id}
+
+      authorize_if {Tracker.Accounts.Checks.AdminIssuingForServiceAccount, arg: :subject_id}
     end
 
     policy always() do

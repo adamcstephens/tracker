@@ -78,8 +78,8 @@ defmodule Tracker.Accounts.Token do
     end
 
     bypass action(:revoke_api_token) do
-      authorize_if {Tracker.Accounts.Checks.ActorHasRole, role: :admin}
       authorize_if {Tracker.Accounts.Checks.ActorOwnsToken, []}
+      authorize_if {Tracker.Accounts.Checks.AdminRevokingServiceAccountToken, []}
     end
 
     policy always() do
