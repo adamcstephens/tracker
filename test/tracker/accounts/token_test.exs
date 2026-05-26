@@ -21,14 +21,22 @@ defmodule Tracker.Accounts.TokenTest do
       assert {:error, %Ash.Error.Forbidden{}} = Token.revoke_own_token(jti, actor: bob)
     end
 
-    test "admin can revoke any api token via the admin interface" do
-      user = register_via_github!()
+    test "admin can revoke a service-account token via the admin interface" do
       admin = register_via_github!() |> with_roles!([:admin])
-      {:ok, %{jti: jti}} = User.issue_api_token(user.id, %{}, actor: user)
+      service = User.create_service_account!("ingest", [:user], actor: admin)
+      {:ok, %{jti: jti}} = User.issue_api_token(service.id, %{}, actor: admin)
 
       assert {:ok, _} = Token.revoke_token_admin(jti, actor: admin)
 
       assert token_revoked?(jti)
+    end
+
+    test "admin cannot revoke another human user's token" do
+      admin = register_via_github!() |> with_roles!([:admin])
+      other = register_via_github!()
+      {:ok, %{jti: jti}} = User.issue_api_token(other.id, %{}, actor: other)
+
+      assert {:error, %Ash.Error.Forbidden{}} = Token.revoke_token_admin(jti, actor: admin)
     end
   end
 

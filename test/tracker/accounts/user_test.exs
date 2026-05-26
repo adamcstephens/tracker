@@ -124,7 +124,7 @@ defmodule Tracker.Accounts.UserTest do
       assert record.extra_data["label"] == "ci"
     end
 
-    test "admin can issue a token for another user" do
+    test "admin can issue a token for a service account" do
       admin = register_via_github!() |> with_roles!([:admin])
       service = User.create_service_account!("ingest", [:user], actor: admin)
 
@@ -133,6 +133,14 @@ defmodule Tracker.Accounts.UserTest do
 
       assert {:ok, claims, _} = AshAuthentication.Jwt.verify(token, :tracker)
       assert claims["sub"] =~ "user?id=#{service.id}"
+    end
+
+    test "admin cannot issue a token for another human user" do
+      admin = register_via_github!() |> with_roles!([:admin])
+      other = register_via_github!()
+
+      assert {:error, %Ash.Error.Forbidden{}} =
+               User.issue_api_token(other.id, %{expires_in: 60}, actor: admin)
     end
 
     test "non-admin cannot issue a token for another user" do
