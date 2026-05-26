@@ -48,7 +48,6 @@ defmodule Tracker.Accounts.User do
   code_interface do
     define :create_service_account, args: [:name, :roles]
     define :issue_api_token, args: [:subject_id]
-    define :list_service_accounts
   end
 
   actions do
@@ -105,12 +104,6 @@ defmodule Tracker.Accounts.User do
       get? true
       prepare AshAuthentication.Preparations.FilterBySubject
     end
-
-    read :list_service_accounts do
-      description "List service-account users (no GitHub identity)."
-      filter expr(is_nil(github_id))
-      prepare build(sort: [github_username: :asc])
-    end
   end
 
   policies do
@@ -119,10 +112,6 @@ defmodule Tracker.Accounts.User do
     end
 
     bypass action(:create_service_account) do
-      authorize_if {Tracker.Accounts.Checks.ActorHasRole, role: :admin}
-    end
-
-    bypass action(:list_service_accounts) do
       authorize_if {Tracker.Accounts.Checks.ActorHasRole, role: :admin}
     end
 
