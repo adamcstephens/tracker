@@ -95,6 +95,65 @@ defmodule Tracker.Accounts.UserTest do
     end
   end
 
+  describe "issue_api_token" do
+    test "user can issue a token for themselves" do
+      user = register_via_github!()
+
+      assert {:ok, %{token: token, jti: jti, expires_at: %DateTime{} = expires_at}} =
+               User.issue_api_token(user.id, %{expires_in: 3600, label: "ci"}, actor: user)
+
+      assert is_binary(token)
+      assert byte_size(jti) > 0
+      assert DateTime.diff(expires_at, DateTime.utc_now()) in 3500..3700
+
+      {:ok, claims, Tracker.Accounts.User} =
+        AshAuthentication.Jwt.verify(token, :tracker)
+
+      assert claims["purpose"] == "api"
+      assert claims["sub"] =~ "user?id=#{user.id}"
+      assert claims["jti"] == jti
+
+      require Ash.Query
+
+      record =
+        Tracker.Accounts.Token
+        |> Ash.Query.filter(jti == ^jti)
+        |> Ash.read_one!(authorize?: false)
+
+      assert record.purpose == "api"
+      assert record.extra_data["label"] == "ci"
+    end
+
+    test "admin can issue a token for another user" do
+      admin = register_via_github!() |> with_roles!([:admin])
+      service = User.create_service_account!("ingest", [:user], actor: admin)
+
+      assert {:ok, %{token: token}} =
+               User.issue_api_token(service.id, %{expires_in: 60}, actor: admin)
+
+      assert {:ok, claims, _} = AshAuthentication.Jwt.verify(token, :tracker)
+      assert claims["sub"] =~ "user?id=#{service.id}"
+    end
+
+    test "non-admin cannot issue a token for another user" do
+      issuer = register_via_github!()
+      other = register_via_github!()
+
+      assert {:error, %Ash.Error.Forbidden{}} =
+               User.issue_api_token(other.id, %{expires_in: 60}, actor: issuer)
+    end
+
+    test "defaults to roughly one year expiry" do
+      user = register_via_github!()
+
+      assert {:ok, %{expires_at: expires_at}} =
+               User.issue_api_token(user.id, %{}, actor: user)
+
+      diff_days = DateTime.diff(expires_at, DateTime.utc_now(), :day)
+      assert diff_days in 364..366
+    end
+  end
+
   defp register_via_github!(overrides \\ %{}) do
     user_info =
       Map.merge(
