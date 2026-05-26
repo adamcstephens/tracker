@@ -45,8 +45,27 @@ defmodule Tracker.Accounts.User do
     repo Tracker.Repo
   end
 
+  code_interface do
+    define :create_service_account, args: [:name, :roles]
+  end
+
   actions do
     defaults [:read]
+
+    create :create_service_account do
+      description "Create a non-human user with no GitHub identity."
+      argument :name, :string, allow_nil?: false
+      argument :roles, {:array, Tracker.Accounts.User.Role}, allow_nil?: false
+
+      change fn changeset, _ ->
+        name = Ash.Changeset.get_argument(changeset, :name)
+        roles = Ash.Changeset.get_argument(changeset, :roles)
+
+        changeset
+        |> Ash.Changeset.change_attribute(:github_username, "service:#{name}")
+        |> Ash.Changeset.change_attribute(:roles, roles)
+      end
+    end
 
     create :register_with_github do
       argument :user_info, :map, allow_nil?: false
@@ -80,6 +99,10 @@ defmodule Tracker.Accounts.User do
   policies do
     bypass AshAuthentication.Checks.AshAuthenticationInteraction do
       authorize_if always()
+    end
+
+    bypass action(:create_service_account) do
+      authorize_if {Tracker.Accounts.Checks.ActorHasRole, role: :admin}
     end
 
     policy always() do

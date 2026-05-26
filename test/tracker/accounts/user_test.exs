@@ -65,6 +65,36 @@ defmodule Tracker.Accounts.UserTest do
     end
   end
 
+  describe "create_service_account" do
+    test "admin can create a service account with given roles" do
+      admin = register_via_github!() |> with_roles!([:user, :admin])
+
+      service = User.create_service_account!("ingest", [:user, :maintainer], actor: admin)
+
+      assert service.github_username == "service:ingest"
+      assert service.github_id == nil
+      assert Enum.sort(service.roles) == [:maintainer, :user]
+    end
+
+    test "non-admin actor is forbidden" do
+      non_admin = register_via_github!()
+
+      assert_raise Ash.Error.Forbidden, fn ->
+        User.create_service_account!("ingest", [:user], actor: non_admin)
+      end
+    end
+
+    test "duplicate service-account names are rejected" do
+      admin = register_via_github!() |> with_roles!([:admin])
+
+      User.create_service_account!("dupe", [:user], actor: admin)
+
+      assert_raise Ash.Error.Invalid, fn ->
+        User.create_service_account!("dupe", [:user], actor: admin)
+      end
+    end
+  end
+
   defp register_via_github!(overrides \\ %{}) do
     user_info =
       Map.merge(
@@ -81,5 +111,16 @@ defmodule Tracker.Accounts.UserTest do
       oauth_tokens: %{"access_token" => "tok"}
     )
     |> Ash.create!(authorize?: false)
+  end
+
+  defp with_roles!(%User{} = user, roles) do
+    role_strings = Enum.map(roles, &Atom.to_string/1)
+
+    Tracker.Repo.update_all(
+      from(u in "users", where: u.github_id == ^user.github_id),
+      set: [roles: role_strings]
+    )
+
+    Ash.get!(User, user.id, authorize?: false)
   end
 end
