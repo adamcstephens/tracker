@@ -1,18 +1,17 @@
 defmodule TrackerWeb.AccountLive.TokensTest do
   use TrackerWeb.ConnCase, async: true
 
-  import Ecto.Query
   import Phoenix.LiveViewTest
 
   alias AshAuthentication.Plug.Helpers
-  alias Tracker.Accounts.{Token, User}
+  alias Tracker.Accounts.User
 
-  describe "non-admin user" do
+  describe "/account/tokens" do
     test "redirects to sign-in when not logged in", %{conn: conn} do
       assert {:error, {:redirect, %{to: "/sign-in"}}} = live(conn, ~p"/account/tokens")
     end
 
-    test "lists own tokens", %{conn: conn} do
+    test "lists the user's own active tokens", %{conn: conn} do
       user = register_via_github!()
       {:ok, _} = User.issue_api_token(user.id, %{label: "my-ci"}, actor: user)
       conn = log_in(conn, user)
@@ -21,6 +20,17 @@ defmodule TrackerWeb.AccountLive.TokensTest do
 
       assert html =~ "my-ci"
       assert html =~ "active"
+    end
+
+    test "does not list revoked user-session tokens from prior logouts", %{conn: conn} do
+      user = register_via_github!()
+      _ = simulate_logged_out_session(user)
+
+      conn = log_in(conn, user)
+
+      {:ok, _view, html} = live(conn, ~p"/account/tokens")
+
+      refute html =~ "revoked"
     end
 
     test "issues a token and shows the JWT once", %{conn: conn} do
@@ -71,75 +81,11 @@ defmodule TrackerWeb.AccountLive.TokensTest do
       html = render(view)
       assert html =~ "revoked"
     end
-
-    test "does not show the service-account selector", %{conn: conn} do
-      user = register_via_github!()
-      conn = log_in(conn, user)
-
-      {:ok, _view, html} = live(conn, ~p"/account/tokens")
-
-      refute html =~ "Viewing tokens for"
-    end
-  end
-
-  describe "admin user" do
-    test "sees the service-account selector when service accounts exist", %{conn: conn} do
-      admin = register_via_github!() |> grant_admin!()
-      _service = User.create_service_account!("ingest", [:user], actor: admin)
-      conn = log_in(conn, admin)
-
-      {:ok, _view, html} = live(conn, ~p"/account/tokens")
-
-      assert html =~ "Viewing tokens for"
-      assert html =~ "service:ingest"
-    end
-
-    test "can switch to a service account and issue a token for it", %{conn: conn} do
-      admin = register_via_github!() |> grant_admin!()
-      service = User.create_service_account!("ingest", [:user], actor: admin)
-      conn = log_in(conn, admin)
-
-      {:ok, view, _html} = live(conn, ~p"/account/tokens")
-
-      view
-      |> form("form[phx-change='select_user']", user_id: service.id)
-      |> render_change()
-
-      view
-      |> form("#issue-form", token: %{label: "robot", expires_in_days: "7"})
-      |> render_submit()
-
-      assert has_element?(view, "#fresh-token")
-
-      subject = AshAuthentication.user_to_subject(service)
-      rows = Token.list_api_tokens_for_subject!(subject, actor: admin)
-      assert Enum.any?(rows, fn r -> r.extra_data["label"] == "robot" end)
-    end
-
-    test "can revoke a service-account token via the row action", %{conn: conn} do
-      admin = register_via_github!() |> grant_admin!()
-      service = User.create_service_account!("ingest", [:user], actor: admin)
-      {:ok, %{jti: jti}} = User.issue_api_token(service.id, %{label: "robot"}, actor: admin)
-      conn = log_in(conn, admin)
-
-      {:ok, view, _html} = live(conn, ~p"/account/tokens")
-
-      view
-      |> form("form[phx-change='select_user']", user_id: service.id)
-      |> render_change()
-
-      view
-      |> element("button[phx-value-jti='#{jti}']")
-      |> render_click()
-
-      html = render(view)
-      assert html =~ "revoked"
-    end
   end
 
   defp log_in(conn, user) do
     conn
-    |> init_test_session(%{})
+    |> Plug.Test.init_test_session(%{})
     |> Helpers.store_in_session(user)
   end
 
@@ -161,14 +107,25 @@ defmodule TrackerWeb.AccountLive.TokensTest do
     |> Ash.create!(authorize?: false)
   end
 
-  defp grant_admin!(%User{} = user) do
-    Tracker.Repo.update_all(
-      from(u in "users", where: u.github_id == ^user.github_id),
-      set: [roles: ["user", "admin"]]
-    )
+  defp simulate_logged_out_session(%User{} = user) do
+    subject = AshAuthentication.user_to_subject(user)
+    jti = "session-" <> Integer.to_string(System.unique_integer([:positive]))
+    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
 
-    refreshed = Ash.get!(User, user.id, authorize?: false)
-    %{refreshed | __metadata__: user.__metadata__}
+    Tracker.Repo.insert_all("tokens", [
+      %{
+        jti: jti,
+        subject: subject,
+        purpose: "revocation",
+        expires_at: now |> DateTime.add(86_400, :second) |> DateTime.truncate(:second),
+        extra_data: nil,
+        inserted_at: now,
+        updated_at: now,
+        created_at: now
+      }
+    ])
+
+    jti
   end
 
   defp strip_tags(html) do

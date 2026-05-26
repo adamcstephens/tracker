@@ -42,7 +42,7 @@ defmodule Tracker.Accounts.User.IssueApiToken do
   end
 
   defp store(token, label) do
-    extra_data = if label, do: %{"label" => label}, else: %{}
+    extra_data = %{"kind" => "api"} |> maybe_put_label(label)
 
     Token
     |> Ash.Changeset.for_create(:store_token, %{
@@ -52,4 +52,7 @@ defmodule Tracker.Accounts.User.IssueApiToken do
     })
     |> Ash.create(authorize?: false)
   end
+
+  defp maybe_put_label(map, nil), do: map
+  defp maybe_put_label(map, label), do: Map.put(map, "label", label)
 end

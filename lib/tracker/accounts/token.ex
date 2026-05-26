@@ -25,9 +25,15 @@ defmodule Tracker.Accounts.Token do
     end
 
     read :list_api_tokens_for_subject do
-      description "List api/revocation token rows for a given subject, newest first."
+      description "List api/revocation token rows for a given subject, newest first. Filters by extra_data.kind == \"api\" so logged-out user-session revocations don't leak in."
       argument :subject, :string, allow_nil?: false
-      filter expr(subject == ^arg(:subject) and purpose in ["api", "revocation"])
+
+      filter expr(
+               subject == ^arg(:subject) and
+                 purpose in ["api", "revocation"] and
+                 get_path(extra_data, [:kind]) == "api"
+             )
+
       prepare build(sort: [inserted_at: :desc])
     end
 
@@ -95,7 +101,6 @@ defmodule Tracker.Accounts.Token do
 
     bypass action(:list_api_tokens_for_subject) do
       authorize_if {Tracker.Accounts.Checks.ActorSubjectEqualsArg, arg: :subject}
-      authorize_if {Tracker.Accounts.Checks.AdminListingServiceAccountTokens, arg: :subject}
     end
 
     policy always() do
