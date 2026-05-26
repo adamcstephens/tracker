@@ -30,6 +30,7 @@ defmodule TrackerWeb.ChannelLive.Index do
         >
           <.badge variant={:danger}>Build problem</.badge>
         </.link>
+        <.badge :if={channel.status == :retired} variant={:neutral}>Retired</.badge>
       </:col>
       <:col :let={{_id, channel}} field={:count} label="Revisions" sortable>
         {channel.count}
@@ -130,7 +131,8 @@ defmodule TrackerWeb.ChannelLive.Index do
       latest_release: latest && latest.released_at,
       build_problem?: channel.build_problem?,
       hydra_project: channel.hydra_project,
-      hydra_jobset: channel.hydra_jobset
+      hydra_jobset: channel.hydra_jobset,
+      status: channel.status
     }
   end
 

@@ -6,6 +6,10 @@ defmodule Tracker.Nixpkgs.Channel do
     notifiers: [Ash.Notifier.PubSub],
     extensions: [AshAdmin.Resource]
 
+  admin do
+    update_actions [:update_status]
+  end
+
   postgres do
     table "channels"
     repo Tracker.Repo
@@ -19,6 +23,7 @@ defmodule Tracker.Nixpkgs.Channel do
     define :nixos_channels
     define :default_stable
     define :update_hydra_status
+    define :update_status
   end
 
   actions do
@@ -67,6 +72,10 @@ defmodule Tracker.Nixpkgs.Channel do
       accept [:hydra_build_failed?, :hydra_project, :hydra_jobset, :hydra_exported_job]
 
       change set_attribute(:hydra_checked_at, &DateTime.utc_now/0)
+    end
+
+    update :update_status do
+      accept [:status]
     end
   end
 
