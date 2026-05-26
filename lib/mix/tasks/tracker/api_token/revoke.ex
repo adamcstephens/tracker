@@ -18,7 +18,7 @@ defmodule Mix.Tasks.Tracker.ApiToken.Revoke do
   use Mix.Task
 
   alias Mix.Tasks.Tracker.ApiToken.Support
-  alias Tracker.Accounts.Token
+  alias Tracker.Accounts.ApiToken
 
   @switches [actor: :string, jti: :string]
 
@@ -29,7 +29,7 @@ defmodule Mix.Tasks.Tracker.ApiToken.Revoke do
     opts = parse!(args)
     actor = Support.fetch_user_by_github_username!(opts[:actor])
 
-    case Token.revoke_token_admin(opts[:jti], actor: actor) do
+    case ApiToken.revoke(opts[:jti], actor: actor) do
       {:ok, _} ->
         Mix.shell().info("Revoked #{opts[:jti]}")
 

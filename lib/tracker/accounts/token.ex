@@ -11,31 +11,8 @@ defmodule Tracker.Accounts.Token do
     repo Tracker.Repo
   end
 
-  code_interface do
-    define :list_api_tokens_for_subject, args: [:subject]
-  end
-
   actions do
     defaults [:read]
-
-    update :revoke_api_token do
-      description "Mark an API token row as revoked by setting purpose=revocation."
-      require_atomic? false
-      change set_attribute(:purpose, "revocation")
-    end
-
-    read :list_api_tokens_for_subject do
-      description "List api/revocation token rows for a given subject, newest first. Filters by extra_data.kind == \"api\" so logged-out user-session revocations don't leak in."
-      argument :subject, :string, allow_nil?: false
-
-      filter expr(
-               subject == ^arg(:subject) and
-                 purpose in ["api", "revocation"] and
-                 get_path(extra_data, [:kind]) == "api"
-             )
-
-      prepare build(sort: [inserted_at: :desc])
-    end
 
     read :expired do
       description "Look up all expired tokens."
@@ -94,15 +71,6 @@ defmodule Tracker.Accounts.Token do
       authorize_if always()
     end
 
-    bypass action(:revoke_api_token) do
-      authorize_if {Tracker.Accounts.Checks.ActorOwnsToken, []}
-      authorize_if {Tracker.Accounts.Checks.AdminRevokingServiceAccountToken, []}
-    end
-
-    bypass action(:list_api_tokens_for_subject) do
-      authorize_if {Tracker.Accounts.Checks.ActorSubjectEqualsArg, arg: :subject}
-    end
-
     policy always() do
       description "No one aside from AshAuthentication can interact with the tokens resource."
       forbid_if always()
@@ -137,16 +105,5 @@ defmodule Tracker.Accounts.Token do
     end
 
     timestamps()
-  end
-
-  def revoke_own_token(jti, opts), do: do_revoke(jti, opts)
-  def revoke_token_admin(jti, opts), do: do_revoke(jti, opts)
-
-  defp do_revoke(jti, opts) do
-    with {:ok, token} <- Ash.get(__MODULE__, jti, authorize?: false) do
-      token
-      |> Ash.Changeset.for_update(:revoke_api_token, %{}, opts)
-      |> Ash.update()
-    end
   end
 end

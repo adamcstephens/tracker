@@ -14,5 +14,9 @@ defmodule Tracker.Accounts.Checks.ActorIdEqualsArg do
     actor_id == Map.get(arguments, opts[:arg])
   end
 
+  def match?(%{id: actor_id}, %{query: %Ash.Query{arguments: arguments}}, opts) do
+    actor_id == Map.get(arguments, opts[:arg])
+  end
+
   def match?(_, _, _), do: false
 end
