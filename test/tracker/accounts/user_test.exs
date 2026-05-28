@@ -17,6 +17,13 @@ defmodule Tracker.Accounts.UserTest do
       refute User.has_role?(user, :admin)
       refute User.has_role?(user, :maintainer)
     end
+
+    test "accepts :reconstruction_worker as a valid role" do
+      user = %User{roles: [:reconstruction_worker]}
+
+      assert User.has_role?(user, :reconstruction_worker)
+      assert :reconstruction_worker in Tracker.Accounts.User.Role.values()
+    end
   end
 
   describe "register_with_github" do

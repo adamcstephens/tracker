@@ -21,6 +21,13 @@ defmodule TrackerWeb.Router do
     plug :set_actor, :user
   end
 
+  pipeline :api_reconstruction_worker do
+    plug :accepts, ["json"]
+    plug TrackerWeb.Plug.BearerAuth, purpose: "api"
+    plug TrackerWeb.Plug.RequireRole, role: :reconstruction_worker
+    plug :set_actor, :user
+  end
+
   scope "/", TrackerWeb do
     pipe_through :browser
 
@@ -67,6 +74,18 @@ defmodule TrackerWeb.Router do
             default_model_expand_depth: 4
 
     forward "/", TrackerWeb.AshJsonApiRouter
+  end
+
+  scope "/api/worker/json" do
+    pipe_through :api_reconstruction_worker
+
+    forward "/", TrackerWeb.WorkerAshJsonApiRouter
+  end
+
+  scope "/api/worker", TrackerWeb do
+    pipe_through :api_reconstruction_worker
+
+    post "/reconstruction_jobs/:id/result", ReconstructionJobController, :result
   end
 
   scope "/", TrackerWeb do

@@ -1,5 +1,5 @@
 defmodule Tracker.Accounts.User.Role do
-  use Ash.Type.Enum, values: [:user, :admin, :maintainer, :committer]
+  use Ash.Type.Enum, values: [:user, :admin, :maintainer, :committer, :reconstruction_worker]
 end
 
 defmodule Tracker.Accounts.User do

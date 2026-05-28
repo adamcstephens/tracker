@@ -411,6 +411,7 @@ defmodule Tracker.Nixpkgs.Change do
     has_many :change_packages, Tracker.Nixpkgs.ChangePackage
     has_many :change_branches, Tracker.Nixpkgs.ChangeBranch
     has_many :change_files, Tracker.Nixpkgs.ChangeFile
+    has_many :reconstruction_jobs, Tracker.Nixpkgs.ReconstructionJob
 
     many_to_many :packages, Tracker.Nixpkgs.Package do
       through Tracker.Nixpkgs.ChangePackage
