@@ -368,13 +368,13 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCacheTest do
       :ets.insert(store, {"/#{config.bucket}/#{meta_key}", :erlang.term_to_binary(meta)})
 
       assert {:error, {:source_mismatch, :pr}} =
-               ChangeArtifactCache.fetch_comparison(pr_number, expected_source: :merge_group)
+               ChangeArtifactCache.fetch_comparison(pr_number, expected_source: :merge)
 
       # Without the constraint, the cache still serves the artifact.
       assert {:ok, @attrdiff} = ChangeArtifactCache.fetch_comparison(pr_number)
     end
 
-    test "legacy meta with no :source field grandfathers to :merge_group", %{config: config} do
+    test "legacy meta with no :source field grandfathers to :merge", %{config: config} do
       pr_number = System.unique_integer([:positive])
       store = stub_s3_store()
       zip_body = build_comparison_zip()
@@ -391,25 +391,69 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCacheTest do
       :ets.insert(store, {"/#{config.bucket}/#{meta_key}", :erlang.term_to_binary(legacy_meta)})
 
       assert {:ok, @attrdiff} =
-               ChangeArtifactCache.fetch_comparison(pr_number, expected_source: :merge_group)
+               ChangeArtifactCache.fetch_comparison(pr_number, expected_source: :merge)
 
-      assert {:error, {:source_mismatch, :merge_group}} =
+      assert {:error, {:source_mismatch, :merge}} =
                ChangeArtifactCache.fetch_comparison(pr_number, expected_source: :pr)
     end
 
-    test "merge-group-sourced cache satisfies a merged read", %{config: config} do
+    test "pre-trk-268 :merge_group source value normalizes to :merge on read",
+         %{config: config} do
       pr_number = System.unique_integer([:positive])
       store = stub_s3_store()
       zip_body = build_comparison_zip()
       zip_key = ChangeArtifactCache.cache_key(pr_number, "comparison")
       :ets.insert(store, {"/#{config.bucket}/#{zip_key}", zip_body})
 
-      meta = %ChangeArtifactCache.Meta{run_id: 1, names: ["comparison"], source: :merge_group}
+      legacy_meta = %{
+        __struct__: ChangeArtifactCache.Meta,
+        version: 1,
+        run_id: 1,
+        names: ["comparison"],
+        source: :merge_group
+      }
+
+      meta_key = ChangeArtifactCache.meta_key(pr_number)
+      :ets.insert(store, {"/#{config.bucket}/#{meta_key}", :erlang.term_to_binary(legacy_meta)})
+
+      assert {:ok, @attrdiff} =
+               ChangeArtifactCache.fetch_comparison(pr_number, expected_source: :merge)
+    end
+
+    test "merge-sourced cache satisfies a merged read", %{config: config} do
+      pr_number = System.unique_integer([:positive])
+      store = stub_s3_store()
+      zip_body = build_comparison_zip()
+      zip_key = ChangeArtifactCache.cache_key(pr_number, "comparison")
+      :ets.insert(store, {"/#{config.bucket}/#{zip_key}", zip_body})
+
+      meta = %ChangeArtifactCache.Meta{run_id: 1, names: ["comparison"], source: :merge}
       meta_key = ChangeArtifactCache.meta_key(pr_number)
       :ets.insert(store, {"/#{config.bucket}/#{meta_key}", :erlang.term_to_binary(meta)})
 
       assert {:ok, @attrdiff} =
-               ChangeArtifactCache.fetch_comparison(pr_number, expected_source: :merge_group)
+               ChangeArtifactCache.fetch_comparison(pr_number, expected_source: :merge)
+    end
+  end
+
+  describe "Meta v2 schema" do
+    test "version defaults to 2 and provenance defaults to :github_artifact" do
+      meta = %ChangeArtifactCache.Meta{run_id: 1}
+
+      assert meta.version == 2
+      assert meta.provenance == :github_artifact
+      assert meta.source == :merge
+    end
+
+    test "supports :reconstruction provenance with nil run_id" do
+      meta = %ChangeArtifactCache.Meta{
+        run_id: nil,
+        source: :merge,
+        provenance: :reconstruction
+      }
+
+      assert meta.provenance == :reconstruction
+      assert is_nil(meta.run_id)
     end
   end
 end

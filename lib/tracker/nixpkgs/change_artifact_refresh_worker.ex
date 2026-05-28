@@ -407,7 +407,7 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
     token = Tracker.GitHub.installation_token!()
 
     cache_first =
-      case ChangeArtifactCache.fetch_comparison(change.number, expected_source: :merge_group) do
+      case ChangeArtifactCache.fetch_comparison(change.number, expected_source: :merge) do
         {:ok, attrdiff} -> {:ok, attrdiff}
         {:error, _} -> :miss
       end
@@ -420,7 +420,7 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
         fetch_from_github(change,
           find_run: &find_merge_group_run/4,
           sha: change.merge_commit_sha,
-          source: :merge_group,
+          source: :merge,
           token: token
         )
     end

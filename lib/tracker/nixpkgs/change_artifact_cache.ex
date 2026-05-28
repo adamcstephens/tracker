@@ -19,13 +19,18 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCache do
     use TypedStruct
 
     typedstruct enforce: true do
-      field :version, integer(), default: 1
-      field :run_id, integer()
+      field :version, integer(), default: 2
+      field :run_id, integer() | nil, default: nil
       field :names, [String.t()], default: []
-      # Workflow that produced the cached artifacts. `:merge_group` is the
-      # post-merge canonical comparison; `:pr` is the in-flight PR-run
-      # comparison and should not satisfy reads expecting `:merge_group`.
-      field :source, :merge_group | :pr, default: :merge_group
+      # Workflow source. `:merge` is the post-merge canonical comparison
+      # (either via the historic Merge Group workflow or a worker
+      # reconstruction); `:pr` is the in-flight PR-run comparison and
+      # should not satisfy reads expecting `:merge`.
+      field :source, :merge | :pr, default: :merge
+      # How the cached artifacts were produced. `:github_artifact` came
+      # straight from a GitHub Actions run; `:reconstruction` was rebuilt
+      # by an external worker after the original artifact expired.
+      field :provenance, :github_artifact | :reconstruction, default: :github_artifact
     end
   end
 
@@ -64,15 +69,15 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCache do
   Each artifact map must have `:name` and `:archive_download_url` keys.
 
   Options:
-    * `:source` — `:merge_group` (default) or `:pr`. Records which
-      workflow produced these artifacts so that `fetch_comparison/2`
-      can reject a cache hit from the wrong source.
+    * `:source` — `:merge` (default) or `:pr`. Records which workflow
+      produced these artifacts so that `fetch_comparison/2` can reject
+      a cache hit from the wrong source.
 
   Returns `:ok` or `{:error, reason}` (stops on first download failure).
   """
   def cache_run_artifacts(pr_number, run_id, artifacts, token, opts \\ []) do
     m_key = meta_key(pr_number)
-    source = Keyword.get(opts, :source, :merge_group)
+    source = Keyword.get(opts, :source, :merge)
 
     if run_cached?(m_key, run_id) do
       Logger.debug(msg: "all artifacts cached", pr_number: pr_number, run_id: run_id)
@@ -153,9 +158,7 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCache do
   defp check_source(pr_number, expected) do
     case read_meta(pr_number) do
       {:ok, meta} ->
-        # Pre-trk-185 metas were serialized without :source; grandfather
-        # them in as :merge_group since that was the only path then.
-        cached = Map.get(meta, :source) || :merge_group
+        cached = normalize_source(Map.get(meta, :source))
 
         if cached == expected, do: :ok, else: {:error, {:source_mismatch, cached}}
 
@@ -163,6 +166,12 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCache do
         :ok
     end
   end
+
+  # Pre-trk-185 metas had no :source. Pre-trk-268 metas used :merge_group
+  # for what is now :merge. Normalize both onto :merge.
+  defp normalize_source(nil), do: :merge
+  defp normalize_source(:merge_group), do: :merge
+  defp normalize_source(other), do: other
 
   defp read_or_miss(pr_number) do
     case read_artifact(pr_number, "comparison") do
