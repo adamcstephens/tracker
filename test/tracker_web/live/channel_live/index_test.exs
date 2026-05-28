@@ -22,6 +22,14 @@ defmodule TrackerWeb.ChannelLive.IndexTest do
         is_stable: true
       })
 
+    channel_pre_release =
+      Channel.create!(%{
+        name: "nixos-26.05",
+        display_name: "NixOS 26.05",
+        status: :pre_release,
+        is_stable: true
+      })
+
     Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
       channel_id: channel_unstable.id,
       revision: "aaa111bbb222ccc",
@@ -38,6 +46,12 @@ defmodule TrackerWeb.ChannelLive.IndexTest do
       channel_id: channel_stable.id,
       revision: "ggg555hhh666iii",
       released_at: ~U[2026-03-10 10:00:00Z]
+    })
+
+    Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
+      channel_id: channel_pre_release.id,
+      revision: "jjj777kkk888lll",
+      released_at: ~U[2026-03-12 10:00:00Z]
     })
 
     :ok
@@ -112,5 +126,12 @@ defmodule TrackerWeb.ChannelLive.IndexTest do
 
     html = render(view)
     assert html =~ "2026-04-02"
+  end
+
+  test "renders Pre-release badge for channels in pre_release status", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/channels")
+
+    assert html =~ "nixos-26.05"
+    assert html =~ "Pre-release"
   end
 end
