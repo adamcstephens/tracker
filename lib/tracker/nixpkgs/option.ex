@@ -92,13 +92,24 @@ defmodule Tracker.Nixpkgs.Option do
   (e.g. `services.nginx.virtualHosts` → `services.nginx`).
   """
   def prefix_counts_by_change_and_channel_revision(change_id, channel_revision_id) do
-    Tracker.Nixpkgs.OptionRevision.list_by_change_and_channel_revision!(
-      change_id,
-      channel_revision_id
-    )
-    |> Enum.map(&fold_to_prefix(&1.option.name))
-    |> Enum.frequencies()
-    |> Enum.sort_by(fn {prefix, _count} -> prefix end)
+    file_ids =
+      change_id
+      |> Tracker.Nixpkgs.ChangeFile.file_ids_for_change!()
+      |> Enum.map(& &1.file_id)
+
+    case file_ids do
+      [] ->
+        []
+
+      _ ->
+        Tracker.Nixpkgs.OptionRevision.list_by_channel_revision_and_file_ids!(
+          channel_revision_id,
+          file_ids
+        )
+        |> Enum.map(&fold_to_prefix(&1.option.name))
+        |> Enum.frequencies()
+        |> Enum.sort_by(fn {prefix, _count} -> prefix end)
+    end
   end
 
   defp fold_to_prefix(name) do

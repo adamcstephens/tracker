@@ -12,7 +12,7 @@ defmodule Tracker.Nixpkgs.OptionRevision do
     define :latest_by_option_ids, args: [:option_ids]
     define :list_by_channel_revision, args: [:channel_revision_id, {:optional, :search}]
     define :list_by_channel_revision_and_prefix, args: [:channel_revision_id, :prefix]
-    define :list_by_change_and_channel_revision, args: [:change_id, :channel_revision_id]
+    define :list_by_channel_revision_and_file_ids, args: [:channel_revision_id, :file_ids]
     define :all_by_channel_revision, args: [:channel_revision_id]
   end
 
@@ -65,18 +65,18 @@ defmodule Tracker.Nixpkgs.OptionRevision do
       prepare build(sort: [option_id: :asc, released_at: :desc], distinct: [:option_id])
     end
 
-    read :list_by_change_and_channel_revision do
-      argument :change_id, :integer, allow_nil?: false
+    read :list_by_channel_revision_and_file_ids do
       argument :channel_revision_id, :integer, allow_nil?: false
+      argument :file_ids, {:array, :integer}, allow_nil?: false
 
       prepare build(sort: [option_name: :asc], load: [:option])
 
+      # Drive from option_revisions filtered by channel_revision_id (selective),
+      # then probe option_revision_files. The (option_revision_id, file_id)
+      # unique index handles the inner exists with leading-column access.
       filter expr(
                channel_revision_id == ^arg(:channel_revision_id) and
-                 exists(
-                   option_revision_files,
-                   exists(file.change_files, change_id == ^arg(:change_id))
-                 )
+                 exists(option_revision_files, file_id in ^arg(:file_ids))
              )
     end
 
