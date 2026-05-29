@@ -4,6 +4,10 @@ defmodule Tracker.Nixpkgs.OptionRevisionFile do
   postgres do
     table "option_revision_files"
     repo Tracker.Repo
+
+    custom_indexes do
+      index [:file_id]
+    end
   end
 
   code_interface do
