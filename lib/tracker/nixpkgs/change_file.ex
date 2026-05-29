@@ -8,10 +8,19 @@ defmodule Tracker.Nixpkgs.ChangeFile do
 
   code_interface do
     define :read
+    define :file_ids_for_change, args: [:change_id]
   end
 
   actions do
     defaults [:read, :destroy]
+
+    read :file_ids_for_change do
+      argument :change_id, :integer, allow_nil?: false
+
+      prepare build(select: [:file_id])
+
+      filter expr(change_id == ^arg(:change_id))
+    end
   end
 
   attributes do
