@@ -32,7 +32,12 @@ defmodule TrackerWeb.ChannelLive.Show do
       </:actions>
     </.header>
 
-    <div :if={@has_revisions?}>
+    <form
+      :if={@has_revisions?}
+      id="revisions-form"
+      method="get"
+      action={~p"/channels/#{@channel}/diff"}
+    >
       <DataTable.data_table
         id="revisions"
         rows={@revisions}
@@ -44,12 +49,7 @@ defmodule TrackerWeb.ChannelLive.Show do
         has_next_page?={@has_next_page?}
       >
         <:col :let={rev} label="">
-          <input
-            type="checkbox"
-            checked={rev.revision in @selected_revisions}
-            phx-click="toggle-rev"
-            phx-value-revision={rev.revision}
-          />
+          <input type="checkbox" name="compare[]" value={rev.revision} />
         </:col>
         <:col :let={rev} field={:revision} label="Revision" sortable>
           <.revision_link revision={rev.revision} channel={@channel} />
@@ -62,17 +62,8 @@ defmodule TrackerWeb.ChannelLive.Show do
         </:col>
       </DataTable.data_table>
 
-      <a
-        :if={length(@selected_revisions) == 2}
-        href={
-          ~p"/channels/#{@channel}/diff/#{Enum.at(@selected_revisions, 0)}/#{Enum.at(@selected_revisions, 1)}"
-        }
-        role="button"
-        style="margin-top: 1rem; display: inline-block;"
-      >
-        Show diff
-      </a>
-    </div>
+      <button type="submit" style="margin-top: 1rem;">Compare selected</button>
+    </form>
 
     <p :if={not @has_revisions?}>
       No revisions found.
@@ -105,7 +96,6 @@ defmodule TrackerWeb.ChannelLive.Show do
     {:ok,
      socket
      |> assign_new(:current_user, fn -> nil end)
-     |> assign(:selected_revisions, [])
      |> assign(:subscribed_channel_id, nil)}
   end
 
@@ -217,22 +207,5 @@ defmodule TrackerWeb.ChannelLive.Show do
            "/channels/#{socket.assigns.channel}"
          )
      )}
-  end
-
-  @impl true
-  def handle_event("toggle-rev", %{"revision" => revision}, socket) do
-    selected = socket.assigns.selected_revisions
-
-    selected =
-      if revision in selected do
-        List.delete(selected, revision)
-      else
-        case selected do
-          [_a, _b] -> [List.last(selected), revision]
-          _ -> selected ++ [revision]
-        end
-      end
-
-    {:noreply, assign(socket, :selected_revisions, selected)}
   end
 end

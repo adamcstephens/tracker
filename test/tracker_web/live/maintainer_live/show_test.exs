@@ -56,4 +56,16 @@ defmodule TrackerWeb.MaintainerLive.ShowTest do
     assert html =~ "maint-pkg-one"
     assert html =~ "maint-pkg-two"
   end
+
+  test "package search form submits via GET for no-JS fallback", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/maintainers/testmaint")
+
+    [form] =
+      html
+      |> Floki.parse_document!()
+      |> Floki.find("form#maintainer-package-search")
+
+    assert Floki.attribute(form, "method") == ["get"]
+    assert Floki.attribute(form, "action") == ["/maintainers/testmaint"]
+  end
 end

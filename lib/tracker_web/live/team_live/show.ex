@@ -36,7 +36,13 @@ defmodule TrackerWeb.TeamLive.Show do
 
     <h2>Packages</h2>
 
-    <form phx-change="search-packages" phx-submit="search-packages">
+    <form
+      id="team-package-search"
+      method="get"
+      action={~p"/teams/#{@team.short_name}"}
+      phx-change="search-packages"
+      phx-submit="search-packages"
+    >
       <input
         type="search"
         name="package_search"
