@@ -5,8 +5,8 @@ defmodule Tracker.Ingestion.CronWorker do
   For each active channel, issues a conditional GET against
   `https://channels.nixos.org/<channel>/git-revision`. On `304` the worker
   does nothing. On `200` it stores the new ETag/Last-Modified pointer and,
-  if the body differs from the newest revision currently in
-  `ReleaseCache`, refreshes the channel's S3 listing and runs
+  if no non-failed ingestion pipeline exists for that revision yet,
+  refreshes the channel's S3 listing and runs
   `PipelineStarter.sync_channel/1`.
   """
 
@@ -14,7 +14,7 @@ defmodule Tracker.Ingestion.CronWorker do
 
   require Logger
 
-  alias Tracker.Ingestion.PipelineStarter
+  alias Tracker.Ingestion.{Pipeline, PipelineStarter}
   alias Tracker.Nixpkgs.{Channel, ReleaseCache}
 
   @pointer_base_url "https://channels.nixos.org"
@@ -61,7 +61,7 @@ defmodule Tracker.Ingestion.CronWorker do
         ReleaseCache.put_pointer(cache, channel.name, new_pointer)
 
         if new_pointer.revision != nil and
-             new_pointer.revision != ReleaseCache.newest_revision(cache, channel.name) do
+             not pipeline_exists?(channel.id, new_pointer.revision) do
           sync_after_pointer_change(channel, cache, %{acc | changed: acc.changed + 1})
         else
           Logger.debug(
@@ -76,6 +76,14 @@ defmodule Tracker.Ingestion.CronWorker do
       {:error, reason} ->
         Logger.warning(msg: "channel poll error", channel: channel.name, reason: inspect(reason))
         acc
+    end
+  end
+
+  defp pipeline_exists?(channel_id, revision) do
+    case Pipeline.find(channel_id, revision) do
+      {:ok, %Pipeline{status: :failed}} -> false
+      {:ok, %Pipeline{}} -> true
+      _ -> false
     end
   end
 

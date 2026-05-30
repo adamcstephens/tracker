@@ -121,6 +121,33 @@ defmodule Tracker.Ingestion.CronWorkerTest do
       assert ReleaseCache.get_pointer(@cache_name, "nixos-unstable").revision == @new_revision
     end
 
+    test "200 with new revision creates a pipeline even when ReleaseCache already knows the release",
+         %{channel: channel, old_release: old_release} do
+      new_release = %Release{
+        base_url: "https://releases.nixos.org/nixos/unstable/nixos-25.05pre-ccc2222",
+        released_at: ~U[2025-06-20 00:00:00Z],
+        revision: @new_revision
+      }
+
+      ReleaseCache.put_releases(@cache_name, "nixos-unstable", [new_release, old_release])
+
+      Application.put_env(
+        :tracker,
+        :release_cache_fetcher,
+        fn "nixos-unstable" -> [new_release, old_release] end
+      )
+
+      Req.Test.stub(@stub, fn conn ->
+        conn
+        |> Plug.Conn.put_resp_header("etag", ~s("etag-v2"))
+        |> Plug.Conn.send_resp(200, @new_revision <> "\n")
+      end)
+
+      before = length(Pipeline.for_channel!(channel.id))
+      assert :ok = perform_job(CronWorker, %{}, queue: :ingestion)
+      assert length(Pipeline.for_channel!(channel.id)) == before + 1
+    end
+
     test "sends If-None-Match and If-Modified-Since from stored pointer" do
       ReleaseCache.put_pointer(@cache_name, "nixos-unstable", %{
         etag: ~s("prev-etag"),
