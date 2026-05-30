@@ -51,6 +51,7 @@ defmodule TrackerWeb.Router do
           {TrackerWeb.LiveUserAuth, :live_user_required}
         ] do
         live "/tokens", AccountLive.Tokens, :index
+        live "/settings", AccountLive.Settings, :index
       end
     end
 

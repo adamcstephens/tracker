@@ -111,6 +111,20 @@
             </summary>
             <div class="app-user__panel" role="menu">
               <.link
+                navigate={~p"/account/settings"}
+                class="app-user__menu-item"
+                role="menuitem"
+              >
+                Settings
+              </.link>
+              <.link
+                navigate={~p"/account/tokens"}
+                class="app-user__menu-item"
+                role="menuitem"
+              >
+                API tokens
+              </.link>
+              <.link
                 href={~p"/sign-out"}
                 method="delete"
                 class="app-user__menu-item"
