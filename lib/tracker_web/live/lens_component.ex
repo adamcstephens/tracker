@@ -63,6 +63,7 @@ defmodule TrackerWeb.LensComponent do
           </select>
         </span>
         <span :if={short_rev(@lens)} class="lens-rev">@{short_rev(@lens)}</span>
+        <button type="submit" class="lens__submit" disabled={@lens.disabled?}>Set</button>
       </form>
     </div>
     """
