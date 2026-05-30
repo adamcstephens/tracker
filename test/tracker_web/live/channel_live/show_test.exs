@@ -71,75 +71,19 @@ defmodule TrackerWeb.ChannelLive.ShowTest do
     assert html =~ ~s|type="checkbox"|
   end
 
-  test "shows diff link when two revisions are checked", %{conn: conn, cr1: cr1, cr2: cr2} do
-    {:ok, view, _html} = live(conn, ~p"/channels/nixos-unstable")
+  test "revisions form submits via GET to the diff endpoint", %{conn: conn, cr1: cr1} do
+    {:ok, _view, html} = live(conn, ~p"/channels/nixos-unstable")
 
-    html =
-      view
-      |> element(~s|input[type="checkbox"][phx-value-revision="#{cr1.revision}"]|)
-      |> render_click()
+    document = Floki.parse_document!(html)
+    [form] = Floki.find(document, "form#revisions-form")
 
-    refute html =~ "Show diff"
+    assert Floki.attribute(form, "method") == ["get"]
+    assert Floki.attribute(form, "action") == ["/channels/nixos-unstable/diff"]
 
-    html =
-      view
-      |> element(~s|input[type="checkbox"][phx-value-revision="#{cr2.revision}"]|)
-      |> render_click()
+    checkboxes = Floki.find(form, ~s|input[type="checkbox"][name="compare[]"]|)
+    assert Enum.any?(checkboxes, &(Floki.attribute(&1, "value") == [cr1.revision]))
 
-    assert html =~ "Show diff"
-    assert html =~ ~p"/channels/nixos-unstable/diff/#{cr1.revision}/#{cr2.revision}"
-  end
-
-  test "unchecking a revision hides diff link", %{conn: conn, cr1: cr1, cr2: cr2} do
-    {:ok, view, _html} = live(conn, ~p"/channels/nixos-unstable")
-
-    view
-    |> element(~s|input[type="checkbox"][phx-value-revision="#{cr1.revision}"]|)
-    |> render_click()
-
-    view
-    |> element(~s|input[type="checkbox"][phx-value-revision="#{cr2.revision}"]|)
-    |> render_click()
-
-    html =
-      view
-      |> element(~s|input[type="checkbox"][phx-value-revision="#{cr1.revision}"]|)
-      |> render_click()
-
-    refute html =~ "Show diff"
-  end
-
-  test "checking a third revision drops the oldest", %{
-    conn: conn,
-    cr1: cr1,
-    cr2: cr2,
-    channel: channel
-  } do
-    cr3 =
-      Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
-        channel_id: channel.id,
-        revision: "shw333fff666777",
-        released_at: ~U[2026-03-20 10:00:00Z]
-      })
-
-    {:ok, view, _html} = live(conn, ~p"/channels/nixos-unstable")
-
-    view
-    |> element(~s|input[type="checkbox"][phx-value-revision="#{cr1.revision}"]|)
-    |> render_click()
-
-    view
-    |> element(~s|input[type="checkbox"][phx-value-revision="#{cr2.revision}"]|)
-    |> render_click()
-
-    html =
-      view
-      |> element(~s|input[type="checkbox"][phx-value-revision="#{cr3.revision}"]|)
-      |> render_click()
-
-    assert html =~ "Show diff"
-    assert html =~ ~p"/channels/nixos-unstable/diff/#{cr2.revision}/#{cr3.revision}"
-    refute html =~ ~s|checked="checked" phx-value-revision="#{cr1.revision}"|
+    assert Floki.find(form, "button[type=submit]") != []
   end
 
   test "renders a Build problem badge in the header when hydra reports failure",

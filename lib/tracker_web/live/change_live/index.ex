@@ -30,6 +30,7 @@ defmodule TrackerWeb.ChangeLive.Index do
           {base}
         </option>
       </select>
+      <button type="submit">Apply</button>
     </form>
 
     <DataTable.data_table

@@ -34,6 +34,7 @@ defmodule TrackerWeb.Router do
     get "/feeds/channels/:channel", FeedController, :channel
     get "/feeds/packages/:name", FeedController, :package
     post "/lens", LensController, :update
+    get "/channels/:channel/diff", ChannelDiffController, :resolve
 
     ash_authentication_live_session :account_routes,
       on_mount: [

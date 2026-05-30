@@ -67,7 +67,13 @@ defmodule TrackerWeb.MaintainerLive.Show do
 
     <h2>Packages ({@package_count})</h2>
 
-    <form phx-change="search-packages" phx-submit="search-packages">
+    <form
+      id="maintainer-package-search"
+      method="get"
+      action={~p"/maintainers/#{@maintainer.github}"}
+      phx-change="search-packages"
+      phx-submit="search-packages"
+    >
       <input
         type="search"
         name="package_search"

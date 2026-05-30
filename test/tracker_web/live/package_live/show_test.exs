@@ -434,6 +434,21 @@ defmodule TrackerWeb.PackageLive.ShowTest do
       assert length(versions) == 3
     end
 
+    test "revision filter form submits via GET for no-JS fallback", %{
+      conn: conn,
+      package: package
+    } do
+      {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}")
+
+      [form] =
+        html
+        |> Floki.parse_document!()
+        |> Floki.find("form.revision-filters")
+
+      assert Floki.attribute(form, "method") == ["get"]
+      assert Floki.attribute(form, "action") == ["/packages/#{package.attribute}"]
+    end
+
     test "all_revisions is preserved in URL after sort", %{conn: conn, package: package} do
       {:ok, view, _html} =
         live(conn, ~p"/packages/#{package.attribute}?all_revisions=true")

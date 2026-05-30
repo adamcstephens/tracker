@@ -95,6 +95,18 @@ defmodule TrackerWeb.ChangeLive.IndexTest do
     refute html =~ "5001"
   end
 
+  test "base_ref filter form has a submit button for no-JS fallback", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/changes")
+
+    [form] =
+      html
+      |> Floki.parse_document!()
+      |> Floki.find("form#change-base-ref-filter")
+
+    assert Floki.attribute(form, "method") == ["get"]
+    assert Floki.find(form, "button[type=submit]") != []
+  end
+
   test "sorting by title ascending", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/changes")
 

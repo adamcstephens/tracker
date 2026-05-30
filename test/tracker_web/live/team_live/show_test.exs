@@ -53,4 +53,16 @@ defmodule TrackerWeb.TeamLive.ShowTest do
 
     assert html =~ "team-pkg"
   end
+
+  test "package search form submits via GET for no-JS fallback", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/teams/teamshow")
+
+    [form] =
+      html
+      |> Floki.parse_document!()
+      |> Floki.find("form#team-package-search")
+
+    assert Floki.attribute(form, "method") == ["get"]
+    assert Floki.attribute(form, "action") == ["/teams/teamshow"]
+  end
 end

@@ -150,7 +150,13 @@ defmodule TrackerWeb.PackageLive.Show do
     <div class="revisions-header">
       <h2>Revisions</h2>
 
-      <form phx-change="filter" phx-submit="filter" class="revision-filters">
+      <form
+        method="get"
+        action={~p"/packages/#{@package.attribute}"}
+        phx-change="filter"
+        phx-submit="filter"
+        class="revision-filters"
+      >
         <input
           type="text"
           name="version"
