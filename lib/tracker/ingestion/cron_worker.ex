@@ -54,30 +54,29 @@ defmodule Tracker.Ingestion.CronWorker do
 
     case fetch_pointer(channel.name, pointer) do
       {:not_modified, _resp} ->
-        Logger.debug(msg: "channel poll unchanged", channel: channel.name, reason: :not_modified)
-        %{acc | unchanged: acc.unchanged + 1}
+        maybe_sync(channel, cache, pointer_revision(pointer), :not_modified, acc)
 
       {:ok, new_pointer} ->
         ReleaseCache.put_pointer(cache, channel.name, new_pointer)
-
-        if new_pointer.revision != nil and
-             not pipeline_exists?(channel.id, new_pointer.revision) do
-          sync_after_pointer_change(channel, cache, %{acc | changed: acc.changed + 1})
-        else
-          Logger.debug(
-            msg: "channel poll unchanged",
-            channel: channel.name,
-            reason: :same_revision
-          )
-
-          %{acc | unchanged: acc.unchanged + 1}
-        end
+        maybe_sync(channel, cache, new_pointer.revision, :same_revision, acc)
 
       {:error, reason} ->
         Logger.warning(msg: "channel poll error", channel: channel.name, reason: inspect(reason))
         acc
     end
   end
+
+  defp maybe_sync(channel, cache, revision, unchanged_reason, acc) do
+    if revision != nil and not pipeline_exists?(channel.id, revision) do
+      sync_after_pointer_change(channel, cache, %{acc | changed: acc.changed + 1})
+    else
+      Logger.debug(msg: "channel poll unchanged", channel: channel.name, reason: unchanged_reason)
+      %{acc | unchanged: acc.unchanged + 1}
+    end
+  end
+
+  defp pointer_revision(nil), do: nil
+  defp pointer_revision(%{revision: revision}), do: revision
 
   defp pipeline_exists?(channel_id, revision) do
     case Pipeline.find(channel_id, revision) do

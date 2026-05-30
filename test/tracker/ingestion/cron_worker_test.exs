@@ -121,6 +121,39 @@ defmodule Tracker.Ingestion.CronWorkerTest do
       assert ReleaseCache.get_pointer(@cache_name, "nixos-unstable").revision == @new_revision
     end
 
+    test "304 still syncs when stored pointer revision has no pipeline", %{channel: channel} do
+      # Simulates production: a prior poll stored a pointer for a revision
+      # that never got a pipeline. Upstream now returns 304 against the
+      # conditional headers, but the cron should still detect the gap.
+      new_release = %Release{
+        base_url: "https://releases.nixos.org/nixos/unstable/nixos-25.05pre-ccc2222",
+        released_at: ~U[2025-06-20 00:00:00Z],
+        revision: @new_revision
+      }
+
+      ReleaseCache.put_releases(@cache_name, "nixos-unstable", [new_release])
+
+      ReleaseCache.put_pointer(@cache_name, "nixos-unstable", %{
+        etag: ~s("etag-v2"),
+        last_modified: "Wed, 25 May 2026 14:59:39 GMT",
+        revision: @new_revision
+      })
+
+      Application.put_env(
+        :tracker,
+        :release_cache_fetcher,
+        fn "nixos-unstable" -> [new_release] end
+      )
+
+      Req.Test.stub(@stub, fn conn ->
+        Plug.Conn.send_resp(conn, 304, "")
+      end)
+
+      before = length(Pipeline.for_channel!(channel.id))
+      assert :ok = perform_job(CronWorker, %{}, queue: :ingestion)
+      assert length(Pipeline.for_channel!(channel.id)) == before + 1
+    end
+
     test "200 with new revision creates a pipeline even when ReleaseCache already knows the release",
          %{channel: channel, old_release: old_release} do
       new_release = %Release{
