@@ -47,6 +47,7 @@ defmodule Tracker.Accounts.User do
 
   code_interface do
     define :create_service_account, args: [:name, :roles]
+    define :set_live_ui
   end
 
   actions do
@@ -94,6 +95,11 @@ defmodule Tracker.Accounts.User do
       get? true
       prepare AshAuthentication.Preparations.FilterBySubject
     end
+
+    update :set_live_ui do
+      require_atomic? false
+      accept [:live_ui]
+    end
   end
 
   policies do
@@ -103,6 +109,10 @@ defmodule Tracker.Accounts.User do
 
     bypass action(:create_service_account) do
       authorize_if {Tracker.Accounts.Checks.ActorHasRole, role: :admin}
+    end
+
+    bypass action(:set_live_ui) do
+      authorize_if expr(id == ^actor(:id))
     end
 
     policy always() do
@@ -134,6 +144,11 @@ defmodule Tracker.Accounts.User do
       default [:user]
       allow_nil? false
       constraints min_length: 1
+    end
+
+    attribute :live_ui, :boolean do
+      default true
+      allow_nil? false
     end
   end
 

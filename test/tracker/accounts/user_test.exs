@@ -102,6 +102,31 @@ defmodule Tracker.Accounts.UserTest do
     end
   end
 
+  describe "live_ui preference" do
+    test "defaults to true on registration" do
+      user = register_via_github!()
+
+      assert user.live_ui == true
+    end
+
+    test "set_live_ui flips the preference" do
+      user = register_via_github!()
+
+      updated = User.set_live_ui!(user, %{live_ui: false}, actor: user)
+
+      assert updated.live_ui == false
+    end
+
+    test "set_live_ui forbids another user from changing your preference" do
+      user = register_via_github!()
+      other = register_via_github!()
+
+      assert_raise Ash.Error.Forbidden, fn ->
+        User.set_live_ui!(user, %{live_ui: false}, actor: other)
+      end
+    end
+  end
+
   defp register_via_github!(overrides \\ %{}) do
     user_info =
       Map.merge(

@@ -12,8 +12,15 @@ defmodule TrackerWeb.Router do
     plug :protect_from_forgery
     plug :put_secure_browser_headers
     plug :load_from_session
+    plug TrackerWeb.Plug.InteractiveUI
     plug TrackerWeb.Plug.Lens
   end
+
+  pipeline :force_interactive do
+    plug :assign_interactive
+  end
+
+  defp assign_interactive(conn, _opts), do: Plug.Conn.assign(conn, :interactive?, true)
 
   pipeline :api do
     plug :accepts, ["json"]
@@ -36,16 +43,21 @@ defmodule TrackerWeb.Router do
     post "/lens", LensController, :update
     get "/channels/:channel/diff", ChannelDiffController, :resolve
 
-    ash_authentication_live_session :account_routes,
-      on_mount: [
-        {TrackerWeb.LiveUserAuth, :live_user_required}
-      ] do
-      live "/account/tokens", AccountLive.Tokens, :index
+    scope "/account" do
+      pipe_through :force_interactive
+
+      ash_authentication_live_session :account_routes,
+        on_mount: [
+          {TrackerWeb.LiveUserAuth, :live_user_required}
+        ] do
+        live "/tokens", AccountLive.Tokens, :index
+      end
     end
 
     ash_authentication_live_session :authenticated_routes,
       on_mount: [
         {TrackerWeb.LiveUserAuth, :live_user_optional},
+        {TrackerWeb.Plug.InteractiveUI, :default},
         {TrackerWeb.LensHook, :default}
       ] do
       live "/", PackageLive.Index, :index
