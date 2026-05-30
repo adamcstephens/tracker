@@ -41,5 +41,23 @@ defmodule TrackerWeb.LensControllerTest do
       {:ok, value} = Lens.verify_cookie(cookie.value)
       assert value == "nixos-unstable"
     end
+
+    test "strips scheme/host when referer is an absolute same-host URL", %{conn: conn} do
+      conn =
+        conn
+        |> put_req_header("referer", "http://#{conn.host}/packages?search=foo")
+        |> post("/lens", %{"channel" => "nixos-unstable"})
+
+      assert redirected_to(conn) == "/packages?search=foo"
+    end
+
+    test "falls back to / when referer is a cross-origin URL", %{conn: conn} do
+      conn =
+        conn
+        |> put_req_header("referer", "https://evil.example/attack")
+        |> post("/lens", %{"channel" => "nixos-unstable"})
+
+      assert redirected_to(conn) == "/"
+    end
   end
 end

@@ -67,6 +67,17 @@ defmodule TrackerWeb.LensComponentTest do
     assert html =~ "All channels"
   end
 
+  test "renders a submit button so the lens works without JS", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/packages")
+
+    [form] =
+      html
+      |> Floki.parse_document!()
+      |> Floki.find("form.lens__form")
+
+    assert Floki.find(form, "button[type=submit]") != []
+  end
+
   test "renders short revision when lens has a revision set", %{conn: conn} do
     suffix = System.unique_integer([:positive])
 

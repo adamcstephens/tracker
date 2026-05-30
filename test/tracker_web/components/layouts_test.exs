@@ -92,6 +92,17 @@ defmodule TrackerWeb.LayoutsTest do
                ~r{app-header__row--bottom.*?<input[^>]*type="hidden"[^>]*name="base_ref"[^>]*value="master"}s
     end
 
+    test "search form has a submit button so it works without JS", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/packages")
+
+      [form] =
+        html
+        |> Floki.parse_document!()
+        |> Floki.find("form#page-search")
+
+      assert Floki.find(form, "button[type=submit]") != []
+    end
+
     test "page no longer renders its own search input on Changes", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/changes")
 

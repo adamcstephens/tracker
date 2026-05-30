@@ -1222,6 +1222,23 @@ dl.option-body dd {
 	flex-shrink: 0;
 }
 
+.app-search__submit {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 0;
+	margin: 0;
+	border: 0;
+	background: transparent;
+	color: inherit;
+	cursor: pointer;
+	flex-shrink: 0;
+}
+
+.app-search__submit:disabled {
+	cursor: default;
+}
+
 .app-search input[type="search"] {
 	flex: 1;
 	color: var(--text);
@@ -1313,6 +1330,32 @@ dl.option-body dd {
 	border-left: 1px solid var(--line);
 	color: var(--text-2);
 	font-family: var(--mono);
+}
+
+.lens__submit {
+	display: inline-flex;
+	align-items: center;
+	padding: 0.3125rem 0.625rem;
+	border: 0;
+	border-left: 1px solid var(--line);
+	background: var(--surface-2);
+	color: var(--text-2);
+	font-family: var(--mono);
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	cursor: pointer;
+	margin: 0;
+	border-radius: 0;
+}
+
+.lens__submit:hover:not(:disabled) {
+	background: var(--surface);
+	color: var(--text);
+}
+
+.lens__submit:disabled {
+	cursor: default;
+	opacity: 0.5;
 }
 
 /* Mobile bottom tabs — hidden on desktop */
