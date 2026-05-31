@@ -348,5 +348,45 @@ defmodule TrackerWeb.DataTableTest do
       assert html =~ "prev-page"
       assert html =~ "next-page"
     end
+
+    test "renders prev/next as links when prev_path and next_path are given" do
+      assigns = %{}
+
+      html =
+        rendered_to_string(~H"""
+        <DataTable.pagination
+          total_pages={3}
+          current_page={2}
+          has_prev_page?={true}
+          has_next_page?={true}
+          prev_path="/items?page=1"
+          next_path="/items?page=3"
+        />
+        """)
+
+      assert html =~ ~s(href="/items?page=1")
+      assert html =~ ~s(href="/items?page=3")
+    end
+
+    test "disabled prev/next render as non-link spans when paths are given" do
+      assigns = %{}
+
+      html =
+        rendered_to_string(~H"""
+        <DataTable.pagination
+          total_pages={2}
+          current_page={1}
+          has_prev_page?={false}
+          has_next_page?={true}
+          prev_path="/items?page=1"
+          next_path="/items?page=2"
+        />
+        """)
+
+      # next is enabled — should be an anchor
+      assert html =~ ~s(href="/items?page=2")
+      # prev is disabled — should NOT be an anchor to that URL
+      refute html =~ ~s(href="/items?page=1")
+    end
   end
 end

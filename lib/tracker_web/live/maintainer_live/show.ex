@@ -96,6 +96,20 @@ defmodule TrackerWeb.MaintainerLive.Show do
       current_page={@current_page}
       has_prev_page?={@has_prev_page?}
       has_next_page?={@has_next_page?}
+      prev_path={
+        TableParams.page_path(
+          @table_params,
+          @current_page - 1,
+          "/maintainers/#{@maintainer.github}"
+        )
+      }
+      next_path={
+        TableParams.page_path(
+          @table_params,
+          @current_page + 1,
+          "/maintainers/#{@maintainer.github}"
+        )
+      }
     />
     """
   end

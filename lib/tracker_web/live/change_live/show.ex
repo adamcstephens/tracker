@@ -190,6 +190,20 @@ defmodule TrackerWeb.ChangeLive.Show do
                 current_page={@pkg_current_page}
                 has_prev_page?={@pkg_has_prev?}
                 has_next_page?={@pkg_has_next?}
+                prev_path={
+                  TableParams.page_path(
+                    @table_params,
+                    @pkg_current_page - 1,
+                    "/changes/#{@change.number}"
+                  )
+                }
+                next_path={
+                  TableParams.page_path(
+                    @table_params,
+                    @pkg_current_page + 1,
+                    "/changes/#{@change.number}"
+                  )
+                }
               />
             <% end %>
           </section>

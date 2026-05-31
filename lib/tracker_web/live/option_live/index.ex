@@ -34,6 +34,8 @@ defmodule TrackerWeb.OptionLive.Index do
       current_page={@current_page}
       has_prev_page?={@has_prev_page?}
       has_next_page?={@has_next_page?}
+      prev_path={options_path(@search, @current_page - 1)}
+      next_path={options_path(@search, @current_page + 1)}
     />
     """
   end
