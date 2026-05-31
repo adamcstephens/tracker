@@ -102,6 +102,15 @@ defmodule TrackerWeb.TableParams do
   end
 
   @doc """
+  Build the URL for a specific page, preserving the rest of the table params.
+  Used by pagination links for the no-JS fallback.
+  """
+  @spec page_path(t(), pos_integer(), String.t(), map()) :: String.t()
+  def page_path(%__MODULE__{} = tp, page, base_path, extras \\ %{}) do
+    to_path(%{tp | page: page}, base_path, extras)
+  end
+
+  @doc """
   Returns true if any table params have changed (triggering a data reload).
   Returns true if the first argument is nil (initial load).
   """

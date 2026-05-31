@@ -1332,6 +1332,17 @@ dl.option-body dd {
 	font-family: var(--mono);
 }
 
+.pagination-button {
+	padding: 0.25rem 0.75rem;
+	font-size: 0.875rem;
+	text-decoration: none;
+}
+
+.pagination-button[aria-disabled="true"] {
+	opacity: 0.5;
+	pointer-events: none;
+}
+
 .lens__submit {
 	display: inline-flex;
 	align-items: center;

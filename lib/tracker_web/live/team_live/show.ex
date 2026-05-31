@@ -65,6 +65,12 @@ defmodule TrackerWeb.TeamLive.Show do
       current_page={@current_page}
       has_prev_page?={@has_prev_page?}
       has_next_page?={@has_next_page?}
+      prev_path={
+        TableParams.page_path(@table_params, @current_page - 1, "/teams/#{@team.short_name}")
+      }
+      next_path={
+        TableParams.page_path(@table_params, @current_page + 1, "/teams/#{@team.short_name}")
+      }
     />
     """
   end

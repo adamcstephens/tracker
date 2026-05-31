@@ -111,6 +111,8 @@ defmodule TrackerWeb.DataTable do
       current_page={@current_page}
       has_prev_page?={@has_prev_page?}
       has_next_page?={@has_next_page?}
+      prev_path={@base_path && page_href(@table_params, @current_page - 1, @base_path)}
+      next_path={@base_path && page_href(@table_params, @current_page + 1, @base_path)}
     />
     """
   end
@@ -134,15 +136,40 @@ defmodule TrackerWeb.DataTable do
   attr :has_prev_page?, :boolean, default: false
   attr :has_next_page?, :boolean, default: false
 
+  attr :prev_path, :string,
+    default: nil,
+    doc:
+      "URL for the previous page (no-JS fallback). When set, renders an <a> instead of a button."
+
+  attr :next_path, :string,
+    default: nil,
+    doc: "URL for the next page (no-JS fallback). When set, renders an <a> instead of a button."
+
   def pagination(assigns) do
     ~H"""
     <nav
       :if={@total_pages > 1}
       style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-top: 1rem;"
     >
+      <.link
+        :if={@prev_path && @has_prev_page?}
+        patch={@prev_path}
+        role="button"
+        class="outline secondary pagination-button"
+      >
+        &larr;
+      </.link>
+      <span
+        :if={@prev_path && !@has_prev_page?}
+        role="button"
+        aria-disabled="true"
+        class="outline secondary pagination-button"
+      >
+        &larr;
+      </span>
       <button
-        class="outline secondary"
-        style="padding: 0.25rem 0.75rem; font-size: 0.875rem;"
+        :if={!@prev_path}
+        class="outline secondary pagination-button"
         phx-click="prev-page"
         disabled={!@has_prev_page?}
       >
@@ -151,9 +178,25 @@ defmodule TrackerWeb.DataTable do
       <small>
         Page {@current_page} of {@total_pages}
       </small>
+      <.link
+        :if={@next_path && @has_next_page?}
+        patch={@next_path}
+        role="button"
+        class="outline secondary pagination-button"
+      >
+        &rarr;
+      </.link>
+      <span
+        :if={@next_path && !@has_next_page?}
+        role="button"
+        aria-disabled="true"
+        class="outline secondary pagination-button"
+      >
+        &rarr;
+      </span>
       <button
-        class="outline secondary"
-        style="padding: 0.25rem 0.75rem; font-size: 0.875rem;"
+        :if={!@next_path}
+        class="outline secondary pagination-button"
         phx-click="next-page"
         disabled={!@has_next_page?}
       >
@@ -167,5 +210,9 @@ defmodule TrackerWeb.DataTable do
     dir = if tp.sort_by == field, do: TableParams.toggle_dir(tp.sort_dir), else: :asc
     new_tp = %{tp | sort_by: field, sort_dir: dir, page: 1, offset: 0}
     TableParams.to_path(new_tp, base_path)
+  end
+
+  defp page_href(%TableParams{} = tp, page, base_path) do
+    TableParams.to_path(%{tp | page: page}, base_path)
   end
 end
