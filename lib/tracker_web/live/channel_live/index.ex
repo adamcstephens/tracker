@@ -31,6 +31,7 @@ defmodule TrackerWeb.ChannelLive.Index do
           <.badge variant={:danger}>Build problem</.badge>
         </.link>
         <.badge :if={channel.status == :pre_release} variant={:warn}>Pre-release</.badge>
+        <.badge :if={channel.status == :deprecated} variant={:warn}>Deprecated</.badge>
         <.badge :if={channel.status == :retired} variant={:neutral}>Retired</.badge>
       </:col>
       <:col :let={{_id, channel}} field={:count} label="Revisions" sortable>
