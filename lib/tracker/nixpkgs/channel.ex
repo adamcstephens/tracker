@@ -103,7 +103,7 @@ defmodule Tracker.Nixpkgs.Channel do
     attribute :status, :atom do
       allow_nil? false
       public? true
-      constraints one_of: [:active, :retired, :pre_release]
+      constraints one_of: [:active, :retired, :pre_release, :deprecated]
     end
 
     attribute :is_stable, :boolean do

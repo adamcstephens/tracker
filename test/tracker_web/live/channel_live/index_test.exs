@@ -134,4 +134,18 @@ defmodule TrackerWeb.ChannelLive.IndexTest do
     assert html =~ "nixos-26.05"
     assert html =~ "Pre-release"
   end
+
+  test "renders Deprecated badge for channels in deprecated status", %{conn: conn} do
+    Channel.create!(%{
+      name: "nixos-23.11",
+      display_name: "NixOS 23.11",
+      status: :deprecated,
+      is_stable: true
+    })
+
+    {:ok, _view, html} = live(conn, ~p"/channels")
+
+    assert html =~ "nixos-23.11"
+    assert html =~ "Deprecated"
+  end
 end
