@@ -23,6 +23,14 @@
       src={~p"/assets/app.js"}
     >
     </script>
+    <script :if={!assigns[:interactive?]} type="text/javascript">
+      // No-JS-socket fallback: when app.js / LiveView isn't loaded, auto-submit
+      // the lens form on dropdown change so the channel applies without clicking
+      // "Set". Inverse-gated against app.js so it never coexists with phx-change.
+      document.addEventListener("change", (e) => {
+        if (e.target.matches(".lens__select")) e.target.form.requestSubmit()
+      })
+    </script>
   </head>
   <body>
     {@inner_content}
