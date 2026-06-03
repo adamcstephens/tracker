@@ -30,6 +30,25 @@
       document.addEventListener("change", (e) => {
         if (e.target.matches(".lens__select")) e.target.form.requestSubmit()
       })
+
+      // Mirror of app.js: focus the header search when "/" is pressed outside
+      // an editable element. Shipped here so the shortcut works without app.js.
+      document.addEventListener("keydown", (event) => {
+        if (event.key !== "/") return
+        if (event.ctrlKey || event.metaKey || event.altKey) return
+        let target = event.target
+        if (target && (target.isContentEditable ||
+            target.tagName === "INPUT" ||
+            target.tagName === "TEXTAREA" ||
+            target.tagName === "SELECT")) {
+          return
+        }
+        let input = document.getElementById("page-search-input")
+        if (!input) return
+        event.preventDefault()
+        input.focus()
+        input.select()
+      })
     </script>
   </head>
   <body>

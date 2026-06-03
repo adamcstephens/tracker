@@ -60,6 +60,24 @@ defmodule TrackerWeb.InteractiveUIIntegrationTest do
     end
   end
 
+  describe "slash focus-search fallback script in the root layout" do
+    test "is present for anonymous users (dead view) so \"/\" focuses search", %{conn: conn} do
+      conn = get(conn, ~p"/packages")
+      html = html_response(conn, 200)
+
+      assert html =~ ~s|getElementById("page-search-input")|
+      assert html =~ "input.select()"
+    end
+
+    test "is omitted for an authenticated user with live_ui: true (app.js drives it)",
+         %{conn: conn} do
+      user = register_via_github!()
+      conn = log_in(conn, user) |> get(~p"/packages")
+
+      refute html_response(conn, 200) =~ ~s|getElementById("page-search-input")|
+    end
+  end
+
   describe "LiveView socket halts for opted-out users" do
     test "opted-out user is redirected when the socket connects", %{conn: conn} do
       user = register_via_github!() |> opt_out!()
