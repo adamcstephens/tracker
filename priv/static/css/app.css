@@ -1343,30 +1343,25 @@ dl.option-body dd {
 	pointer-events: none;
 }
 
-.lens__submit {
-	display: inline-flex;
-	align-items: center;
-	padding: 0.3125rem 0.625rem;
-	border: 0;
-	border-left: 1px solid var(--line);
-	background: var(--surface-2);
+/* Scoped under .lens__form to out-specify the .app-header control reset
+   (`.app-header :is(input, select, button)`, specificity 0,1,1). */
+.lens__form .lens__submit {
+	padding: 0.3125rem 0.875rem 0.3125rem 0.625rem;
 	color: var(--text-2);
-	font-family: var(--mono);
-	letter-spacing: 0.04em;
-	text-transform: uppercase;
 	cursor: pointer;
-	margin: 0;
-	border-radius: 0;
 }
 
-.lens__submit:hover:not(:disabled) {
-	background: var(--surface);
+.lens__form .lens__submit:hover:not(:disabled) {
 	color: var(--text);
 }
 
-.lens__submit:disabled {
-	cursor: default;
-	opacity: 0.5;
+.lens__icon {
+	width: 1.0625rem;
+	height: 1.0625rem;
+	flex-shrink: 0;
+	background: currentColor;
+	-webkit-mask: url("/images/arrow-forward.svg") center / contain no-repeat;
+	mask: url("/images/arrow-forward.svg") center / contain no-repeat;
 }
 
 /* Mobile bottom tabs — hidden on desktop */

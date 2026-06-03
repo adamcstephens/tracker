@@ -63,7 +63,14 @@ defmodule TrackerWeb.LensComponent do
           </select>
         </span>
         <span :if={short_rev(@lens)} class="lens-rev">@{short_rev(@lens)}</span>
-        <button type="submit" class="lens__submit" disabled={@lens.disabled?}>Set</button>
+        <button
+          type="submit"
+          class="lens__submit"
+          aria-label="Set channel"
+          disabled={@lens.disabled?}
+        >
+          <span class="lens__icon" aria-hidden="true"></span>
+        </button>
       </form>
     </div>
     """
