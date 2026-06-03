@@ -35,6 +35,31 @@ defmodule TrackerWeb.InteractiveUIIntegrationTest do
     end
   end
 
+  describe "lens auto-submit fallback script in the root layout" do
+    test "is present for anonymous users (dead view) so the dropdown auto-applies", %{conn: conn} do
+      conn = get(conn, ~p"/packages")
+      html = html_response(conn, 200)
+
+      assert html =~ "requestSubmit()"
+      assert html =~ ~s|matches(".lens__select")|
+    end
+
+    test "is omitted for an authenticated user with live_ui: true (phx-change drives it)",
+         %{conn: conn} do
+      user = register_via_github!()
+      conn = log_in(conn, user) |> get(~p"/packages")
+
+      refute html_response(conn, 200) =~ "requestSubmit()"
+    end
+
+    test "is present for an authenticated user with live_ui: false", %{conn: conn} do
+      user = register_via_github!() |> opt_out!()
+      conn = log_in(conn, user) |> get(~p"/packages")
+
+      assert html_response(conn, 200) =~ "requestSubmit()"
+    end
+  end
+
   describe "LiveView socket halts for opted-out users" do
     test "opted-out user is redirected when the socket connects", %{conn: conn} do
       user = register_via_github!() |> opt_out!()
