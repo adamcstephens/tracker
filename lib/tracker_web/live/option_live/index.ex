@@ -71,7 +71,7 @@ defmodule TrackerWeb.OptionLive.Index do
         action: "/options",
         value: search,
         event: "filter",
-        hidden: if(page > 1, do: %{"page" => Integer.to_string(page)}, else: %{})
+        hidden: %{}
       })
 
     socket =

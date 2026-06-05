@@ -196,6 +196,34 @@ defmodule TrackerWeb.TableParamsTest do
     end
   end
 
+  describe "to_hidden_inputs/2" do
+    test "omits :page so a fresh search resets to the first page (trk-278)" do
+      tp = TableParams.from_params(%{"search" => "hello", "page" => "3"})
+      refute Map.has_key?(TableParams.to_hidden_inputs(tp), "page")
+    end
+
+    test "excludes the visible search input" do
+      tp = TableParams.from_params(%{"search" => "hello", "page" => "3"})
+      refute Map.has_key?(TableParams.to_hidden_inputs(tp), "search")
+    end
+
+    test "preserves sort while dropping page" do
+      tp =
+        TableParams.from_params(%{"sort_by" => "title", "sort_dir" => "desc", "page" => "3"},
+          allowed_sorts: ~w(number title)a,
+          default_sort: :number,
+          default_sort_dir: :asc
+        )
+
+      assert TableParams.to_hidden_inputs(tp) == %{"sort_by" => "title", "sort_dir" => "desc"}
+    end
+
+    test "preserves extra filters while dropping page" do
+      tp = TableParams.from_params(%{"page" => "3"})
+      assert TableParams.to_hidden_inputs(tp, %{base_ref: "main"}) == %{"base_ref" => "main"}
+    end
+  end
+
   describe "changed?/2" do
     test "returns false for identical params" do
       tp = TableParams.from_params(%{"search" => "hello", "page" => "2"})

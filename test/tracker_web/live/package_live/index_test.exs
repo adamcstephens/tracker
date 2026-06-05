@@ -230,6 +230,22 @@ defmodule TrackerWeb.PackageLive.IndexTest do
     end
   end
 
+  describe "search resets pagination (trk-278)" do
+    test "search form drops the page hidden input so a no-JS search starts on page 1", %{
+      conn: conn
+    } do
+      {:ok, _view, html} = live(conn, ~p"/packages?page=2")
+
+      hidden_names =
+        html
+        |> Floki.parse_document!()
+        |> Floki.find("#page-search input[type=hidden]")
+        |> Enum.flat_map(&Floki.attribute(&1, "name"))
+
+      refute "page" in hidden_names
+    end
+  end
+
   defp attribute_order(html) do
     ~r/<td[^>]*>\s*(?:<a[^>]*>)?\s*([a-z][\w.-]*)\s*(?:<\/a>)?\s*<\/td>/
     |> Regex.scan(html)

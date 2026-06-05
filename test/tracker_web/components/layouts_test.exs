@@ -134,13 +134,15 @@ defmodule TrackerWeb.LayoutsTest do
       assert chrome_form =~ ~r{<input[^>]*name="sort_dir"[^>]*value="asc"}
     end
 
-    test "Options search form preserves page via hidden input", %{conn: conn} do
+    test "Options search form drops page so a fresh search resets to page 1 (trk-278)", %{
+      conn: conn
+    } do
       {:ok, _view, html} = live(conn, ~p"/options?page=3")
 
       [_top, bottom] = String.split(html, "app-header__row--bottom", parts: 2)
       [chrome_form, _rest] = String.split(bottom, "</form>", parts: 2)
 
-      assert chrome_form =~ ~r{<input[^>]*type="hidden"[^>]*name="page"[^>]*value="3"}
+      refute chrome_form =~ ~r{<input[^>]*type="hidden"[^>]*name="page"}
     end
   end
 
