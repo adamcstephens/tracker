@@ -3,7 +3,10 @@ defmodule TrackerWeb.LayoutsTest do
 
   import Phoenix.LiveViewTest
 
+  alias Tracker.Accounts.User
   alias Tracker.Nixpkgs.Channel
+  alias TrackerWeb.Layouts
+  alias TrackerWeb.Layouts.NavItem
 
   setup do
     suffix = System.unique_integer([:positive])
@@ -237,25 +240,102 @@ defmodule TrackerWeb.LayoutsTest do
     end
   end
 
-  describe "mobile bottom tab bar" do
-    test "renders a fixed bottom nav with five tab links", %{conn: conn} do
+  describe "section nav (single source)" do
+    test "renders one nav carrying full and short labels", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/changes")
 
-      assert html =~ ~s(class="app-mobile-tabs")
-      assert html =~ ~s(aria-label="Sections")
+      assert html =~ ~s(class="app-nav")
 
-      # Five primary mobile tabs.
-      for label <- ~w(Pkgs Chans Changes Options More) do
-        assert html =~ ~r{class="app-mobile-tab[^"]*"[^>]*>\s*#{label}}
+      # Short (mobile) labels live in dedicated spans alongside the full ones,
+      # so one render serves both breakpoints; CSS picks which to show.
+      for short <- ~w(Pkgs Chans More) do
+        assert html =~ ~r{class="app-tab__short">\s*#{short}}
+      end
+
+      for full <- ~w(Packages Channels Maintainers Teams) do
+        assert html =~ ~r{class="app-tab__full">\s*#{full}}
       end
     end
 
-    test "active mobile tab matches current section", %{conn: conn} do
+    test "tags off-breakpoint cells for CSS hiding", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/changes")
 
-      # The Changes mobile tab should have aria-current=page.
-      assert html =~
-               ~r{class="app-mobile-tab[^"]*is-active[^"]*"[^>]*aria-current="page"[^>]*>\s*Changes}
+      # Maintainers/Teams are desktop-only; the More collapse is mobile-only.
+      assert html =~ ~s(class="is-desktop-only")
+      assert html =~ ~s(class="is-mobile-only")
+    end
+
+    test "marks the active section with aria-current=page", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/changes")
+
+      current =
+        html
+        |> Floki.parse_document!()
+        |> Floki.find(~s(.app-nav a[aria-current="page"]))
+        |> Floki.text()
+
+      assert current =~ "Changes"
+    end
+  end
+
+  describe "nav_items/1 (single nav source)" do
+    test "lists sections in desktop order with both/desktop/mobile contexts" do
+      items = Layouts.nav_items(nil)
+
+      assert Enum.map(items, & &1.path) == [
+               "/packages",
+               "/channels",
+               "/options",
+               "/changes",
+               "/maintainers",
+               "/teams",
+               "/maintainers"
+             ]
+
+      assert Enum.map(items, & &1.context) == [
+               :both,
+               :both,
+               :both,
+               :both,
+               :desktop,
+               :desktop,
+               :mobile
+             ]
+    end
+
+    test "common items carry both full and short labels" do
+      pkgs = Enum.find(Layouts.nav_items(nil), &(&1.path == "/packages"))
+
+      assert pkgs.full == "Packages"
+      assert pkgs.short == "Pkgs"
+    end
+
+    test "the mobile-only More entry collapses maintainers and teams" do
+      more = Enum.find(Layouts.nav_items(nil), &(&1.context == :mobile))
+
+      assert more.short == "More"
+      assert more.path == "/maintainers"
+      assert more.active == ["MaintainerLive", "TeamLive"]
+    end
+
+    test "Admin section appears only for admin users" do
+      refute Enum.any?(Layouts.nav_items(nil), &(&1.full == "Admin"))
+      refute Enum.any?(Layouts.nav_items(%User{roles: [:user]}), &(&1.full == "Admin"))
+      assert Enum.any?(Layouts.nav_items(%User{roles: [:user, :admin]}), &(&1.full == "Admin"))
+    end
+  end
+
+  describe "nav_active?/2" do
+    test "true when the view matches any of the item's active prefixes" do
+      item = %NavItem{
+        path: "/maintainers",
+        active: ["MaintainerLive", "TeamLive"],
+        context: :mobile
+      }
+
+      assert Layouts.nav_active?(TrackerWeb.TeamLive.Index, item)
+      assert Layouts.nav_active?(TrackerWeb.MaintainerLive.Index, item)
+      refute Layouts.nav_active?(TrackerWeb.PackageLive.Index, item)
     end
   end
 

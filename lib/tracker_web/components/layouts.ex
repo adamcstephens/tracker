@@ -12,6 +12,131 @@ defmodule TrackerWeb.Layouts do
 
   embed_templates "layouts/*"
 
+  defmodule NavItem do
+    @moduledoc """
+    One chrome navigation entry, shared by both nav renders.
+
+    `context` controls which breakpoint shows the item (CSS hides the others);
+    `full`/`short` are the desktop and mobile labels.
+    """
+    use TypedStruct
+
+    typedstruct enforce: true do
+      field :path, String.t()
+      field :active, [String.t()]
+      field :context, :both | :desktop | :mobile
+      field :full, String.t() | nil, enforce: false
+      field :short, String.t() | nil, enforce: false
+    end
+  end
+
+  @doc """
+  The single ordered source for the chrome section navigation.
+
+  Order follows the desktop layout. The desktop tabs render the `:both` and
+  `:desktop` entries; the mobile bar renders `:both` and `:mobile`. CSS hides
+  the off-breakpoint cells, so one render serves both.
+  """
+  def nav_items(current_user) do
+    [
+      %NavItem{
+        path: "/packages",
+        full: "Packages",
+        short: "Pkgs",
+        active: ["PackageLive"],
+        context: :both
+      },
+      %NavItem{
+        path: "/channels",
+        full: "Channels",
+        short: "Chans",
+        active: ["ChannelLive"],
+        context: :both
+      },
+      %NavItem{
+        path: "/options",
+        full: "Options",
+        short: "Options",
+        active: ["OptionLive"],
+        context: :both
+      },
+      %NavItem{
+        path: "/changes",
+        full: "Changes",
+        short: "Changes",
+        active: ["ChangeLive"],
+        context: :both
+      },
+      %NavItem{
+        path: "/maintainers",
+        full: "Maintainers",
+        active: ["MaintainerLive"],
+        context: :desktop
+      },
+      %NavItem{path: "/teams", full: "Teams", active: ["TeamLive"], context: :desktop}
+    ] ++
+      admin_items(current_user) ++
+      [
+        %NavItem{
+          path: "/maintainers",
+          short: "More",
+          active: ["MaintainerLive", "TeamLive"],
+          context: :mobile
+        }
+      ]
+  end
+
+  defp admin_items(current_user) do
+    if current_user && Tracker.Accounts.User.has_role?(current_user, :admin) do
+      # aria-current here mirrors the prior layout's quirk (checks TeamLive);
+      # preserved as-is and tracked separately.
+      [%NavItem{path: "/admin", full: "Admin", active: ["TeamLive"], context: :desktop}]
+    else
+      []
+    end
+  end
+
+  @doc """
+  Whether `view` falls under any of the nav item's active view prefixes.
+  """
+  def nav_active?(view, %NavItem{active: prefixes}) do
+    Enum.any?(prefixes, &active_nav?(view, &1))
+  end
+
+  attr :current_user, :any, default: nil
+  attr :view, :atom, required: true
+  attr :search, :string, default: ""
+
+  @doc """
+  Renders the chrome section navigation once for both breakpoints.
+
+  CSS picks the per-breakpoint label (`app-tab__full`/`app-tab__short`) and
+  hides the off-breakpoint cells via `is-desktop-only`/`is-mobile-only`.
+  """
+  def app_nav(assigns) do
+    assigns = assign(assigns, :items, nav_items(assigns.current_user))
+
+    ~H"""
+    <nav class="app-nav" aria-label="Primary">
+      <ul class="app-tabs">
+        <li :for={item <- @items} class={nav_item_class(item)}>
+          <.link
+            navigate={nav_path(item.path, @search)}
+            aria-current={nav_active?(@view, item) && "page"}
+          >
+            <span :if={item.full} class="app-tab__full">{item.full}</span>
+            <span :if={item.short} class="app-tab__short">{item.short}</span>
+          </.link>
+        </li>
+      </ul>
+    </nav>
+    """
+  end
+
+  defp nav_item_class(%NavItem{context: :desktop}), do: "is-desktop-only"
+  defp nav_item_class(%NavItem{context: :mobile}), do: "is-mobile-only"
+  defp nav_item_class(%NavItem{context: :both}), do: nil
+
   def active_nav?(view, prefix) when is_atom(view) do
     case Module.split(view) do
       [_, ^prefix | _] -> true

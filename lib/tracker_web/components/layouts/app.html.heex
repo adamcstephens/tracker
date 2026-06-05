@@ -30,66 +30,7 @@
         </svg>
         <span class="app-brand__word">Tracker</span>
       </.link>
-      <nav aria-label="Primary">
-        <ul class="app-tabs">
-          <li>
-            <.link
-              navigate={nav_path(~p"/packages", search)}
-              aria-current={active_nav?(@socket.view, "PackageLive") && "page"}
-            >
-              Packages
-            </.link>
-          </li>
-          <li>
-            <.link
-              navigate={nav_path(~p"/channels", search)}
-              aria-current={active_nav?(@socket.view, "ChannelLive") && "page"}
-            >
-              Channels
-            </.link>
-          </li>
-          <li>
-            <.link
-              navigate={nav_path(~p"/options", search)}
-              aria-current={active_nav?(@socket.view, "OptionLive") && "page"}
-            >
-              Options
-            </.link>
-          </li>
-          <li>
-            <.link
-              navigate={nav_path(~p"/changes", search)}
-              aria-current={active_nav?(@socket.view, "ChangeLive") && "page"}
-            >
-              Changes
-            </.link>
-          </li>
-          <li>
-            <.link
-              navigate={nav_path(~p"/maintainers", search)}
-              aria-current={active_nav?(@socket.view, "MaintainerLive") && "page"}
-            >
-              Maintainers
-            </.link>
-          </li>
-          <li>
-            <.link
-              navigate={nav_path(~p"/teams", search)}
-              aria-current={active_nav?(@socket.view, "TeamLive") && "page"}
-            >
-              Teams
-            </.link>
-          </li>
-          <li :if={@current_user && Tracker.Accounts.User.has_role?(@current_user, :admin)}>
-            <.link
-              navigate={nav_path(~p"/admin", search)}
-              aria-current={active_nav?(@socket.view, "TeamLive") && "page"}
-            >
-              Admin
-            </.link>
-          </li>
-        </ul>
-      </nav>
+      <.app_nav current_user={@current_user} view={@socket.view} search={search} />
       <div class="app-user">
         <%= if @current_user do %>
           <details class="app-user__menu" id="app-user-menu" phx-update="ignore">
@@ -140,50 +81,6 @@
       </div>
     </div>
   </div>
-  <nav class="app-mobile-tabs" aria-label="Sections">
-    <.link
-      navigate={nav_path(~p"/packages", search)}
-      class={["app-mobile-tab", active_nav?(@socket.view, "PackageLive") && "is-active"]}
-      aria-current={active_nav?(@socket.view, "PackageLive") && "page"}
-    >
-      Pkgs
-    </.link>
-    <.link
-      navigate={nav_path(~p"/channels", search)}
-      class={["app-mobile-tab", active_nav?(@socket.view, "ChannelLive") && "is-active"]}
-      aria-current={active_nav?(@socket.view, "ChannelLive") && "page"}
-    >
-      Chans
-    </.link>
-    <.link
-      navigate={nav_path(~p"/changes", search)}
-      class={["app-mobile-tab", active_nav?(@socket.view, "ChangeLive") && "is-active"]}
-      aria-current={active_nav?(@socket.view, "ChangeLive") && "page"}
-    >
-      Changes
-    </.link>
-    <.link
-      navigate={nav_path(~p"/options", search)}
-      class={["app-mobile-tab", active_nav?(@socket.view, "OptionLive") && "is-active"]}
-      aria-current={active_nav?(@socket.view, "OptionLive") && "page"}
-    >
-      Options
-    </.link>
-    <.link
-      navigate={nav_path(~p"/maintainers", search)}
-      class={[
-        "app-mobile-tab",
-        (active_nav?(@socket.view, "MaintainerLive") || active_nav?(@socket.view, "TeamLive")) &&
-          "is-active"
-      ]}
-      aria-current={
-        (active_nav?(@socket.view, "MaintainerLive") || active_nav?(@socket.view, "TeamLive")) &&
-          "page"
-      }
-    >
-      More
-    </.link>
-  </nav>
   <div class="app-header__row app-header__row--bottom">
     <div class="container">
       <.link
