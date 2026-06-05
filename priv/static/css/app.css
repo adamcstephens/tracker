@@ -1414,18 +1414,15 @@ dl.option-body dd {
 		display: flex;
 	}
 
+	/* Underline the active tab like desktop: keep the base rule's transparent
+	   bottom border (it turns accent for aria-current=page at any width) so the
+	   underline spans the whole tab and sits at the tab's bottom edge. */
 	.app-tabs a {
 		flex: 1;
 		justify-content: center;
 		min-height: 2.75rem;
 		padding: 0.375rem 0.25rem;
-		border-bottom: 0;
 		margin-bottom: 0;
-		border-radius: 0.5rem;
-	}
-
-	.app-tabs a[aria-current="page"] {
-		color: var(--accent);
 	}
 
 	.app-header__row--bottom > .container {
