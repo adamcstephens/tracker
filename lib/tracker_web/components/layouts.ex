@@ -17,7 +17,8 @@ defmodule TrackerWeb.Layouts do
     One chrome navigation entry, shared by both nav renders.
 
     `context` controls which breakpoint shows the item (CSS hides the others);
-    `full`/`short` are the desktop and mobile labels.
+    `full`/`short` are the desktop and mobile labels. A non-empty `children`
+    list turns the entry into a disclosure (the mobile "More" dropdown).
     """
     use TypedStruct
 
@@ -27,6 +28,7 @@ defmodule TrackerWeb.Layouts do
       field :context, :both | :desktop | :mobile
       field :full, String.t() | nil, enforce: false
       field :short, String.t() | nil, enforce: false
+      field :children, list(), default: []
     end
   end
 
@@ -38,6 +40,8 @@ defmodule TrackerWeb.Layouts do
   the off-breakpoint cells, so one render serves both.
   """
   def nav_items(current_user) do
+    more_group = more_group(current_user)
+
     [
       %NavItem{
         path: "/packages",
@@ -66,7 +70,24 @@ defmodule TrackerWeb.Layouts do
         short: "Changes",
         active: ["ChangeLive"],
         context: :both
-      },
+      }
+    ] ++
+      more_group ++
+      [
+        %NavItem{
+          path: "/maintainers",
+          short: "More",
+          active: Enum.flat_map(more_group, & &1.active) |> Enum.uniq(),
+          context: :mobile,
+          children: more_group
+        }
+      ]
+  end
+
+  # Sections that are top-level tabs on desktop, but collapse into the mobile
+  # "More" dropdown. Defined once so both renders share the same source.
+  defp more_group(current_user) do
+    [
       %NavItem{
         path: "/maintainers",
         full: "Maintainers",
@@ -74,16 +95,7 @@ defmodule TrackerWeb.Layouts do
         context: :desktop
       },
       %NavItem{path: "/teams", full: "Teams", active: ["TeamLive"], context: :desktop}
-    ] ++
-      admin_items(current_user) ++
-      [
-        %NavItem{
-          path: "/maintainers",
-          short: "More",
-          active: ["MaintainerLive", "TeamLive"],
-          context: :mobile
-        }
-      ]
+    ] ++ admin_items(current_user)
   end
 
   defp admin_items(current_user) do
@@ -121,12 +133,28 @@ defmodule TrackerWeb.Layouts do
       <ul class="app-tabs">
         <li :for={item <- @items} class={nav_item_class(item)}>
           <.link
+            :if={item.children == []}
             navigate={nav_path(item.path, @search)}
             aria-current={nav_active?(@view, item) && "page"}
           >
             <span :if={item.full} class="app-tab__full">{item.full}</span>
             <span :if={item.short} class="app-tab__short">{item.short}</span>
           </.link>
+          <details :if={item.children != []} class="app-more">
+            <summary class="app-more__summary" aria-current={nav_active?(@view, item) && "page"}>
+              <span class="app-tab__short">{item.short}</span>
+              <span class="app-more__caret" aria-hidden="true">▾</span>
+            </summary>
+            <div class="app-more__panel">
+              <.link
+                :for={child <- item.children}
+                navigate={nav_path(child.path, @search)}
+                aria-current={nav_active?(@view, child) && "page"}
+              >
+                {child.full}
+              </.link>
+            </div>
+          </details>
         </li>
       </ul>
     </nav>

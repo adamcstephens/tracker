@@ -1425,6 +1425,81 @@ dl.option-body dd {
 		margin-bottom: 0;
 	}
 
+	/* "More" tab is a native <details> disclosure: the summary looks like a
+	   tab, the panel drops down beneath it (no JS needed). */
+	.app-more {
+		position: relative;
+		flex: 1;
+		display: flex;
+	}
+
+	.app-more__summary {
+		flex: 1;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.25rem;
+		min-height: 2.75rem;
+		padding: 0.375rem 0.25rem;
+		color: var(--text-2);
+		font-weight: 500;
+		list-style: none;
+		cursor: pointer;
+		border-bottom: 2px solid transparent;
+	}
+
+	.app-more__summary::-webkit-details-marker {
+		display: none;
+	}
+
+	.app-more__summary:hover {
+		color: var(--text);
+	}
+
+	.app-more__summary[aria-current="page"] {
+		color: var(--text);
+		border-bottom-color: var(--accent);
+	}
+
+	.app-more__caret {
+		font-size: 0.7em;
+	}
+
+	.app-more__panel {
+		position: absolute;
+		top: 100%;
+		right: 0;
+		z-index: 60;
+		min-width: 10rem;
+		padding: 0.3125rem;
+		background: var(--bg);
+		border: 1px solid var(--line);
+		border-radius: 0.625rem;
+		box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.18);
+	}
+
+	.app-more__panel a {
+		display: flex;
+		align-items: center;
+		justify-content: flex-start;
+		min-height: 2.5rem;
+		padding: 0.375rem 0.75rem;
+		color: var(--text-2);
+		font-weight: 500;
+		/* Panel items are a stacked menu, not tabs — no tab underline. */
+		border-bottom: 0;
+		border-radius: 0.5rem;
+	}
+
+	.app-more__panel a:hover {
+		color: var(--text);
+		background: var(--surface);
+	}
+
+	.app-more__panel a[aria-current="page"] {
+		color: var(--accent);
+	}
+
 	.app-header__row--bottom > .container {
 		flex-wrap: wrap;
 		gap: 0.625rem;
