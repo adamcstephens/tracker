@@ -1381,12 +1381,6 @@ dl.option-body dd {
 		flex: 1;
 	}
 
-	/* Full-bleed nav row on mobile (matches the prior section bar) so the
-	   five equal cells have room edge-to-edge. */
-	.app-header__row--top > .container {
-		padding-inline: 0;
-	}
-
 	.app-tab__full {
 		display: none;
 	}
