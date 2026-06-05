@@ -1402,21 +1402,12 @@ dl.option-body dd {
 		width: 100%;
 	}
 
-	main.container {
-		padding-bottom: calc(4rem + env(safe-area-inset-bottom));
-	}
-
 	.app-mobile-tabs {
 		display: grid;
 		grid-template-columns: repeat(5, 1fr);
-		position: fixed;
-		bottom: 0;
-		left: 0;
-		right: 0;
 		background: var(--bg);
-		border-top: 1px solid var(--line);
-		padding: 0.375rem 0.25rem max(0.5rem, env(safe-area-inset-bottom));
-		z-index: 50;
+		border-bottom: 1px solid var(--line);
+		padding: 0.375rem 0.25rem;
 	}
 
 	.app-mobile-tab {
