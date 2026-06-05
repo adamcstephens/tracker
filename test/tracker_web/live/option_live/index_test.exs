@@ -94,6 +94,20 @@ defmodule TrackerWeb.OptionLive.IndexTest do
     refute html =~ "programs.vim.enable"
   end
 
+  test "search form drops the page hidden input so a no-JS search starts on page 1 (trk-278)", %{
+    conn: conn
+  } do
+    {:ok, _view, html} = live(conn, ~p"/options?page=2")
+
+    hidden_names =
+      html
+      |> Floki.parse_document!()
+      |> Floki.find("#page-search input[type=hidden]")
+      |> Enum.flat_map(&Floki.attribute(&1, "name"))
+
+    refute "page" in hidden_names
+  end
+
   test "dot-segment match outranks fuzzy substring matches", %{conn: conn, channel_revision: cr} do
     inc_options = %{
       "services.incron.enable" => %{

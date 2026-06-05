@@ -28,6 +28,9 @@ Hooks.UpdateURL = {
   mounted() {
     this.handleEvent("update-url", ({path}) => {
       history.replaceState(history.state, "", path)
+      // A fresh search re-renders results in place (no navigation), so reset
+      // the viewport to the top the way a full page load would. (trk-278)
+      window.scrollTo(0, 0)
     })
   }
 }
