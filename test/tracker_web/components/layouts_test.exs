@@ -278,6 +278,40 @@ defmodule TrackerWeb.LayoutsTest do
     end
   end
 
+  describe "mobile More dropdown" do
+    test "renders More as a details disclosure listing the desktop sections", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/changes")
+
+      doc = Floki.parse_document!(html)
+
+      assert [_] = Floki.find(doc, "details.app-more")
+
+      panel_links =
+        doc
+        |> Floki.find(".app-more__panel a")
+        |> Enum.map(&(&1 |> Floki.text() |> String.trim()))
+
+      assert "Maintainers" in panel_links
+      assert "Teams" in panel_links
+    end
+
+    test "marks the active route on both the summary and its panel link", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/maintainers")
+
+      doc = Floki.parse_document!(html)
+
+      assert Floki.find(doc, ~s(summary.app-more__summary[aria-current="page"])) != []
+
+      active_panel =
+        doc
+        |> Floki.find(~s(.app-more__panel a[aria-current="page"]))
+        |> Floki.text()
+        |> String.trim()
+
+      assert active_panel =~ "Maintainers"
+    end
+  end
+
   describe "nav_items/1 (single nav source)" do
     test "lists sections in desktop order with both/desktop/mobile contexts" do
       items = Layouts.nav_items(nil)
@@ -318,10 +352,23 @@ defmodule TrackerWeb.LayoutsTest do
       assert more.active == ["MaintainerLive", "TeamLive"]
     end
 
+    test "the More entry carries the desktop group as dropdown children" do
+      more = Enum.find(Layouts.nav_items(nil), &(&1.context == :mobile))
+
+      assert Enum.map(more.children, & &1.path) == ["/maintainers", "/teams"]
+      assert Enum.map(more.children, & &1.full) == ["Maintainers", "Teams"]
+    end
+
     test "Admin section appears only for admin users" do
       refute Enum.any?(Layouts.nav_items(nil), &(&1.full == "Admin"))
       refute Enum.any?(Layouts.nav_items(%User{roles: [:user]}), &(&1.full == "Admin"))
       assert Enum.any?(Layouts.nav_items(%User{roles: [:user, :admin]}), &(&1.full == "Admin"))
+    end
+
+    test "admin user's More dropdown includes Admin as a child" do
+      more = Enum.find(Layouts.nav_items(%User{roles: [:user, :admin]}), &(&1.context == :mobile))
+
+      assert "/admin" in Enum.map(more.children, & &1.path)
     end
   end
 
