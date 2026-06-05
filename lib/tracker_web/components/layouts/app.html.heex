@@ -140,6 +140,50 @@
       </div>
     </div>
   </div>
+  <nav class="app-mobile-tabs" aria-label="Sections">
+    <.link
+      navigate={nav_path(~p"/packages", search)}
+      class={["app-mobile-tab", active_nav?(@socket.view, "PackageLive") && "is-active"]}
+      aria-current={active_nav?(@socket.view, "PackageLive") && "page"}
+    >
+      Pkgs
+    </.link>
+    <.link
+      navigate={nav_path(~p"/channels", search)}
+      class={["app-mobile-tab", active_nav?(@socket.view, "ChannelLive") && "is-active"]}
+      aria-current={active_nav?(@socket.view, "ChannelLive") && "page"}
+    >
+      Chans
+    </.link>
+    <.link
+      navigate={nav_path(~p"/changes", search)}
+      class={["app-mobile-tab", active_nav?(@socket.view, "ChangeLive") && "is-active"]}
+      aria-current={active_nav?(@socket.view, "ChangeLive") && "page"}
+    >
+      Changes
+    </.link>
+    <.link
+      navigate={nav_path(~p"/options", search)}
+      class={["app-mobile-tab", active_nav?(@socket.view, "OptionLive") && "is-active"]}
+      aria-current={active_nav?(@socket.view, "OptionLive") && "page"}
+    >
+      Options
+    </.link>
+    <.link
+      navigate={nav_path(~p"/maintainers", search)}
+      class={[
+        "app-mobile-tab",
+        (active_nav?(@socket.view, "MaintainerLive") || active_nav?(@socket.view, "TeamLive")) &&
+          "is-active"
+      ]}
+      aria-current={
+        (active_nav?(@socket.view, "MaintainerLive") || active_nav?(@socket.view, "TeamLive")) &&
+          "page"
+      }
+    >
+      More
+    </.link>
+  </nav>
   <div class="app-header__row app-header__row--bottom">
     <div class="container">
       <.link
@@ -225,47 +269,3 @@
   <.flash_group flash={@flash} />
   {@inner_content}
 </main>
-<nav class="app-mobile-tabs" aria-label="Sections">
-  <.link
-    navigate={nav_path(~p"/packages", search)}
-    class={["app-mobile-tab", active_nav?(@socket.view, "PackageLive") && "is-active"]}
-    aria-current={active_nav?(@socket.view, "PackageLive") && "page"}
-  >
-    Pkgs
-  </.link>
-  <.link
-    navigate={nav_path(~p"/channels", search)}
-    class={["app-mobile-tab", active_nav?(@socket.view, "ChannelLive") && "is-active"]}
-    aria-current={active_nav?(@socket.view, "ChannelLive") && "page"}
-  >
-    Chans
-  </.link>
-  <.link
-    navigate={nav_path(~p"/changes", search)}
-    class={["app-mobile-tab", active_nav?(@socket.view, "ChangeLive") && "is-active"]}
-    aria-current={active_nav?(@socket.view, "ChangeLive") && "page"}
-  >
-    Changes
-  </.link>
-  <.link
-    navigate={nav_path(~p"/options", search)}
-    class={["app-mobile-tab", active_nav?(@socket.view, "OptionLive") && "is-active"]}
-    aria-current={active_nav?(@socket.view, "OptionLive") && "page"}
-  >
-    Options
-  </.link>
-  <.link
-    navigate={nav_path(~p"/maintainers", search)}
-    class={[
-      "app-mobile-tab",
-      (active_nav?(@socket.view, "MaintainerLive") || active_nav?(@socket.view, "TeamLive")) &&
-        "is-active"
-    ]}
-    aria-current={
-      (active_nav?(@socket.view, "MaintainerLive") || active_nav?(@socket.view, "TeamLive")) &&
-        "page"
-    }
-  >
-    More
-  </.link>
-</nav>
