@@ -100,9 +100,9 @@ defmodule TrackerWeb.Layouts do
 
   defp admin_items(current_user) do
     if current_user && Tracker.Accounts.User.has_role?(current_user, :admin) do
-      # aria-current here mirrors the prior layout's quirk (checks TeamLive);
-      # preserved as-is and tracked separately.
-      [%NavItem{path: "/admin", full: "Admin", active: ["TeamLive"], context: :desktop}]
+      # /admin routes to AshAdmin (AshAdmin.* namespace), which active_nav?/2
+      # can't match, so the tab carries no active prefix of its own.
+      [%NavItem{path: "/admin", full: "Admin", active: [], context: :desktop}]
     else
       []
     end
