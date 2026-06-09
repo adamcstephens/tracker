@@ -120,17 +120,15 @@ defmodule TrackerWeb.InboxLive.IndexTest do
     assert view |> render() |> String.contains?("Show all")
   end
 
-  test "lets the user generate a personal feed URL on demand", %{conn: conn} do
+  test "links to the user's feed with a host-relative href", %{conn: conn} do
     user = register_user!()
     conn = log_in(conn, user)
 
     {:ok, view, _html} = live(conn, ~p"/inbox")
-    refute has_element?(view, "#feed-url")
-    assert has_element?(view, "#generate-feed-token")
 
-    view |> element("#generate-feed-token") |> render_click()
-
-    assert view |> element("#feed-url") |> render() =~ "/feeds/notifications/trk_feed_"
+    # Relative path (starts with "/", not an absolute http URL) so it resolves
+    # against the host the user actually visited.
+    assert view |> element("#feed-link") |> render() =~ ~s(href="/feeds/notifications/trk_feed_)
   end
 
   test "regenerating the feed token invalidates the old URL", %{conn: conn} do
@@ -138,8 +136,8 @@ defmodule TrackerWeb.InboxLive.IndexTest do
     conn = log_in(conn, user)
 
     {:ok, view, _html} = live(conn, ~p"/inbox")
-    view |> element("#generate-feed-token") |> render_click()
     old_token = Ash.get!(Tracker.Accounts.User, user.id, authorize?: false).feed_token
+    refute is_nil(old_token)
 
     view |> element("#regenerate-feed-token") |> render_click()
 
