@@ -27,6 +27,7 @@ defmodule Tracker.Notifications.ChangeSubscription do
     define :find, args: [:change_id, {:optional, :channel_id}], not_found_error?: false
     define :destroy
     define :for_user
+    define :subscribers_of_change, args: [:change_id, {:optional, :channel_id}]
   end
 
   actions do
@@ -58,6 +59,21 @@ defmodule Tracker.Notifications.ChangeSubscription do
     read :for_user do
       description "List the actor's change subscriptions, newest first."
       prepare build(sort: [inserted_at: :desc])
+    end
+
+    read :subscribers_of_change do
+      description """
+      Change subscriptions matching a change for fan-out: any-branch (nil channel)
+      subscriptions always match; channel-targeted subscriptions match the mapped channel.
+      """
+
+      argument :change_id, :integer, allow_nil?: false
+      argument :channel_id, :integer
+
+      filter expr(
+               change_id == ^arg(:change_id) and
+                 (is_nil(channel_id) or channel_id == ^arg(:channel_id))
+             )
     end
   end
 

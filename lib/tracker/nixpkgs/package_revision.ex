@@ -10,6 +10,7 @@ defmodule Tracker.Nixpkgs.PackageRevision do
     define :read
     define :list_by_package, args: [:package_id, {:optional, :channel_id}, {:optional, :version}]
     define :load
+    define :for_revisions_packages, args: [:channel_revision_ids, :package_ids]
   end
 
   actions do
@@ -43,6 +44,18 @@ defmodule Tracker.Nixpkgs.PackageRevision do
                  else
                    true
                  end
+             )
+    end
+
+    read :for_revisions_packages do
+      description "Package revisions for a set of packages across a set of channel revisions."
+
+      argument :channel_revision_ids, {:array, :integer}, allow_nil?: false
+      argument :package_ids, {:array, :integer}, allow_nil?: false
+
+      filter expr(
+               channel_revision_id in ^arg(:channel_revision_ids) and
+                 package_id in ^arg(:package_ids)
              )
     end
 

@@ -26,6 +26,7 @@ defmodule Tracker.Notifications.PackageSubscription do
     define :find, args: [:package_id, {:optional, :channel_id}], not_found_error?: false
     define :destroy
     define :for_user
+    define :subscribers_in_channel_scope, args: [:channel_id]
   end
 
   actions do
@@ -57,6 +58,12 @@ defmodule Tracker.Notifications.PackageSubscription do
     read :for_user do
       description "List the actor's package subscriptions, newest first."
       prepare build(sort: [inserted_at: :desc])
+    end
+
+    read :subscribers_in_channel_scope do
+      description "Package subscriptions whose channel scope includes the given channel (system fan-out)."
+      argument :channel_id, :integer, allow_nil?: false
+      filter expr(is_nil(channel_id) or channel_id == ^arg(:channel_id))
     end
   end
 

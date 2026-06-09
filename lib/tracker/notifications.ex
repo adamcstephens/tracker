@@ -5,5 +5,6 @@ defmodule Tracker.Notifications do
     resource Tracker.Notifications.PackageSubscription
     resource Tracker.Notifications.ChannelSubscription
     resource Tracker.Notifications.ChangeSubscription
+    resource Tracker.Notifications.Notification
   end
 end
