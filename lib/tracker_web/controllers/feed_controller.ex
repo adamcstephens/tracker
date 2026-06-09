@@ -1,7 +1,64 @@
 defmodule TrackerWeb.FeedController do
   use TrackerWeb, :controller
 
+  alias Tracker.Notifications.Notification
+  alias TrackerWeb.{FeedToken, NotificationPresenter}
+
   @base_url "https://tracker-dev.junco.dev"
+
+  def notifications(conn, %{"token" => token}) do
+    case FeedToken.verify(token) do
+      {:ok, user} ->
+        render_notifications_feed(conn, user, token)
+
+      {:error, _reason} ->
+        conn
+        |> put_resp_content_type("application/json")
+        |> send_resp(401, Jason.encode!(%{error: "invalid feed token"}))
+    end
+  end
+
+  defp render_notifications_feed(conn, user, token) do
+    notifications = Notification.for_user!(actor: user) |> Enum.take(50)
+
+    latest_updated =
+      case notifications do
+        [n | _] -> n.occurred_at
+        [] -> DateTime.utc_now()
+      end
+
+    feed =
+      Atomex.Feed.new("#{@base_url}/inbox", latest_updated, "Your notifications - Tracker")
+      |> Atomex.Feed.link("#{@base_url}/feeds/notifications/#{token}", rel: "self")
+      |> Atomex.Feed.link("#{@base_url}/inbox", rel: "alternate")
+      |> Atomex.Feed.entries(Enum.map(notifications, &notification_entry/1))
+      |> Atomex.Feed.build()
+      |> Atomex.generate_document()
+
+    conn
+    |> put_resp_content_type("application/atom+xml")
+    |> send_resp(200, feed)
+  end
+
+  defp notification_entry(notification) do
+    text = NotificationPresenter.describe(notification)
+
+    url =
+      case NotificationPresenter.path(notification) do
+        nil -> "#{@base_url}/inbox"
+        path -> "#{@base_url}#{path}"
+      end
+
+    Atomex.Entry.new(
+      "#{@base_url}/inbox#notification-#{notification.id}",
+      notification.occurred_at,
+      text
+    )
+    |> Atomex.Entry.link(url, rel: "alternate")
+    |> Atomex.Entry.published(notification.occurred_at)
+    |> Atomex.Entry.summary(text)
+    |> Atomex.Entry.build()
+  end
 
   def channel(conn, %{"channel" => channel_name}) do
     channel = Tracker.Nixpkgs.Channel.by_name!(channel_name)

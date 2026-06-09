@@ -120,6 +120,29 @@ defmodule TrackerWeb.InboxLive.IndexTest do
     assert view |> render() |> String.contains?("Show all")
   end
 
+  test "shows the user's personal feed URL", %{conn: conn} do
+    user = register_user!()
+    conn = log_in(conn, user)
+
+    {:ok, view, _html} = live(conn, ~p"/inbox")
+
+    token = TrackerWeb.FeedToken.sign(user)
+    assert view |> element("#feed-url") |> render() =~ "/feeds/notifications/"
+    assert {:ok, %{id: id}} = TrackerWeb.FeedToken.verify(token)
+    assert id == user.id
+  end
+
+  test "regenerating the feed token invalidates the old URL", %{conn: conn} do
+    user = register_user!()
+    old_token = TrackerWeb.FeedToken.sign(user)
+    conn = log_in(conn, user)
+
+    {:ok, view, _html} = live(conn, ~p"/inbox")
+    view |> element("#regenerate-feed-token") |> render_click()
+
+    assert {:error, _} = TrackerWeb.FeedToken.verify(old_token)
+  end
+
   test "updates live when a notification is inserted", %{conn: conn} do
     user = register_user!()
     conn = log_in(conn, user)

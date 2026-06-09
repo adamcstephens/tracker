@@ -6,7 +6,9 @@ defmodule TrackerWeb.InboxLive.Index do
   """
   use TrackerWeb, :live_view
 
+  alias Tracker.Accounts.User
   alias Tracker.Notifications.Notification
+  alias TrackerWeb.{FeedToken, NotificationPresenter}
 
   @impl true
   def mount(_params, _session, socket) do
@@ -16,7 +18,10 @@ defmodule TrackerWeb.InboxLive.Index do
       Phoenix.PubSub.subscribe(Tracker.PubSub, "notifications:#{user.id}")
     end
 
-    {:ok, assign(socket, :page_title, "Inbox")}
+    {:ok,
+     socket
+     |> assign(:page_title, "Inbox")
+     |> assign(:feed_url, feed_url(user))}
   end
 
   @impl true
@@ -44,6 +49,17 @@ defmodule TrackerWeb.InboxLive.Index do
     end
   end
 
+  def handle_event("regenerate-feed-token", _params, socket) do
+    user = socket.assigns.current_user
+    {:ok, updated} = User.rotate_feed_token(user, actor: user)
+
+    {:noreply,
+     socket
+     |> assign(:current_user, updated)
+     |> assign(:feed_url, feed_url(updated))
+     |> put_flash(:info, "Feed URL regenerated. The previous URL no longer works.")}
+  end
+
   def handle_event("mark-all-read", _params, socket) do
     user = socket.assigns.current_user
 
@@ -68,6 +84,8 @@ defmodule TrackerWeb.InboxLive.Index do
     {:ok, _} = Notification.mark_read(notification, actor: user)
     load_notifications(socket)
   end
+
+  defp feed_url(user), do: url(~p"/feeds/notifications/#{FeedToken.sign(user)}")
 
   defp load_notifications(socket) do
     user = socket.assigns.current_user
@@ -98,6 +116,18 @@ defmodule TrackerWeb.InboxLive.Index do
       </:actions>
     </.header>
 
+    <details class="inbox-feed" id="feed-subscription">
+      <summary>Subscribe in a feed reader</summary>
+      <p>
+        Paste this private Atom URL into your feed reader. Anyone with the URL can read
+        your notifications — regenerate it if it leaks.
+      </p>
+      <input id="feed-url" type="text" readonly value={@feed_url} />
+      <button type="button" id="regenerate-feed-token" phx-click="regenerate-feed-token">
+        Regenerate
+      </button>
+    </details>
+
     <p :if={@channel_revision_id} class="flash flash--info">
       Showing notifications for one revision. <.link navigate={~p"/inbox"}>Show all</.link>
     </p>
@@ -111,10 +141,12 @@ defmodule TrackerWeb.InboxLive.Index do
         class={["inbox-item", is_nil(n.read_at) && "inbox-item--unread"]}
       >
         <div class="inbox-item__body">
-          <%= if target_path(n) do %>
-            <.link navigate={target_path(n)}>{describe(n)}</.link>
+          <%= if NotificationPresenter.path(n) do %>
+            <.link navigate={NotificationPresenter.path(n)}>
+              {NotificationPresenter.describe(n)}
+            </.link>
           <% else %>
-            <span>{describe(n)}</span>
+            <span>{NotificationPresenter.describe(n)}</span>
           <% end %>
           <time class="inbox-item__time">
             {Calendar.strftime(n.occurred_at, "%Y-%m-%d %H:%M UTC")}
@@ -132,46 +164,4 @@ defmodule TrackerWeb.InboxLive.Index do
     </ul>
     """
   end
-
-  defp describe(%{type: :channel_revision_published} = n),
-    do: "New revision published on #{channel_name(n)}"
-
-  defp describe(%{type: :package_added} = n),
-    do: "#{package_name(n)} added to #{channel_name(n)}"
-
-  defp describe(%{type: :package_removed} = n),
-    do: "#{package_name(n)} removed from #{channel_name(n)}"
-
-  defp describe(%{type: :package_version_changed} = n),
-    do: "#{package_name(n)} updated on #{channel_name(n)}"
-
-  defp describe(%{type: :change_propagated} = n) do
-    case n.channel do
-      nil -> "Change ##{change_number(n)} propagated"
-      channel -> "Change ##{change_number(n)} reached #{channel.name}"
-    end
-  end
-
-  defp target_path(%{type: :change_propagated} = n), do: ~p"/changes/#{change_number(n)}"
-
-  defp target_path(%{
-         type: :channel_revision_published,
-         channel: %{name: name},
-         channel_revision: %{revision: rev}
-       }),
-       do: ~p"/channels/#{name}/revisions/#{rev}"
-
-  defp target_path(%{package: %{attribute: attribute}}) when is_binary(attribute),
-    do: ~p"/packages/#{attribute}"
-
-  defp target_path(_n), do: nil
-
-  defp channel_name(%{channel: %{name: name}}), do: name
-  defp channel_name(_), do: "a channel"
-
-  defp package_name(%{package: %{attribute: attribute}}), do: attribute
-  defp package_name(_), do: "a package"
-
-  defp change_number(%{change: %{number: number}}), do: number
-  defp change_number(_), do: nil
 end
