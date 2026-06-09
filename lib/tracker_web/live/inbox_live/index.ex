@@ -12,7 +12,7 @@ defmodule TrackerWeb.InboxLive.Index do
 
   @impl true
   def mount(_params, _session, socket) do
-    user = socket.assigns.current_user
+    user = ensure_feed_token(socket.assigns.current_user)
 
     if connected?(socket) do
       Phoenix.PubSub.subscribe(Tracker.PubSub, "notifications:#{user.id}")
@@ -20,8 +20,9 @@ defmodule TrackerWeb.InboxLive.Index do
 
     {:ok,
      socket
+     |> assign(:current_user, user)
      |> assign(:page_title, "Inbox")
-     |> assign(:feed_url, feed_url(user))}
+     |> assign(:feed_path, feed_path(user))}
   end
 
   @impl true
@@ -56,7 +57,7 @@ defmodule TrackerWeb.InboxLive.Index do
     {:noreply,
      socket
      |> assign(:current_user, updated)
-     |> assign(:feed_url, feed_url(updated))
+     |> assign(:feed_path, feed_path(updated))
      |> put_flash(:info, "Feed URL regenerated. The previous URL no longer works.")}
   end
 
@@ -85,8 +86,19 @@ defmodule TrackerWeb.InboxLive.Index do
     load_notifications(socket)
   end
 
-  defp feed_url(%{feed_token: nil}), do: nil
-  defp feed_url(%{feed_token: token}), do: url(~p"/feeds/notifications/#{token}")
+  defp ensure_feed_token(%{feed_token: nil} = user) do
+    case User.rotate_feed_token(user, actor: user) do
+      {:ok, updated} -> updated
+      _ -> user
+    end
+  end
+
+  defp ensure_feed_token(user), do: user
+
+  # A relative path so feed readers resolve it against the host the user
+  # actually visited, rather than the endpoint's configured URL.
+  defp feed_path(%{feed_token: nil}), do: nil
+  defp feed_path(%{feed_token: token}), do: ~p"/feeds/notifications/#{token}"
 
   defp load_notifications(socket) do
     user = socket.assigns.current_user
@@ -111,30 +123,29 @@ defmodule TrackerWeb.InboxLive.Index do
       Inbox
       <:subtitle :if={@unread_count > 0}>{@unread_count} unread</:subtitle>
       <:actions>
+        <a
+          :if={@feed_path}
+          id="feed-link"
+          href={@feed_path}
+          title="Your private notifications Atom feed"
+          style="display: flex; align-items: center;"
+        >
+          <img src="/images/feed.svg" alt="Atom feed" width="20" height="20" />
+        </a>
+        <button
+          :if={@feed_path}
+          id="regenerate-feed-token"
+          type="button"
+          phx-click="regenerate-feed-token"
+          title="Generate a new feed URL and revoke the current one"
+        >
+          Regenerate feed
+        </button>
         <button :if={@unread_count > 0} id="mark-all-read" type="button" phx-click="mark-all-read">
           Mark all read
         </button>
       </:actions>
     </.header>
-
-    <details class="inbox-feed" id="feed-subscription">
-      <summary>Subscribe in a feed reader</summary>
-      <%= if @feed_url do %>
-        <p>
-          Paste this private Atom URL into your feed reader. Anyone with the URL can read
-          your notifications — regenerate it if it leaks.
-        </p>
-        <input id="feed-url" type="text" readonly value={@feed_url} />
-        <button type="button" id="regenerate-feed-token" phx-click="regenerate-feed-token">
-          Regenerate
-        </button>
-      <% else %>
-        <p>Generate a private Atom URL to follow your notifications in a feed reader.</p>
-        <button type="button" id="generate-feed-token" phx-click="regenerate-feed-token">
-          Generate feed URL
-        </button>
-      <% end %>
-    </details>
 
     <p :if={@channel_revision_id} class="flash flash--info">
       Showing notifications for one revision. <.link navigate={~p"/inbox"}>Show all</.link>
