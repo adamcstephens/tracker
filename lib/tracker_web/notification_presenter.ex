@@ -7,8 +7,12 @@ defmodule TrackerWeb.NotificationPresenter do
   use TrackerWeb, :verified_routes
 
   @doc "A one-line human description of a notification."
-  def describe(%{type: :channel_revision_published} = n),
-    do: "New revision published on #{channel_name(n)}"
+  def describe(%{type: :channel_revision_published} = n) do
+    case revision_hash(n) do
+      nil -> "New revision published on #{channel_name(n)}"
+      hash -> "New revision #{hash} published on #{channel_name(n)}"
+    end
+  end
 
   def describe(%{type: :package_added} = n),
     do: "#{package_name(n)} added to #{channel_name(n)}"
@@ -20,10 +24,13 @@ defmodule TrackerWeb.NotificationPresenter do
     do: "#{package_name(n)} updated on #{channel_name(n)}"
 
   def describe(%{type: :change_propagated} = n) do
-    case n.channel do
-      nil -> "Change ##{change_number(n)} propagated"
-      channel -> "Change ##{change_number(n)} reached #{channel.name}"
-    end
+    prefix =
+      case change_title(n) do
+        nil -> "PR ##{change_number(n)}"
+        title -> "#{title} — PR ##{change_number(n)}"
+      end
+
+    "#{prefix} reached #{propagation_target(n)}"
   end
 
   @doc "The in-app path a notification links to, or `nil` when there is no target."
@@ -40,6 +47,20 @@ defmodule TrackerWeb.NotificationPresenter do
     do: ~p"/packages/#{attribute}"
 
   def path(_n), do: nil
+
+  defp revision_hash(%{channel_revision: %{revision: rev}}) when is_binary(rev),
+    do: String.slice(rev, 0, 7)
+
+  defp revision_hash(_), do: nil
+
+  defp change_title(%{change: %{title: title}}) when is_binary(title) and title != "", do: title
+  defp change_title(_), do: nil
+
+  # The propagation destination: the branch the change reached (a channel-kind
+  # branch name doubles as the channel name), falling back to the mapped channel.
+  defp propagation_target(%{change_branch: %{branch_name: name}}) when is_binary(name), do: name
+  defp propagation_target(%{channel: %{name: name}}) when is_binary(name), do: name
+  defp propagation_target(_), do: "a new branch"
 
   defp channel_name(%{channel: %{name: name}}), do: name
   defp channel_name(_), do: "a channel"

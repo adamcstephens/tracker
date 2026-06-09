@@ -30,7 +30,7 @@ defmodule TrackerWeb.FeedControllerNotificationsTest do
 
     assert response(conn, 200)
     assert ["application/atom+xml" <> _] = get_resp_header(conn, "content-type")
-    assert response(conn, 200) =~ "New revision published on nixos-alpha"
+    assert response(conn, 200) =~ "published on nixos-alpha"
   end
 
   test "orders entries newest first", %{conn: conn} do

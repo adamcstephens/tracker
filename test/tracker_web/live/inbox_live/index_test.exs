@@ -47,7 +47,7 @@ defmodule TrackerWeb.InboxLive.IndexTest do
     {:ok, view, _html} = live(conn, ~p"/inbox")
 
     assert has_element?(view, "#notifications")
-    assert render(view) =~ "New revision published on nixos-unstable"
+    assert render(view) =~ "published on nixos-unstable"
   end
 
   test "does not show another user's notifications", %{conn: conn} do
@@ -156,6 +156,6 @@ defmodule TrackerWeb.InboxLive.IndexTest do
     published_notification!(user)
 
     refute has_element?(view, "#inbox-empty")
-    assert render(view) =~ "New revision published on nixos-unstable"
+    assert render(view) =~ "published on nixos-unstable"
   end
 end
