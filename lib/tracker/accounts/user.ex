@@ -49,6 +49,7 @@ defmodule Tracker.Accounts.User do
     define :create_service_account, args: [:name, :roles]
     define :set_live_ui
     define :rotate_feed_token
+    define :by_feed_token, args: [:feed_token], not_found_error?: false
   end
 
   actions do
@@ -103,17 +104,24 @@ defmodule Tracker.Accounts.User do
     end
 
     update :rotate_feed_token do
-      description "Generate a fresh feed-token seed, invalidating any existing feed URL."
+      description "Generate a fresh feed token, invalidating any existing feed URL."
       require_atomic? false
       accept []
 
       change fn changeset, _context ->
         Ash.Changeset.force_change_attribute(
           changeset,
-          :feed_token_seed,
-          Tracker.Accounts.User.generate_feed_token_seed()
+          :feed_token,
+          Tracker.Accounts.User.generate_feed_token()
         )
       end
+    end
+
+    read :by_feed_token do
+      description "Look up a user by their notifications-feed token."
+      get? true
+      argument :feed_token, :string, allow_nil?: false, sensitive?: true
+      filter expr(feed_token == ^arg(:feed_token))
     end
   end
 
@@ -170,8 +178,8 @@ defmodule Tracker.Accounts.User do
       allow_nil? false
     end
 
-    attribute :feed_token_seed, :string do
-      description "Per-user seed mixed into the signed notifications-feed URL token; rotating it revokes outstanding feed URLs."
+    attribute :feed_token, :string do
+      description "Opaque secret embedded in the user's personal notifications-feed URL; rotating it revokes outstanding feed URLs."
       sensitive? true
     end
   end
@@ -179,14 +187,20 @@ defmodule Tracker.Accounts.User do
   identities do
     identity :unique_github_id, [:github_id]
     identity :unique_github_username, [:github_username]
+    identity :unique_feed_token, [:feed_token]
   end
 
   def has_role?(%{roles: roles}, role) when is_list(roles) and is_atom(role) do
     role in roles
   end
 
-  @doc "Generates a random seed for the notifications-feed URL token."
-  def generate_feed_token_seed do
-    16 |> :crypto.strong_rand_bytes() |> Base.url_encode64(padding: false)
+  @feed_token_prefix "trk_feed_"
+
+  @doc "Prefix prepended to every notifications-feed token, recognised by secret scanners."
+  def feed_token_prefix, do: @feed_token_prefix
+
+  @doc "Generates a random notifications-feed token."
+  def generate_feed_token do
+    @feed_token_prefix <> Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)
   end
 end

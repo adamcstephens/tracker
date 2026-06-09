@@ -8,7 +8,7 @@ defmodule TrackerWeb.InboxLive.Index do
 
   alias Tracker.Accounts.User
   alias Tracker.Notifications.Notification
-  alias TrackerWeb.{FeedToken, NotificationPresenter}
+  alias TrackerWeb.NotificationPresenter
 
   @impl true
   def mount(_params, _session, socket) do
@@ -85,7 +85,8 @@ defmodule TrackerWeb.InboxLive.Index do
     load_notifications(socket)
   end
 
-  defp feed_url(user), do: url(~p"/feeds/notifications/#{FeedToken.sign(user)}")
+  defp feed_url(%{feed_token: nil}), do: nil
+  defp feed_url(%{feed_token: token}), do: url(~p"/feeds/notifications/#{token}")
 
   defp load_notifications(socket) do
     user = socket.assigns.current_user
@@ -118,14 +119,21 @@ defmodule TrackerWeb.InboxLive.Index do
 
     <details class="inbox-feed" id="feed-subscription">
       <summary>Subscribe in a feed reader</summary>
-      <p>
-        Paste this private Atom URL into your feed reader. Anyone with the URL can read
-        your notifications — regenerate it if it leaks.
-      </p>
-      <input id="feed-url" type="text" readonly value={@feed_url} />
-      <button type="button" id="regenerate-feed-token" phx-click="regenerate-feed-token">
-        Regenerate
-      </button>
+      <%= if @feed_url do %>
+        <p>
+          Paste this private Atom URL into your feed reader. Anyone with the URL can read
+          your notifications — regenerate it if it leaks.
+        </p>
+        <input id="feed-url" type="text" readonly value={@feed_url} />
+        <button type="button" id="regenerate-feed-token" phx-click="regenerate-feed-token">
+          Regenerate
+        </button>
+      <% else %>
+        <p>Generate a private Atom URL to follow your notifications in a feed reader.</p>
+        <button type="button" id="generate-feed-token" phx-click="regenerate-feed-token">
+          Generate feed URL
+        </button>
+      <% end %>
     </details>
 
     <p :if={@channel_revision_id} class="flash flash--info">

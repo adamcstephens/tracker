@@ -120,27 +120,30 @@ defmodule TrackerWeb.InboxLive.IndexTest do
     assert view |> render() |> String.contains?("Show all")
   end
 
-  test "shows the user's personal feed URL", %{conn: conn} do
+  test "lets the user generate a personal feed URL on demand", %{conn: conn} do
     user = register_user!()
     conn = log_in(conn, user)
 
     {:ok, view, _html} = live(conn, ~p"/inbox")
+    refute has_element?(view, "#feed-url")
+    assert has_element?(view, "#generate-feed-token")
 
-    token = TrackerWeb.FeedToken.sign(user)
-    assert view |> element("#feed-url") |> render() =~ "/feeds/notifications/"
-    assert {:ok, %{id: id}} = TrackerWeb.FeedToken.verify(token)
-    assert id == user.id
+    view |> element("#generate-feed-token") |> render_click()
+
+    assert view |> element("#feed-url") |> render() =~ "/feeds/notifications/trk_feed_"
   end
 
   test "regenerating the feed token invalidates the old URL", %{conn: conn} do
     user = register_user!()
-    old_token = TrackerWeb.FeedToken.sign(user)
     conn = log_in(conn, user)
 
     {:ok, view, _html} = live(conn, ~p"/inbox")
+    view |> element("#generate-feed-token") |> render_click()
+    old_token = Ash.get!(Tracker.Accounts.User, user.id, authorize?: false).feed_token
+
     view |> element("#regenerate-feed-token") |> render_click()
 
-    assert {:error, _} = TrackerWeb.FeedToken.verify(old_token)
+    assert {:ok, nil} = Tracker.Accounts.User.by_feed_token(old_token, authorize?: false)
   end
 
   test "updates live when a notification is inserted", %{conn: conn} do
