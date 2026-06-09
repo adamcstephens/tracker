@@ -28,6 +28,18 @@ defmodule Tracker.Nixpkgs.ChangeBranch do
       upsert_fields [:channel_revision_id]
 
       validate {__MODULE__.ValidateBranchName, []}
+
+      change after_transaction(fn
+               _changeset, {:ok, branch}, _context ->
+                 %{change_branch_id: branch.id}
+                 |> Tracker.Notifications.NotificationFanoutPropagationWorker.new()
+                 |> Oban.insert!()
+
+                 {:ok, branch}
+
+               _changeset, {:error, error}, _context ->
+                 {:error, error}
+             end)
     end
   end
 

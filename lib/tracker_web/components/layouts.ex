@@ -95,7 +95,15 @@ defmodule TrackerWeb.Layouts do
         context: :desktop
       },
       %NavItem{path: "/teams", full: "Teams", active: ["TeamLive"], context: :desktop}
-    ] ++ admin_items(current_user)
+    ] ++ inbox_items(current_user) ++ admin_items(current_user)
+  end
+
+  defp inbox_items(current_user) do
+    if current_user do
+      [%NavItem{path: "/inbox", full: "Inbox", active: ["InboxLive"], context: :desktop}]
+    else
+      []
+    end
   end
 
   defp admin_items(current_user) do

@@ -25,6 +25,7 @@ defmodule Tracker.Notifications.ChannelSubscription do
     define :find, args: [:channel_id], not_found_error?: false
     define :destroy
     define :for_user
+    define :subscribers_of_channel, args: [:channel_id]
   end
 
   actions do
@@ -51,6 +52,12 @@ defmodule Tracker.Notifications.ChannelSubscription do
     read :for_user do
       description "List the actor's channel subscriptions, newest first."
       prepare build(sort: [inserted_at: :desc])
+    end
+
+    read :subscribers_of_channel do
+      description "All subscriptions to a channel (system fan-out)."
+      argument :channel_id, :integer, allow_nil?: false
+      filter expr(channel_id == ^arg(:channel_id))
     end
   end
 

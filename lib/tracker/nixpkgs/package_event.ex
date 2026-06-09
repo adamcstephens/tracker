@@ -7,9 +7,11 @@ defmodule Tracker.Nixpkgs.PackageEvent do
   end
 
   code_interface do
+    define :create
     define :list
     define :list_by_package, args: [:package_id, {:optional, :channel_id}]
     define :list_between_revisions, args: [:channel_id, :from_date, :to_date]
+    define :list_for_revision_packages, args: [:channel_revision_id, :package_ids]
   end
 
   actions do
@@ -39,6 +41,18 @@ defmodule Tracker.Nixpkgs.PackageEvent do
                  else
                    true
                  end
+             )
+    end
+
+    read :list_for_revision_packages do
+      description "Added/removed events for a set of packages within one channel revision."
+
+      argument :channel_revision_id, :integer, allow_nil?: false
+      argument :package_ids, {:array, :integer}, allow_nil?: false
+
+      filter expr(
+               channel_revision_id == ^arg(:channel_revision_id) and
+                 package_id in ^arg(:package_ids)
              )
     end
 

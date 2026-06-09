@@ -67,6 +67,21 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
 
     update :record_result do
       accept [:result]
+      require_atomic? false
+
+      change after_transaction(fn
+               _changeset, {:ok, revision}, _context ->
+                 if revision.result == :success do
+                   %{channel_revision_id: revision.id}
+                   |> Tracker.Notifications.NotificationFanoutRevisionWorker.new()
+                   |> Oban.insert!()
+                 end
+
+                 {:ok, revision}
+
+               _changeset, {:error, error}, _context ->
+                 {:error, error}
+             end)
     end
 
     update :record_options_result do

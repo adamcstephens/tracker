@@ -54,6 +54,69 @@ defmodule Tracker.Fixtures do
     Tracker.Nixpkgs.Change.get_by_number!(number)
   end
 
+  @doc "Creates a channel revision with a unique git revision hash."
+  def channel_revision!(channel \\ nil, attrs \\ %{}) do
+    channel = channel || channel!()
+
+    base = %{
+      revision: "rev-#{System.unique_integer([:positive])}",
+      released_at: DateTime.utc_now(:second),
+      channel_id: channel.id
+    }
+
+    Tracker.Nixpkgs.ChannelRevision.create!(Map.merge(base, attrs))
+  end
+
+  @doc "Creates a package revision (a package present at a version in a channel revision)."
+  def package_revision!(package, channel_revision, version \\ nil) do
+    version = version || "1.0.#{System.unique_integer([:positive])}"
+
+    Tracker.Nixpkgs.PackageRevision.load!(%{
+      package_id: package.id,
+      channel_revision_id: channel_revision.id,
+      version: version
+    })
+  end
+
+  @doc "Creates a package event (:added or :removed) for a channel revision."
+  def package_event!(type, package, channel_revision) do
+    Tracker.Nixpkgs.PackageEvent.create!(%{
+      type: type,
+      package_id: package.id,
+      channel_revision_id: channel_revision.id
+    })
+  end
+
+  @doc "Records a notification for a user via the fan-out path, returning the row."
+  def notification!(user, overrides \\ %{}) do
+    dedup_key = "dk-#{System.unique_integer([:positive])}"
+
+    row =
+      Map.merge(
+        %{
+          user_id: user.id,
+          type: :channel_revision_published,
+          occurred_at: DateTime.utc_now(:second),
+          dedup_key: dedup_key
+        },
+        overrides
+      )
+
+    :ok = Tracker.Notifications.Notification.fanout([row])
+
+    Tracker.Notifications.Notification.for_user!(actor: user)
+    |> Enum.find(&(&1.dedup_key == dedup_key))
+  end
+
+  @doc "Records a change branch, optionally linked to a channel revision."
+  def change_branch!(change, branch_name, channel_revision \\ nil) do
+    Tracker.Nixpkgs.ChangeBranch.create!(%{
+      change_id: change.id,
+      branch_name: branch_name,
+      channel_revision_id: channel_revision && channel_revision.id
+    })
+  end
+
   @doc """
   Loads options data into the database for a channel revision.
 

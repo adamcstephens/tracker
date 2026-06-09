@@ -55,6 +55,17 @@ defmodule TrackerWeb.Router do
       end
     end
 
+    scope "/inbox" do
+      pipe_through :force_interactive
+
+      ash_authentication_live_session :inbox_routes,
+        on_mount: [
+          {TrackerWeb.LiveUserAuth, :live_user_required}
+        ] do
+        live "/", InboxLive.Index, :index
+      end
+    end
+
     ash_authentication_live_session :authenticated_routes,
       on_mount: [
         {TrackerWeb.LiveUserAuth, :live_user_optional},
