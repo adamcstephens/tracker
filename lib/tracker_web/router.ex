@@ -40,6 +40,7 @@ defmodule TrackerWeb.Router do
 
     get "/feeds/channels/:channel", FeedController, :channel
     get "/feeds/packages/:name", FeedController, :package
+    get "/feeds/notifications/:token", FeedController, :notifications
     post "/lens", LensController, :update
     get "/channels/:channel/diff", ChannelDiffController, :resolve
 

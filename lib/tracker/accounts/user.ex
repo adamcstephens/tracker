@@ -48,6 +48,7 @@ defmodule Tracker.Accounts.User do
   code_interface do
     define :create_service_account, args: [:name, :roles]
     define :set_live_ui
+    define :rotate_feed_token
   end
 
   actions do
@@ -100,6 +101,20 @@ defmodule Tracker.Accounts.User do
       require_atomic? false
       accept [:live_ui]
     end
+
+    update :rotate_feed_token do
+      description "Generate a fresh feed-token seed, invalidating any existing feed URL."
+      require_atomic? false
+      accept []
+
+      change fn changeset, _context ->
+        Ash.Changeset.force_change_attribute(
+          changeset,
+          :feed_token_seed,
+          Tracker.Accounts.User.generate_feed_token_seed()
+        )
+      end
+    end
   end
 
   policies do
@@ -112,6 +127,10 @@ defmodule Tracker.Accounts.User do
     end
 
     bypass action(:set_live_ui) do
+      authorize_if expr(id == ^actor(:id))
+    end
+
+    bypass action(:rotate_feed_token) do
       authorize_if expr(id == ^actor(:id))
     end
 
@@ -150,6 +169,11 @@ defmodule Tracker.Accounts.User do
       default true
       allow_nil? false
     end
+
+    attribute :feed_token_seed, :string do
+      description "Per-user seed mixed into the signed notifications-feed URL token; rotating it revokes outstanding feed URLs."
+      sensitive? true
+    end
   end
 
   identities do
@@ -159,5 +183,10 @@ defmodule Tracker.Accounts.User do
 
   def has_role?(%{roles: roles}, role) when is_list(roles) and is_atom(role) do
     role in roles
+  end
+
+  @doc "Generates a random seed for the notifications-feed URL token."
+  def generate_feed_token_seed do
+    16 |> :crypto.strong_rand_bytes() |> Base.url_encode64(padding: false)
   end
 end
