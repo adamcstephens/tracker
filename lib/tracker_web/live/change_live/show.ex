@@ -34,6 +34,7 @@ defmodule TrackerWeb.ChangeLive.Show do
   alias TrackerWeb.PropagationTree
   alias TrackerWeb.TableParams
   alias Tracker.Nixpkgs.Propagation
+  alias Tracker.Notifications.ChangeSubscription
 
   @impl true
   def render(assigns) do
@@ -50,6 +51,14 @@ defmodule TrackerWeb.ChangeLive.Show do
           </a>
           <span class="cm-arrow muted">→</span>
           <code class="cm-base">{@change.base_ref}</code>
+          <button
+            :if={@current_user}
+            id="subscribe-toggle"
+            type="button"
+            phx-click="toggle-subscription"
+          >
+            {if @subscribed?, do: "Unsubscribe", else: "Subscribe"}
+          </button>
         </div>
         <h1 class="cm-title">{@change.title}</h1>
       </header>
@@ -362,7 +371,10 @@ defmodule TrackerWeb.ChangeLive.Show do
       Phoenix.PubSub.subscribe(Tracker.PubSub, "change_branches:updated")
     end
 
-    {:ok, assign_new(socket, :current_user, fn -> nil end)}
+    {:ok,
+     socket
+     |> assign_new(:current_user, fn -> nil end)
+     |> assign(:subscribed?, false)}
   end
 
   @impl true
@@ -407,6 +419,7 @@ defmodule TrackerWeb.ChangeLive.Show do
     socket
     |> assign(:page_title, "##{change.number} #{change.title}")
     |> assign(:change, change)
+    |> assign(:subscribed?, change_subscribed?(socket.assigns[:current_user], change.id))
     |> assign(:author_maintainer, author_maintainer)
     |> assign(:merger_maintainer, merger_maintainer)
     |> assign(:lifecycle_dag, lifecycle_dag)
@@ -417,6 +430,15 @@ defmodule TrackerWeb.ChangeLive.Show do
     |> assign(:channels_enabled?, channels_enabled?)
     |> load_packages(change.id)
     |> load_options(change.id)
+  end
+
+  defp change_subscribed?(nil, _change_id), do: false
+
+  defp change_subscribed?(user, change_id) do
+    case ChangeSubscription.find(change_id, nil, actor: user) do
+      {:ok, nil} -> false
+      {:ok, _subscription} -> true
+    end
   end
 
   defp lens_branch_name(nil), do: nil
@@ -440,6 +462,24 @@ defmodule TrackerWeb.ChangeLive.Show do
         into: %{} do
       {name, %PropagationDag.BranchLink{channel_name: ch_name, revision: rev}}
     end
+  end
+
+  @impl true
+  def handle_event("toggle-subscription", _params, socket) do
+    %{current_user: user, change: change} = socket.assigns
+
+    subscribed? =
+      case ChangeSubscription.find(change.id, nil, actor: user) do
+        {:ok, nil} ->
+          {:ok, _subscription} = ChangeSubscription.subscribe(change.id, nil, actor: user)
+          true
+
+        {:ok, subscription} ->
+          :ok = ChangeSubscription.destroy(subscription, actor: user)
+          false
+      end
+
+    {:noreply, assign(socket, :subscribed?, subscribed?)}
   end
 
   @impl true

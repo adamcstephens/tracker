@@ -4,6 +4,57 @@ defmodule Tracker.Fixtures do
   """
 
   @doc """
+  Registers a user via the GitHub strategy, returning the persisted user.
+  """
+  def register_user!(overrides \\ %{}) do
+    user_info =
+      Map.merge(
+        %{
+          "id" => System.unique_integer([:positive]),
+          "login" => "user_#{System.unique_integer([:positive])}"
+        },
+        overrides
+      )
+
+    Tracker.Accounts.User
+    |> Ash.Changeset.for_create(:register_with_github,
+      user_info: user_info,
+      oauth_tokens: %{"access_token" => "tok"}
+    )
+    |> Ash.create!(authorize?: false)
+  end
+
+  @doc "Creates a package with a unique attribute name."
+  def package!(attribute \\ nil) do
+    attribute = attribute || "pkg-#{System.unique_integer([:positive])}"
+    Tracker.Nixpkgs.Package.create!(%{attribute: attribute})
+  end
+
+  @doc "Creates an active channel with a unique name."
+  def channel!(name \\ nil) do
+    name = name || "chan-#{System.unique_integer([:positive])}"
+    Tracker.Nixpkgs.Channel.create!(%{name: name, display_name: name, status: :active})
+  end
+
+  @doc "Creates a merged change with a unique PR number."
+  def change!(number \\ nil) do
+    number = number || System.unique_integer([:positive])
+
+    Tracker.Nixpkgs.Change.bulk_upsert_all([
+      %{
+        number: number,
+        title: "change ##{number}",
+        state: :merged,
+        author: "tester",
+        base_ref: "master",
+        url: "https://github.com/NixOS/nixpkgs/pull/#{number}"
+      }
+    ])
+
+    Tracker.Nixpkgs.Change.get_by_number!(number)
+  end
+
+  @doc """
   Loads options data into the database for a channel revision.
 
   Accepts a raw options map (as from options.json) and a channel revision.

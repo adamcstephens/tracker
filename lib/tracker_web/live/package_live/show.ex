@@ -1,6 +1,7 @@
 defmodule TrackerWeb.PackageLive.Show do
   use TrackerWeb, :live_view
 
+  alias Tracker.Notifications.PackageSubscription
   alias TrackerWeb.DataTable
   alias TrackerWeb.PageSearch
   alias TrackerWeb.TableParams
@@ -16,6 +17,16 @@ defmodule TrackerWeb.PackageLive.Show do
     ~H"""
     <.header>
       {@package.attribute}
+      <:actions>
+        <button
+          :if={@current_user}
+          id="subscribe-toggle"
+          type="button"
+          phx-click="toggle-subscription"
+        >
+          {if @subscribed?, do: "Unsubscribe", else: "Subscribe"}
+        </button>
+      </:actions>
     </.header>
 
     <p :if={@package.description}>{@package.description}</p>
@@ -298,7 +309,10 @@ defmodule TrackerWeb.PackageLive.Show do
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, socket}
+    {:ok,
+     socket
+     |> assign_new(:current_user, fn -> nil end)
+     |> assign(:subscribed?, false)}
   end
 
   @impl true
@@ -336,6 +350,7 @@ defmodule TrackerWeb.PackageLive.Show do
      socket
      |> assign(:page_title, package.attribute)
      |> assign(:package, package)
+     |> assign(:subscribed?, package_subscribed?(socket.assigns.current_user, package.id))
      |> assign(:family_siblings, family_siblings)
      |> assign(:variant_siblings, variant_siblings)
      |> assign(:option_revisions, option_revisions)
@@ -369,6 +384,15 @@ defmodule TrackerWeb.PackageLive.Show do
   def handle_info({:set_lens, channel_name, rev}, socket) do
     socket = TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)
     {:noreply, load_revision_data(socket)}
+  end
+
+  defp package_subscribed?(nil, _package_id), do: false
+
+  defp package_subscribed?(user, package_id) do
+    case PackageSubscription.find(package_id, nil, actor: user) do
+      {:ok, nil} -> false
+      {:ok, _subscription} -> true
+    end
   end
 
   defp extra_params(socket, overrides \\ %{}) do
@@ -436,6 +460,24 @@ defmodule TrackerWeb.PackageLive.Show do
     |> assign(:has_next_page?, has_more?)
     |> assign(:total_pages, total_pages)
     |> assign(:current_page, tp.page)
+  end
+
+  @impl true
+  def handle_event("toggle-subscription", _params, socket) do
+    %{current_user: user, package: package} = socket.assigns
+
+    subscribed? =
+      case PackageSubscription.find(package.id, nil, actor: user) do
+        {:ok, nil} ->
+          {:ok, _subscription} = PackageSubscription.subscribe(package.id, nil, actor: user)
+          true
+
+        {:ok, subscription} ->
+          :ok = PackageSubscription.destroy(subscription, actor: user)
+          false
+      end
+
+    {:noreply, assign(socket, :subscribed?, subscribed?)}
   end
 
   @impl true
