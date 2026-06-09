@@ -1,6 +1,7 @@
 defmodule TrackerWeb.ChannelLive.Show do
   use TrackerWeb, :live_view
 
+  alias Tracker.Notifications.ChannelSubscription
   alias TrackerWeb.DataTable
   alias TrackerWeb.PageSearch
   alias TrackerWeb.TableParams
@@ -29,6 +30,14 @@ defmodule TrackerWeb.ChannelLive.Show do
         <a href={"/feeds/channels/#{@channel}"} title="Atom feed">
           <img src="/images/feed.svg" alt="Atom feed" width="20" height="20" />
         </a>
+        <button
+          :if={@current_user}
+          id="subscribe-toggle"
+          type="button"
+          phx-click="toggle-subscription"
+        >
+          {if @subscribed?, do: "Unsubscribe", else: "Subscribe"}
+        </button>
       </:actions>
     </.header>
 
@@ -96,6 +105,7 @@ defmodule TrackerWeb.ChannelLive.Show do
     {:ok,
      socket
      |> assign_new(:current_user, fn -> nil end)
+     |> assign(:subscribed?, false)
      |> assign(:subscribed_channel_id, nil)}
   end
 
@@ -131,6 +141,7 @@ defmodule TrackerWeb.ChannelLive.Show do
      |> assign(:channel_resource, channel)
      |> assign(:table_params, tp)
      |> assign(:subscribed_channel_id, channel.id)
+     |> assign(:subscribed?, channel_subscribed?(socket.assigns.current_user, channel.id))
      |> assign(:lens, lens)
      |> assign(:page_search, %PageSearch{
        mode: :inert,
@@ -151,6 +162,15 @@ defmodule TrackerWeb.ChannelLive.Show do
     {:noreply, TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)}
   end
 
+  defp channel_subscribed?(nil, _channel_id), do: false
+
+  defp channel_subscribed?(user, channel_id) do
+    case ChannelSubscription.find(channel_id, actor: user) do
+      {:ok, nil} -> false
+      {:ok, _subscription} -> true
+    end
+  end
+
   defp assign_revisions(socket, channel_id) do
     tp = socket.assigns.table_params
 
@@ -169,6 +189,24 @@ defmodule TrackerWeb.ChannelLive.Show do
     |> assign(:has_next_page?, pagination.has_next_page?)
     |> assign(:total_pages, pagination.total_pages)
     |> assign(:current_page, pagination.current_page)
+  end
+
+  @impl true
+  def handle_event("toggle-subscription", _params, socket) do
+    %{current_user: user, channel_resource: channel} = socket.assigns
+
+    subscribed? =
+      case ChannelSubscription.find(channel.id, actor: user) do
+        {:ok, nil} ->
+          {:ok, _subscription} = ChannelSubscription.subscribe(channel.id, actor: user)
+          true
+
+        {:ok, subscription} ->
+          :ok = ChannelSubscription.destroy(subscription, actor: user)
+          false
+      end
+
+    {:noreply, assign(socket, :subscribed?, subscribed?)}
   end
 
   @impl true

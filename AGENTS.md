@@ -17,6 +17,7 @@
 - Always read code for project elixir dependencies from `deps`. Never query hexdocs or hex.
 - Remove dead code
 - Use Ash resource code interfaces outside the resource modules.
+- Model behaviour with native Ash actions: subscribe→`create`, fetch/"exists?"→`read` (`get?` + `not_found_error?: false`), remove→`destroy`. Generic `action` blocks are ONLY for genuinely non-CRUD operations (side effects, cross-resource orchestration, external calls). Never write a resource function that calls `Ash.Query`/`Ash.read!`/`Ash.destroy!` to stand in for an action — the exception is bulk operations via `Ash.bulk_*` over a real action. Put cross-action orchestration (e.g. a toggle) in the caller, composing code interfaces.
 - You must get permission to use raw SQL.
 - Always use typedstruct structs instead of maps
 
