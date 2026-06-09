@@ -1,17 +1,18 @@
 defmodule TrackerWeb.FeedController do
   use TrackerWeb, :controller
 
+  alias Tracker.Accounts.User
   alias Tracker.Notifications.Notification
-  alias TrackerWeb.{FeedToken, NotificationPresenter}
+  alias TrackerWeb.NotificationPresenter
 
   @base_url "https://tracker-dev.junco.dev"
 
   def notifications(conn, %{"token" => token}) do
-    case FeedToken.verify(token) do
-      {:ok, user} ->
+    case User.by_feed_token(token, authorize?: false) do
+      {:ok, %User{} = user} ->
         render_notifications_feed(conn, user, token)
 
-      {:error, _reason} ->
+      _ ->
         conn
         |> put_resp_content_type("application/json")
         |> send_resp(401, Jason.encode!(%{error: "invalid feed token"}))
