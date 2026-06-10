@@ -122,7 +122,6 @@ defmodule TrackerWeb.InboxLive.Index do
     |> assign(:notifications, notifications)
     |> assign(:unread_count, unread_count)
     |> assign(:unread_notification_count, unread_count)
-    |> assign(:type_counts, Enum.frequencies_by(notifications, & &1.type))
     |> apply_filters()
   end
 
@@ -133,17 +132,19 @@ defmodule TrackerWeb.InboxLive.Index do
       active_types: active_types
     } = socket.assigns
 
+    in_segment =
+      Enum.filter(notifications, fn n -> unread_filter == :all or is_nil(n.read_at) end)
+
     visible =
-      notifications
-      |> Enum.filter(fn n ->
+      Enum.filter(in_segment, fn n ->
         MapSet.size(active_types) == 0 or MapSet.member?(active_types, n.type)
       end)
-      |> Enum.filter(fn n -> unread_filter == :all or is_nil(n.read_at) end)
 
     now = DateTime.utc_now()
 
     socket
     |> assign(:now, now)
+    |> assign(:type_counts, Enum.frequencies_by(in_segment, & &1.type))
     |> assign(:groups, NotificationPresenter.group_by_day(visible, now))
   end
 

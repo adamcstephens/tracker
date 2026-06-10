@@ -159,6 +159,26 @@ defmodule TrackerWeb.InboxLive.IndexTest do
     assert has_element?(view, "#notification-#{revision.id}")
   end
 
+  test "type chip counts reflect the unread/all selection", %{conn: conn} do
+    user = register_user!()
+    read = published_notification!(user)
+    _unread = published_notification!(user)
+    {:ok, _} = Notification.mark_read(read, actor: user)
+    conn = log_in(conn, user)
+
+    {:ok, view, _html} = live(conn, ~p"/inbox")
+
+    assert view |> element("#filter-type-channel_revision_published .n") |> render() =~ ">1<"
+
+    view |> element("#filter-all") |> render_click()
+
+    assert view |> element("#filter-type-channel_revision_published .n") |> render() =~ ">2<"
+
+    view |> element("#filter-unread") |> render_click()
+
+    assert view |> element("#filter-type-channel_revision_published .n") |> render() =~ ">1<"
+  end
+
   test "shows an empty-filter state when nothing matches", %{conn: conn} do
     user = register_user!()
     n = published_notification!(user)
