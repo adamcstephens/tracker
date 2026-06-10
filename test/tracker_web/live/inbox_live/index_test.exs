@@ -312,4 +312,103 @@ defmodule TrackerWeb.InboxLive.IndexTest do
       refute has_element?(view, "#inbox-icon")
     end
   end
+
+  describe "search bar and lens" do
+    test "renders the lens with its selector disabled", %{conn: conn} do
+      user = register_user!()
+      channel!("nixos-unstable")
+      conn = log_in(conn, user)
+
+      {:ok, view, _html} = live(conn, ~p"/inbox")
+
+      assert has_element?(view, "#lens select.lens__select[disabled]")
+    end
+
+    test "renders an active search box", %{conn: conn} do
+      user = register_user!()
+      conn = log_in(conn, user)
+
+      {:ok, view, _html} = live(conn, ~p"/inbox")
+
+      assert has_element?(view, "#page-search-input")
+      refute has_element?(view, "#page-search-input[disabled]")
+    end
+
+    test "search filters notifications and scopes the type chip counts", %{conn: conn} do
+      user = register_user!()
+      chan = channel!()
+
+      firefox =
+        notification!(user, %{
+          type: :package_added,
+          package_id: package!("firefox").id,
+          channel_id: chan.id
+        })
+
+      vim =
+        notification!(user, %{
+          type: :package_added,
+          package_id: package!("vim").id,
+          channel_id: chan.id
+        })
+
+      conn = log_in(conn, user)
+
+      {:ok, view, _html} = live(conn, ~p"/inbox")
+
+      view |> element("#page-search") |> render_change(%{"search" => "FIRE"})
+
+      assert has_element?(view, "#notification-#{firefox.id}")
+      refute has_element?(view, "#notification-#{vim.id}")
+      assert view |> element("#filter-type-package_added .n") |> render() =~ ">1<"
+    end
+
+    test "search matches the channel name", %{conn: conn} do
+      user = register_user!()
+
+      n =
+        notification!(user, %{
+          type: :package_added,
+          package_id: package!("vim").id,
+          channel_id: channel!("nixos-unstable").id
+        })
+
+      conn = log_in(conn, user)
+
+      {:ok, view, _html} = live(conn, ~p"/inbox")
+
+      view |> element("#page-search") |> render_change(%{"search" => "unstable"})
+      assert has_element?(view, "#notification-#{n.id}")
+
+      view |> element("#page-search") |> render_change(%{"search" => "nomatch"})
+      refute has_element?(view, "#notification-#{n.id}")
+    end
+
+    test "applies the search param from the URL", %{conn: conn} do
+      user = register_user!()
+      chan = channel!()
+
+      firefox =
+        notification!(user, %{
+          type: :package_added,
+          package_id: package!("firefox").id,
+          channel_id: chan.id
+        })
+
+      vim =
+        notification!(user, %{
+          type: :package_added,
+          package_id: package!("vim").id,
+          channel_id: chan.id
+        })
+
+      conn = log_in(conn, user)
+
+      {:ok, view, _html} = live(conn, ~p"/inbox?search=firefox")
+
+      assert has_element?(view, "#notification-#{firefox.id}")
+      refute has_element?(view, "#notification-#{vim.id}")
+      assert has_element?(view, "#page-search-input[value='firefox']")
+    end
+  end
 end

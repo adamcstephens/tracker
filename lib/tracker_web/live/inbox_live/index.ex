@@ -1,16 +1,21 @@
 defmodule TrackerWeb.InboxLive.Index do
   @moduledoc """
   The per-user in-app inbox. A triage view over durable notifications:
-  unread/all segment, multi-select type filter chips, day-grouped rows
-  with per-row read/unread toggling. Updates live as new ones are
-  inserted, and doubles as the "everything affected" view when filtered
-  to a single channel revision.
+  unread/all segment, multi-select type filter chips, chrome search over
+  row text, day-grouped rows with per-row read/unread toggling. Updates
+  live as new ones are inserted, and doubles as the "everything
+  affected" view when filtered to a single channel revision.
+
+  The sitewide lens renders disabled here: notifications are
+  point-in-time events on subscriptions, so channel-scoping them would
+  hide unread items and only some types map to a channel at all.
   """
   use TrackerWeb, :live_view
 
   alias Tracker.Notifications.Notification
   alias TrackerWeb.FeedLink
   alias TrackerWeb.NotificationPresenter
+  alias TrackerWeb.PageSearch
 
   @impl true
   def mount(_params, _session, socket) do
@@ -37,9 +42,27 @@ defmodule TrackerWeb.InboxLive.Index do
         :error -> nil
       end
 
+    search = params["search"] || ""
+
+    hidden =
+      case channel_revision_id do
+        nil -> %{}
+        id -> %{"channel_revision_id" => Integer.to_string(id)}
+      end
+
+    lens = socket.assigns.lens && %{socket.assigns.lens | disabled?: true}
+
     {:noreply,
      socket
      |> assign(:channel_revision_id, channel_revision_id)
+     |> assign(:search, search)
+     |> assign(:lens, lens)
+     |> assign(:page_search, %PageSearch{
+       action: "/inbox",
+       value: search,
+       placeholder: "Search notifications…",
+       hidden: hidden
+     })
      |> load_notifications()}
   end
 
@@ -60,6 +83,17 @@ defmodule TrackerWeb.InboxLive.Index do
         {:ok, _} = Notification.mark_unread(notification, actor: user)
         {:noreply, load_notifications(socket)}
     end
+  end
+
+  def handle_event("search", %{"search" => search}, socket) do
+    {:noreply,
+     socket
+     |> assign(:search, search)
+     |> update(:page_search, &%{&1 | value: search})
+     |> apply_filters()
+     |> push_event("update-url", %{
+       path: inbox_path(socket.assigns.channel_revision_id, search)
+     })}
   end
 
   def handle_event("set-unread-filter", %{"filter" => filter}, socket) do
@@ -130,11 +164,18 @@ defmodule TrackerWeb.InboxLive.Index do
     %{
       notifications: notifications,
       unread_filter: unread_filter,
-      active_types: active_types
+      active_types: active_types,
+      search: search,
+      version_changes: version_changes
     } = socket.assigns
 
+    query = search |> String.trim() |> String.downcase()
+
     in_segment =
-      Enum.filter(notifications, fn n -> unread_filter == :all or is_nil(n.read_at) end)
+      Enum.filter(notifications, fn n ->
+        (unread_filter == :all or is_nil(n.read_at)) and
+          search_match?(n, version_changes, query)
+      end)
 
     visible =
       Enum.filter(in_segment, fn n ->
@@ -147,6 +188,30 @@ defmodule TrackerWeb.InboxLive.Index do
     |> assign(:now, now)
     |> assign(:type_counts, Enum.frequencies_by(in_segment, & &1.type))
     |> assign(:groups, NotificationPresenter.group_by_day(visible, now))
+  end
+
+  defp search_match?(_n, _version_changes, ""), do: true
+
+  defp search_match?(n, version_changes, query) do
+    [
+      NotificationPresenter.hero(n, version_changes),
+      n.channel && n.channel.name,
+      n.change_branch && n.change_branch.branch_name
+    ]
+    |> Enum.any?(fn text ->
+      is_binary(text) and String.contains?(String.downcase(text), query)
+    end)
+  end
+
+  defp inbox_path(channel_revision_id, search) do
+    params =
+      %{"channel_revision_id" => channel_revision_id, "search" => search}
+      |> Enum.reject(fn {_key, value} -> value in [nil, ""] end)
+
+    case params do
+      [] -> ~p"/inbox"
+      params -> ~p"/inbox?#{params}"
+    end
   end
 
   @impl true
