@@ -22,6 +22,10 @@ defmodule TrackerWeb.Router do
 
   defp assign_interactive(conn, _opts), do: Plug.Conn.assign(conn, :interactive?, true)
 
+  pipeline :require_admin do
+    plug TrackerWeb.Plug.RequireRole, role: :admin, format: :browser
+  end
+
   pipeline :api do
     plug :accepts, ["json"]
     plug :load_from_bearer
@@ -145,20 +149,23 @@ defmodule TrackerWeb.Router do
 
   # Enable LiveDashboard and Swoosh mailbox preview in development
   if Application.compile_env(:tracker, :dev_routes) do
-    # If you want to use the LiveDashboard in production, you should put
-    # it behind authentication and allow only admins to access it.
-    # If your application does not have an admins-only section yet,
-    # you can use Plug.BasicAuth to set up some basic authentication
-    # as long as you are also using SSL (which you should anyway).
     import Phoenix.LiveDashboard.Router
     import Oban.Web.Router
 
-    scope "/dev" do
-      pipe_through :browser
+    @dev_dashboard_on_mount [
+      AshAuthentication.Phoenix.LiveSession,
+      {TrackerWeb.LiveUserAuth, :admin_only}
+    ]
 
-      live_dashboard "/dashboard", metrics: TrackerWeb.Telemetry
+    scope "/dev" do
+      pipe_through [:browser, :require_admin]
+
+      live_dashboard "/dashboard",
+        metrics: TrackerWeb.Telemetry,
+        on_mount: @dev_dashboard_on_mount
+
       forward "/mailbox", Plug.Swoosh.MailboxPreview
-      oban_dashboard "/oban"
+      oban_dashboard "/oban", on_mount: @dev_dashboard_on_mount
     end
   end
 
