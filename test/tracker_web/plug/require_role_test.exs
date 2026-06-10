@@ -42,4 +42,38 @@ defmodule TrackerWeb.Plug.RequireRoleTest do
       assert_raise KeyError, fn -> RequireRole.init([]) end
     end
   end
+
+  describe "call/2 with format: :browser" do
+    test "passes through when actor has the required role" do
+      user = %User{id: "0", roles: [:user, :admin]}
+
+      conn =
+        build_conn(:get, "/dev/dashboard")
+        |> Plug.Conn.assign(:current_user, user)
+        |> RequireRole.call(RequireRole.init(role: :admin, format: :browser))
+
+      refute conn.halted
+    end
+
+    test "redirects to sign-in when current_user is absent" do
+      conn =
+        build_conn(:get, "/dev/dashboard")
+        |> RequireRole.call(RequireRole.init(role: :admin, format: :browser))
+
+      assert conn.halted
+      assert redirected_to(conn) == ~p"/sign-in"
+    end
+
+    test "redirects home when actor lacks the required role" do
+      user = %User{id: "0", roles: [:user]}
+
+      conn =
+        build_conn(:get, "/dev/dashboard")
+        |> Plug.Conn.assign(:current_user, user)
+        |> RequireRole.call(RequireRole.init(role: :admin, format: :browser))
+
+      assert conn.halted
+      assert redirected_to(conn) == ~p"/"
+    end
+  end
 end
