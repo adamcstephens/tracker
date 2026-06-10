@@ -186,8 +186,10 @@ defmodule TrackerWeb.PackageLive.Show do
         </label>
         <button type="submit">Filter</button>
         <a
+          id="feed-link"
           href={"/feeds/packages/#{@package.attribute}"}
-          title="Atom feed"
+          phx-hook="CopyLink"
+          title="Copy the Atom feed URL"
           style="display: flex; align-items: center;"
         >
           <img src="/images/feed.svg" alt="Atom feed" width="20" height="20" />

@@ -27,7 +27,12 @@ defmodule TrackerWeb.ChannelLive.Show do
         >
           <.badge variant={:danger}>Build problem</.badge>
         </.link>
-        <a href={"/feeds/channels/#{@channel}"} title="Atom feed">
+        <a
+          id="feed-link"
+          href={"/feeds/channels/#{@channel}"}
+          phx-hook="CopyLink"
+          title="Copy the Atom feed URL"
+        >
           <img src="/images/feed.svg" alt="Atom feed" width="20" height="20" />
         </a>
         <button

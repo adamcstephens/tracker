@@ -86,6 +86,23 @@ Hooks.LensCookie = {
   }
 }
 
+// Copy a link's URL to the clipboard instead of navigating to it. The anchor
+// stays a real link, so right-click "Copy link address" and non-JS visitors
+// still work. `this.el.href` is already resolved to an absolute URL by the
+// browser, so feed readers get a usable address regardless of the host.
+Hooks.CopyLink = {
+  mounted() {
+    this.el.addEventListener("click", (event) => {
+      event.preventDefault()
+      navigator.clipboard.writeText(this.el.href).then(() => {
+        this.el.classList.add("is-copied")
+        clearTimeout(this._copiedTimer)
+        this._copiedTimer = setTimeout(() => this.el.classList.remove("is-copied"), 1500)
+      })
+    })
+  }
+}
+
 let csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 let liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,

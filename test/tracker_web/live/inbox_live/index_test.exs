@@ -200,28 +200,28 @@ defmodule TrackerWeb.InboxLive.IndexTest do
     assert view |> render() |> String.contains?("Show all")
   end
 
-  test "links to the user's feed with a host-relative href from the overflow menu", %{conn: conn} do
+  test "exposes the feed as a copy-on-click icon with a host-relative href", %{conn: conn} do
     user = register_user!()
     conn = log_in(conn, user)
 
     {:ok, view, _html} = live(conn, ~p"/inbox")
 
+    feed = view |> element("#feed-link") |> render()
     # Relative path (starts with "/", not an absolute http URL) so it resolves
     # against the host the user actually visited.
-    assert view |> element("#feed-link") |> render() =~ ~s(href="/feeds/notifications/trk_feed_)
+    assert feed =~ ~s(href="/feeds/notifications/trk_feed_)
+    # Copy-on-click for JS users; right-click "copy link" still works via the href.
+    assert feed =~ ~s(phx-hook="CopyLink")
   end
 
-  test "regenerating the feed token invalidates the old URL", %{conn: conn} do
+  test "no longer offers token regeneration from the inbox", %{conn: conn} do
     user = register_user!()
     conn = log_in(conn, user)
 
     {:ok, view, _html} = live(conn, ~p"/inbox")
-    old_token = Ash.get!(Tracker.Accounts.User, user.id, authorize?: false).feed_token
-    refute is_nil(old_token)
 
-    view |> element("#regenerate-feed-token") |> render_click()
-
-    assert {:ok, nil} = Tracker.Accounts.User.by_feed_token(old_token, authorize?: false)
+    refute has_element?(view, "#regenerate-feed-token")
+    refute has_element?(view, "#inbox-menu")
   end
 
   test "updates live when a notification is inserted", %{conn: conn} do
