@@ -76,6 +76,7 @@ defmodule TrackerWeb.Router do
       ash_authentication_live_session :inbox_routes,
         on_mount: [
           {TrackerWeb.LiveUserAuth, :live_user_required},
+          {TrackerWeb.LensHook, :default},
           TrackerWeb.InboxBadgeHook
         ] do
         live "/", InboxLive.Index, :index
