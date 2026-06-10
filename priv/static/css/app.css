@@ -136,9 +136,9 @@ h6 {
 		--surface-3: #373c4d;
 		--line: #373c4d;
 		--line-soft: #2f3340;
-		--text: #c6c6c6;
-		--text-2: #748999;
-		--text-3: #748999;
+		--text: #e8e8ec;
+		--text-2: #a8b2c0;
+		--text-3: #8a93a3;
 		--accent: #80a0ff;
 		--accent-on: #080808;
 		--accent-soft: rgba(128, 160, 255, 0.0375);
@@ -2535,7 +2535,7 @@ dl.option-body dd {
 
 /* Unread = full opacity + right dot; read rows dim back (single indicator). */
 .ibx-row.is-read {
-	opacity: 0.6;
+	opacity: 0.72;
 }
 
 .ibx-row.is-read:hover {
