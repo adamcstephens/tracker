@@ -1,3 +1,14 @@
+defmodule TrackerWeb.NotificationPresenter.TypeMeta do
+  @moduledoc "Display metadata for one notification type."
+  use TypedStruct
+
+  typedstruct enforce: true do
+    field :label, String.t()
+    field :filter_label, String.t()
+    field :class, String.t()
+  end
+end
+
 defmodule TrackerWeb.NotificationPresenter do
   @moduledoc """
   Render-on-read presentation for `Tracker.Notifications.Notification` records,
@@ -5,6 +16,94 @@ defmodule TrackerWeb.NotificationPresenter do
   notification's references (package/channel/change/...) to be loaded.
   """
   use TrackerWeb, :verified_routes
+
+  alias TrackerWeb.NotificationPresenter.TypeMeta
+
+  # Display order for filters and summaries.
+  @type_order [
+    :package_version_changed,
+    :change_propagated,
+    :package_added,
+    :package_removed,
+    :channel_revision_published
+  ]
+
+  @type_meta %{
+    package_version_changed: %TypeMeta{label: "Updated", filter_label: "Updates", class: "update"},
+    change_propagated: %TypeMeta{
+      label: "Propagated",
+      filter_label: "Propagated",
+      class: "propagate"
+    },
+    package_added: %TypeMeta{label: "Added", filter_label: "Added", class: "add"},
+    package_removed: %TypeMeta{label: "Removed", filter_label: "Removed", class: "remove"},
+    channel_revision_published: %TypeMeta{
+      label: "Revision",
+      filter_label: "Revisions",
+      class: "revision"
+    }
+  }
+
+  @doc "All notification types in display order."
+  def type_order, do: @type_order
+
+  @doc "The short status label for a type (row chip)."
+  def type_label(type), do: Map.fetch!(@type_meta, type).label
+
+  @doc "The plural label for a type (filter chip)."
+  def type_filter_label(type), do: Map.fetch!(@type_meta, type).filter_label
+
+  @doc "The CSS modifier carrying the type's accent color."
+  def type_class(type), do: Map.fetch!(@type_meta, type).class
+
+  @doc """
+  The row's leading identifier: the package attribute, the short revision
+  hash, or — for propagations — the change title rendered verbatim (titles
+  are free-form; never parsed for versions).
+  """
+  def hero(%{type: :change_propagated} = n) do
+    change_title(n) || "PR ##{change_number(n)}"
+  end
+
+  def hero(%{type: :channel_revision_published} = n) do
+    case revision_hash(n) do
+      nil -> "New revision"
+      hash -> "New revision #{hash}"
+    end
+  end
+
+  def hero(n), do: package_name(n)
+
+  @doc "A compact relative timestamp, e.g. `7m ago`."
+  def relative_time(occurred_at, now) do
+    minutes = DateTime.diff(now, occurred_at, :minute)
+
+    cond do
+      minutes < 1 -> "just now"
+      minutes < 60 -> "#{minutes}m ago"
+      minutes < 1440 -> "#{div(minutes, 60)}h ago"
+      true -> "#{div(minutes, 1440)}d ago"
+    end
+  end
+
+  @doc "The absolute UTC clock time, used as the relative time's tooltip."
+  def clock_utc(occurred_at), do: Calendar.strftime(occurred_at, "%H:%M UTC")
+
+  @doc ~S(The day-group label for a timestamp: "Today", "Yesterday", or "Friday, Jun 5".)
+  def day_bucket(occurred_at, now) do
+    case Date.diff(DateTime.to_date(now), DateTime.to_date(occurred_at)) do
+      diff when diff <= 0 -> "Today"
+      1 -> "Yesterday"
+      _ -> Calendar.strftime(occurred_at, "%A, %b %-d")
+    end
+  end
+
+  @doc "Groups notifications into `{day_label, notifications}` pairs, preserving order."
+  def group_by_day(notifications, now) do
+    notifications
+    |> Enum.chunk_by(&day_bucket(&1.occurred_at, now))
+    |> Enum.map(fn [first | _] = group -> {day_bucket(first.occurred_at, now), group} end)
+  end
 
   @doc "A one-line human description of a notification."
   def describe(%{type: :channel_revision_published} = n) do

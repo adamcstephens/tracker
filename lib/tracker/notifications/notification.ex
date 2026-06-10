@@ -39,6 +39,7 @@ defmodule Tracker.Notifications.Notification do
   code_interface do
     define :for_user
     define :mark_read
+    define :mark_unread
     define :destroy
   end
 
@@ -95,6 +96,12 @@ defmodule Tracker.Notifications.Notification do
       accept []
       require_atomic? false
       change set_attribute(:read_at, &DateTime.utc_now/0)
+    end
+
+    update :mark_unread do
+      description "Mark a notification unread."
+      accept []
+      change set_attribute(:read_at, nil)
     end
   end
 

@@ -117,4 +117,26 @@ defmodule Tracker.Notifications.NotificationTest do
       assert {:error, _} = Notification.mark_read(n, actor: bob)
     end
   end
+
+  describe "mark_unread/2" do
+    test "clears read_at" do
+      user = register_user!()
+      :ok = Notification.fanout([row(user, %{})])
+      [n] = Notification.for_user!(actor: user)
+      {:ok, n} = Notification.mark_read(n, actor: user)
+      refute is_nil(n.read_at)
+
+      assert {:ok, %Notification{read_at: nil}} = Notification.mark_unread(n, actor: user)
+    end
+
+    test "another user cannot mark it unread" do
+      alice = register_user!()
+      bob = register_user!()
+      :ok = Notification.fanout([row(alice, %{})])
+      [n] = Notification.for_user!(actor: alice)
+      {:ok, n} = Notification.mark_read(n, actor: alice)
+
+      assert {:error, _} = Notification.mark_unread(n, actor: bob)
+    end
+  end
 end

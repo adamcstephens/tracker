@@ -95,15 +95,7 @@ defmodule TrackerWeb.Layouts do
         context: :desktop
       },
       %NavItem{path: "/teams", full: "Teams", active: ["TeamLive"], context: :desktop}
-    ] ++ inbox_items(current_user) ++ admin_items(current_user)
-  end
-
-  defp inbox_items(current_user) do
-    if current_user do
-      [%NavItem{path: "/inbox", full: "Inbox", active: ["InboxLive"], context: :desktop}]
-    else
-      []
-    end
+    ] ++ admin_items(current_user)
   end
 
   defp admin_items(current_user) do
@@ -181,6 +173,18 @@ defmodule TrackerWeb.Layouts do
   end
 
   def active_nav?(_view, _prefix), do: false
+
+  @doc """
+  The inbox icon's unread badge text: capped at `99+`, `nil` when there is
+  nothing unread (the badge is hidden at zero).
+  """
+  def inbox_badge(assigns) do
+    case assigns[:unread_notification_count] || 0 do
+      0 -> nil
+      count when count > 99 -> "99+"
+      count -> Integer.to_string(count)
+    end
+  end
 
   @doc """
   Returns up to two uppercase initials for a given name, used as the

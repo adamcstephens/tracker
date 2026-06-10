@@ -108,6 +108,14 @@ h6 {
 	--good: #007a3d;
 	--warn: #c46e1f;
 	--danger: #b3261e;
+
+	/* Per-type notification accents (inbox). One hue family per type;
+	   light values darkened for contrast on light surfaces. */
+	--t-update: #4747c9;
+	--t-add: #0f8a55;
+	--t-remove: #c2335a;
+	--t-revision: #7a3fd1;
+	--t-propagate: #0d7f8c;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -130,6 +138,12 @@ h6 {
 		--good: #36c692;
 		--warn: #f0a868;
 		--danger: #f28a82;
+
+		--t-update: #8a8aff;
+		--t-add: #5fd39a;
+		--t-remove: #f07a92;
+		--t-revision: #b694ff;
+		--t-propagate: #4fc8d4;
 	}
 }
 
@@ -1084,6 +1098,63 @@ dl.option-body dd {
 
 .app-tabs .is-mobile-only {
 	display: none;
+}
+
+/* Inbox icon — replaces the Inbox text tab. Carries the unread badge. */
+.app-inbox {
+	position: relative;
+	margin-left: auto;
+	width: 2.375rem;
+	height: 2.375rem;
+	border-radius: 0.625rem;
+	display: grid;
+	place-items: center;
+	flex-shrink: 0;
+	color: var(--text-2);
+	border: 1px solid transparent;
+	transition:
+		background 0.12s,
+		color 0.12s;
+}
+
+.app-inbox:hover {
+	background: var(--surface);
+	color: var(--text);
+}
+
+.app-inbox[aria-current="page"] {
+	background: var(--surface);
+	color: var(--text);
+	border-color: var(--line);
+}
+
+.app-inbox__icon {
+	width: 1.25rem;
+	height: 1.25rem;
+}
+
+.app-inbox__badge {
+	position: absolute;
+	top: -0.3125rem;
+	right: -0.3125rem;
+	min-width: 1.125rem;
+	height: 1.125rem;
+	padding: 0 0.25rem;
+	border-radius: 0.5625rem;
+	background: var(--accent);
+	color: var(--accent-on);
+	font-family: var(--mono);
+	font-size: 0.65625rem;
+	font-weight: 700;
+	line-height: 1;
+	display: grid;
+	place-items: center;
+	border: 2px solid var(--bg);
+}
+
+/* The user chip no longer needs to push itself right; the inbox icon does. */
+.app-inbox + .app-user {
+	margin-left: 0;
 }
 
 /* User chip */
@@ -2135,4 +2206,587 @@ dl.option-body dd {
 	background: color-mix(in srgb, var(--danger) 12%, transparent);
 	color: var(--danger);
 	border-color: color-mix(in srgb, var(--danger) 35%, transparent);
+}
+
+/* ========================================================================
+   Inbox — triage view.
+   Spec: tmp/design_handoff_inbox_redesign/README.md
+   ======================================================================== */
+
+.ibx {
+	max-width: 51.25rem;
+	margin: 0 auto;
+}
+
+.ibx-icon {
+	width: 1rem;
+	height: 1rem;
+	display: block;
+}
+
+/* Toolbar: segment · actions · full-width filter chip row */
+.ibx-toolbar {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	flex-wrap: wrap;
+	padding-bottom: 0.875rem;
+	margin-bottom: 0.375rem;
+	border-bottom: 1px solid var(--line-soft);
+}
+
+.ibx-seg {
+	display: inline-flex;
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-radius: 0.5rem;
+	padding: 2px;
+	gap: 2px;
+}
+
+.ibx-toolbar .ibx-seg button {
+	border: 0;
+	background: transparent;
+	color: var(--text-2);
+	font-size: 0.78125rem;
+	font-weight: 500;
+	padding: 0.3125rem 0.6875rem;
+	border-radius: 0.375rem;
+	cursor: pointer;
+	display: inline-flex;
+	align-items: center;
+	gap: 0.375rem;
+}
+
+.ibx-toolbar .ibx-seg button:hover {
+	filter: none;
+	color: var(--text);
+}
+
+.ibx-seg button .n {
+	font-family: var(--mono);
+	font-size: 0.6875rem;
+	color: var(--text-3);
+}
+
+.ibx-toolbar .ibx-seg button.is-active {
+	background: var(--surface-3);
+	color: var(--text);
+}
+
+.ibx-seg button.is-active .n {
+	color: var(--accent);
+}
+
+.ibx-actions {
+	margin-left: auto;
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.ibx-toolbar .ibx-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4375rem;
+	padding: 0.375rem 0.75rem;
+	border-radius: 0.5rem;
+	border: 1px solid var(--line);
+	background: var(--surface);
+	color: var(--text);
+	font-size: 0.78125rem;
+	font-weight: 500;
+	cursor: pointer;
+}
+
+.ibx-toolbar .ibx-btn .ibx-icon {
+	width: 0.875rem;
+	height: 0.875rem;
+	color: var(--text-2);
+}
+
+.ibx-toolbar .ibx-btn--primary {
+	background: var(--accent-bg);
+	border-color: var(--accent-edge);
+	color: var(--text);
+}
+
+.ibx-toolbar .ibx-btn--primary:hover:not(:disabled) {
+	filter: none;
+	background: color-mix(in srgb, var(--accent) 20%, transparent);
+	color: var(--text);
+}
+
+.ibx-menuwrap {
+	position: relative;
+	margin: 0;
+}
+
+.ibx-menuwrap .ibx-iconbtn {
+	width: 2rem;
+	height: 2rem;
+	border-radius: 0.5rem;
+	border: 1px solid var(--line);
+	background: var(--surface);
+	color: var(--text-2);
+	display: grid;
+	place-items: center;
+	cursor: pointer;
+	list-style: none;
+}
+
+.ibx-iconbtn::-webkit-details-marker {
+	display: none;
+}
+
+.ibx-menuwrap .ibx-iconbtn:hover {
+	border-color: var(--surface-3);
+	color: var(--text);
+}
+
+.ibx-menu {
+	position: absolute;
+	top: calc(100% + 0.375rem);
+	right: 0;
+	z-index: 20;
+	background: var(--surface-2);
+	border: 1px solid var(--line);
+	border-radius: 0.625rem;
+	box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
+	padding: 0.3125rem;
+	min-width: 13.125rem;
+}
+
+.ibx-menu a,
+.ibx-menu button {
+	display: flex;
+	align-items: center;
+	justify-content: flex-start;
+	gap: 0.5625rem;
+	width: 100%;
+	padding: 0.5rem 0.625rem;
+	border: 0;
+	background: transparent;
+	border-radius: 0.4375rem;
+	color: var(--text);
+	font-size: 0.8125rem;
+	font-weight: 500;
+	text-align: left;
+	text-decoration: none;
+	cursor: pointer;
+}
+
+.ibx-menu a:hover,
+.ibx-menu button:hover {
+	background: var(--surface-3);
+	filter: none;
+	color: var(--text);
+}
+
+.ibx-menu .ibx-icon {
+	width: 0.9375rem;
+	height: 0.9375rem;
+	color: var(--text-2);
+	flex-shrink: 0;
+}
+
+.ibx-menu small {
+	display: block;
+	color: var(--text-3);
+	font-weight: 400;
+	font-size: 0.71875rem;
+}
+
+/* Type filter chips — own full-width row inside the toolbar */
+.ibx-filters {
+	display: inline-flex;
+	gap: 0.375rem;
+	flex-wrap: wrap;
+	flex-basis: 100%;
+	order: 2;
+	margin-top: 0.75rem;
+	padding-top: 0.75rem;
+	border-top: 1px solid var(--line-soft);
+}
+
+.ibx-filters .ibx-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4375rem;
+	padding: 0.3125rem 0.6875rem 0.3125rem 0.5625rem;
+	border-radius: 999px;
+	background: var(--surface);
+	border: 1px solid var(--line);
+	color: var(--text-2);
+	font-size: 0.78125rem;
+	font-weight: 500;
+	cursor: pointer;
+	transition:
+		border-color 0.12s,
+		background 0.12s,
+		color 0.12s;
+}
+
+.ibx-filters .ibx-chip:hover {
+	filter: none;
+	border-color: var(--surface-3);
+	color: var(--text);
+}
+
+.ibx-chip .swatch {
+	width: 0.5rem;
+	height: 0.5rem;
+	border-radius: 50%;
+}
+
+.ibx-chip .n {
+	font-family: var(--mono);
+	font-size: 0.6875rem;
+	color: var(--text-3);
+}
+
+.ibx-filters .ibx-chip.is-active {
+	background: var(--accent-bg);
+	border-color: var(--accent-edge);
+	color: var(--text);
+}
+
+.ibx-chip.is-active .n {
+	color: var(--accent);
+}
+
+.ibx-t-update {
+	background: var(--t-update);
+}
+.ibx-t-add {
+	background: var(--t-add);
+}
+.ibx-t-remove {
+	background: var(--t-remove);
+}
+.ibx-t-revision {
+	background: var(--t-revision);
+}
+.ibx-t-propagate {
+	background: var(--t-propagate);
+}
+
+/* Day groups */
+.ibx-day {
+	margin-top: 1.375rem;
+}
+
+.ibx-day:first-of-type {
+	margin-top: 0.625rem;
+}
+
+.ibx-day-head {
+	display: flex;
+	align-items: center;
+	gap: 0.625rem;
+	margin-bottom: 0.5rem;
+}
+
+.ibx-day-head h2 {
+	margin: 0;
+	font-size: 0.75rem;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--text-3);
+}
+
+.ibx-day-head .rule {
+	flex: 1;
+	height: 1px;
+	background: var(--line-soft);
+}
+
+.ibx-day-head .n {
+	font-family: var(--mono);
+	font-size: 0.6875rem;
+	color: var(--text-3);
+}
+
+/* Notification rows */
+.ibx-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.ibx-row {
+	display: grid;
+	grid-template-columns: 1.875rem 1fr auto;
+	gap: 0.75rem;
+	align-items: start;
+	padding: 0.8125rem 0.875rem 0.8125rem 0.75rem;
+	border-radius: 0.625rem;
+	border: 1px solid transparent;
+	transition:
+		background 0.12s,
+		border-color 0.12s,
+		opacity 0.12s;
+}
+
+.ibx-row:hover {
+	background: var(--surface);
+	border-color: var(--line-soft);
+}
+
+/* Unread = full opacity + right dot; read rows dim back (single indicator). */
+.ibx-row.is-read {
+	opacity: 0.6;
+}
+
+.ibx-row.is-read:hover {
+	opacity: 1;
+}
+
+.ibx-glyph {
+	width: 1.875rem;
+	height: 1.875rem;
+	border-radius: 0.5625rem;
+	display: grid;
+	place-items: center;
+	background: color-mix(in srgb, var(--type-color) 16%, transparent);
+	color: var(--type-color);
+	flex-shrink: 0;
+}
+
+.ibx-body {
+	min-width: 0;
+}
+
+.ibx-line1 {
+	display: flex;
+	align-items: baseline;
+	gap: 0.5rem;
+	flex-wrap: wrap;
+	line-height: 1.4;
+}
+
+.ibx-attr,
+.ibx-title {
+	font-family: var(--mono);
+	color: var(--text);
+	font-size: 0.84375rem;
+	letter-spacing: -0.01em;
+	word-break: break-word;
+}
+
+.ibx-attr {
+	font-weight: 600;
+}
+
+/* Verbatim change title (free-form; ligatures off so "->" never draws as an
+   arrow the data doesn't contain). */
+.ibx-title {
+	font-weight: 500;
+	line-height: 1.4;
+	font-variant-ligatures: none;
+	font-feature-settings:
+		"liga" 0,
+		"calt" 0;
+}
+
+.ibx-attr a,
+.ibx-title a {
+	color: var(--text);
+	text-decoration: none;
+}
+
+.ibx-attr a:hover,
+.ibx-title a:hover {
+	color: var(--accent);
+}
+
+.ibx-line2 {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	flex-wrap: wrap;
+	margin-top: 0.375rem;
+	font-size: 0.75rem;
+	color: var(--text-3);
+}
+
+/* Type label chip — carries the type's colour identity */
+.ibx-typechip {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.375rem;
+	padding: 2px 0.5625rem 2px 0.4375rem;
+	border-radius: 999px;
+	font-size: 0.71875rem;
+	font-weight: 600;
+	letter-spacing: 0.01em;
+	color: var(--type-color, var(--accent));
+	background: color-mix(
+		in srgb,
+		var(--type-color, var(--accent)) 14%,
+		transparent
+	);
+}
+
+.ibx-typechip .dot {
+	width: 0.375rem;
+	height: 0.375rem;
+	border-radius: 50%;
+	background: var(--type-color, var(--accent));
+}
+
+.ibx-tag {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.3125rem;
+	padding: 2px 0.5rem;
+	border-radius: 999px;
+	background: var(--surface);
+	border: 1px solid var(--line);
+	color: var(--text-2);
+	font-size: 0.71875rem;
+	font-family: var(--mono);
+	text-decoration: none;
+}
+
+.ibx-tag .dot {
+	width: 0.3125rem;
+	height: 0.3125rem;
+	border-radius: 50%;
+	background: var(--accent);
+}
+
+.ibx-tag--pr {
+	color: var(--text);
+}
+
+.ibx-tag--pr .hash {
+	color: var(--text-3);
+}
+
+.ibx-tag--reached {
+	font-family: var(--sans);
+}
+
+.ibx-dot-sep {
+	color: var(--line);
+}
+
+.ibx-time {
+	color: var(--text-3);
+	font-variant-numeric: tabular-nums;
+}
+
+/* Right rail: unread dot + hover actions */
+.ibx-right {
+	display: flex;
+	align-items: center;
+	gap: 0.25rem;
+	flex-shrink: 0;
+	padding-top: 1px;
+}
+
+.ibx-unread-dot {
+	width: 0.5rem;
+	height: 0.5rem;
+	border-radius: 50%;
+	background: var(--type-color, var(--accent));
+	flex-shrink: 0;
+	align-self: center;
+	margin-right: 2px;
+}
+
+.ibx-row-acts {
+	display: inline-flex;
+	gap: 2px;
+	opacity: 0;
+	transition: opacity 0.12s;
+}
+
+.ibx-row:hover .ibx-row-acts,
+.ibx-row:focus-within .ibx-row-acts {
+	opacity: 1;
+}
+
+.ibx-row .ibx-act {
+	width: 1.75rem;
+	height: 1.75rem;
+	padding: 0;
+	border-radius: 0.4375rem;
+	border: 1px solid transparent;
+	background: transparent;
+	color: var(--text-3);
+	display: grid;
+	place-items: center;
+	cursor: pointer;
+}
+
+.ibx-row .ibx-act:hover {
+	filter: none;
+	background: var(--surface-3);
+	color: var(--text);
+	border-color: var(--line);
+}
+
+.ibx-act .ibx-icon {
+	width: 0.9375rem;
+	height: 0.9375rem;
+}
+
+.ibx-empty {
+	text-align: center;
+	color: var(--text-3);
+	padding: 3.75rem 0;
+}
+
+@media (max-width: 719px) {
+	/* Segment stretches to fill; chips scroll in one row; actions always on. */
+	.ibx-seg {
+		flex: 1 1 auto;
+	}
+
+	.ibx-toolbar .ibx-seg button {
+		flex: 1;
+		justify-content: center;
+	}
+
+	.ibx-actions {
+		flex-shrink: 0;
+	}
+
+	.ibx-filters {
+		overflow-x: auto;
+		flex-wrap: nowrap;
+		padding-bottom: 2px;
+		margin-top: 0.625rem;
+		padding-top: 0.625rem;
+		scrollbar-width: none;
+	}
+
+	.ibx-filters .ibx-chip {
+		flex-shrink: 0;
+	}
+
+	.ibx-row {
+		grid-template-columns: 1.625rem 1fr;
+		padding: 0.75rem 0.5rem;
+	}
+
+	.ibx-glyph {
+		width: 1.625rem;
+		height: 1.625rem;
+	}
+
+	.ibx-right {
+		grid-column: 1 / -1;
+		justify-content: flex-end;
+		margin-top: 0.25rem;
+	}
+
+	.ibx-row-acts {
+		opacity: 1;
+	}
 }
