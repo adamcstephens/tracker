@@ -32,6 +32,7 @@
               beamPackages.elixir
               beamPackages.expert
               beamPackages.hex
+              pkgs.dexter
 
               pkgs.cargo
               pkgs.rustc
