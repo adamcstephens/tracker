@@ -33,6 +33,27 @@ defmodule TrackerWeb.FeedControllerNotificationsTest do
     assert response(conn, 200) =~ "published on nixos-alpha"
   end
 
+  test "renders the version bump for package_version_changed entries", %{conn: conn} do
+    user = register_user!()
+    pkg = package!("vim")
+    chan = channel!("nixos-unstable")
+    prev = channel_revision!(chan)
+    rev = channel_revision!(chan, %{previous_channel_revision_id: prev.id})
+    package_revision!(pkg, prev, "9.0")
+    package_revision!(pkg, rev, "9.1")
+
+    notification!(user, %{
+      type: :package_version_changed,
+      package_id: pkg.id,
+      channel_id: chan.id,
+      channel_revision_id: rev.id
+    })
+
+    body = conn |> get("/feeds/notifications/#{feed_token!(user)}") |> response(200)
+
+    assert body =~ "vim 9.0 → 9.1 on nixos-unstable"
+  end
+
   test "orders entries newest first", %{conn: conn} do
     user = register_user!()
     published_notification!(user, "nixos-older", ~U[2024-01-01 00:00:00Z])

@@ -17,6 +17,7 @@ defmodule TrackerWeb.NotificationPresenter do
   """
   use TrackerWeb, :verified_routes
 
+  alias Tracker.Nixpkgs.PackageRevision
   alias TrackerWeb.NotificationPresenter.TypeMeta
 
   # Display order for filters and summaries.
@@ -57,22 +58,73 @@ defmodule TrackerWeb.NotificationPresenter do
   def type_class(type), do: Map.fetch!(@type_meta, type).class
 
   @doc """
-  The row's leading identifier: the package attribute, the short revision
-  hash, or — for propagations — the change title rendered verbatim (titles
+  Resolves the old→new version bump for each `:package_version_changed`
+  notification on a page, in one batched `PackageRevision` lookup. Returns
+  a map of notification id to `{old_version, new_version}`, with entries
+  only where both versions resolve; `hero/2` and `describe/2` fall back to
+  the version-less copy for the rest.
+  """
+  def version_changes(notifications) do
+    targets =
+      for %{
+            type: :package_version_changed,
+            package_id: package_id,
+            channel_revision: %{id: rev_id, previous_channel_revision_id: prev_id}
+          } = n <- notifications,
+          not is_nil(package_id) and not is_nil(prev_id) do
+        {n.id, package_id, rev_id, prev_id}
+      end
+
+    versions = versions_by_package_and_revision(targets)
+
+    for {id, package_id, rev_id, prev_id} <- targets,
+        old = versions[{package_id, prev_id}],
+        new = versions[{package_id, rev_id}],
+        into: %{} do
+      {id, {old, new}}
+    end
+  end
+
+  defp versions_by_package_and_revision([]), do: %{}
+
+  defp versions_by_package_and_revision(targets) do
+    revision_ids =
+      targets |> Enum.flat_map(fn {_id, _pkg, rev, prev} -> [rev, prev] end) |> Enum.uniq()
+
+    package_ids = targets |> Enum.map(fn {_id, pkg, _rev, _prev} -> pkg end) |> Enum.uniq()
+
+    revision_ids
+    |> PackageRevision.for_revisions_packages!(package_ids, authorize?: false)
+    |> Map.new(fn pr -> {{pr.package_id, pr.channel_revision_id}, pr.version} end)
+  end
+
+  @doc """
+  The row's leading identifier: the package attribute (with its version
+  bump when resolved via `version_changes/1`), the short revision hash,
+  or — for propagations — the change title rendered verbatim (titles
   are free-form; never parsed for versions).
   """
-  def hero(%{type: :change_propagated} = n) do
+  def hero(n, version_changes \\ %{})
+
+  def hero(%{type: :change_propagated} = n, _version_changes) do
     change_title(n) || "PR ##{change_number(n)}"
   end
 
-  def hero(%{type: :channel_revision_published} = n) do
+  def hero(%{type: :channel_revision_published} = n, _version_changes) do
     case revision_hash(n) do
       nil -> "New revision"
       hash -> "New revision #{hash}"
     end
   end
 
-  def hero(n), do: package_name(n)
+  def hero(%{type: :package_version_changed} = n, version_changes) do
+    case Map.get(version_changes, n.id) do
+      {old, new} -> "#{package_name(n)} #{old} → #{new}"
+      nil -> package_name(n)
+    end
+  end
+
+  def hero(n, _version_changes), do: package_name(n)
 
   @doc "A compact relative timestamp, e.g. `7m ago`."
   def relative_time(occurred_at, now) do
@@ -105,24 +157,33 @@ defmodule TrackerWeb.NotificationPresenter do
     |> Enum.map(fn [first | _] = group -> {day_bucket(first.occurred_at, now), group} end)
   end
 
-  @doc "A one-line human description of a notification."
-  def describe(%{type: :channel_revision_published} = n) do
+  @doc """
+  A one-line human description of a notification, including the version
+  bump for updates when resolved via `version_changes/1`.
+  """
+  def describe(n, version_changes \\ %{})
+
+  def describe(%{type: :channel_revision_published} = n, _version_changes) do
     case revision_hash(n) do
       nil -> "New revision published on #{channel_name(n)}"
       hash -> "New revision #{hash} published on #{channel_name(n)}"
     end
   end
 
-  def describe(%{type: :package_added} = n),
+  def describe(%{type: :package_added} = n, _version_changes),
     do: "#{package_name(n)} added to #{channel_name(n)}"
 
-  def describe(%{type: :package_removed} = n),
+  def describe(%{type: :package_removed} = n, _version_changes),
     do: "#{package_name(n)} removed from #{channel_name(n)}"
 
-  def describe(%{type: :package_version_changed} = n),
-    do: "#{package_name(n)} updated on #{channel_name(n)}"
+  def describe(%{type: :package_version_changed} = n, version_changes) do
+    case Map.get(version_changes, n.id) do
+      {old, new} -> "#{package_name(n)} #{old} → #{new} on #{channel_name(n)}"
+      nil -> "#{package_name(n)} updated on #{channel_name(n)}"
+    end
+  end
 
-  def describe(%{type: :change_propagated} = n) do
+  def describe(%{type: :change_propagated} = n, _version_changes) do
     prefix =
       case change_title(n) do
         nil -> "PR ##{change_number(n)}"
