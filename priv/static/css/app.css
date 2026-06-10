@@ -1182,6 +1182,9 @@ dl.option-body dd {
 
 .app-user__menu {
 	position: relative;
+	/* Cancel the base `details` bottom margin; it pushes the chip above the
+	   header row's center line. */
+	margin: 0;
 }
 
 .app-user__chip {
