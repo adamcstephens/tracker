@@ -115,6 +115,95 @@ defmodule TrackerWeb.NotificationPresenterTest do
     end
   end
 
+  describe "version changes" do
+    defp version_bump!(user, attribute, old_version, new_version) do
+      pkg = package!(attribute)
+      chan = channel!()
+      prev = channel_revision!(chan)
+      rev = channel_revision!(chan, %{previous_channel_revision_id: prev.id})
+      package_revision!(pkg, prev, old_version)
+      package_revision!(pkg, rev, new_version)
+
+      notification!(user, %{
+        type: :package_version_changed,
+        package_id: pkg.id,
+        channel_id: chan.id,
+        channel_revision_id: rev.id
+      })
+    end
+
+    test "version_changes/1 resolves old and new versions per notification" do
+      user = register_user!()
+      vim = version_bump!(user, "vim", "9.0", "9.1")
+      rg = version_bump!(user, "ripgrep", "14.0.3", "14.1.0")
+      notifications = Notification.for_user!(actor: user)
+
+      changes = NotificationPresenter.version_changes(notifications)
+
+      assert changes[vim.id] == {"9.0", "9.1"}
+      assert changes[rg.id] == {"14.0.3", "14.1.0"}
+    end
+
+    test "version_changes/1 skips notifications it cannot resolve" do
+      user = register_user!()
+      pkg = package!()
+      chan = channel!()
+      # no predecessor revision recorded
+      rev = channel_revision!(chan)
+      package_revision!(pkg, rev, "2.0")
+
+      notification!(user, %{
+        type: :package_version_changed,
+        package_id: pkg.id,
+        channel_id: chan.id,
+        channel_revision_id: rev.id
+      })
+
+      notifications = Notification.for_user!(actor: user)
+
+      assert NotificationPresenter.version_changes(notifications) == %{}
+    end
+
+    test "hero/2 and describe/2 render the bump, falling back without one" do
+      user = register_user!()
+      chan = channel!("nixos-unstable")
+      pkg = package!("vim")
+
+      n =
+        loaded_notification!(user, %{
+          type: :package_version_changed,
+          package_id: pkg.id,
+          channel_id: chan.id
+        })
+
+      changes = %{n.id => {"9.0", "9.1"}}
+
+      assert NotificationPresenter.hero(n, changes) == "vim 9.0 → 9.1"
+      assert NotificationPresenter.describe(n, changes) == "vim 9.0 → 9.1 on nixos-unstable"
+
+      assert NotificationPresenter.hero(n, %{}) == "vim"
+      assert NotificationPresenter.describe(n, %{}) == "vim updated on nixos-unstable"
+    end
+
+    test "hero/2 and describe/2 ignore the map for other types" do
+      user = register_user!()
+      chan = channel!("nixos-unstable")
+      pkg = package!("vim")
+
+      n =
+        loaded_notification!(user, %{
+          type: :package_added,
+          package_id: pkg.id,
+          channel_id: chan.id
+        })
+
+      changes = %{n.id => {"9.0", "9.1"}}
+
+      assert NotificationPresenter.hero(n, changes) == "vim"
+      assert NotificationPresenter.describe(n, changes) == "vim added to nixos-unstable"
+    end
+  end
+
   describe "type metadata" do
     test "labels and css classes per type" do
       assert NotificationPresenter.type_label(:package_version_changed) == "Updated"

@@ -120,6 +120,7 @@ defmodule TrackerWeb.InboxLive.Index do
 
     socket
     |> assign(:notifications, notifications)
+    |> assign(:version_changes, NotificationPresenter.version_changes(notifications))
     |> assign(:unread_count, unread_count)
     |> assign(:unread_notification_count, unread_count)
     |> apply_filters()
@@ -230,7 +231,7 @@ defmodule TrackerWeb.InboxLive.Index do
           <span class="n">{length(rows)}</span>
         </div>
         <ul class="ibx-list">
-          <.row :for={n <- rows} n={n} now={@now} />
+          <.row :for={n <- rows} n={n} now={@now} version_changes={@version_changes} />
         </ul>
       </section>
     </div>
@@ -239,12 +240,14 @@ defmodule TrackerWeb.InboxLive.Index do
 
   attr :n, :map, required: true
   attr :now, :any, required: true
+  attr :version_changes, :map, required: true
 
   defp row(assigns) do
     assigns =
       assigns
       |> assign(:type_class, NotificationPresenter.type_class(assigns.n.type))
       |> assign(:path, NotificationPresenter.path(assigns.n))
+      |> assign(:hero, NotificationPresenter.hero(assigns.n, assigns.version_changes))
 
     ~H"""
     <li
@@ -257,9 +260,9 @@ defmodule TrackerWeb.InboxLive.Index do
         <div class="ibx-line1">
           <span class={hero_class(@n.type)}>
             <%= if @path do %>
-              <.link navigate={@path}>{NotificationPresenter.hero(@n)}</.link>
+              <.link navigate={@path}>{@hero}</.link>
             <% else %>
-              {NotificationPresenter.hero(@n)}
+              {@hero}
             <% end %>
           </span>
         </div>

@@ -159,6 +159,30 @@ defmodule TrackerWeb.InboxLive.IndexTest do
     assert has_element?(view, "#notification-#{revision.id}")
   end
 
+  test "shows the version bump for package_version_changed notifications", %{conn: conn} do
+    user = register_user!()
+    pkg = package!("vim")
+    chan = channel!("nixos-unstable")
+    prev = channel_revision!(chan)
+    rev = channel_revision!(chan, %{previous_channel_revision_id: prev.id})
+    package_revision!(pkg, prev, "9.0")
+    package_revision!(pkg, rev, "9.1")
+
+    n =
+      notification!(user, %{
+        type: :package_version_changed,
+        package_id: pkg.id,
+        channel_id: chan.id,
+        channel_revision_id: rev.id
+      })
+
+    conn = log_in(conn, user)
+
+    {:ok, view, _html} = live(conn, ~p"/inbox")
+
+    assert view |> element("#notification-#{n.id}") |> render() =~ "vim 9.0 → 9.1"
+  end
+
   test "type chip counts reflect the unread/all selection", %{conn: conn} do
     user = register_user!()
     read = published_notification!(user)

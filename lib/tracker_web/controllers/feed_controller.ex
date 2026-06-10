@@ -21,6 +21,7 @@ defmodule TrackerWeb.FeedController do
 
   defp render_notifications_feed(conn, user, token) do
     notifications = Notification.for_user!(actor: user) |> Enum.take(50)
+    version_changes = NotificationPresenter.version_changes(notifications)
 
     latest_updated =
       case notifications do
@@ -32,7 +33,7 @@ defmodule TrackerWeb.FeedController do
       Atomex.Feed.new("#{@base_url}/inbox", latest_updated, "Your notifications - Tracker")
       |> Atomex.Feed.link("#{@base_url}/feeds/notifications/#{token}", rel: "self")
       |> Atomex.Feed.link("#{@base_url}/inbox", rel: "alternate")
-      |> Atomex.Feed.entries(Enum.map(notifications, &notification_entry/1))
+      |> Atomex.Feed.entries(Enum.map(notifications, &notification_entry(&1, version_changes)))
       |> Atomex.Feed.build()
       |> Atomex.generate_document()
 
@@ -41,8 +42,8 @@ defmodule TrackerWeb.FeedController do
     |> send_resp(200, feed)
   end
 
-  defp notification_entry(notification) do
-    text = NotificationPresenter.describe(notification)
+  defp notification_entry(notification, version_changes) do
+    text = NotificationPresenter.describe(notification, version_changes)
 
     url =
       case NotificationPresenter.path(notification) do
