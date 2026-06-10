@@ -7,9 +7,16 @@ defmodule TrackerWeb.Plug.InteractiveUI do
   interactive but can opt out via `Tracker.Accounts.User.set_live_ui/2`.
   The flag drives the script tag in the root layout and the LiveView
   socket on_mount halt, so opted-out users never establish a WebSocket.
+
+  Views in `@forced_views` only work live (their routes pipe through
+  `:force_interactive` for the dead render), so they are interactive
+  regardless of the user's preference and never halted. This lets them
+  share the sitewide live_session for live navigation.
   """
 
   import Plug.Conn
+
+  @forced_views [TrackerWeb.InboxLive.Index]
 
   def init(opts), do: opts
 
@@ -19,7 +26,7 @@ defmodule TrackerWeb.Plug.InteractiveUI do
 
   def on_mount(:default, _params, _session, socket) do
     user = socket.assigns[:current_user]
-    interactive? = interactive_for?(user)
+    interactive? = socket.view in @forced_views or interactive_for?(user)
     opted_out? = user != nil and not interactive?
 
     if Phoenix.LiveView.connected?(socket) and opted_out? do

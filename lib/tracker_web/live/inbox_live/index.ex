@@ -12,6 +12,8 @@ defmodule TrackerWeb.InboxLive.Index do
   """
   use TrackerWeb, :live_view
 
+  on_mount {TrackerWeb.LiveUserAuth, :live_user_required}
+
   alias Tracker.Notifications.Notification
   alias TrackerWeb.FeedLink
   alias TrackerWeb.NotificationPresenter

@@ -70,19 +70,6 @@ defmodule TrackerWeb.Router do
       end
     end
 
-    scope "/inbox" do
-      pipe_through :force_interactive
-
-      ash_authentication_live_session :inbox_routes,
-        on_mount: [
-          {TrackerWeb.LiveUserAuth, :live_user_required},
-          {TrackerWeb.LensHook, :default},
-          TrackerWeb.InboxBadgeHook
-        ] do
-        live "/", InboxLive.Index, :index
-      end
-    end
-
     ash_authentication_live_session :authenticated_routes,
       on_mount: [
         {TrackerWeb.LiveUserAuth, :live_user_optional},
@@ -105,6 +92,15 @@ defmodule TrackerWeb.Router do
       live "/changes/:number", ChangeLive.Show, :show
       live "/teams", TeamLive.Index, :index
       live "/teams/:short_name", TeamLive.Show, :show
+
+      # Same live_session as the tabs above so navigation stays on the
+      # websocket; the view itself enforces authentication and the
+      # InteractiveUI hook treats it as force-interactive.
+      scope "/inbox" do
+        pipe_through :force_interactive
+
+        live "/", InboxLive.Index, :index
+      end
     end
   end
 
