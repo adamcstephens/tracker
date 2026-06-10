@@ -4,6 +4,15 @@ defmodule TrackerWeb.Router do
   use AshAuthentication.Phoenix.Router
   import AshAuthentication.Plug.Helpers
 
+  import Phoenix.LiveDashboard.Router
+  import Oban.Web.Router
+  import AshAdmin.Router
+
+  @dev_dashboard_on_mount [
+    AshAuthentication.Phoenix.LiveSession,
+    {TrackerWeb.LiveUserAuth, :admin_only}
+  ]
+
   pipeline :browser do
     plug :accepts, ["html"]
     plug :fetch_session
@@ -142,43 +151,23 @@ defmodule TrackerWeb.Router do
                 overrides: [TrackerWeb.AuthOverrides, AshAuthentication.Phoenix.Overrides.Default]
   end
 
-  # Other scopes may use custom stacks.
-  # scope "/api", TrackerWeb do
-  #   pipe_through :api
-  # end
+  scope "/dev" do
+    pipe_through [:browser, :require_admin]
 
-  # Enable LiveDashboard and Swoosh mailbox preview in development
-  if Application.compile_env(:tracker, :dev_routes) do
-    import Phoenix.LiveDashboard.Router
-    import Oban.Web.Router
+    live_dashboard "/dashboard",
+      metrics: TrackerWeb.Telemetry,
+      on_mount: @dev_dashboard_on_mount
 
-    @dev_dashboard_on_mount [
-      AshAuthentication.Phoenix.LiveSession,
-      {TrackerWeb.LiveUserAuth, :admin_only}
-    ]
-
-    scope "/dev" do
-      pipe_through [:browser, :require_admin]
-
-      live_dashboard "/dashboard",
-        metrics: TrackerWeb.Telemetry,
-        on_mount: @dev_dashboard_on_mount
-
-      forward "/mailbox", Plug.Swoosh.MailboxPreview
-      oban_dashboard "/oban", on_mount: @dev_dashboard_on_mount
-    end
+    forward "/mailbox", Plug.Swoosh.MailboxPreview
+    oban_dashboard "/oban", on_mount: @dev_dashboard_on_mount
   end
 
-  if Application.compile_env(:tracker, :dev_routes) do
-    import AshAdmin.Router
+  scope "/admin" do
+    pipe_through :browser
 
-    scope "/admin" do
-      pipe_through :browser
-
-      ash_admin "/",
-                AshAuthentication.Phoenix.LiveSession.opts(
-                  on_mount: [{TrackerWeb.LiveUserAuth, :admin_only}]
-                )
-    end
+    ash_admin "/",
+              AshAuthentication.Phoenix.LiveSession.opts(
+                on_mount: [{TrackerWeb.LiveUserAuth, :admin_only}]
+              )
   end
 end
