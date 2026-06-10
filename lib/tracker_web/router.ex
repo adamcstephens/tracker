@@ -49,7 +49,8 @@ defmodule TrackerWeb.Router do
 
       ash_authentication_live_session :account_routes,
         on_mount: [
-          {TrackerWeb.LiveUserAuth, :live_user_required}
+          {TrackerWeb.LiveUserAuth, :live_user_required},
+          TrackerWeb.InboxBadgeHook
         ] do
         live "/tokens", AccountLive.Tokens, :index
         live "/settings", AccountLive.Settings, :index
@@ -61,7 +62,8 @@ defmodule TrackerWeb.Router do
 
       ash_authentication_live_session :inbox_routes,
         on_mount: [
-          {TrackerWeb.LiveUserAuth, :live_user_required}
+          {TrackerWeb.LiveUserAuth, :live_user_required},
+          TrackerWeb.InboxBadgeHook
         ] do
         live "/", InboxLive.Index, :index
       end
@@ -71,7 +73,8 @@ defmodule TrackerWeb.Router do
       on_mount: [
         {TrackerWeb.LiveUserAuth, :live_user_optional},
         {TrackerWeb.Plug.InteractiveUI, :default},
-        {TrackerWeb.LensHook, :default}
+        {TrackerWeb.LensHook, :default},
+        TrackerWeb.InboxBadgeHook
       ] do
       live "/", PackageLive.Index, :index
       live "/packages", PackageLive.Index, :index

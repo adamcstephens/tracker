@@ -184,6 +184,16 @@ defmodule Tracker.Accounts.User do
     end
   end
 
+  relationships do
+    has_many :notifications, Tracker.Notifications.Notification
+  end
+
+  aggregates do
+    count :unread_notification_count, :notifications do
+      filter expr(is_nil(read_at))
+    end
+  end
+
   identities do
     identity :unique_github_id, [:github_id]
     identity :unique_github_username, [:github_username]
@@ -192,6 +202,18 @@ defmodule Tracker.Accounts.User do
 
   def has_role?(%{roles: roles}, role) when is_list(roles) and is_atom(role) do
     role in roles
+  end
+
+  @doc """
+  The user's unread-notification count, shown on the chrome inbox icon.
+  Loaded without authorization: the User read policy forbids everything
+  (sessions come through AshAuthentication's bypass), and the count is
+  only ever requested for the session's own user.
+  """
+  def unread_notification_count(user) do
+    user
+    |> Ash.load!(:unread_notification_count, authorize?: false)
+    |> Map.fetch!(:unread_notification_count)
   end
 
   @feed_token_prefix "trk_feed_"
