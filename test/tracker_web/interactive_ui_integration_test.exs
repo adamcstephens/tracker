@@ -33,6 +33,13 @@ defmodule TrackerWeb.InteractiveUIIntegrationTest do
 
       assert html_response(conn, 200) =~ "/assets/app.js"
     end
+
+    test "is always present on /inbox regardless of preference", %{conn: conn} do
+      user = register_via_github!() |> opt_out!()
+      conn = log_in(conn, user) |> get(~p"/inbox")
+
+      assert html_response(conn, 200) =~ "/assets/app.js"
+    end
   end
 
   describe "lens auto-submit fallback script in the root layout" do
@@ -103,6 +110,13 @@ defmodule TrackerWeb.InteractiveUIIntegrationTest do
       conn = log_in(conn, user)
 
       {:ok, _view, _html} = live(conn, ~p"/account/tokens")
+    end
+
+    test "opted-out user can still mount /inbox", %{conn: conn} do
+      user = register_via_github!() |> opt_out!()
+      conn = log_in(conn, user)
+
+      {:ok, _view, _html} = live(conn, ~p"/inbox")
     end
   end
 

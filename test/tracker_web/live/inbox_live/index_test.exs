@@ -313,6 +313,17 @@ defmodule TrackerWeb.InboxLive.IndexTest do
     end
   end
 
+  describe "live navigation" do
+    test "live-navigates between the inbox and other tabs in one session", %{conn: conn} do
+      user = register_user!()
+      conn = log_in(conn, user)
+
+      {:ok, packages, _html} = live(conn, ~p"/packages")
+      assert {:ok, inbox, _html} = live_redirect(packages, to: ~p"/inbox")
+      assert {:ok, _packages, _html} = live_redirect(inbox, to: ~p"/packages")
+    end
+  end
+
   describe "search bar and lens" do
     test "renders the lens with its selector disabled", %{conn: conn} do
       user = register_user!()
