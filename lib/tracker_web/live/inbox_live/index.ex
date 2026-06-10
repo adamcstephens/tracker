@@ -24,7 +24,7 @@ defmodule TrackerWeb.InboxLive.Index do
      socket
      |> assign(:current_user, user)
      |> assign(:page_title, "Inbox")
-     |> assign(:unread_filter, :all)
+     |> assign(:unread_filter, :unread)
      |> assign(:active_types, MapSet.new())
      |> assign(:feed_path, feed_path(user))}
   end

@@ -84,6 +84,8 @@ defmodule TrackerWeb.InboxLive.IndexTest do
     conn = log_in(conn, user)
 
     {:ok, view, _html} = live(conn, ~p"/inbox")
+    # widen to All so the row stays visible once it is read
+    view |> element("#filter-all") |> render_click()
     assert has_element?(view, "#notification-#{n.id}.is-unread")
 
     view |> element("#notification-#{n.id} [aria-label='Mark as read']") |> render_click()
@@ -113,7 +115,7 @@ defmodule TrackerWeb.InboxLive.IndexTest do
     assert has_element?(view, "#mark-all-read[disabled]")
   end
 
-  test "filters to unread only", %{conn: conn} do
+  test "defaults to unread only and can widen to all", %{conn: conn} do
     user = register_user!()
     read = published_notification!(user)
     unread = published_notification!(user)
@@ -121,15 +123,15 @@ defmodule TrackerWeb.InboxLive.IndexTest do
     conn = log_in(conn, user)
 
     {:ok, view, _html} = live(conn, ~p"/inbox")
-    assert has_element?(view, "#notification-#{read.id}")
-
-    view |> element("#filter-unread") |> render_click()
 
     refute has_element?(view, "#notification-#{read.id}")
     assert has_element?(view, "#notification-#{unread.id}")
 
     view |> element("#filter-all") |> render_click()
     assert has_element?(view, "#notification-#{read.id}")
+
+    view |> element("#filter-unread") |> render_click()
+    refute has_element?(view, "#notification-#{read.id}")
   end
 
   test "filters by type with multi-select chips", %{conn: conn} do
