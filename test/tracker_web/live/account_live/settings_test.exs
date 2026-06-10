@@ -53,6 +53,49 @@ defmodule TrackerWeb.AccountLive.SettingsTest do
     end
   end
 
+  describe "notifications feed" do
+    test "exposes the feed as a copy-on-click icon with a host-relative href", %{conn: conn} do
+      user = register_via_github!()
+      conn = log_in(conn, user)
+
+      {:ok, view, _html} = live(conn, ~p"/account/settings")
+
+      feed = view |> element("#feed-link") |> render()
+      assert feed =~ ~s(href="/feeds/notifications/trk_feed_)
+      assert feed =~ ~s(phx-hook="CopyLink")
+    end
+
+    test "regenerating invalidates the old URL and reveals the new one", %{conn: conn} do
+      user = register_via_github!()
+      conn = log_in(conn, user)
+
+      {:ok, view, _html} = live(conn, ~p"/account/settings")
+      old_token = Ash.get!(User, user.id, authorize?: false).feed_token
+      refute is_nil(old_token)
+      refute has_element?(view, "#feed-url")
+
+      view |> element("#regenerate-feed-token") |> render_click()
+
+      assert {:ok, nil} = User.by_feed_token(old_token, authorize?: false)
+
+      new_token = Ash.get!(User, user.id, authorize?: false).feed_token
+      refute new_token == old_token
+
+      # The freshly minted URL is revealed with a copy control.
+      assert view |> element("#feed-url") |> render() =~ "/feeds/notifications/#{new_token}"
+      assert has_element?(view, "#copy-feed-url[phx-hook='CopyLink']")
+    end
+
+    test "the regenerate button asks for confirmation first", %{conn: conn} do
+      user = register_via_github!()
+      conn = log_in(conn, user)
+
+      {:ok, view, _html} = live(conn, ~p"/account/settings")
+
+      assert view |> element("#regenerate-feed-token") |> render() =~ "data-confirm"
+    end
+  end
+
   defp log_in(conn, user) do
     conn
     |> Plug.Test.init_test_session(%{})

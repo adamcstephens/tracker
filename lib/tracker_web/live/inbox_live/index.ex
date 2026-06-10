@@ -8,13 +8,13 @@ defmodule TrackerWeb.InboxLive.Index do
   """
   use TrackerWeb, :live_view
 
-  alias Tracker.Accounts.User
   alias Tracker.Notifications.Notification
+  alias TrackerWeb.FeedLink
   alias TrackerWeb.NotificationPresenter
 
   @impl true
   def mount(_params, _session, socket) do
-    user = ensure_feed_token(socket.assigns.current_user)
+    user = FeedLink.ensure_token(socket.assigns.current_user)
 
     if connected?(socket) do
       Phoenix.PubSub.subscribe(Tracker.PubSub, "notifications:#{user.id}")
@@ -26,7 +26,7 @@ defmodule TrackerWeb.InboxLive.Index do
      |> assign(:page_title, "Inbox")
      |> assign(:unread_filter, :unread)
      |> assign(:active_types, MapSet.new())
-     |> assign(:feed_path, feed_path(user))}
+     |> assign(:feed_path, FeedLink.path(user))}
   end
 
   @impl true
@@ -86,17 +86,6 @@ defmodule TrackerWeb.InboxLive.Index do
      |> apply_filters()}
   end
 
-  def handle_event("regenerate-feed-token", _params, socket) do
-    user = socket.assigns.current_user
-    {:ok, updated} = User.rotate_feed_token(user, actor: user)
-
-    {:noreply,
-     socket
-     |> assign(:current_user, updated)
-     |> assign(:feed_path, feed_path(updated))
-     |> put_flash(:info, "Feed URL regenerated. The previous URL no longer works.")}
-  end
-
   def handle_event("mark-all-read", _params, socket) do
     user = socket.assigns.current_user
 
@@ -116,20 +105,6 @@ defmodule TrackerWeb.InboxLive.Index do
   end
 
   def handle_info(_message, socket), do: {:noreply, socket}
-
-  defp ensure_feed_token(%{feed_token: nil} = user) do
-    case User.rotate_feed_token(user, actor: user) do
-      {:ok, updated} -> updated
-      _ -> user
-    end
-  end
-
-  defp ensure_feed_token(user), do: user
-
-  # A relative path so feed readers resolve it against the host the user
-  # actually visited, rather than the endpoint's configured URL.
-  defp feed_path(%{feed_token: nil}), do: nil
-  defp feed_path(%{feed_token: token}), do: ~p"/feeds/notifications/#{token}"
 
   defp load_notifications(socket) do
     user = socket.assigns.current_user
@@ -208,21 +183,17 @@ defmodule TrackerWeb.InboxLive.Index do
           >
             <.icon name="check" /> Mark all read
           </button>
-          <details :if={@feed_path} class="ibx-menuwrap" id="inbox-menu">
-            <summary class="ibx-iconbtn" title="More" aria-label="More actions">
-              <.icon name="dots" />
-            </summary>
-            <div class="ibx-menu">
-              <a id="feed-link" href={@feed_path} title="Your private notifications Atom feed">
-                <.icon name="rss" />
-                <span>Atom feed<small>Your private notifications feed</small></span>
-              </a>
-              <button id="regenerate-feed-token" type="button" phx-click="regenerate-feed-token">
-                <.icon name="refresh" />
-                <span>Regenerate feed URL<small>Revokes the current link</small></span>
-              </button>
-            </div>
-          </details>
+          <a
+            :if={@feed_path}
+            id="feed-link"
+            class="ibx-iconbtn"
+            href={@feed_path}
+            phx-hook="CopyLink"
+            title="Copy your private Atom feed URL"
+            aria-label="Copy your private Atom feed URL"
+          >
+            <.icon name="rss" />
+          </a>
         </div>
 
         <div class="ibx-filters" role="group" aria-label="Type filters">
@@ -387,16 +358,6 @@ defmodule TrackerWeb.InboxLive.Index do
             fill="currentColor"
             stroke="none"
           />
-        <% "refresh" -> %>
-          <path d="M21 12a9 9 0 1 1-3-6.7" /><path d="M21 4v5h-5" />
-        <% "dots" -> %>
-          <circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none" /><circle
-            cx="12"
-            cy="12"
-            r="1.5"
-            fill="currentColor"
-            stroke="none"
-          /><circle cx="19" cy="12" r="1.5" fill="currentColor" stroke="none" />
       <% end %>
     </svg>
     """
