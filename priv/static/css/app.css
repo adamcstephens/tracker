@@ -116,6 +116,15 @@ h6 {
 	--t-remove: #c2335a;
 	--t-revision: #7a3fd1;
 	--t-propagate: #0d7f8c;
+
+	/* Inbox control surfaces. In light mode these follow the app surfaces;
+	   in dark mode they use the redesign's deeper palette — the app's dark
+	   surfaces are too light for the inbox controls. */
+	--ibx-surface: var(--surface);
+	--ibx-surface-2: var(--surface-2);
+	--ibx-surface-3: var(--surface-3);
+	--ibx-line: var(--line);
+	--ibx-line-soft: var(--line-soft);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -144,6 +153,12 @@ h6 {
 		--t-remove: #f07a92;
 		--t-revision: #b694ff;
 		--t-propagate: #4fc8d4;
+
+		--ibx-surface: #15151b;
+		--ibx-surface-2: #1c1c24;
+		--ibx-surface-3: #25252f;
+		--ibx-line: #2a2a36;
+		--ibx-line-soft: #1f1f29;
 	}
 }
 
@@ -2232,13 +2247,13 @@ dl.option-body dd {
 	flex-wrap: wrap;
 	padding-bottom: 0.875rem;
 	margin-bottom: 0.375rem;
-	border-bottom: 1px solid var(--line-soft);
+	border-bottom: 1px solid var(--ibx-line-soft);
 }
 
 .ibx-seg {
 	display: inline-flex;
-	background: var(--surface);
-	border: 1px solid var(--line);
+	background: var(--ibx-surface);
+	border: 1px solid var(--ibx-line);
 	border-radius: 0.5rem;
 	padding: 2px;
 	gap: 2px;
@@ -2270,7 +2285,7 @@ dl.option-body dd {
 }
 
 .ibx-toolbar .ibx-seg button.is-active {
-	background: var(--surface-3);
+	background: var(--ibx-surface-3);
 	color: var(--text);
 }
 
@@ -2291,8 +2306,8 @@ dl.option-body dd {
 	gap: 0.4375rem;
 	padding: 0.375rem 0.75rem;
 	border-radius: 0.5rem;
-	border: 1px solid var(--line);
-	background: var(--surface);
+	border: 1px solid var(--ibx-line);
+	background: var(--ibx-surface);
 	color: var(--text);
 	font-size: 0.78125rem;
 	font-weight: 500;
@@ -2326,8 +2341,8 @@ dl.option-body dd {
 	width: 2rem;
 	height: 2rem;
 	border-radius: 0.5rem;
-	border: 1px solid var(--line);
-	background: var(--surface);
+	border: 1px solid var(--ibx-line);
+	background: var(--ibx-surface);
 	color: var(--text-2);
 	display: grid;
 	place-items: center;
@@ -2340,7 +2355,7 @@ dl.option-body dd {
 }
 
 .ibx-menuwrap .ibx-iconbtn:hover {
-	border-color: var(--surface-3);
+	border-color: var(--ibx-surface-3);
 	color: var(--text);
 }
 
@@ -2349,8 +2364,8 @@ dl.option-body dd {
 	top: calc(100% + 0.375rem);
 	right: 0;
 	z-index: 20;
-	background: var(--surface-2);
-	border: 1px solid var(--line);
+	background: var(--ibx-surface-2);
+	border: 1px solid var(--ibx-line);
 	border-radius: 0.625rem;
 	box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
 	padding: 0.3125rem;
@@ -2378,7 +2393,7 @@ dl.option-body dd {
 
 .ibx-menu a:hover,
 .ibx-menu button:hover {
-	background: var(--surface-3);
+	background: var(--ibx-surface-3);
 	filter: none;
 	color: var(--text);
 }
@@ -2406,7 +2421,7 @@ dl.option-body dd {
 	order: 2;
 	margin-top: 0.75rem;
 	padding-top: 0.75rem;
-	border-top: 1px solid var(--line-soft);
+	border-top: 1px solid var(--ibx-line-soft);
 }
 
 .ibx-filters .ibx-chip {
@@ -2415,8 +2430,8 @@ dl.option-body dd {
 	gap: 0.4375rem;
 	padding: 0.3125rem 0.6875rem 0.3125rem 0.5625rem;
 	border-radius: 999px;
-	background: var(--surface);
-	border: 1px solid var(--line);
+	background: var(--ibx-surface);
+	border: 1px solid var(--ibx-line);
 	color: var(--text-2);
 	font-size: 0.78125rem;
 	font-weight: 500;
@@ -2429,7 +2444,7 @@ dl.option-body dd {
 
 .ibx-filters .ibx-chip:hover {
 	filter: none;
-	border-color: var(--surface-3);
+	border-color: var(--ibx-surface-3);
 	color: var(--text);
 }
 
@@ -2499,7 +2514,7 @@ dl.option-body dd {
 .ibx-day-head .rule {
 	flex: 1;
 	height: 1px;
-	background: var(--line-soft);
+	background: var(--ibx-line-soft);
 }
 
 .ibx-day-head .n {
@@ -2532,8 +2547,8 @@ dl.option-body dd {
 }
 
 .ibx-row:hover {
-	background: var(--surface);
-	border-color: var(--line-soft);
+	background: var(--ibx-surface);
+	border-color: var(--ibx-line-soft);
 }
 
 /* Unread = full opacity + right dot; read rows dim back (single indicator). */
@@ -2644,8 +2659,8 @@ dl.option-body dd {
 	gap: 0.3125rem;
 	padding: 2px 0.5rem;
 	border-radius: 999px;
-	background: var(--surface);
-	border: 1px solid var(--line);
+	background: var(--ibx-surface);
+	border: 1px solid var(--ibx-line);
 	color: var(--text-2);
 	font-size: 0.71875rem;
 	font-family: var(--mono);
@@ -2672,7 +2687,7 @@ dl.option-body dd {
 }
 
 .ibx-dot-sep {
-	color: var(--line);
+	color: var(--ibx-line);
 }
 
 .ibx-time {
@@ -2726,9 +2741,9 @@ dl.option-body dd {
 
 .ibx-row .ibx-act:hover {
 	filter: none;
-	background: var(--surface-3);
+	background: var(--ibx-surface-3);
 	color: var(--text);
-	border-color: var(--line);
+	border-color: var(--ibx-line);
 }
 
 .ibx-act .ibx-icon {
