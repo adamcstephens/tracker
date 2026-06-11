@@ -6,7 +6,7 @@ defmodule TrackerWeb.ChangeLive.Index do
   alias TrackerWeb.TableParams
 
   @table_opts [
-    allowed_sorts: ~w(number title author base_ref merged_at)a,
+    allowed_sorts: ~w(number title state base_ref merged_at)a,
     default_sort: :number,
     default_sort_dir: :desc
   ]
@@ -53,8 +53,11 @@ defmodule TrackerWeb.ChangeLive.Index do
           </span>
         </.link>
       </:col>
-      <:col :let={{_id, change}} field={:author} label="Author" sortable>
-        {change.author}
+      <:col :let={{_id, change}} field={:state} label="Status" sortable>
+        <span class={"pill pill-#{change.state}"}>
+          <span class="dot" aria-hidden="true"></span>
+          {change.state}
+        </span>
       </:col>
       <:col :let={{_id, change}} field={:base_ref} label="Base" sortable>
         {change.base_ref}

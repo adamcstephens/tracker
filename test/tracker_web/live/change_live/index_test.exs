@@ -33,11 +33,43 @@ defmodule TrackerWeb.ChangeLive.IndexTest do
 
     assert html =~ "5001"
     assert html =~ "feat: add new-pkg"
-    assert html =~ "alice"
     assert html =~ "master"
     assert html =~ "5002"
-    assert html =~ "bob"
     assert html =~ "release-25.11"
+  end
+
+  test "does not render an author column", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/changes")
+
+    refute html =~ "alice"
+    refute html =~ "Author"
+  end
+
+  test "shows a status pill, marking closed PRs", %{conn: conn} do
+    Tracker.Nixpkgs.Change.bulk_upsert_all([
+      %{
+        number: 5004,
+        title: "fix: abandoned work",
+        state: :closed,
+        author: "dave",
+        base_ref: "master",
+        url: "https://github.com/NixOS/nixpkgs/pull/5004",
+        closed_at: ~U[2026-04-02 09:00:00Z]
+      }
+    ])
+
+    {:ok, _view, html} = live(conn, ~p"/changes")
+    doc = Floki.parse_document!(html)
+
+    assert Floki.find(doc, "td .pill-closed") != []
+    assert Floki.find(doc, "td .pill-merged") != []
+  end
+
+  test "sorting by status", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/changes")
+
+    view |> element("th[phx-value-field=state]") |> render_click()
+    assert_patched(view, ~p"/changes?sort_by=state&sort_dir=asc")
   end
 
   test "search filters by title", %{conn: conn} do
