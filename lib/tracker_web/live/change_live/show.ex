@@ -42,7 +42,7 @@ defmodule TrackerWeb.ChangeLive.Show do
     <div class="change-show">
       <header class="change-head">
         <div class="change-head-row cm-headrow">
-          <span class={"pill pill-#{@change.state}"}>
+          <span class={"pill pill--lg pill-#{@change.state}"}>
             <span class="dot" aria-hidden="true"></span>
             {@change.state}
           </span>
