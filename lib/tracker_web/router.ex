@@ -21,6 +21,7 @@ defmodule TrackerWeb.Router do
     plug :protect_from_forgery
     plug :put_secure_browser_headers
     plug :load_from_session
+    plug TrackerWeb.Plug.StoreReturnTo
     plug TrackerWeb.Plug.InteractiveUI
     plug TrackerWeb.Plug.Lens
   end
