@@ -1649,7 +1649,7 @@ dl.option-body dd {
 	font-weight: 600;
 }
 
-.change-show .pill {
+.pill {
 	display: inline-flex;
 	align-items: center;
 	gap: 0.35rem;
@@ -1660,29 +1660,29 @@ dl.option-body dd {
 	white-space: nowrap;
 }
 
-.change-show .pill .dot {
+.pill .dot {
 	width: 0.5rem;
 	height: 0.5rem;
 	border-radius: 999px;
 	background: currentColor;
 }
 
-.change-show .pill-merged {
+.pill-merged {
 	color: #8957e5;
 	background: #f1eaff;
 }
 
-.change-show .pill-open {
+.pill-open {
 	color: #1f883d;
 	background: #dafbe1;
 }
 
-.change-show .pill-closed {
+.pill-closed {
 	color: #cf222e;
 	background: #ffebe9;
 }
 
-.change-show .pill-draft {
+.pill-draft {
 	color: #6e7781;
 	background: #eaeef2;
 }
