@@ -1678,6 +1678,17 @@ dl.option-body dd {
 	background: var(--pill-color, var(--accent));
 }
 
+.pill--lg {
+	gap: 0.4rem;
+	padding: 0.25rem 0.7rem;
+	font-size: 0.85rem;
+}
+
+.pill--lg .dot {
+	width: 0.5rem;
+	height: 0.5rem;
+}
+
 .pill-merged {
 	--pill-color: var(--t-revision);
 }
