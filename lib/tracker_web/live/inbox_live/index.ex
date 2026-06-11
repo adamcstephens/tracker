@@ -334,7 +334,7 @@ defmodule TrackerWeb.InboxLive.Index do
           </span>
         </div>
         <div class="ibx-line2">
-          <span class="ibx-typechip">
+          <span class="pill ibx-typechip">
             <span class="dot"></span>{NotificationPresenter.type_label(@n.type)}
           </span>
           <%= if @n.type == :change_propagated do %>
