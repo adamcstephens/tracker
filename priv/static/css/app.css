@@ -1292,8 +1292,6 @@ dl.option-body dd {
 	flex: 1;
 	display: flex;
 	align-items: center;
-	gap: 0.625rem;
-	padding: 0.625rem 0.75rem 0.625rem 0.875rem;
 	background: var(--surface);
 	border: 1px solid var(--line);
 	border-radius: 0.625rem;
@@ -1316,11 +1314,14 @@ dl.option-body dd {
 	flex-shrink: 0;
 }
 
-.app-search__submit {
+/* .app-search prefix outranks the chrome reset above, which would
+   otherwise zero the padding (.app-header :is(input, select, button)). */
+.app-search .app-search__submit {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	padding: 0;
+	align-self: stretch;
+	padding: 0 0.3125rem 0 0.875rem;
 	margin: 0;
 	border: 0;
 	background: transparent;
@@ -1331,6 +1332,20 @@ dl.option-body dd {
 
 .app-search__submit:disabled {
 	cursor: default;
+}
+
+/* The label fills the rest of the box so a click anywhere inside it
+   natively focuses the input — no JS, no dead zones (trk-305). */
+.app-search__field {
+	flex: 1;
+	display: flex;
+	align-items: center;
+	align-self: stretch;
+	gap: 0.625rem;
+	padding: 0.625rem 0.75rem 0.625rem 0.3125rem;
+	margin: 0;
+	font-weight: inherit;
+	cursor: inherit;
 }
 
 .app-search input[type="search"] {
