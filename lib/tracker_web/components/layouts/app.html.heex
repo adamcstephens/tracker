@@ -168,17 +168,19 @@
           </svg>
         </button>
         <input :for={{k, v} <- @page_search.hidden} type="hidden" name={k} value={v} />
-        <input
-          id="page-search-input"
-          type="search"
-          name={@page_search.param}
-          value={@page_search.value}
-          placeholder={@page_search.placeholder}
-          aria-label={@page_search.placeholder}
-          phx-debounce="300"
-          disabled={@page_search.mode == :inert}
-        />
-        <span class="app-search__hint" aria-hidden="true">/</span>
+        <label class="app-search__field" for="page-search-input">
+          <input
+            id="page-search-input"
+            type="search"
+            name={@page_search.param}
+            value={@page_search.value}
+            placeholder={@page_search.placeholder}
+            aria-label={@page_search.placeholder}
+            phx-debounce="300"
+            disabled={@page_search.mode == :inert}
+          />
+          <span class="app-search__hint" aria-hidden="true">/</span>
+        </label>
       </form>
       <div :if={assigns[:lens]} class="app-header__lens-slot">
         <.live_component module={TrackerWeb.LensComponent} id="lens" lens={@lens} />

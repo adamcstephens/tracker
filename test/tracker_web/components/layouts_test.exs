@@ -106,6 +106,22 @@ defmodule TrackerWeb.LayoutsTest do
       assert Floki.find(form, "button[type=submit]") != []
     end
 
+    test "clicking anywhere in the search box focuses the input (trk-305)", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/packages")
+
+      # The styled box is the form, not the input — clicks on its padding,
+      # gaps, or "/" hint must still reach the input. A label wrapping the
+      # input does this natively, with or without JS.
+      [form] =
+        html
+        |> Floki.parse_document!()
+        |> Floki.find("form#page-search")
+
+      [label] = Floki.find(form, "label.app-search__field")
+      assert Floki.attribute(label, "for") == ["page-search-input"]
+      assert Floki.find(label, "input#page-search-input") != []
+    end
+
     test "page no longer renders its own search input on Changes", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/changes")
 
