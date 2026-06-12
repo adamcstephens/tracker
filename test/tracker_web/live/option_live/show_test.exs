@@ -24,6 +24,13 @@ defmodule TrackerWeb.OptionLive.ShowTest do
       "readOnly" => false,
       "type" => "string"
     },
+    "services.nginx.virtualHosts" => %{
+      "declarations" => ["nixos/modules/services/web-servers/nginx/default.nix"],
+      "description" => "Declarative vhost config.",
+      "loc" => ["services", "nginx", "virtualHosts"],
+      "readOnly" => false,
+      "type" => "attribute set of (submodule)"
+    },
     "services.nginx.virtualHosts.example.serverName" => %{
       "declarations" => ["nixos/modules/services/web-servers/nginx/vhost-options.nix"],
       "description" => "Server name for the vhost.",
@@ -130,11 +137,17 @@ defmodule TrackerWeb.OptionLive.ShowTest do
   end
 
   test "pure group prefix lists a top-level Defined-in section", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/options/services.nginx.virtualHosts")
+    {:ok, _view, html} = live(conn, ~p"/options/services")
 
     assert html =~ "Defined in"
     assert html =~ "nixos/modules/services/web-servers/nginx/vhost-options.nix"
     assert html =~ "nixos/modules/services/web-servers/nginx/location-options.nix"
+  end
+
+  test "an option matching the prefix renders as italic self", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/options/services.nginx.virtualHosts")
+
+    assert html =~ ~s(<em class="tail">self</em>)
   end
 
   test "prefix with leaf options omits the top-level Defined-in section", %{conn: conn} do

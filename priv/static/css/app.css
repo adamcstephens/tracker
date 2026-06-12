@@ -1166,12 +1166,6 @@ a.revision-link {
 	color: var(--accent);
 }
 
-.option-show .opt-name .prefix-itself {
-	font-style: normal;
-	color: var(--text-2);
-	margin-left: 6px;
-}
-
 .option-show .opt-type {
 	font-family: var(--mono);
 	font-size: 0.8125rem;
@@ -1367,16 +1361,18 @@ a.revision-link {
 		word-break: break-all;
 	}
 
-	/* Collapse the page-prefix part of each option name to an ellipsis —
-	   the path bar already says where we are. The :has guard keeps the
-	   "(prefix itself)" row's name, which has no .tail. */
-	.option-show .opt-name:has(.tail) .leading {
-		display: none;
+	/* Collapse the page-prefix part of option and child names to an
+	   ellipsis — the path bar already says where we are. font-size: 0
+	   keeps the full text selectable and readable to screen readers. */
+	.option-show .opt-name .leading,
+	.option-show .child-card .name .leading {
+		font-size: 0;
 	}
 
-	.option-show .opt-name .tail::before {
+	.option-show .opt-name .leading::before,
+	.option-show .child-card .name .leading::before {
 		content: "…";
-		color: var(--text-2);
+		font-size: 0.9375rem;
 	}
 
 	.option-show .opt-type {

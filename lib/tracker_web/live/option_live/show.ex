@@ -93,8 +93,7 @@ defmodule TrackerWeb.OptionLive.Show do
               <summary>
                 <span class="opt-name">
                   <%= if rev.option.name == @prefix do %>
-                    <span class="leading">{rev.option.name}</span>
-                    <em class="prefix-itself">(prefix itself)</em>
+                    <em class="tail">self</em>
                   <% else %>
                     <span class="leading">{@prefix}.</span><span class="tail">{tail(
                       rev.option.name,
