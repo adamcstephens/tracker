@@ -134,7 +134,12 @@
       <% end %>
       <div :if={assigns[:lens] || @current_user} class="app-header__lens-row">
         <div :if={assigns[:lens]} class="app-header__lens-slot">
-          <.live_component module={TrackerWeb.LensComponent} id="lens" lens={@lens} />
+          <.live_component
+            module={TrackerWeb.LensComponent}
+            id="lens"
+            lens={@lens}
+            highlight={assigns[:highlight_lens?] || false}
+          />
         </div>
         <.inbox_link
           :if={@current_user}

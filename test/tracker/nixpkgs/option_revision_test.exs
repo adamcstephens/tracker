@@ -25,6 +25,47 @@ defmodule Tracker.Nixpkgs.OptionRevisionTest do
     %{id: Map.fetch!(id_map, name), name: name}
   end
 
+  describe "list_names_by_channel_revision/1" do
+    test "returns option names for the channel revision, sorted by name" do
+      channel = create_channel!("nixos-unstable")
+      cr1 = create_revision!(channel, "names1aaa11", ~U[2026-04-01 10:00:00Z])
+      cr2 = create_revision!(channel, "names2bbb22", ~U[2026-04-02 10:00:00Z])
+
+      for name <- ["services.nginx.enable", "boot.loader.grub.enable"] do
+        opt = create_option!(name)
+
+        OptionRevision.load!(%{
+          option_id: opt.id,
+          channel_revision_id: cr1.id,
+          description: "desc",
+          type: "boolean",
+          default: "false",
+          example: nil,
+          read_only: false
+        })
+      end
+
+      other = create_option!("programs.vim.enable")
+
+      OptionRevision.load!(%{
+        option_id: other.id,
+        channel_revision_id: cr2.id,
+        description: "desc",
+        type: "boolean",
+        default: "false",
+        example: nil,
+        read_only: false
+      })
+
+      names =
+        cr1.id
+        |> OptionRevision.list_names_by_channel_revision!()
+        |> Enum.map(& &1.option_name)
+
+      assert names == ["boot.loader.grub.enable", "services.nginx.enable"]
+    end
+  end
+
   describe "metadata_diff/2" do
     test "returns a row per changed metadata field" do
       channel = create_channel!("nixos-unstable")
