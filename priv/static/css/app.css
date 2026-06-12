@@ -1530,21 +1530,22 @@ a.revision-link {
 	place-items: center;
 	flex-shrink: 0;
 	color: var(--text-2);
-	border: 1px solid transparent;
+	background: var(--ibx-surface);
+	border: 1px solid var(--ibx-line);
 	transition:
 		background 0.12s,
 		color 0.12s;
 }
 
 .app-inbox:hover {
-	background: var(--surface);
+	background: var(--ibx-surface-2);
 	color: var(--text);
 }
 
 .app-inbox[aria-current="page"] {
-	background: var(--surface);
+	background: var(--ibx-surface-2);
 	color: var(--text);
-	border-color: var(--line);
+	border-color: var(--ibx-line);
 }
 
 .app-inbox__icon {
@@ -1610,8 +1611,8 @@ a.revision-link {
 	align-items: center;
 	gap: 0.5rem;
 	padding: 0.375rem 0.875rem;
-	background: transparent;
-	border: 1px solid transparent;
+	background: var(--ibx-surface);
+	border: 1px solid var(--ibx-line);
 	border-radius: var(--radius-sm);
 	color: var(--text);
 	font-weight: 500;
@@ -1643,7 +1644,7 @@ a.revision-link {
 	width: 1.5rem;
 	height: 1.5rem;
 	border-radius: 999px;
-	background: var(--surface-2);
+	background: var(--ibx-surface-2);
 	object-fit: cover;
 }
 
