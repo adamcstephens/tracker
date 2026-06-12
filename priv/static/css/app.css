@@ -982,6 +982,7 @@ a.revision-link {
 	font-family: var(--sans);
 	font-weight: 400;
 	cursor: pointer;
+	text-decoration: none;
 	transition:
 		background 120ms,
 		border-color 120ms,
@@ -994,8 +995,7 @@ a.revision-link {
 	color: var(--text);
 }
 
-.option-show .opt-copy.is-copied .opt-share-icon,
-.option-show .opt-copy.is-copied .label {
+.option-show .opt-copy.is-copied .opt-share-icon {
 	display: none;
 }
 
