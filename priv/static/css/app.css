@@ -1125,7 +1125,8 @@ a.revision-link {
 	cursor: pointer;
 	padding: 10px 14px;
 	display: grid;
-	grid-template-columns: 1fr auto auto;
+	/* name, type, copy-path button, share button */
+	grid-template-columns: 1fr auto auto auto;
 	gap: 10px;
 	align-items: baseline;
 	transition: background 120ms;
@@ -1358,10 +1359,10 @@ a.revision-link {
 		flex: none;
 	}
 
-	/* Option rows: name + share only — the type tag is clutter at this
-	   width, and the detail body has it. */
+	/* Option rows: name + copy/share only — the type tag is clutter at
+	   this width, and the detail body has it. */
 	.option-show .opt-list summary {
-		grid-template-columns: 1fr auto;
+		grid-template-columns: 1fr auto auto;
 		align-items: center;
 	}
 

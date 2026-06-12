@@ -136,6 +136,12 @@ defmodule TrackerWeb.OptionLive.ShowTest do
     refute html =~ "option-anchor"
   end
 
+  test "leaf option rows carry a copy button for the attribute path", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/options/services.nginx")
+
+    assert html =~ ~s(data-copy="services.nginx.enable")
+  end
+
   test "pure group prefix lists a top-level Defined-in section", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/options/services")
 
