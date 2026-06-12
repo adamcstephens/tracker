@@ -1356,25 +1356,22 @@ a.revision-link {
 		flex: none;
 	}
 
-	/* Option rows: name on its own line; type + share beneath it. */
+	/* Option rows: name + share only — the type tag is clutter at this
+	   width, and the detail body has it. */
 	.option-show .opt-list summary {
 		grid-template-columns: 1fr auto;
-		row-gap: 4px;
 		align-items: center;
 	}
 
 	.option-show .opt-name {
-		grid-column: 1 / -1;
 		word-break: break-all;
 	}
 
 	.option-show .opt-type {
-		grid-column: 1;
+		display: none;
 	}
 
 	.option-show .opt-share {
-		grid-column: 2;
-		grid-row: 2;
 		/* always visible on touch — no hover to reveal it */
 		opacity: 1;
 	}
