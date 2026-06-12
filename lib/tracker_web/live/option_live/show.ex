@@ -8,12 +8,14 @@ defmodule TrackerWeb.OptionLive.Show do
   # Inline so it works on dead renders too — anonymous visitors don't load
   # app.js (see TrackerWeb.Plug.InteractiveUI), so a phx-hook would never run.
   # Copies data-copy when present (the attribute path), else the link's URL.
+  # The class is "copied", not "is-copied" — the global .is-copied rule
+  # renders a floating "Copied!" bubble; here the icon swaps in place.
   defp copy_onclick do
     """
     event.preventDefault(); event.stopPropagation(); \
     navigator.clipboard.writeText(this.dataset.copy || this.href); \
-    this.classList.add('is-copied'); clearTimeout(this._copyTimer); \
-    this._copyTimer = setTimeout(() => this.classList.remove('is-copied'), 1400)\
+    this.classList.add('copied'); clearTimeout(this._copyTimer); \
+    this._copyTimer = setTimeout(() => this.classList.remove('copied'), 1400)\
     """
   end
 
@@ -38,6 +40,7 @@ defmodule TrackerWeb.OptionLive.Show do
           aria-label={"Copy attribute path #{@prefix}"}
         >
           <.copy_icon />
+          <.check_icon />
         </a>
       </h1>
 
@@ -113,6 +116,7 @@ defmodule TrackerWeb.OptionLive.Show do
                   aria-label={"Copy attribute path #{rev.option.name}"}
                 >
                   <.copy_icon />
+                  <.check_icon />
                 </button>
                 <a
                   href={~p"/options/#{rev.option.name}"}
@@ -122,6 +126,7 @@ defmodule TrackerWeb.OptionLive.Show do
                   aria-label={"Copy link to #{rev.option.name}"}
                 >
                   <.share_icon />
+                  <.check_icon />
                 </a>
               </summary>
 
@@ -183,6 +188,25 @@ defmodule TrackerWeb.OptionLive.Show do
         </ul>
       </section>
     </div>
+    """
+  end
+
+  defp check_icon(assigns) do
+    ~H"""
+    <svg
+      class="opt-check-icon"
+      viewBox="0 0 24 24"
+      width="14"
+      height="14"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.8"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+    >
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
     """
   end
 
