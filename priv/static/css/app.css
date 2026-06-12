@@ -1367,6 +1367,18 @@ a.revision-link {
 		word-break: break-all;
 	}
 
+	/* Collapse the page-prefix part of each option name to an ellipsis —
+	   the path bar already says where we are. The :has guard keeps the
+	   "(prefix itself)" row's name, which has no .tail. */
+	.option-show .opt-name:has(.tail) .leading {
+		display: none;
+	}
+
+	.option-show .opt-name .tail::before {
+		content: "…";
+		color: var(--text-2);
+	}
+
 	.option-show .opt-type {
 		display: none;
 	}
