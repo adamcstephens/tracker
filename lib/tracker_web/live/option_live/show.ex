@@ -29,16 +29,16 @@ defmodule TrackerWeb.OptionLive.Show do
           <span :if={last?} class="crumb-current" aria-current="page">{seg}</span>
           <span :if={!last?} class="crumb-sep" aria-hidden="true">.</span>
         <% end %>
-        <button
-          type="button"
+        <a
+          href={~p"/options/#{@prefix}"}
           class="opt-copy"
           data-copy={@prefix}
           onclick={copy_onclick()}
           title="Copy attribute path"
+          aria-label={"Copy attribute path #{@prefix}"}
         >
           <.share_icon />
-          <span class="label">copy</span>
-        </button>
+        </a>
       </h1>
 
       <div class="opt-meta">
