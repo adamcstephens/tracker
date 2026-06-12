@@ -229,6 +229,53 @@ defmodule TrackerWeb.OptionLive.ShowTest do
     assert html =~ "services.nginx"
   end
 
+  test "search surfaces deep matches under the prefix as a flat list", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/options/services.nginx?search=serverName")
+
+    assert html =~ "Matching options"
+    assert html =~ ~s(href="/options/services.nginx.virtualHosts.example.serverName")
+  end
+
+  test "search scopes matches to the prefix", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/options/services.nginx.virtualHosts?search=enable")
+
+    refute html =~ ~s(href="/options/services.nginx.enable")
+  end
+
+  test "search filters children cards to subtrees with matches", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/options/services.nginx?search=serverName")
+
+    assert html =~ "matching"
+    # The vhost subtree holds the only match; card links carry the search
+    assert html =~ ~s(href="/options/services.nginx.virtualHosts?search=serverName")
+  end
+
+  test "search hides leaf details, files, and PR sections", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/options/services.nginx?search=serverName")
+
+    refute html =~ "Options at this prefix"
+    refute html =~ ">Defined in</h2>"
+    refute html =~ "Recent PRs"
+  end
+
+  test "search with no matches under the prefix says so", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/options/services.nginx?search=zzzznothing")
+
+    assert html =~ "No options match"
+  end
+
+  test "clearing the search restores the tree view", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/options/services.nginx?search=serverName")
+
+    html =
+      view
+      |> element("#page-search")
+      |> render_change(%{"search" => ""})
+
+    assert html =~ "Children"
+    assert html =~ "Options at this prefix"
+  end
+
   test "lists recent PRs whose change_files intersect the prefix's file set", %{conn: conn} do
     %{id: change_id} =
       Tracker.Nixpkgs.Change

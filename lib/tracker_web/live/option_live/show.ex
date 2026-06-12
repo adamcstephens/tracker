@@ -3,6 +3,7 @@ defmodule TrackerWeb.OptionLive.Show do
 
   import TrackerWeb.CodeHighlight
 
+  alias TrackerWeb.DataTable
   alias TrackerWeb.PageSearch
 
   # Inline so it works on dead renders too — anonymous visitors don't load
@@ -61,7 +62,7 @@ defmodule TrackerWeb.OptionLive.Show do
         <div class="opt-children">
           <.link
             :for={{group, count} <- @subgroups}
-            navigate={~p"/options/#{group}"}
+            navigate={child_path(group, @search)}
             class="child-card"
           >
             <span class="name">
@@ -71,11 +72,37 @@ defmodule TrackerWeb.OptionLive.Show do
               )}</span>
             </span>
             <span class="right">
-              <span>{count} options</span>
+              <span>{count} {if @search == "", do: "options", else: "matching"}</span>
               <span class="arrow" aria-hidden="true">→</span>
             </span>
           </.link>
         </div>
+      </section>
+
+      <section :if={@matches != []}>
+        <h2>Matching options</h2>
+        <.table id="matching-options" rows={@matches}>
+          <:col :let={rev} label="Option">
+            <.link navigate={~p"/options/#{rev.option.name}"}>{rev.option.name}</.link>
+          </:col>
+          <:col :let={rev} label="Group">
+            <.link
+              :if={parent_prefix(rev.option.name)}
+              navigate={~p"/options/#{parent_prefix(rev.option.name)}"}
+            >
+              {parent_prefix(rev.option.name)}
+            </.link>
+          </:col>
+        </.table>
+
+        <DataTable.pagination
+          total_pages={@total_pages}
+          current_page={@current_page}
+          has_prev_page?={@has_prev_page?}
+          has_next_page?={@has_next_page?}
+          prev_path={options_path(@prefix, @search, @current_page - 1)}
+          next_path={options_path(@prefix, @search, @current_page + 1)}
+        />
       </section>
 
       <section :if={@leaf_options != []}>
@@ -283,6 +310,8 @@ defmodule TrackerWeb.OptionLive.Show do
   @impl true
   def handle_params(params, _url, socket) do
     prefix = Map.get(params, "prefix", "")
+    search = Map.get(params, "search", "")
+    page = params |> Map.get("page", "1") |> String.to_integer() |> max(1)
     lens = socket.assigns.lens
     default_channel = if lens, do: lens.channel.name, else: ""
     default_rev = if lens && lens.revision, do: lens.revision.revision, else: ""
@@ -297,18 +326,6 @@ defmodule TrackerWeb.OptionLive.Show do
     channel_revision =
       if select_channel?, do: nil, else: resolve_channel_revision(channel, rev)
 
-    {subgroups, leaf_options, files, leaf?} =
-      case channel_revision do
-        nil -> {[], [], [], false}
-        cr when prefix == "" -> load_root_view(cr.id)
-        cr -> load_prefix_view(cr.id, prefix)
-      end
-
-    recent_prs = recent_prs_for_files(files)
-
-    nothing_here? =
-      channel_revision != nil and subgroups == [] and leaf_options == [] and files == []
-
     {:noreply,
      socket
      |> assign(:page_title, if(prefix == "", do: "Options", else: prefix))
@@ -320,17 +337,144 @@ defmodule TrackerWeb.OptionLive.Show do
      |> assign(:select_channel?, select_channel?)
      |> assign(:highlight_lens?, select_channel?)
      |> assign(:channel_unavailable?, is_nil(channel_revision) and not select_channel?)
-     |> assign(:subgroups, subgroups)
-     |> assign(:leaf_options, leaf_options)
-     |> assign(:files, files)
-     |> assign(:recent_prs, recent_prs)
-     |> assign(:leaf, leaf?)
-     |> assign(:nothing_here?, nothing_here?)
+     |> assign(:search, search)
+     |> assign(:offset, (page - 1) * 15)
      |> assign(:page_search, %PageSearch{
-       mode: :passthrough,
-       action: "/options",
-       value: Map.get(params, "search", "")
-     })}
+       action: show_path(prefix),
+       value: search,
+       event: "filter",
+       hidden: %{}
+     })
+     |> load_view()}
+  end
+
+  defp load_view(socket) do
+    %{channel_revision: channel_revision, prefix: prefix, search: search} = socket.assigns
+
+    {subgroups, leaf_options, files, leaf?} =
+      case channel_revision do
+        nil -> {[], [], [], false}
+        cr when search != "" -> load_filtered_tree(cr.id, prefix, search)
+        cr when prefix == "" -> load_root_view(cr.id)
+        cr -> load_prefix_view(cr.id, prefix)
+      end
+
+    recent_prs = if search == "", do: recent_prs_for_files(files), else: []
+
+    socket = load_matches(socket)
+
+    nothing_here? =
+      channel_revision != nil and subgroups == [] and leaf_options == [] and files == [] and
+        socket.assigns.matches == []
+
+    socket
+    |> assign(:subgroups, subgroups)
+    |> assign(:leaf_options, leaf_options)
+    |> assign(:files, files)
+    |> assign(:recent_prs, recent_prs)
+    |> assign(:leaf, leaf?)
+    |> assign(:nothing_here?, nothing_here?)
+  end
+
+  # The fuzzy-ranked flat list of matches under the prefix, paginated.
+  defp load_matches(socket) do
+    %{channel_revision: channel_revision, prefix: prefix, search: search, offset: offset} =
+      socket.assigns
+
+    if channel_revision && search != "" do
+      page =
+        Tracker.Nixpkgs.OptionRevision.list_by_channel_revision!(
+          channel_revision.id,
+          search,
+          prefix,
+          page: [offset: offset, count: true]
+        )
+
+      socket
+      |> assign(:matches, page.results)
+      |> assign(:total_pages, ceil(page.count / 15))
+      |> assign(:current_page, div(offset, 15) + 1)
+      |> assign(:has_prev_page?, offset > 0)
+      |> assign(:has_next_page?, page.more?)
+    else
+      socket
+      |> assign(:matches, [])
+      |> assign(:total_pages, 0)
+      |> assign(:current_page, 1)
+      |> assign(:has_prev_page?, false)
+      |> assign(:has_next_page?, false)
+    end
+  end
+
+  # While searching, the children cards become orientation aids: only
+  # subtrees containing a (substring) match survive, counted by matches.
+  # The substring filter approximates the fuzzy match list below it.
+  defp load_filtered_tree(channel_revision_id, prefix, search) do
+    down = String.downcase(search)
+    prefix_depth = if prefix == "", do: 0, else: depth(prefix)
+
+    subgroups =
+      channel_revision_id
+      |> Tracker.Nixpkgs.OptionRevision.list_names_by_channel_revision!()
+      |> Enum.map(& &1.option_name)
+      |> Enum.filter(&under_prefix?(&1, prefix))
+      |> Enum.filter(&String.contains?(String.downcase(&1), down))
+      |> Enum.filter(fn name -> depth(name) > prefix_depth + 1 end)
+      |> Enum.map(fn name ->
+        name |> String.split(".") |> Enum.take(prefix_depth + 1) |> Enum.join(".")
+      end)
+      |> Enum.frequencies()
+      |> Enum.sort_by(fn {name, _} -> name end)
+
+    {subgroups, [], [], false}
+  end
+
+  defp under_prefix?(_name, ""), do: true
+
+  defp under_prefix?(name, prefix),
+    do: name == prefix or String.starts_with?(name, prefix <> ".")
+
+  @impl true
+  def handle_event("filter", params, socket) do
+    search = Map.get(params, "search", "")
+
+    socket =
+      socket
+      |> assign(:search, search)
+      |> assign(:offset, 0)
+      |> update(:page_search, fn ps -> %{ps | value: search, hidden: %{}} end)
+      |> load_view()
+      |> push_event("update-url", %{path: options_path(socket.assigns.prefix, search, 1)})
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("next-page", _params, socket) do
+    %{prefix: prefix, search: search, current_page: current_page} = socket.assigns
+
+    {:noreply, push_patch(socket, to: options_path(prefix, search, current_page + 1))}
+  end
+
+  @impl true
+  def handle_event("prev-page", _params, socket) do
+    %{prefix: prefix, search: search, current_page: current_page} = socket.assigns
+
+    {:noreply, push_patch(socket, to: options_path(prefix, search, max(current_page - 1, 1)))}
+  end
+
+  defp options_path(prefix, search, page) do
+    params =
+      %{}
+      |> then(fn p -> if search != "", do: Map.put(p, :search, search), else: p end)
+      |> then(fn p -> if page > 1, do: Map.put(p, :page, page), else: p end)
+
+    base = show_path(prefix)
+
+    case URI.encode_query(params) do
+      "" -> base
+      qs -> "#{base}?#{qs}"
+    end
   end
 
   defp recent_prs_for_files([]), do: []
@@ -444,9 +588,14 @@ defmodule TrackerWeb.OptionLive.Show do
   @impl true
   def handle_info({:set_lens, channel_name, rev}, socket) do
     socket = TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)
-    {:noreply, push_patch(socket, to: show_path(socket.assigns.prefix))}
+
+    {:noreply,
+     push_patch(socket, to: options_path(socket.assigns.prefix, socket.assigns.search, 1))}
   end
 
   defp show_path(""), do: ~p"/options"
   defp show_path(prefix), do: ~p"/options/#{prefix}"
+
+  defp child_path(group, ""), do: ~p"/options/#{group}"
+  defp child_path(group, search), do: ~p"/options/#{group}?search=#{search}"
 end
