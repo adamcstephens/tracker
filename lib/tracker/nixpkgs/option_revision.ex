@@ -10,7 +10,10 @@ defmodule Tracker.Nixpkgs.OptionRevision do
     define :read
     define :load
     define :latest_by_option_ids, args: [:option_ids]
-    define :list_by_channel_revision, args: [:channel_revision_id, {:optional, :search}]
+
+    define :list_by_channel_revision,
+      args: [:channel_revision_id, {:optional, :search}, {:optional, :prefix}]
+
     define :list_names_by_channel_revision, args: [:channel_revision_id]
     define :list_by_channel_revision_and_prefix, args: [:channel_revision_id, :prefix]
     define :list_by_channel_revision_and_file_ids, args: [:channel_revision_id, :file_ids]
@@ -23,6 +26,7 @@ defmodule Tracker.Nixpkgs.OptionRevision do
     read :list_by_channel_revision do
       argument :channel_revision_id, :integer, allow_nil?: false
       argument :search, :string, default: ""
+      argument :prefix, :string, default: ""
 
       pagination do
         offset? true
@@ -39,6 +43,15 @@ defmodule Tracker.Nixpkgs.OptionRevision do
                if ^arg(:search) != "" do
                  fragment("strict_word_similarity(?, ?) > 0.4", ^arg(:search), option.name) or
                    contains(option.name, ^arg(:search))
+               else
+                 true
+               end
+             )
+
+      filter expr(
+               if ^arg(:prefix) != "" do
+                 option.name == ^arg(:prefix) or
+                   fragment("? LIKE ? || '.%'", option.name, ^arg(:prefix))
                else
                  true
                end

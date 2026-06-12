@@ -66,6 +66,58 @@ defmodule Tracker.Nixpkgs.OptionRevisionTest do
     end
   end
 
+  describe "list_by_channel_revision/3 with a prefix" do
+    test "scopes search matches to options under the prefix" do
+      channel = create_channel!("nixos-unstable")
+      cr = create_revision!(channel, "scoped1aaa11", ~U[2026-04-01 10:00:00Z])
+
+      for name <- [
+            "services.nginx.enable",
+            "services.openssh.enable",
+            "programs.vim.enable"
+          ] do
+        opt = create_option!(name)
+
+        OptionRevision.load!(%{
+          option_id: opt.id,
+          channel_revision_id: cr.id,
+          description: "desc",
+          type: "boolean",
+          default: "false",
+          example: nil,
+          read_only: false
+        })
+      end
+
+      page = OptionRevision.list_by_channel_revision!(cr.id, "enable", "services")
+      names = Enum.map(page.results, & &1.option.name)
+
+      assert "services.nginx.enable" in names
+      assert "services.openssh.enable" in names
+      refute "programs.vim.enable" in names
+    end
+
+    test "an exact prefix match is included" do
+      channel = create_channel!("nixos-unstable")
+      cr = create_revision!(channel, "scoped2bbb22", ~U[2026-04-01 10:00:00Z])
+      opt = create_option!("services.nginx.enable")
+
+      OptionRevision.load!(%{
+        option_id: opt.id,
+        channel_revision_id: cr.id,
+        description: "desc",
+        type: "boolean",
+        default: "false",
+        example: nil,
+        read_only: false
+      })
+
+      page = OptionRevision.list_by_channel_revision!(cr.id, "", "services.nginx.enable")
+
+      assert Enum.map(page.results, & &1.option.name) == ["services.nginx.enable"]
+    end
+  end
+
   describe "metadata_diff/2" do
     test "returns a row per changed metadata field" do
       channel = create_channel!("nixos-unstable")

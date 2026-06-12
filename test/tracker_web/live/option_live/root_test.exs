@@ -168,6 +168,91 @@ defmodule TrackerWeb.OptionLive.RootTest do
     refute html =~ "lens-attention"
   end
 
+  test "search at the root matches the whole channel", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/options?search=enable")
+
+    assert html =~ "Matching options"
+    assert html =~ ~s(href="/options/services.nginx.enable")
+    assert html =~ ~s(href="/options/programs.vim.enable")
+    assert html =~ ~s(href="/options/enableDebugging")
+  end
+
+  test "search at the root filters group cards to matching subtrees", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/options?search=nginx")
+
+    assert html =~ ~s(href="/options/services?search=nginx")
+    refute html =~ ~s(href="/options/programs?search=nginx")
+  end
+
+  test "fuzzy search tolerates typos", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/options?search=nginxx")
+
+    assert html =~ ~s(href="/options/services.nginx.enable")
+    refute html =~ ~s(href="/options/programs.vim.enable")
+  end
+
+  test "dot-segment match outranks fuzzy substring matches", %{
+    conn: conn,
+    channel_revision: cr
+  } do
+    inc_options = %{
+      "services.incron.enable" => %{
+        "declarations" => ["x"],
+        "description" => "",
+        "loc" => ["services", "incron", "enable"],
+        "readOnly" => false,
+        "type" => "boolean"
+      },
+      "virtualisation.incus.enable" => %{
+        "declarations" => ["x"],
+        "description" => "",
+        "loc" => ["virtualisation", "incus", "enable"],
+        "readOnly" => false,
+        "type" => "boolean"
+      }
+    }
+
+    Fixtures.load_options(inc_options, cr)
+
+    {:ok, _view, html} = live(conn, ~p"/options?search=incus")
+
+    order = option_order(html)
+    incus_idx = Enum.find_index(order, &(&1 == "virtualisation.incus.enable"))
+    incron_idx = Enum.find_index(order, &(&1 == "services.incron.enable"))
+
+    assert incus_idx, "virtualisation.incus.enable not in results"
+    assert incron_idx == nil or incus_idx < incron_idx
+  end
+
+  test "search form drops the page hidden input so a no-JS search starts on page 1 (trk-278)",
+       %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/options?search=enable&page=2")
+
+    hidden_names =
+      html
+      |> Floki.parse_document!()
+      |> Floki.find("#page-search input[type=hidden]")
+      |> Enum.flat_map(&Floki.attribute(&1, "name"))
+
+    refute "page" in hidden_names
+  end
+
+  test "searching with the all-channels lens still prompts for a channel", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/options?search=nginx")
+
+    send(view.pid, {:set_lens, "all", ""})
+    html = render(view)
+
+    assert html =~ "Select a channel"
+    refute html =~ "Matching options"
+  end
+
+  defp option_order(html) do
+    ~r{<a[^>]*href="/options/([^"#?]+)"[^>]*>[^<]*</a>}
+    |> Regex.scan(html)
+    |> Enum.map(fn [_, name] -> name end)
+  end
+
   test "shows message when channel has no options data", %{conn: conn} do
     channel2 =
       Channel.create!(%{
