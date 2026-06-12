@@ -1107,6 +1107,9 @@ a.revision-link {
 }
 
 .option-show .opt-list details {
+	/* cancel the base details bottom margin — it shows as a page-background
+	   gap between the row and the li border */
+	margin: 0;
 	scroll-margin-top: 8rem;
 }
 
