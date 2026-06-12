@@ -1805,6 +1805,29 @@ a.revision-link {
 	flex-shrink: 0;
 }
 
+/* Draws the eye to the channel picker when a page needs a specific channel.
+   Pure CSS so it also works on dead renders (anonymous visitors load no JS). */
+@media (prefers-reduced-motion: no-preference) {
+	.lens-attention .lens__form {
+		animation: lens-pulse 1.6s ease-in-out 3;
+	}
+}
+
+.lens-attention .lens__form {
+	border-color: var(--accent);
+}
+
+@keyframes lens-pulse {
+	0%,
+	100% {
+		box-shadow: 0 0 0 0 transparent;
+	}
+
+	50% {
+		box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 35%, transparent);
+	}
+}
+
 .lens__form {
 	display: inline-flex;
 	align-items: stretch;

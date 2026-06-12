@@ -11,6 +11,7 @@ defmodule Tracker.Nixpkgs.OptionRevision do
     define :load
     define :latest_by_option_ids, args: [:option_ids]
     define :list_by_channel_revision, args: [:channel_revision_id, {:optional, :search}]
+    define :list_names_by_channel_revision, args: [:channel_revision_id]
     define :list_by_channel_revision_and_prefix, args: [:channel_revision_id, :prefix]
     define :list_by_channel_revision_and_file_ids, args: [:channel_revision_id, :file_ids]
     define :all_by_channel_revision, args: [:channel_revision_id]
@@ -42,6 +43,20 @@ defmodule Tracker.Nixpkgs.OptionRevision do
                  true
                end
              )
+    end
+
+    read :list_names_by_channel_revision do
+      argument :channel_revision_id, :integer, allow_nil?: false
+
+      # Names only — selecting the metadata columns would drag megabytes of
+      # descriptions/examples along for a whole channel (~20k options).
+      prepare build(
+                select: [:id, :option_id, :channel_revision_id],
+                load: [:option_name],
+                sort: [option_name: :asc]
+              )
+
+      filter expr(channel_revision_id == ^arg(:channel_revision_id))
     end
 
     read :list_by_channel_revision_and_prefix do

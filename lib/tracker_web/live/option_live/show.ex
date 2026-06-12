@@ -23,7 +23,7 @@ defmodule TrackerWeb.OptionLive.Show do
   def render(assigns) do
     ~H"""
     <div class="option-show">
-      <h1 class="opt-pathbar" aria-label={@prefix}>
+      <h1 :if={@prefix != ""} class="opt-pathbar" aria-label={@prefix}>
         <%= for {seg, cumulative, last?} <- crumbs(@prefix) do %>
           <.link :if={!last?} navigate={~p"/options/#{cumulative}"} class="crumb-link">
             {seg}
@@ -44,6 +44,10 @@ defmodule TrackerWeb.OptionLive.Show do
         </a>
       </h1>
 
+      <p :if={@select_channel?} class="opt-select-channel">
+        Options are channel-specific. Select a channel from the picker above to browse them.
+      </p>
+
       <p :if={@channel_unavailable?}>
         The {@channel} channel doesn't have options data.
       </p>
@@ -61,7 +65,10 @@ defmodule TrackerWeb.OptionLive.Show do
             class="child-card"
           >
             <span class="name">
-              <span class="leading">{@prefix}.</span><span class="tail">{tail(group, @prefix)}</span>
+              <span :if={@prefix != ""} class="leading">{@prefix}.</span><span class="tail">{tail(
+                group,
+                @prefix
+              )}</span>
             </span>
             <span class="right">
               <span>{count} options</span>
@@ -81,7 +88,7 @@ defmodule TrackerWeb.OptionLive.Show do
                   <%= if rev.option.name == @prefix do %>
                     <em class="tail">self</em>
                   <% else %>
-                    <span class="leading">{@prefix}.</span><span class="tail">{tail(
+                    <span :if={@prefix != ""} class="leading">{@prefix}.</span><span class="tail">{tail(
                       rev.option.name,
                       @prefix
                     )}</span>
@@ -245,6 +252,7 @@ defmodule TrackerWeb.OptionLive.Show do
     end)
   end
 
+  defp tail(name, ""), do: name
   defp tail(name, prefix), do: String.slice(name, String.length(prefix) + 1, String.length(name))
 
   defp option_packages(%Tracker.Nixpkgs.OptionRevision{option: %{packages: packages}}),
@@ -273,17 +281,26 @@ defmodule TrackerWeb.OptionLive.Show do
   end
 
   @impl true
-  def handle_params(%{"prefix" => prefix} = params, _url, socket) do
+  def handle_params(params, _url, socket) do
+    prefix = Map.get(params, "prefix", "")
     lens = socket.assigns.lens
     default_channel = if lens, do: lens.channel.name, else: ""
     default_rev = if lens && lens.revision, do: lens.revision.revision, else: ""
     channel = Map.get(params, "channel", default_channel)
     rev = Map.get(params, "rev", default_rev)
-    channel_revision = resolve_channel_revision(channel, rev)
+
+    # The root view has no channel of its own to fall back to: with the lens
+    # on "All channels" (and no explicit ?channel=) it only prompts for one.
+    select_channel? =
+      prefix == "" and lens != nil and lens.all? and not Map.has_key?(params, "channel")
+
+    channel_revision =
+      if select_channel?, do: nil, else: resolve_channel_revision(channel, rev)
 
     {subgroups, leaf_options, files, leaf?} =
       case channel_revision do
         nil -> {[], [], [], false}
+        cr when prefix == "" -> load_root_view(cr.id)
         cr -> load_prefix_view(cr.id, prefix)
       end
 
@@ -294,13 +311,15 @@ defmodule TrackerWeb.OptionLive.Show do
 
     {:noreply,
      socket
-     |> assign(:page_title, prefix)
+     |> assign(:page_title, if(prefix == "", do: "Options", else: prefix))
      |> assign(:prefix, prefix)
      |> assign(:parent_prefix, parent_prefix(prefix))
      |> assign(:channel, channel)
      |> assign(:rev, rev)
      |> assign(:channel_revision, channel_revision)
-     |> assign(:channel_unavailable?, is_nil(channel_revision))
+     |> assign(:select_channel?, select_channel?)
+     |> assign(:highlight_lens?, select_channel?)
+     |> assign(:channel_unavailable?, is_nil(channel_revision) and not select_channel?)
      |> assign(:subgroups, subgroups)
      |> assign(:leaf_options, leaf_options)
      |> assign(:files, files)
@@ -318,6 +337,33 @@ defmodule TrackerWeb.OptionLive.Show do
 
   defp recent_prs_for_files(files) do
     Tracker.Nixpkgs.Change.by_files!(Enum.map(files, & &1.id), 10)
+  end
+
+  # The root tree is built from option names alone — loading every revision's
+  # metadata and files for a whole channel just to count top-level groups
+  # would be far too heavy. Only the few depth-1 leaves get full detail.
+  defp load_root_view(channel_revision_id) do
+    names =
+      channel_revision_id
+      |> Tracker.Nixpkgs.OptionRevision.list_names_by_channel_revision!()
+      |> Enum.map(& &1.option_name)
+
+    {leaf_names, deeper_names} = Enum.split_with(names, fn name -> depth(name) == 1 end)
+
+    subgroups =
+      deeper_names
+      |> Enum.map(fn name -> name |> String.split(".") |> hd() end)
+      |> Enum.frequencies()
+      |> Enum.sort_by(fn {name, _} -> name end)
+
+    leaf_revs =
+      Enum.flat_map(leaf_names, fn name ->
+        channel_revision_id
+        |> Tracker.Nixpkgs.OptionRevision.list_by_channel_revision_and_prefix!(name)
+        |> Enum.filter(fn rev -> rev.option.name == name end)
+      end)
+
+    {subgroups, leaf_revs, [], false}
   end
 
   defp load_prefix_view(channel_revision_id, prefix) do
@@ -398,6 +444,9 @@ defmodule TrackerWeb.OptionLive.Show do
   @impl true
   def handle_info({:set_lens, channel_name, rev}, socket) do
     socket = TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)
-    {:noreply, push_patch(socket, to: ~p"/options/#{socket.assigns.prefix}")}
+    {:noreply, push_patch(socket, to: show_path(socket.assigns.prefix))}
   end
+
+  defp show_path(""), do: ~p"/options"
+  defp show_path(prefix), do: ~p"/options/#{prefix}"
 end

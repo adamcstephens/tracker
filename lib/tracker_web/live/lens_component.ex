@@ -28,6 +28,7 @@ defmodule TrackerWeb.LensComponent do
     {:ok,
      socket
      |> assign(:lens, assigns.lens)
+     |> assign(:highlight, Map.get(assigns, :highlight, false))
      |> assign(:channels, channels)
      |> assign(:display_rev, display_rev(assigns.lens))}
   end
@@ -35,7 +36,7 @@ defmodule TrackerWeb.LensComponent do
   @impl true
   def render(assigns) do
     ~H"""
-    <div id="lens" class="lens" phx-hook="LensCookie">
+    <div id="lens" class={["lens", @highlight && "lens-attention"]} phx-hook="LensCookie">
       <form
         :if={@lens != nil}
         method="post"
