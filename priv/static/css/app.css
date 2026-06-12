@@ -125,6 +125,11 @@ h6 {
 	--ibx-surface-3: var(--surface-3);
 	--ibx-line: var(--line);
 	--ibx-line-soft: var(--line-soft);
+
+	/* Inset panel fill (e.g. expanded option detail). Tracks --surface in
+	   light mode; dark mode needs a deeper value — --surface reads too
+	   light for large filled areas there. */
+	--surface-inset: var(--surface);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -159,6 +164,8 @@ h6 {
 		--ibx-surface-3: #25252f;
 		--ibx-line: #2a2a36;
 		--ibx-line-soft: #1f1f29;
+
+		--surface-inset: #15151b;
 	}
 }
 
@@ -1233,7 +1240,7 @@ a.revision-link {
 	margin: 0;
 	padding: 12px 14px 16px;
 	font-size: 0.9375rem;
-	background: var(--surface);
+	background: var(--surface-inset);
 }
 
 .option-show .opt-detail dt {
@@ -1265,8 +1272,9 @@ a.revision-link {
 }
 
 .option-show .opt-detail pre {
+	/* background comes from the linked Lumis theme (pre.lumis) so the
+	   token colors and fill always match the active color scheme */
 	margin: 0;
-	background: var(--bg);
 	border: 1px solid var(--line);
 	border-radius: 6px;
 	padding: 8px 10px;
