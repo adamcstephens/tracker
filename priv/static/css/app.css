@@ -1176,6 +1176,11 @@ a.revision-link {
 	font-family: var(--mono);
 	font-size: 0.8125rem;
 	color: var(--text-2);
+	/* long types stay on one line; the full type is in the detail body */
+	max-width: 40ch;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 /* Share button — replaces the old `#` anchor; hidden until hover/open. */
@@ -1251,6 +1256,18 @@ a.revision-link {
 	/* let <pre> children shrink inside the grid instead of overflowing */
 	min-width: 0;
 	overflow-wrap: break-word;
+}
+
+.option-show .opt-detail .read-only {
+	color: var(--text-2);
+}
+
+/* File paths render as plain mono text, not code chips. */
+.option-show .opt-detail dd code,
+.option-show .opt-defined code {
+	background: transparent;
+	padding: 0;
+	border-radius: 0;
 }
 
 .option-show .opt-detail pre {
