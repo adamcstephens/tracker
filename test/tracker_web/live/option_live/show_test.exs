@@ -167,6 +167,8 @@ defmodule TrackerWeb.OptionLive.ShowTest do
 
     assert html =~ "Enable Nginx."
     assert html =~ "boolean"
+    # The full type is repeated inside the detail body (summary tag truncates)
+    assert html =~ ">Type<"
   end
 
   test "shows fallback when channel has no options data", %{conn: conn} do

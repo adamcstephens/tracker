@@ -117,6 +117,12 @@ defmodule TrackerWeb.OptionLive.Show do
               </summary>
 
               <dl class="opt-detail">
+                <dt :if={rev.type}>Type</dt>
+                <dd :if={rev.type}>
+                  {rev.type}
+                  <span :if={rev.read_only} class="read-only">(read-only)</span>
+                </dd>
+
                 <dt :if={rev.description}>Description</dt>
                 <dd :if={rev.description}>{rev.description}</dd>
 
