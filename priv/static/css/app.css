@@ -902,80 +902,493 @@ a.revision-link {
 	flex-shrink: 0;
 }
 
-/* Option details */
-.option-details {
-	margin-bottom: 0.5rem;
-	scroll-margin-top: 20rem;
+/* Options Show (V3).
+   Spec: tmp/design_handoff_options_show/README.md */
+
+.option-show section {
+	margin-bottom: 1.75rem;
 }
 
-.option-details {
-	padding-left: 1.25em;
-}
-
-.option-details summary {
-	cursor: pointer;
-	list-style: none;
-	margin-left: -1.25em;
-}
-
-.option-details summary::after {
-	display: none;
-}
-
-.option-details summary::before {
-	content: "▸ ";
-}
-
-.option-details[open] summary::before {
-	content: "▾ ";
-}
-
-.option-type-inline {
-	margin-left: 0.5rem;
+.option-show section h2 {
+	font-size: 0.6875rem;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
 	color: var(--text-2);
-	display: inline-block;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	max-width: 40ch;
-	vertical-align: bottom;
+	font-weight: 600;
+	margin: 0 0 8px;
 }
 
-.option-anchor {
+/* Path bar — the breadcrumb header is the page's h1. */
+.option-show .opt-pathbar {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	padding: 10px 12px;
+	margin: 4px 0 14px;
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	background: var(--bg);
+	max-width: 100%;
+	font-family: var(--mono);
+	font-size: 1.375rem;
+	font-weight: 600;
+	letter-spacing: -0.005em;
+	line-height: 1.2;
+	word-break: break-all;
+}
+
+.option-show .crumb-link,
+.option-show .crumb-current {
+	padding: 2px 6px;
+	margin: 0 -2px;
+	border-radius: 5px;
 	text-decoration: none;
+	color: var(--text);
+	transition:
+		background 120ms,
+		color 120ms;
+	word-break: break-all;
+}
+
+.option-show a.crumb-link:hover {
+	background: var(--accent-bg);
+	color: var(--accent);
+	text-decoration: none;
+}
+
+.option-show .crumb-current {
+	cursor: default;
+}
+
+.option-show .crumb-sep {
 	color: var(--text-2);
-	visibility: hidden;
+	font-weight: 500;
+	padding: 0 1px;
+	user-select: none;
 }
 
-@media (hover: hover) {
-	.option-details summary:hover .option-anchor {
-		visibility: visible;
-	}
+.option-show .opt-copy {
+	margin-left: auto;
+	align-self: center;
+	font-size: 0.8125rem;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 4px 9px;
+	border-radius: 6px;
+	border: 1px solid transparent;
+	background: transparent;
+	color: var(--text-2);
+	font-family: var(--sans);
+	font-weight: 400;
+	cursor: pointer;
+	transition:
+		background 120ms,
+		border-color 120ms,
+		color 120ms;
 }
 
-.option-details[open] .option-type-inline {
+.option-show .opt-copy:hover {
+	background: var(--surface);
+	border-color: var(--line);
+	color: var(--text);
+}
+
+.option-show .opt-copy.is-copied .opt-share-icon,
+.option-show .opt-copy.is-copied .label {
 	display: none;
 }
 
-dl.option-body {
-	display: grid;
-	grid-template-columns: auto 1fr;
-	gap: 0.25rem 1rem;
-	padding: 0.5rem 0 0.5rem 1rem;
-	margin-bottom: 0;
+.option-show .opt-copy.is-copied::after {
+	content: "✓ copied";
 }
 
-dl.option-body dt {
+/* Meta strip — just the channel chip. */
+.option-show .opt-meta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px 18px;
+	font-size: 0.875rem;
 	color: var(--text-2);
-	font-weight: normal;
+	margin-bottom: 18px;
 }
 
-dl.option-body dd {
+.option-show .channel-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-radius: 999px;
+	padding: 1px 9px;
+	font-family: var(--mono);
+	font-size: 0.8125rem;
+	color: var(--text);
+	text-decoration: none;
+}
+
+.option-show .channel-chip .dot {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--accent);
+}
+
+.option-show .channel-chip .rev {
+	color: var(--text-2);
+}
+
+.option-show .channel-chip--nodata .dot {
+	background: var(--text-3);
+}
+
+/* Children — one card per sub-group, stacked. */
+.option-show .opt-children {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.option-show .child-card {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 9px 12px;
+	border: 1px solid var(--line);
+	border-radius: var(--radius-sm);
+	background: var(--bg);
+	text-decoration: none;
+	transition:
+		border-color 120ms,
+		background 120ms;
+}
+
+.option-show .child-card:hover {
+	border-color: var(--accent);
+	background: var(--accent-soft);
+}
+
+.option-show .child-card .name {
+	font-family: var(--mono);
+	font-size: 0.9375rem;
+	font-weight: 500;
+	color: var(--text);
+}
+
+.option-show .child-card .name .leading {
+	color: var(--text-2);
+	font-weight: 400;
+}
+
+.option-show .child-card .right {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	color: var(--text-2);
+	font-size: 0.8125rem;
+}
+
+/* Options at this prefix — accordion rows sharing one card surface. */
+.option-show .opt-list {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+	border: 1px solid var(--line);
+	border-radius: 8px;
+	overflow: hidden;
+}
+
+.option-show .opt-list > li {
+	border-bottom: 1px solid var(--line);
+}
+
+.option-show .opt-list > li:last-child {
+	border-bottom: 0;
+}
+
+.option-show .opt-list details {
+	scroll-margin-top: 8rem;
+}
+
+.option-show .opt-list summary {
+	list-style: none;
+	cursor: pointer;
+	padding: 10px 14px;
+	display: grid;
+	grid-template-columns: 1fr auto auto;
+	gap: 10px;
+	align-items: baseline;
+	transition: background 120ms;
+}
+
+.option-show .opt-list summary::-webkit-details-marker {
+	display: none;
+}
+
+/* Custom marker on the name so the summary keeps its 3-column grid. */
+.option-show .opt-name::before {
+	content: "▸";
+	display: inline-block;
+	color: var(--text-2);
+	font-size: 0.75rem;
+	margin-right: 8px;
+	transition: transform 120ms;
+}
+
+.option-show .opt-list details[open] .opt-name::before {
+	transform: rotate(90deg);
+}
+
+.option-show .opt-list summary:hover {
+	background: var(--surface);
+}
+
+.option-show .opt-list details[open] > summary {
+	border-bottom: 1px solid var(--line);
+}
+
+.option-show .opt-name {
+	font-family: var(--mono);
+	font-weight: 500;
+	font-size: 0.9375rem;
+	color: var(--text);
+}
+
+.option-show .opt-name .leading {
+	color: var(--text-2);
+	font-weight: 400;
+}
+
+.option-show .opt-name .tail {
+	color: var(--accent);
+}
+
+.option-show .opt-name .prefix-itself {
+	font-style: normal;
+	color: var(--text-2);
+	margin-left: 6px;
+}
+
+.option-show .opt-type {
+	font-family: var(--mono);
+	font-size: 0.8125rem;
+	color: var(--text-2);
+}
+
+/* Share button — replaces the old `#` anchor; hidden until hover/open. */
+.option-show .opt-share {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	padding: 3px 8px;
+	border: 1px solid transparent;
+	border-radius: 6px;
+	color: var(--text-2);
+	background: transparent;
+	font-size: 0.75rem;
+	text-decoration: none;
+	align-self: center;
+	cursor: pointer;
+	opacity: 0;
+	transition:
+		background 120ms,
+		border-color 120ms,
+		color 120ms,
+		opacity 120ms;
+}
+
+.option-show summary:hover .opt-share,
+.option-show summary:focus-within .opt-share,
+.option-show details[open] > summary .opt-share {
+	opacity: 1;
+}
+
+.option-show .opt-share:hover {
+	background: var(--surface);
+	border-color: var(--line);
+	color: var(--text);
+	text-decoration: none;
+}
+
+.option-show .opt-share-icon {
+	display: block;
+}
+
+.option-show .opt-share.is-copied .opt-share-icon {
+	display: none;
+}
+
+.option-show .opt-share.is-copied::after {
+	content: "✓ copied";
+	font-family: var(--sans);
+	letter-spacing: 0.02em;
+}
+
+.option-show .opt-detail {
+	display: grid;
+	grid-template-columns: 110px 1fr;
+	gap: 6px 18px;
+	margin: 0;
+	padding: 12px 14px 16px;
+	font-size: 0.9375rem;
+	background: var(--surface);
+}
+
+.option-show .opt-detail dt {
+	color: var(--text-2);
+	font-size: 0.75rem;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	font-weight: 600;
+	padding-top: 2px;
+}
+
+.option-show .opt-detail dd {
+	margin: 0;
+	/* let <pre> children shrink inside the grid instead of overflowing */
+	min-width: 0;
+	overflow-wrap: break-word;
+}
+
+.option-show .opt-detail pre {
+	margin: 0;
+	background: var(--bg);
+	border: 1px solid var(--line);
+	border-radius: 6px;
+	padding: 8px 10px;
+	font-family: var(--mono);
+	font-size: 0.8125rem;
+	overflow-x: auto;
+}
+
+/* Defined in — plain borderless mono rows. */
+.option-show .opt-defined {
+	list-style: none;
+	padding: 0;
 	margin: 0;
 }
 
-.option-read-only {
-	color: var(--text-2);
+.option-show .opt-defined li {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 7px 0;
+	font-family: var(--mono);
+	font-size: 0.8125rem;
+	margin-bottom: 6px;
+}
+
+/* Recent PRs. */
+.option-show .opt-prs {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+}
+
+.option-show .opt-prs li {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 8px 0;
+	border-bottom: 1px solid var(--line-soft);
+	font-size: 0.875rem;
+}
+
+.option-show .opt-prs li:last-child {
+	border-bottom: 0;
+}
+
+.option-show .opt-prs .prnum {
+	font-family: var(--mono);
+	font-weight: 600;
+	color: var(--accent);
+	text-decoration: none;
+}
+
+.option-show .opt-prs .title {
+	color: var(--text);
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+	/* Path bar: smaller type; the copy button keeps margin-left: auto and
+	   falls onto its own right-aligned line when the path wraps. */
+	.option-show .opt-pathbar {
+		font-size: 1.0625rem;
+		row-gap: 2px;
+	}
+
+	/* Children cards: let a long path wrap; keep count/arrow pinned. */
+	.option-show .child-card {
+		gap: 8px;
+	}
+
+	.option-show .child-card .name {
+		min-width: 0;
+		word-break: break-all;
+	}
+
+	.option-show .child-card .right {
+		flex: none;
+	}
+
+	/* Option rows: name on its own line; type + share beneath it. */
+	.option-show .opt-list summary {
+		grid-template-columns: 1fr auto;
+		row-gap: 4px;
+		align-items: center;
+	}
+
+	.option-show .opt-name {
+		grid-column: 1 / -1;
+		word-break: break-all;
+	}
+
+	.option-show .opt-type {
+		grid-column: 1;
+	}
+
+	.option-show .opt-share {
+		grid-column: 2;
+		grid-row: 2;
+		/* always visible on touch — no hover to reveal it */
+		opacity: 1;
+	}
+
+	/* Option detail: stack dt above dd in one column. */
+	.option-show .opt-detail {
+		grid-template-columns: 1fr;
+		gap: 2px 0;
+	}
+
+	.option-show .opt-detail dt {
+		padding-top: 10px;
+	}
+
+	.option-show .opt-detail dt:first-child {
+		padding-top: 0;
+	}
+
+	/* Defined-in: wrap long paths instead of overflowing. */
+	.option-show .opt-defined li {
+		word-break: break-all;
+	}
+
+	/* PR rows: let the title wrap rather than ellipsize away. */
+	.option-show .opt-prs li {
+		flex-wrap: wrap;
+	}
+
+	.option-show .opt-prs .title {
+		flex: 1 1 100%;
+		order: 3;
+		white-space: normal;
+		overflow: visible;
+	}
 }
 
 /* App chrome.

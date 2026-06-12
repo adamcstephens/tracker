@@ -72,10 +72,33 @@ defmodule TrackerWeb.OptionLive.ShowTest do
     %{channel: channel, channel_revision: cr}
   end
 
-  test "renders the prefix as the page heading", %{conn: conn} do
+  test "renders the prefix as a breadcrumb path bar heading", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/options/services.nginx")
 
-    assert html =~ "services.nginx"
+    # The h1 reads as the whole attribute path for screen readers
+    assert html =~ ~s(aria-label="services.nginx")
+    # Every segment but the last links to its cumulative prefix
+    assert html =~ ~s(href="/options/services")
+    # The last segment is the current page, not a link
+    assert html =~ ~s(aria-current="page")
+  end
+
+  test "path bar has a copy button that copies the attribute path", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/options/services.nginx")
+
+    assert html =~ ~s(data-copy="services.nginx")
+    # Inline handler so copy works on dead renders (no app.js for anonymous)
+    assert html =~ "navigator.clipboard.writeText"
+  end
+
+  test "meta strip shows a channel chip linking to the channel revision", %{
+    conn: conn,
+    channel_revision: cr
+  } do
+    {:ok, _view, html} = live(conn, ~p"/options/services.nginx")
+
+    assert html =~ ~s(href="/channels/nixos-unstable/revisions/#{cr.revision}")
+    assert html =~ "@#{String.slice(cr.revision, 0, 7)}"
   end
 
   test "shows leaf options at the immediate child depth", %{conn: conn} do
@@ -87,20 +110,40 @@ defmodule TrackerWeb.OptionLive.ShowTest do
     refute html =~ "services.nginx.virtualHosts.example.serverName"
   end
 
-  test "shows sub-groups for deeper descendants", %{conn: conn} do
+  test "shows deeper descendants as Children cards", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/options/services.nginx")
 
-    assert html =~ "Sub-groups"
+    assert html =~ "Children"
+    refute html =~ "Sub-groups"
     assert html =~ "services.nginx.virtualHosts"
+    # The child card links to the sub-group prefix
+    assert html =~ ~s(href="/options/services.nginx.virtualHosts")
   end
 
-  test "lists files defined-in for the prefix", %{conn: conn} do
+  test "leaf option rows carry a share link instead of the # anchor", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/options/services.nginx")
 
+    # A real link to the option's own page, hooked for copy-to-clipboard
+    assert html =~ ~s(href="/options/services.nginx.enable")
+    assert html =~ "opt-share"
+    refute html =~ "option-anchor"
+  end
+
+  test "pure group prefix lists a top-level Defined-in section", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/options/services.nginx.virtualHosts")
+
     assert html =~ "Defined in"
-    assert html =~ "nixos/modules/services/web-servers/nginx/default.nix"
     assert html =~ "nixos/modules/services/web-servers/nginx/vhost-options.nix"
     assert html =~ "nixos/modules/services/web-servers/nginx/location-options.nix"
+  end
+
+  test "prefix with leaf options omits the top-level Defined-in section", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/options/services.nginx")
+
+    # Per-option Defined-in stays inside the accordion (default.nix), but the
+    # deeper descendants' files are not listed at the top level.
+    assert html =~ "nixos/modules/services/web-servers/nginx/default.nix"
+    refute html =~ "nixos/modules/services/web-servers/nginx/location-options.nix"
   end
 
   test "leaf options are linked to their files", %{conn: conn} do
@@ -180,6 +223,7 @@ defmodule TrackerWeb.OptionLive.ShowTest do
     assert html =~ "Recent PRs"
     assert html =~ "7777"
     assert html =~ "nginx: bump to 1.27"
+    assert html =~ "pill-merged"
   end
 
   test "Recent PRs section omitted when no change_files intersect", %{conn: conn} do

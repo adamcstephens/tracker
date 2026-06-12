@@ -5,116 +5,205 @@ defmodule TrackerWeb.OptionLive.Show do
 
   alias TrackerWeb.PageSearch
 
+  # Inline so it works on dead renders too — anonymous visitors don't load
+  # app.js (see TrackerWeb.Plug.InteractiveUI), so a phx-hook would never run.
+  # Copies data-copy when present (the attribute path), else the link's URL.
+  defp copy_onclick do
+    """
+    event.preventDefault(); event.stopPropagation(); \
+    navigator.clipboard.writeText(this.dataset.copy || this.href); \
+    this.classList.add('is-copied'); clearTimeout(this._copyTimer); \
+    this._copyTimer = setTimeout(() => this.classList.remove('is-copied'), 1400)\
+    """
+  end
+
   @impl true
   def render(assigns) do
     ~H"""
-    <.header>
-      {@prefix}
-      <:subtitle>
-        {if @leaf, do: "Option", else: "Options"}
-        <span :if={@parent_prefix}>
-          · parent: <.link navigate={~p"/options/#{@parent_prefix}"}>{@parent_prefix}</.link>
+    <div class="option-show">
+      <h1 class="opt-pathbar" aria-label={@prefix}>
+        <%= for {seg, cumulative, last?} <- crumbs(@prefix) do %>
+          <.link :if={!last?} navigate={~p"/options/#{cumulative}"} class="crumb-link">
+            {seg}
+          </.link>
+          <span :if={last?} class="crumb-current" aria-current="page">{seg}</span>
+          <span :if={!last?} class="crumb-sep" aria-hidden="true">.</span>
+        <% end %>
+        <button
+          type="button"
+          class="opt-copy"
+          data-copy={@prefix}
+          onclick={copy_onclick()}
+          title="Copy attribute path"
+        >
+          <.share_icon />
+          <span class="label">copy</span>
+        </button>
+      </h1>
+
+      <div class="opt-meta">
+        <a
+          :if={@channel_revision}
+          class="channel-chip"
+          href={~p"/channels/#{@channel}/revisions/#{@channel_revision.revision}"}
+        >
+          <span class="dot" aria-hidden="true"></span>
+          <span class="mono">{@channel}</span>
+          <span class="rev mono">@{String.slice(@channel_revision.revision, 0, 7)}</span>
+        </a>
+        <span :if={@channel_unavailable?} class="channel-chip channel-chip--nodata">
+          <span class="dot" aria-hidden="true"></span>
+          <span class="mono">{@channel}</span>
+          <span class="rev mono">no data</span>
         </span>
-        <span :if={@channel != ""}>
-          · {@channel}
-          <small :if={@channel_revision}>
-            (<.revision_link revision={@channel_revision.revision} channel={@channel} />)
-          </small>
-        </span>
-      </:subtitle>
-    </.header>
-
-    <p :if={@channel_unavailable?}>
-      The {@channel} channel doesn't have options data.
-    </p>
-
-    <p :if={!@channel_unavailable? and @nothing_here?}>
-      No options match this prefix in {@channel}.
-    </p>
-
-    <section :if={@subgroups != []}>
-      <h2>Sub-groups</h2>
-      <ul>
-        <li :for={{group, count} <- @subgroups}>
-          <.link navigate={~p"/options/#{group}"}>{group}</.link>
-          <small>({count} options)</small>
-        </li>
-      </ul>
-    </section>
-
-    <section :if={@leaf_options != []}>
-      <h2>Options ({length(@leaf_options)})</h2>
-      <div id="options-list" phx-hook="AnchorExpand">
-        <div :for={rev <- @leaf_options} id={"opt-row-#{rev.option.name}"}>
-          <details id={"opt-#{rev.option.name}"} class="option-details">
-            <summary>
-              <strong>{rev.option.name}</strong>
-              <span :if={rev.type} class="option-type-inline">{rev.type}</span>
-              <a
-                href={"#opt-#{rev.option.name}"}
-                class="option-anchor"
-                onclick="event.preventDefault(); history.replaceState(null, '', this.href); this.closest('details').open = !this.closest('details').open"
-              >
-                #
-              </a>
-            </summary>
-
-            <dl class="option-body">
-              <dt :if={rev.type}>Type</dt>
-              <dd :if={rev.type}>
-                {rev.type}
-                <span :if={rev.read_only} class="option-read-only">(read-only)</span>
-              </dd>
-
-              <dt :if={rev.description}>Description</dt>
-              <dd :if={rev.description}>{rev.description}</dd>
-
-              <dt :if={rev.default}>Default</dt>
-              <dd :if={rev.default}><.code_block code={rev.default} /></dd>
-
-              <dt :if={rev.example}>Example</dt>
-              <dd :if={rev.example}><.code_block code={rev.example} /></dd>
-
-              <dt :if={option_packages(rev) != []}>Packages</dt>
-              <dd :if={option_packages(rev) != []}>
-                <span :for={pkg <- option_packages(rev)}>
-                  <.link navigate={~p"/packages/#{pkg.attribute}"}>{pkg.attribute}</.link>
-                </span>
-              </dd>
-
-              <dt :if={rev.files != []}>Defined in</dt>
-              <dd :if={rev.files != []}>
-                <span :for={file <- rev.files}>
-                  <.declaration_link path={file.path} channel_revision={@channel_revision} />
-                </span>
-              </dd>
-            </dl>
-          </details>
-        </div>
       </div>
-    </section>
 
-    <section :if={@files != []}>
-      <h2>Defined in</h2>
-      <ul>
-        <li :for={file <- @files}>
-          <.declaration_link path={file.path} channel_revision={@channel_revision} />
-        </li>
-      </ul>
-    </section>
+      <p :if={@channel_unavailable?}>
+        The {@channel} channel doesn't have options data.
+      </p>
 
-    <section :if={@recent_prs != []}>
-      <h2>Recent PRs</h2>
-      <ul>
-        <li :for={pr <- @recent_prs}>
-          <.link navigate={~p"/changes/#{pr.number}"}>#{pr.number}</.link>
-          {pr.title}
-          <small :if={pr.state}>· {pr.state}</small>
-        </li>
-      </ul>
-    </section>
+      <p :if={!@channel_unavailable? and @nothing_here?}>
+        No options match this prefix in {@channel}.
+      </p>
+
+      <section :if={@subgroups != []}>
+        <h2>Children</h2>
+        <div class="opt-children">
+          <.link
+            :for={{group, count} <- @subgroups}
+            navigate={~p"/options/#{group}"}
+            class="child-card"
+          >
+            <span class="name">
+              <span class="leading">{@prefix}.</span><span class="tail">{tail(group, @prefix)}</span>
+            </span>
+            <span class="right">
+              <span>{count} options</span>
+              <span class="arrow" aria-hidden="true">→</span>
+            </span>
+          </.link>
+        </div>
+      </section>
+
+      <section :if={@leaf_options != []}>
+        <h2>Options at this prefix</h2>
+        <ul id="options-list" class="opt-list" phx-hook="AnchorExpand">
+          <li :for={rev <- @leaf_options}>
+            <details id={"opt-#{rev.option.name}"}>
+              <summary>
+                <span class="opt-name">
+                  <%= if rev.option.name == @prefix do %>
+                    <span class="leading">{rev.option.name}</span>
+                    <em class="prefix-itself">(prefix itself)</em>
+                  <% else %>
+                    <span class="leading">{@prefix}.</span><span class="tail">{tail(
+                      rev.option.name,
+                      @prefix
+                    )}</span>
+                  <% end %>
+                </span>
+                <span class="opt-type">
+                  {rev.type}<span :if={rev.read_only}> (read-only)</span>
+                </span>
+                <a
+                  href={~p"/options/#{rev.option.name}"}
+                  class="opt-share"
+                  onclick={copy_onclick()}
+                  title="Copy share link"
+                  aria-label={"Copy link to #{rev.option.name}"}
+                >
+                  <.share_icon />
+                </a>
+              </summary>
+
+              <dl class="opt-detail">
+                <dt :if={rev.description}>Description</dt>
+                <dd :if={rev.description}>{rev.description}</dd>
+
+                <dt :if={rev.default}>Default</dt>
+                <dd :if={rev.default}><.code_block code={rev.default} /></dd>
+
+                <dt :if={rev.example}>Example</dt>
+                <dd :if={rev.example}><.code_block code={rev.example} /></dd>
+
+                <dt :if={option_packages(rev) != []}>Packages</dt>
+                <dd :if={option_packages(rev) != []}>
+                  <span :for={pkg <- option_packages(rev)}>
+                    <.link navigate={~p"/packages/#{pkg.attribute}"}>{pkg.attribute}</.link>
+                  </span>
+                </dd>
+
+                <dt :if={rev.files != []}>Defined in</dt>
+                <dd :if={rev.files != []}>
+                  <span :for={file <- rev.files}>
+                    <.declaration_link path={file.path} channel_revision={@channel_revision} />
+                  </span>
+                </dd>
+              </dl>
+            </details>
+          </li>
+        </ul>
+      </section>
+
+      <section :if={@files != [] and @leaf_options == []}>
+        <h2>Defined in</h2>
+        <ul class="opt-defined">
+          <li :for={file <- @files}>
+            <.declaration_link path={file.path} channel_revision={@channel_revision} />
+          </li>
+        </ul>
+      </section>
+
+      <section :if={@recent_prs != []}>
+        <h2>Recent PRs touching these files</h2>
+        <ul class="opt-prs">
+          <li :for={pr <- @recent_prs}>
+            <.link navigate={~p"/changes/#{pr.number}"} class="prnum">#{pr.number}</.link>
+            <span class="title">{pr.title}</span>
+            <span :if={pr.state} class={"pill pill-#{pr.state}"}>
+              <span class="dot" aria-hidden="true"></span>
+              {pr.state}
+            </span>
+          </li>
+        </ul>
+      </section>
+    </div>
     """
   end
+
+  defp share_icon(assigns) do
+    ~H"""
+    <svg
+      class="opt-share-icon"
+      viewBox="0 0 24 24"
+      width="14"
+      height="14"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.8"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 1 0-7.07-7.07l-1.5 1.5" />
+      <path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 1 0 7.07 7.07l1.5-1.5" />
+    </svg>
+    """
+  end
+
+  defp crumbs(prefix) do
+    segments = String.split(prefix, ".")
+    last_index = length(segments) - 1
+
+    segments
+    |> Enum.with_index()
+    |> Enum.map(fn {seg, i} ->
+      cumulative = segments |> Enum.take(i + 1) |> Enum.join(".")
+      {seg, cumulative, i == last_index}
+    end)
+  end
+
+  defp tail(name, prefix), do: String.slice(name, String.length(prefix) + 1, String.length(name))
 
   defp option_packages(%Tracker.Nixpkgs.OptionRevision{option: %{packages: packages}}),
     do: packages
@@ -133,18 +222,6 @@ defmodule TrackerWeb.OptionLive.Show do
   defp declaration_link(assigns) do
     ~H"""
     <code>{@path}</code>
-    """
-  end
-
-  defp revision_link(assigns) do
-    ~H"""
-    <.link
-      navigate={~p"/channels/#{@channel}/revisions/#{@revision}"}
-      title={@revision}
-      class="revision-link"
-    >
-      {String.slice(@revision, 0, 7)}
-    </.link>
     """
   end
 
