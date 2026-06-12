@@ -1002,12 +1002,19 @@ a.revision-link {
 	color: var(--text);
 }
 
-.option-show .opt-copy.is-copied .opt-share-icon {
+/* Copied confirmation: swap the icon in place for a same-size check so
+   the button footprint never changes. */
+.option-show .opt-check-icon {
 	display: none;
 }
 
-.option-show .opt-copy.is-copied::after {
-	content: "✓ copied";
+.option-show :is(.opt-copy, .opt-share).copied .opt-share-icon {
+	display: none;
+}
+
+.option-show :is(.opt-copy, .opt-share).copied .opt-check-icon {
+	display: block;
+	color: var(--good);
 }
 
 /* Meta strip — just the channel chip. */
@@ -1224,14 +1231,9 @@ a.revision-link {
 	display: block;
 }
 
-.option-show .opt-share.is-copied .opt-share-icon {
-	display: none;
-}
-
-.option-show .opt-share.is-copied::after {
-	content: "✓ copied";
-	font-family: var(--sans);
-	letter-spacing: 0.02em;
+/* Keep a just-clicked button visible even if the pointer leaves. */
+.option-show .opt-share.copied {
+	opacity: 1;
 }
 
 .option-show .opt-detail {
