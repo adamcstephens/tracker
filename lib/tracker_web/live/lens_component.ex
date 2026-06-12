@@ -14,6 +14,7 @@ defmodule TrackerWeb.LensComponent do
   use TrackerWeb, :live_component
 
   alias Tracker.Nixpkgs.Channel
+  alias Tracker.Nixpkgs.ChannelRevision
 
   @impl true
   def update(assigns, socket) do
@@ -27,7 +28,8 @@ defmodule TrackerWeb.LensComponent do
     {:ok,
      socket
      |> assign(:lens, assigns.lens)
-     |> assign(:channels, channels)}
+     |> assign(:channels, channels)
+     |> assign(:display_rev, display_rev(assigns.lens))}
   end
 
   @impl true
@@ -62,7 +64,7 @@ defmodule TrackerWeb.LensComponent do
             </option>
           </select>
         </span>
-        <span :if={short_rev(@lens)} class="lens-rev">@{short_rev(@lens)}</span>
+        <span :if={@display_rev} class="lens-rev">@{String.slice(@display_rev.revision, 0, 7)}</span>
         <button
           type="submit"
           class="lens__submit"
@@ -83,6 +85,16 @@ defmodule TrackerWeb.LensComponent do
     {:noreply, socket}
   end
 
-  defp short_rev(%{revision: nil}), do: nil
-  defp short_rev(%{revision: rev}), do: String.slice(rev.revision, 0, 7)
+  # The revision shown next to the channel: the pinned one when the lens
+  # carries it, otherwise the channel's latest.
+  defp display_rev(nil), do: nil
+  defp display_rev(%{all?: true}), do: nil
+  defp display_rev(%{revision: %ChannelRevision{} = rev}), do: rev
+
+  defp display_rev(%{channel: channel}) do
+    case ChannelRevision.latest_by_channel(channel.id) do
+      {:ok, rev} -> rev
+      _ -> nil
+    end
+  end
 end

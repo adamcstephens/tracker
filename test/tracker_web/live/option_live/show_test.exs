@@ -98,14 +98,12 @@ defmodule TrackerWeb.OptionLive.ShowTest do
     assert html =~ "navigator.clipboard.writeText"
   end
 
-  test "meta strip shows a channel chip linking to the channel revision", %{
-    conn: conn,
-    channel_revision: cr
-  } do
+  test "channel revision info lives in the lens, not the page", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/options/services.nginx")
 
-    assert html =~ ~s(href="/channels/nixos-unstable/revisions/#{cr.revision}")
-    assert html =~ "@#{String.slice(cr.revision, 0, 7)}"
+    refute html =~ "channel-chip"
+    # The lens shows the resolved latest revision for the channel
+    assert html =~ ~s(class="lens-rev")
   end
 
   test "shows leaf options at the immediate child depth", %{conn: conn} do

@@ -931,9 +931,7 @@ a.revision-link {
 	align-items: center;
 	flex-wrap: wrap;
 	padding: 10px 12px;
-	margin: 4px 0 14px;
-	border: 1px solid var(--line);
-	border-radius: var(--radius);
+	margin: 4px 0 24px;
 	background: var(--bg);
 	max-width: 100%;
 	font-family: var(--mono);
@@ -1015,45 +1013,6 @@ a.revision-link {
 .option-show :is(.opt-copy, .opt-share).copied .opt-check-icon {
 	display: block;
 	color: var(--good);
-}
-
-/* Meta strip — just the channel chip. */
-.option-show .opt-meta {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 6px 18px;
-	font-size: 0.875rem;
-	color: var(--text-2);
-	margin-bottom: 18px;
-}
-
-.option-show .channel-chip {
-	display: inline-flex;
-	align-items: center;
-	gap: 6px;
-	background: var(--surface);
-	border: 1px solid var(--line);
-	border-radius: 999px;
-	padding: 1px 9px;
-	font-family: var(--mono);
-	font-size: 0.8125rem;
-	color: var(--text);
-	text-decoration: none;
-}
-
-.option-show .channel-chip .dot {
-	width: 6px;
-	height: 6px;
-	border-radius: 50%;
-	background: var(--accent);
-}
-
-.option-show .channel-chip .rev {
-	color: var(--text-2);
-}
-
-.option-show .channel-chip--nodata .dot {
-	background: var(--text-3);
 }
 
 /* Children — one card per sub-group, stacked. */
@@ -1879,6 +1838,9 @@ a.revision-link {
 	font-weight: 500;
 	cursor: pointer;
 	padding-right: 0.875rem;
+	/* size to the selected option, not the widest one in the list —
+	   otherwise dead space opens up between the channel and the rev */
+	field-sizing: content;
 }
 
 .lens-rev {
@@ -1907,6 +1869,9 @@ a.revision-link {
 	padding: 0.3125rem 0.875rem 0.3125rem 0.625rem;
 	color: var(--text-2);
 	cursor: pointer;
+	/* keep the arrow pinned to the pill's right edge; spare width in a
+	   stretched form collects before it, not between the cells */
+	margin-left: auto;
 }
 
 .lens__form .lens__submit:hover:not(:disabled) {
@@ -2078,6 +2043,12 @@ a.revision-link {
 	.lens__form {
 		display: flex;
 		width: 100%;
+	}
+
+	/* The label doesn't fit alongside the revision display; the dot +
+	   channel name carry the meaning (the select keeps its aria-label). */
+	.lens-label {
+		display: none;
 	}
 }
 
