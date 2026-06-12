@@ -78,6 +78,43 @@ defmodule TrackerWeb.LensComponentTest do
     assert Floki.find(form, "button[type=submit]") != []
   end
 
+  test "renders the channel's latest revision when none is pinned", %{conn: conn} do
+    suffix = System.unique_integer([:positive])
+
+    channel =
+      Channel.create!(%{
+        name: "nixos-latest-#{suffix}",
+        display_name: "NixOS Latest #{suffix}",
+        status: :active,
+        is_stable: false
+      })
+
+    cr =
+      Tracker.Nixpkgs.ChannelRevision
+      |> Ash.Changeset.for_create(:create, %{
+        channel_id: channel.id,
+        revision: "fedcba9876543210",
+        released_at: ~U[2025-06-01 00:00:00Z]
+      })
+      |> Ash.create!()
+
+    Tracker.Nixpkgs.ChannelRevision.record_options_result!(cr, %{options_result: :success})
+
+    token =
+      Phoenix.Token.sign(
+        TrackerWeb.Endpoint,
+        TrackerWeb.Lens.cookie_salt(),
+        channel.name
+      )
+
+    conn = put_req_cookie(conn, "_tracker_lens", token)
+
+    {:ok, _view, html} = live(conn, ~p"/packages")
+
+    assert html =~ ~s(class="lens-rev")
+    assert html =~ "@fedcba9"
+  end
+
   test "renders short revision when lens has a revision set", %{conn: conn} do
     suffix = System.unique_integer([:positive])
 

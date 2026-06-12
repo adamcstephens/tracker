@@ -44,23 +44,6 @@ defmodule TrackerWeb.OptionLive.Show do
         </a>
       </h1>
 
-      <div class="opt-meta">
-        <a
-          :if={@channel_revision}
-          class="channel-chip"
-          href={~p"/channels/#{@channel}/revisions/#{@channel_revision.revision}"}
-        >
-          <span class="dot" aria-hidden="true"></span>
-          <span class="mono">{@channel}</span>
-          <span class="rev mono">@{String.slice(@channel_revision.revision, 0, 7)}</span>
-        </a>
-        <span :if={@channel_unavailable?} class="channel-chip channel-chip--nodata">
-          <span class="dot" aria-hidden="true"></span>
-          <span class="mono">{@channel}</span>
-          <span class="rev mono">no data</span>
-        </span>
-      </div>
-
       <p :if={@channel_unavailable?}>
         The {@channel} channel doesn't have options data.
       </p>
