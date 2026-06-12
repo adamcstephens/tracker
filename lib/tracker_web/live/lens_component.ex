@@ -48,6 +48,12 @@ defmodule TrackerWeb.LensComponent do
         <span class="lens-label">Channel</span>
         <span class="lens-channel-cell">
           <span class="lens-dot" aria-hidden="true"></span>
+          <span class="lens-channel-name" aria-hidden="true">
+            {if @lens.all?, do: "All channels", else: @lens.channel.name}
+          </span>
+          <%!-- Invisible overlay on the cell: the visible name above sizes
+               the cell to the selected channel, while a native select sized
+               to its widest option would leave dead space after it. --%>
           <select
             name="channel"
             aria-label="Channel"
