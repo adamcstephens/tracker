@@ -1931,8 +1931,8 @@ a.revision-link {
 		height: 1.875rem;
 		padding: 0.3125rem;
 		border-radius: 0.5rem;
-		background: var(--surface);
-		border: 1px solid var(--line);
+		background: var(--ibx-surface);
+		border: 1px solid var(--ibx-line);
 	}
 
 	/* The nav anchors both the right-edge fade and the More dropdown panel,
@@ -2121,7 +2121,7 @@ a.revision-link {
 	.app-user--mobile .app-user__avatar {
 		width: 2.5rem;
 		height: 2.5rem;
-		border: 1px solid var(--line);
+		border: 1px solid var(--ibx-line);
 	}
 
 	.app-user--mobile .app-user__avatar--monogram {
@@ -2142,8 +2142,8 @@ a.revision-link {
 		height: 2.5rem;
 		flex-shrink: 0;
 		border-radius: 999px;
-		background: var(--surface);
-		border: 1px solid var(--line);
+		background: var(--ibx-surface);
+		border: 1px solid var(--ibx-line);
 		color: var(--text-2);
 	}
 
@@ -2173,8 +2173,8 @@ a.revision-link {
 		height: 2.5rem;
 		flex-shrink: 0;
 		border-radius: 0.6875rem;
-		background: var(--surface);
-		border-color: var(--line);
+		background: var(--ibx-surface);
+		border-color: var(--ibx-line);
 	}
 
 	.lens__form {
