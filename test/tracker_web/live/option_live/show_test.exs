@@ -171,6 +171,18 @@ defmodule TrackerWeb.OptionLive.ShowTest do
     assert html =~ ">Type<"
   end
 
+  test "a single option is expanded by default", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/options/services.nginx.enable")
+
+    assert html =~ ~r/<details[^>]* open/
+  end
+
+  test "multiple options are collapsed by default", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/options/services.nginx")
+
+    refute html =~ ~r/<details[^>]* open/
+  end
+
   test "shows fallback when channel has no options data", %{conn: conn} do
     nixpkgs_channel =
       Channel.create!(%{

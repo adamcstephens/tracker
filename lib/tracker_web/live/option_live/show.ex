@@ -89,7 +89,7 @@ defmodule TrackerWeb.OptionLive.Show do
         <h2>Options at this prefix</h2>
         <ul id="options-list" class="opt-list" phx-hook="AnchorExpand">
           <li :for={rev <- @leaf_options}>
-            <details id={"opt-#{rev.option.name}"}>
+            <details id={"opt-#{rev.option.name}"} open={length(@leaf_options) == 1}>
               <summary>
                 <span class="opt-name">
                   <%= if rev.option.name == @prefix do %>
