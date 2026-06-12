@@ -2,7 +2,9 @@ defmodule TrackerWeb.LayoutsTest do
   use TrackerWeb.ConnCase, async: true
 
   import Phoenix.LiveViewTest
+  import Tracker.Fixtures
 
+  alias AshAuthentication.Plug.Helpers
   alias Tracker.Accounts.User
   alias Tracker.Nixpkgs.Channel
   alias TrackerWeb.Layouts
@@ -325,6 +327,99 @@ defmodule TrackerWeb.LayoutsTest do
         |> String.trim()
 
       assert active_panel =~ "Maintainers"
+    end
+  end
+
+  describe "mobile identity & inbox (trk-310)" do
+    defp log_in(conn, user) do
+      conn
+      |> Plug.Test.init_test_session(%{})
+      |> Helpers.store_in_session(user)
+    end
+
+    test "signed out: a mobile sign-in link renders in the search row", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/changes")
+
+      doc = Floki.parse_document!(html)
+
+      [link] = Floki.find(doc, ~s(a[aria-label="Sign in"]))
+      assert Floki.attribute(link, "href") == ["/sign-in"]
+      assert [class] = Floki.attribute(link, "class")
+      assert class =~ "is-mobile-only"
+
+      # Mobile sign-in lives in the bottom (search) row, not the tab row.
+      assert html =~ ~r{app-header__row--bottom.*?aria-label="Sign in"}s
+    end
+
+    test "signed out: no mobile inbox bell renders", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/changes")
+
+      assert Floki.find(Floki.parse_document!(html), "#inbox-icon-mobile") == []
+    end
+
+    test "signed in: the mobile avatar opens the same account menu", %{conn: conn} do
+      user = register_user!()
+      {:ok, _view, html} = live(log_in(conn, user), ~p"/changes")
+
+      doc = Floki.parse_document!(html)
+
+      [menu] = Floki.find(doc, "details#app-user-menu-mobile")
+      assert [class] = Floki.attribute(menu, "class")
+      assert class =~ "is-mobile-only"
+
+      items =
+        menu
+        |> Floki.find(".app-user__menu-item")
+        |> Enum.map(&(&1 |> Floki.text() |> String.trim()))
+
+      assert "Settings" in items
+      assert "API tokens" in items
+      assert "Sign out" in items
+    end
+
+    test "signed in: a mobile inbox bell renders on the lens row", %{conn: conn} do
+      user = register_user!()
+      {:ok, _view, html} = live(log_in(conn, user), ~p"/changes")
+
+      doc = Floki.parse_document!(html)
+
+      [bell] = Floki.find(doc, "#inbox-icon-mobile")
+      assert Floki.attribute(bell, "href") == ["/inbox"]
+      assert Floki.attribute(bell, "aria-label") == ["Inbox"]
+
+      # The bell sits beside the lens in a shared row wrapper.
+      assert [_] = Floki.find(doc, ".app-header__lens-row #inbox-icon-mobile")
+      assert [_] = Floki.find(doc, ".app-header__lens-row .app-header__lens-slot")
+    end
+
+    test "signed in: the bell renders even on pages without a lens", %{conn: conn} do
+      user = register_user!()
+      {:ok, _view, html} = live(log_in(conn, user), ~p"/inbox")
+
+      assert [_] = Floki.find(Floki.parse_document!(html), "#inbox-icon-mobile")
+    end
+
+    test "signed in: unread count renders as a badge on the mobile bell", %{conn: conn} do
+      user = register_user!()
+      chan = channel!("nixos-unstable")
+      rev = channel_revision!(chan)
+
+      notification!(user, %{
+        type: :channel_revision_published,
+        channel_id: chan.id,
+        channel_revision_id: rev.id
+      })
+
+      {:ok, _view, html} = live(log_in(conn, user), ~p"/changes")
+
+      badge =
+        html
+        |> Floki.parse_document!()
+        |> Floki.find("#inbox-icon-mobile .app-inbox__badge")
+        |> Floki.text()
+        |> String.trim()
+
+      assert badge == "1"
     end
   end
 
