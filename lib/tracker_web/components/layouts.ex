@@ -186,6 +186,87 @@ defmodule TrackerWeb.Layouts do
     end
   end
 
+  attr :id, :string, required: true
+  attr :class, :string, default: nil
+  attr :view, :atom, required: true
+  attr :badge, :string, default: nil
+
+  @doc """
+  The inbox link with its unread badge, rendered once per breakpoint: in the
+  top row for desktop and on the lens row for mobile (CSS hides the
+  off-breakpoint instance).
+  """
+  def inbox_link(assigns) do
+    ~H"""
+    <.link
+      id={@id}
+      navigate={~p"/inbox"}
+      class={["app-inbox", @class]}
+      title="Inbox"
+      aria-label="Inbox"
+      aria-current={active_nav?(@view, "InboxLive") && "page"}
+    >
+      <svg
+        class="app-inbox__icon"
+        aria-hidden="true"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.7"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M4 13h4l2 3h4l2-3h4" />
+        <path d="M5 5h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" />
+      </svg>
+      <span :if={@badge} class="app-inbox__badge">{@badge}</span>
+    </.link>
+    """
+  end
+
+  attr :user, :any, required: true
+
+  @doc """
+  The user's GitHub avatar, falling back to a monogram of their username.
+  Shared by the desktop user chip and the mobile avatar disclosure.
+  """
+  def user_avatar(assigns) do
+    ~H"""
+    <%= if @user.github_id do %>
+      <img
+        class="app-user__avatar"
+        src={"https://avatars.githubusercontent.com/u/#{@user.github_id}?v=4&s=64"}
+        alt=""
+        aria-hidden="true"
+      />
+    <% else %>
+      <span class="app-user__avatar app-user__avatar--monogram" aria-hidden="true">
+        {monogram(@user.github_username)}
+      </span>
+    <% end %>
+    """
+  end
+
+  @doc """
+  The account-menu panel (Settings, API tokens, Sign out), shared by the
+  desktop user chip and the mobile avatar disclosure.
+  """
+  def user_menu_panel(assigns) do
+    ~H"""
+    <div class="app-user__panel" role="menu">
+      <.link navigate={~p"/account/settings"} class="app-user__menu-item" role="menuitem">
+        Settings
+      </.link>
+      <.link navigate={~p"/account/tokens"} class="app-user__menu-item" role="menuitem">
+        API tokens
+      </.link>
+      <.link href={~p"/sign-out"} method="delete" class="app-user__menu-item" role="menuitem">
+        Sign out
+      </.link>
+    </div>
+    """
+  end
+
   @doc """
   Returns up to two uppercase initials for a given name, used as the
   monogram in the user chip avatar when a GitHub avatar is unavailable.

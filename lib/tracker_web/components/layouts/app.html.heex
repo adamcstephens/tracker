@@ -31,73 +31,21 @@
         <span class="app-brand__word">Tracker</span>
       </.link>
       <.app_nav current_user={@current_user} view={@socket.view} search={search} />
-      <.link
+      <.inbox_link
         :if={@current_user}
         id="inbox-icon"
-        navigate={~p"/inbox"}
-        class="app-inbox"
-        title="Inbox"
-        aria-label="Inbox"
-        aria-current={active_nav?(@socket.view, "InboxLive") && "page"}
-      >
-        <svg
-          class="app-inbox__icon"
-          aria-hidden="true"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.7"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="M4 13h4l2 3h4l2-3h4" />
-          <path d="M5 5h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" />
-        </svg>
-        <span :if={inbox_badge(assigns)} class="app-inbox__badge">{inbox_badge(assigns)}</span>
-      </.link>
+        view={@socket.view}
+        badge={inbox_badge(assigns)}
+      />
       <div class="app-user">
         <%= if @current_user do %>
           <details class="app-user__menu" id="app-user-menu" phx-update="ignore">
             <summary class="app-user__chip">
-              <%= if @current_user.github_id do %>
-                <img
-                  class="app-user__avatar"
-                  src={"https://avatars.githubusercontent.com/u/#{@current_user.github_id}?v=4&s=64"}
-                  alt=""
-                  aria-hidden="true"
-                />
-              <% else %>
-                <span class="app-user__avatar app-user__avatar--monogram" aria-hidden="true">
-                  {monogram(@current_user.github_username)}
-                </span>
-              <% end %>
+              <.user_avatar user={@current_user} />
               <span class="app-user__name">{@current_user.github_username}</span>
               <span class="app-user__caret" aria-hidden="true">▾</span>
             </summary>
-            <div class="app-user__panel" role="menu">
-              <.link
-                navigate={~p"/account/settings"}
-                class="app-user__menu-item"
-                role="menuitem"
-              >
-                Settings
-              </.link>
-              <.link
-                navigate={~p"/account/tokens"}
-                class="app-user__menu-item"
-                role="menuitem"
-              >
-                API tokens
-              </.link>
-              <.link
-                href={~p"/sign-out"}
-                method="delete"
-                class="app-user__menu-item"
-                role="menuitem"
-              >
-                Sign out
-              </.link>
-            </div>
+            <.user_menu_panel />
           </details>
         <% else %>
           <.link navigate={~p"/sign-in"} class="app-user__chip">Sign in</.link>
@@ -107,37 +55,6 @@
   </div>
   <div class="app-header__row app-header__row--bottom">
     <div class="container">
-      <.link
-        navigate={nav_path(~p"/", search)}
-        class="app-brand app-brand--mobile"
-        aria-label="Tracker home"
-      >
-        <svg
-          class="app-brand__mark"
-          aria-hidden="true"
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="-27 -27 54 54"
-        >
-          <circle cx="0" cy="0" r="18" fill="none" stroke="#5b8fc9" stroke-width="1.5" />
-          <circle
-            cx="0"
-            cy="0"
-            r="25"
-            fill="none"
-            stroke="#5b8fc9"
-            stroke-width="1"
-            opacity="0.5"
-          />
-          <g transform="scale(0.0139)" fill="#5b8fc9">
-            <polygon points="-624,249 -496,27 64,997 -192,997 -320,775 -448,997 -576,997 -640,886 -448,554" />
-            <polygon points="-528,-415 -272,-415 -832,554 -960,332 -832,110 -1088,110 -1152,0 -1088,-110 -704,-110" />
-            <polygon points="96,-665 224,-443 -896,-443 -768,-665 -512,-665 -640,-886 -576,-997 -448,-997 -256,-665" />
-            <polygon points="624,-249 496,-27 -64,-997 192,-997 320,-775 448,-997 576,-997 640,-886 448,-554" />
-            <polygon points="528,415 272,415 832,-554 960,-332 832,-110 1088,-110 1152,0 1088,110 704,110" />
-            <polygon points="-96,665 -224,443 896,443 768,665 512,665 640,886 576,997 448,997 256,665" />
-          </g>
-        </svg>
-      </.link>
       <form
         :if={assigns[:page_search]}
         id="page-search"
@@ -182,8 +99,50 @@
           <span class="app-search__hint" aria-hidden="true">/</span>
         </label>
       </form>
-      <div :if={assigns[:lens]} class="app-header__lens-slot">
-        <.live_component module={TrackerWeb.LensComponent} id="lens" lens={@lens} />
+      <%= if @current_user do %>
+        <details
+          class="app-user__menu app-user--mobile is-mobile-only"
+          id="app-user-menu-mobile"
+          phx-update="ignore"
+        >
+          <summary
+            class="app-user__chip app-user__chip--avatar"
+            aria-label={"Your account — #{@current_user.github_username}"}
+          >
+            <.user_avatar user={@current_user} />
+          </summary>
+          <.user_menu_panel />
+        </details>
+      <% else %>
+        <.link
+          navigate={~p"/sign-in"}
+          class="app-signin--mobile is-mobile-only"
+          aria-label="Sign in"
+        >
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.7"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <circle cx="12" cy="8" r="4" /><path d="M4 21c1.4-4 4.6-6 8-6s6.6 2 8 6" />
+          </svg>
+        </.link>
+      <% end %>
+      <div :if={assigns[:lens] || @current_user} class="app-header__lens-row">
+        <div :if={assigns[:lens]} class="app-header__lens-slot">
+          <.live_component module={TrackerWeb.LensComponent} id="lens" lens={@lens} />
+        </div>
+        <.inbox_link
+          :if={@current_user}
+          id="inbox-icon-mobile"
+          class="app-inbox--mobile is-mobile-only"
+          view={@socket.view}
+          badge={inbox_badge(assigns)}
+        />
       </div>
     </div>
   </div>
