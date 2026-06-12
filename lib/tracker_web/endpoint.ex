@@ -27,6 +27,14 @@ defmodule TrackerWeb.Endpoint do
     gzip: false,
     only: TrackerWeb.static_paths()
 
+  # Syntax-highlighting themes for Lumis html_linked output, served straight
+  # from the dep. Linked in root.html.heex gated on prefers-color-scheme.
+  plug Plug.Static,
+    at: "/themes",
+    from: {:lumis, "priv/static/css"},
+    gzip: false,
+    only: ["github_light.css", "onedark.css"]
+
   if Mix.env() == :dev do
     plug Tidewave
   end
