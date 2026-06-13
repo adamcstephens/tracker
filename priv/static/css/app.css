@@ -1778,6 +1778,22 @@ a.revision-link {
 	color: var(--text-3);
 }
 
+.app-search .app-search__clear {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 1.375rem;
+	height: 1.375rem;
+	border-radius: 999px;
+	color: var(--text-2);
+	flex-shrink: 0;
+}
+
+.app-search .app-search__clear:hover {
+	background: var(--surface-2);
+	color: var(--text);
+}
+
 .app-search__hint {
 	display: inline-flex;
 	align-items: center;

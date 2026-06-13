@@ -177,11 +177,10 @@ defmodule TrackerWeb.OptionLive.RootTest do
     assert html =~ ~s(href="/options/enableDebugging")
   end
 
-  test "search at the root filters group cards to matching subtrees", %{conn: conn} do
+  test "search at the root shows no group cards", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/options?search=nginx")
 
-    assert html =~ ~s(href="/options/services?search=nginx")
-    refute html =~ ~s(href="/options/programs?search=nginx")
+    refute html =~ "child-card"
   end
 
   test "fuzzy search tolerates typos", %{conn: conn} do
