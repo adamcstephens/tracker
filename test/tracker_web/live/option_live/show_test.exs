@@ -293,6 +293,23 @@ defmodule TrackerWeb.OptionLive.ShowTest do
     assert html =~ "No options match"
   end
 
+  test "a new search from a deep page resets scope to the whole channel", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/options/services.nginx.virtualHosts")
+
+    view |> element("#page-search") |> render_change(%{"search" => "user"})
+
+    assert_patch(view, ~p"/options?search=user")
+    assert render(view) =~ ~s(href="/options/services.nginx.user")
+  end
+
+  test "clearing the search stays on the current page", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/options/services.nginx?search=serverName")
+
+    view |> element("#page-search") |> render_change(%{"search" => ""})
+
+    assert_patch(view, ~p"/options/services.nginx")
+  end
+
   test "clearing the search restores the tree view", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/options/services.nginx?search=serverName")
 

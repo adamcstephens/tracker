@@ -411,15 +411,12 @@ defmodule TrackerWeb.OptionLive.Show do
   def handle_event("filter", params, socket) do
     search = Map.get(params, "search", "")
 
-    socket =
-      socket
-      |> assign(:search, search)
-      |> assign(:offset, 0)
-      |> update(:page_search, fn ps -> %{ps | value: search, hidden: %{}} end)
-      |> load_view()
-      |> push_event("update-url", %{path: options_path(socket.assigns.prefix, search, 1)})
+    # A fresh search always scopes to the whole channel — searching from a
+    # deep page would otherwise trap the query inside the current subtree.
+    # Clearing stays put. Prefix-scoped search remains reachable by URL.
+    target_prefix = if search == "", do: socket.assigns.prefix, else: ""
 
-    {:noreply, socket}
+    {:noreply, push_patch(socket, to: options_path(target_prefix, search, 1))}
   end
 
   @impl true
