@@ -62,7 +62,7 @@ defmodule TrackerWeb.OptionLive.Show do
         <div class="opt-children">
           <.link
             :for={{group, count} <- @subgroups}
-            navigate={child_path(group, @search)}
+            navigate={~p"/options/#{group}"}
             class="child-card"
           >
             <span class="name">
@@ -72,7 +72,7 @@ defmodule TrackerWeb.OptionLive.Show do
               )}</span>
             </span>
             <span class="right">
-              <span>{count} {if @search == "", do: "options", else: "matching"}</span>
+              <span>{count} options</span>
               <span class="arrow" aria-hidden="true">→</span>
             </span>
           </.link>
@@ -354,7 +354,7 @@ defmodule TrackerWeb.OptionLive.Show do
     {subgroups, leaf_options, files, leaf?} =
       case channel_revision do
         nil -> {[], [], [], false}
-        cr when search != "" -> load_filtered_tree(cr.id, prefix, search)
+        _cr when search != "" -> {[], [], [], false}
         cr when prefix == "" -> load_root_view(cr.id)
         cr -> load_prefix_view(cr.id, prefix)
       end
@@ -405,34 +405,6 @@ defmodule TrackerWeb.OptionLive.Show do
       |> assign(:has_next_page?, false)
     end
   end
-
-  # While searching, the children cards become orientation aids: only
-  # subtrees containing a (substring) match survive, counted by matches.
-  # The substring filter approximates the fuzzy match list below it.
-  defp load_filtered_tree(channel_revision_id, prefix, search) do
-    down = String.downcase(search)
-    prefix_depth = if prefix == "", do: 0, else: depth(prefix)
-
-    subgroups =
-      channel_revision_id
-      |> Tracker.Nixpkgs.OptionRevision.list_names_by_channel_revision!()
-      |> Enum.map(& &1.option_name)
-      |> Enum.filter(&under_prefix?(&1, prefix))
-      |> Enum.filter(&String.contains?(String.downcase(&1), down))
-      |> Enum.filter(fn name -> depth(name) > prefix_depth + 1 end)
-      |> Enum.map(fn name ->
-        name |> String.split(".") |> Enum.take(prefix_depth + 1) |> Enum.join(".")
-      end)
-      |> Enum.frequencies()
-      |> Enum.sort_by(fn {name, _} -> name end)
-
-    {subgroups, [], [], false}
-  end
-
-  defp under_prefix?(_name, ""), do: true
-
-  defp under_prefix?(name, prefix),
-    do: name == prefix or String.starts_with?(name, prefix <> ".")
 
   @impl true
   def handle_event("filter", params, socket) do
@@ -595,7 +567,4 @@ defmodule TrackerWeb.OptionLive.Show do
 
   defp show_path(""), do: ~p"/options"
   defp show_path(prefix), do: ~p"/options/#{prefix}"
-
-  defp child_path(group, ""), do: ~p"/options/#{group}"
-  defp child_path(group, search), do: ~p"/options/#{group}?search=#{search}"
 end

@@ -96,6 +96,26 @@
             phx-debounce="300"
             disabled={@page_search.mode == :inert}
           />
+          <.link
+            :if={@page_search.mode == :active and @page_search.value != ""}
+            navigate={clear_search_path(@page_search)}
+            class="app-search__clear"
+            aria-label="Clear search"
+            title="Clear search"
+          >
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              width="14"
+              height="14"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+            >
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </.link>
           <span class="app-search__hint" aria-hidden="true">/</span>
         </label>
       </form>

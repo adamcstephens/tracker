@@ -290,4 +290,16 @@ defmodule TrackerWeb.Layouts do
   def nav_path(path, search) when is_binary(search) do
     "#{path}?#{URI.encode_query(%{search: search})}"
   end
+
+  @doc """
+  The current page without its search query — where the search box's clear
+  button lands. Hidden params (sort, filters) survive as query params.
+  """
+  def clear_search_path(%TrackerWeb.PageSearch{action: action, hidden: hidden})
+      when map_size(hidden) == 0,
+      do: action
+
+  def clear_search_path(%TrackerWeb.PageSearch{action: action, hidden: hidden}) do
+    "#{action}?#{URI.encode_query(hidden)}"
+  end
 end

@@ -242,12 +242,10 @@ defmodule TrackerWeb.OptionLive.ShowTest do
     refute html =~ ~s(href="/options/services.nginx.enable")
   end
 
-  test "search filters children cards to subtrees with matches", %{conn: conn} do
+  test "search shows only the match list, not children cards", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/options/services.nginx?search=serverName")
 
-    assert html =~ "matching"
-    # The vhost subtree holds the only match; card links carry the search
-    assert html =~ ~s(href="/options/services.nginx.virtualHosts?search=serverName")
+    refute html =~ "child-card"
   end
 
   test "search hides leaf details, files, and PR sections", %{conn: conn} do
@@ -256,6 +254,16 @@ defmodule TrackerWeb.OptionLive.ShowTest do
     refute html =~ "Options at this prefix"
     refute html =~ ">Defined in</h2>"
     refute html =~ "Recent PRs"
+  end
+
+  test "an active search offers a clear button back to the unfiltered page", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/options/services.nginx?search=serverName")
+
+    assert html =~ "app-search__clear"
+
+    {:ok, _view, html} = live(conn, ~p"/options/services.nginx")
+
+    refute html =~ "app-search__clear"
   end
 
   test "search with no matches under the prefix says so", %{conn: conn} do
