@@ -343,5 +343,17 @@ defmodule TrackerWeb.TableParamsTest do
       assert assigns.has_prev_page? == false
       assert assigns.has_next_page? == false
     end
+
+    test "count-less page result yields nil total_pages" do
+      tp = TableParams.from_params(%{"page" => "2"})
+
+      page_result = %{count: nil, results: [:a], more?: true}
+      assigns = TableParams.apply_pagination(tp, page_result, :items)
+
+      assert assigns.total_pages == nil
+      assert assigns.has_prev_page? == true
+      assert assigns.has_next_page? == true
+      assert assigns.current_page == 2
+    end
   end
 end

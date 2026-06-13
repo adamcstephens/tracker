@@ -4,6 +4,12 @@ defmodule Tracker.Nixpkgs.Package do
   postgres do
     table "packages"
     repo Tracker.Repo
+
+    custom_indexes do
+      # The packages index default view sorts by inserted_at; without this the
+      # planner seq-scans and sorts the whole table for every page load.
+      index [:inserted_at]
+    end
   end
 
   code_interface do

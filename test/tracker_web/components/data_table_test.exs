@@ -349,6 +349,42 @@ defmodule TrackerWeb.DataTableTest do
       assert html =~ "next-page"
     end
 
+    test "renders page number without total when total_pages is nil" do
+      assigns = %{total_pages: nil}
+
+      html =
+        rendered_to_string(~H"""
+        <DataTable.pagination
+          total_pages={@total_pages}
+          current_page={2}
+          has_prev_page?={true}
+          has_next_page?={true}
+        />
+        """)
+
+      assert html =~ "Page 2"
+      refute html =~ "Page 2 of"
+      assert html =~ "prev-page"
+      assert html =~ "next-page"
+    end
+
+    test "hidden when total_pages is nil and no neighboring pages" do
+      assigns = %{total_pages: nil}
+
+      html =
+        rendered_to_string(~H"""
+        <DataTable.pagination
+          total_pages={@total_pages}
+          current_page={1}
+          has_prev_page?={false}
+          has_next_page?={false}
+        />
+        """)
+
+      refute html =~ "Page"
+      refute html =~ "prev-page"
+    end
+
     test "renders prev/next as links when prev_path and next_path are given" do
       assigns = %{}
 

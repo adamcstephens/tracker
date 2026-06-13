@@ -139,14 +139,20 @@ defmodule TrackerWeb.TableParams do
   Returns a map with:
     * `:has_prev_page?` - boolean
     * `:has_next_page?` - boolean
-    * `:total_pages` - integer
+    * `:total_pages` - integer, or nil when the page was fetched without a count
     * `:current_page` - integer
     * `:stream_name` - the atom to use for stream
     * `:stream_results` - the results list
   """
   @spec apply_pagination(t(), map(), atom()) :: map()
   def apply_pagination(%__MODULE__{} = tp, page_result, stream_name) do
-    total_pages = if page_result.count > 0, do: ceil(page_result.count / tp.page_size), else: 0
+    total_pages =
+      case page_result.count do
+        nil -> nil
+        count when count > 0 -> ceil(count / tp.page_size)
+        _zero -> 0
+      end
+
     current_page = div(tp.offset, tp.page_size) + 1
 
     %{
