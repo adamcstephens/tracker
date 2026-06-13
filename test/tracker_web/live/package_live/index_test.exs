@@ -246,6 +246,33 @@ defmodule TrackerWeb.PackageLive.IndexTest do
     end
   end
 
+  describe "count-less pagination (trk-314)" do
+    setup do
+      for n <- 1..20 do
+        Tracker.Nixpkgs.Package
+        |> Ash.Changeset.for_create(:create, %{attribute: "pagepkg-#{n}"})
+        |> Ash.create!()
+      end
+
+      :ok
+    end
+
+    test "footer shows the current page without a total", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/packages")
+
+      assert html =~ "Page 1"
+      refute html =~ "Page 1 of"
+      assert html =~ ~s(href="/packages?page=2")
+    end
+
+    test "later pages keep prev/next without a total", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/packages?page=2")
+
+      assert html =~ "Page 2"
+      refute html =~ "Page 2 of"
+    end
+  end
+
   defp attribute_order(html) do
     ~r/<td[^>]*>\s*(?:<a[^>]*>)?\s*([a-z][\w.-]*)\s*(?:<\/a>)?\s*<\/td>/
     |> Regex.scan(html)

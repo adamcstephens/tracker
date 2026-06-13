@@ -131,7 +131,10 @@ defmodule TrackerWeb.DataTable do
         has_next_page?={@has_next_page?}
       />
   """
-  attr :total_pages, :integer, required: true
+  attr :total_pages, :integer,
+    required: true,
+    doc: "total page count, or nil when the data was fetched without a count"
+
   attr :current_page, :integer, required: true
   attr :has_prev_page?, :boolean, default: false
   attr :has_next_page?, :boolean, default: false
@@ -148,7 +151,7 @@ defmodule TrackerWeb.DataTable do
   def pagination(assigns) do
     ~H"""
     <nav
-      :if={@total_pages > 1}
+      :if={show_pagination?(@total_pages, @has_prev_page?, @has_next_page?)}
       style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-top: 1rem;"
     >
       <.link
@@ -175,8 +178,11 @@ defmodule TrackerWeb.DataTable do
       >
         &larr;
       </button>
-      <small>
+      <small :if={@total_pages}>
         Page {@current_page} of {@total_pages}
+      </small>
+      <small :if={is_nil(@total_pages)}>
+        Page {@current_page}
       </small>
       <.link
         :if={@next_path && @has_next_page?}
@@ -205,6 +211,9 @@ defmodule TrackerWeb.DataTable do
     </nav>
     """
   end
+
+  defp show_pagination?(nil, has_prev_page?, has_next_page?), do: has_prev_page? or has_next_page?
+  defp show_pagination?(total_pages, _has_prev_page?, _has_next_page?), do: total_pages > 1
 
   defp sort_href(%TableParams{} = tp, field, base_path) do
     dir = if tp.sort_by == field, do: TableParams.toggle_dir(tp.sort_dir), else: :asc

@@ -118,7 +118,7 @@ defmodule TrackerWeb.PackageLive.Index do
       Tracker.Nixpkgs.Package.list!(tp.search, channel_id,
         actor: socket.assigns[:current_user],
         query: [sort: [{tp.sort_by, tp.sort_dir}]],
-        page: [offset: tp.offset, count: true]
+        page: [offset: tp.offset]
       )
 
     pagination = TableParams.apply_pagination(tp, page, :packages)
