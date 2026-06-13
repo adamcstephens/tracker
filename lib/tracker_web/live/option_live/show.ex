@@ -304,7 +304,10 @@ defmodule TrackerWeb.OptionLive.Show do
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, assign_new(socket, :current_user, fn -> nil end)}
+    {:ok,
+     socket
+     |> assign_new(:current_user, fn -> nil end)
+     |> assign(:search_origin, nil)}
   end
 
   @impl true
@@ -327,9 +330,12 @@ defmodule TrackerWeb.OptionLive.Show do
     channel_revision =
       if select_channel?, do: nil, else: resolve_channel_revision(channel, rev)
 
+    search_origin = if search == "", do: nil, else: socket.assigns.search_origin
+
     {:noreply,
      socket
      |> assign(:page_title, if(prefix == "", do: "Options", else: prefix))
+     |> assign(:search_origin, search_origin)
      |> assign(:prefix, prefix)
      |> assign(:parent_prefix, parent_prefix(prefix))
      |> assign(:channel, channel)
@@ -344,7 +350,8 @@ defmodule TrackerWeb.OptionLive.Show do
        action: show_path(prefix),
        value: search,
        event: "filter",
-       hidden: %{}
+       hidden: %{},
+       clear_to: search_origin && show_path(search_origin)
      })
      |> load_view()}
   end
@@ -410,13 +417,25 @@ defmodule TrackerWeb.OptionLive.Show do
   @impl true
   def handle_event("filter", params, socket) do
     search = Map.get(params, "search", "")
+    %{search: current_search, prefix: prefix, search_origin: origin} = socket.assigns
 
     # A fresh search always scopes to the whole channel — searching from a
     # deep page would otherwise trap the query inside the current subtree.
-    # Clearing stays put. Prefix-scoped search remains reachable by URL.
-    target_prefix = if search == "", do: socket.assigns.prefix, else: ""
+    # The page it started from is remembered (in the socket only, never the
+    # URL) so cancelling the search returns there; refining a search keeps
+    # the original return point. Prefix-scoped search remains reachable by
+    # URL, where clearing just stays put.
+    {target_prefix, origin} =
+      cond do
+        search == "" -> {origin || prefix, nil}
+        current_search == "" and prefix != "" -> {"", prefix}
+        true -> {"", origin}
+      end
 
-    {:noreply, push_patch(socket, to: options_path(target_prefix, search, 1))}
+    {:noreply,
+     socket
+     |> assign(:search_origin, origin)
+     |> push_patch(to: options_path(target_prefix, search, 1))}
   end
 
   @impl true

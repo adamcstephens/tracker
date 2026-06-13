@@ -302,7 +302,37 @@ defmodule TrackerWeb.OptionLive.ShowTest do
     assert render(view) =~ ~s(href="/options/services.nginx.user")
   end
 
-  test "clearing the search stays on the current page", %{conn: conn} do
+  test "cancelling a search returns to the page it started from", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/options/services.nginx")
+
+    view |> element("#page-search") |> render_change(%{"search" => "user"})
+    assert_patch(view, ~p"/options?search=user")
+
+    # Refining the search keeps the original return point
+    view |> element("#page-search") |> render_change(%{"search" => "use"})
+    assert_patch(view, ~p"/options?search=use")
+
+    view |> element("#page-search") |> render_change(%{"search" => ""})
+    assert_patch(view, ~p"/options/services.nginx")
+  end
+
+  test "the clear button links back to where the search started", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/options/services.nginx")
+
+    view |> element("#page-search") |> render_change(%{"search" => "user"})
+    assert_patch(view, ~p"/options?search=user")
+
+    [href] =
+      view
+      |> render()
+      |> Floki.parse_document!()
+      |> Floki.find("a.app-search__clear")
+      |> Floki.attribute("href")
+
+    assert href == "/options/services.nginx"
+  end
+
+  test "clearing a deep-linked search stays on the current page", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/options/services.nginx?search=serverName")
 
     view |> element("#page-search") |> render_change(%{"search" => ""})
