@@ -359,10 +359,10 @@ defmodule TrackerWeb.OptionLive.Show do
   defp load_view(socket) do
     %{channel_revision: channel_revision, prefix: prefix, search: search} = socket.assigns
 
-    {subgroups, leaf_options, files, leaf?} =
+    {subgroups, leaf_options, files} =
       case channel_revision do
-        nil -> {[], [], [], false}
-        _cr when search != "" -> {[], [], [], false}
+        nil -> {[], [], []}
+        _cr when search != "" -> {[], [], []}
         cr when prefix == "" -> load_root_view(cr.id)
         cr -> load_prefix_view(cr.id, prefix)
       end
@@ -380,7 +380,6 @@ defmodule TrackerWeb.OptionLive.Show do
     |> assign(:leaf_options, leaf_options)
     |> assign(:files, files)
     |> assign(:recent_prs, recent_prs)
-    |> assign(:leaf, leaf?)
     |> assign(:nothing_here?, nothing_here?)
   end
 
@@ -472,73 +471,34 @@ defmodule TrackerWeb.OptionLive.Show do
     Tracker.Nixpkgs.Change.by_files!(Enum.map(files, & &1.id), 10)
   end
 
-  # The root tree is built from option names alone — loading every revision's
-  # metadata and files for a whole channel just to count top-level groups
-  # would be far too heavy. Only the few depth-1 leaves get full detail.
+  # Both tree views are assembled from three narrow queries — subgroup counts
+  # aggregated in the database, full detail for only the handful of leaf rows
+  # the page renders, and the subtree's file set for Defined-in/recent PRs.
+  # Hydrating every revision under a big prefix like `services` costs seconds.
   defp load_root_view(channel_revision_id) do
-    names =
-      channel_revision_id
-      |> Tracker.Nixpkgs.OptionRevision.list_names_by_channel_revision!()
-      |> Enum.map(& &1.option_name)
-
-    {leaf_names, deeper_names} = Enum.split_with(names, fn name -> depth(name) == 1 end)
-
-    subgroups =
-      deeper_names
-      |> Enum.map(fn name -> name |> String.split(".") |> hd() end)
-      |> Enum.frequencies()
-      |> Enum.sort_by(fn {name, _} -> name end)
+    subgroups = Tracker.Nixpkgs.OptionRevision.subgroup_counts(channel_revision_id)
 
     leaf_revs =
-      Enum.flat_map(leaf_names, fn name ->
-        channel_revision_id
-        |> Tracker.Nixpkgs.OptionRevision.list_by_channel_revision_and_prefix!(name)
-        |> Enum.filter(fn rev -> rev.option.name == name end)
-      end)
+      Tracker.Nixpkgs.OptionRevision.list_direct_by_channel_revision_and_prefix!(
+        channel_revision_id,
+        ""
+      )
 
-    {subgroups, leaf_revs, [], false}
+    {subgroups, leaf_revs, []}
   end
 
   defp load_prefix_view(channel_revision_id, prefix) do
-    revisions =
-      Tracker.Nixpkgs.OptionRevision.list_by_channel_revision_and_prefix!(
+    subgroups = Tracker.Nixpkgs.OptionRevision.subgroup_counts(channel_revision_id, prefix)
+
+    leaf_revs =
+      Tracker.Nixpkgs.OptionRevision.list_direct_by_channel_revision_and_prefix!(
         channel_revision_id,
         prefix
       )
 
-    prefix_depth = depth(prefix)
+    files = Tracker.Nixpkgs.File.files_for_prefix!(prefix, channel_revision_id)
 
-    {leaf_revs, deeper_revs} =
-      Enum.split_with(revisions, fn rev ->
-        depth(rev.option.name) <= prefix_depth + 1
-      end)
-
-    subgroups =
-      deeper_revs
-      |> Enum.map(fn rev ->
-        rev.option.name
-        |> String.split(".")
-        |> Enum.take(prefix_depth + 1)
-        |> Enum.join(".")
-      end)
-      |> Enum.frequencies()
-      |> Enum.sort_by(fn {name, _} -> name end)
-
-    files = unique_files(revisions)
-    leaf? = Enum.any?(revisions, fn rev -> rev.option.name == prefix end)
-
-    leaf_revs = Enum.sort_by(leaf_revs, & &1.option.name)
-
-    {subgroups, leaf_revs, files, leaf?}
-  end
-
-  defp depth(name), do: name |> String.split(".") |> length()
-
-  defp unique_files(revisions) do
-    revisions
-    |> Enum.flat_map(fn rev -> rev.files end)
-    |> Enum.uniq_by(& &1.id)
-    |> Enum.sort_by(& &1.path)
+    {subgroups, leaf_revs, files}
   end
 
   defp parent_prefix(name) do

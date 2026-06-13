@@ -25,30 +25,66 @@ defmodule Tracker.Nixpkgs.OptionRevisionTest do
     %{id: Map.fetch!(id_map, name), name: name}
   end
 
-  describe "list_names_by_channel_revision/1" do
-    test "returns option names for the channel revision, sorted by name" do
+  defp load_option!(name, cr) do
+    opt = create_option!(name)
+
+    OptionRevision.load!(%{
+      option_id: opt.id,
+      channel_revision_id: cr.id,
+      description: "desc",
+      type: "boolean",
+      default: "false",
+      example: nil,
+      read_only: false
+    })
+  end
+
+  describe "subgroup_counts/2" do
+    test "root groups by top-level segment, counting only deeper options" do
       channel = create_channel!("nixos-unstable")
-      cr1 = create_revision!(channel, "names1aaa11", ~U[2026-04-01 10:00:00Z])
-      cr2 = create_revision!(channel, "names2bbb22", ~U[2026-04-02 10:00:00Z])
+      cr = create_revision!(channel, "rootgrp1aaa", ~U[2026-04-01 10:00:00Z])
 
-      for name <- ["services.nginx.enable", "boot.loader.grub.enable"] do
-        opt = create_option!(name)
-
-        OptionRevision.load!(%{
-          option_id: opt.id,
-          channel_revision_id: cr1.id,
-          description: "desc",
-          type: "boolean",
-          default: "false",
-          example: nil,
-          read_only: false
-        })
+      for name <- [
+            "services.nginx.enable",
+            "services.openssh.enable",
+            "boot.loader.grub.enable",
+            "docs"
+          ] do
+        load_option!(name, cr)
       end
 
-      other = create_option!("programs.vim.enable")
+      assert OptionRevision.subgroup_counts(cr.id) == [{"boot", 1}, {"services", 2}]
+    end
+
+    test "prefix groups by direct child segment, counting strictly deeper options" do
+      channel = create_channel!("nixos-unstable")
+      cr = create_revision!(channel, "prefgrp1aaa", ~U[2026-04-01 10:00:00Z])
+
+      for name <- [
+            "services.nginx.enable",
+            "services.nginx.port",
+            "services.openssh.enable",
+            "services.docs",
+            "programs.vim.enable"
+          ] do
+        load_option!(name, cr)
+      end
+
+      assert OptionRevision.subgroup_counts(cr.id, "services") ==
+               [{"services.nginx", 2}, {"services.openssh", 1}]
+    end
+
+    test "is scoped to the channel revision" do
+      channel = create_channel!("nixos-unstable")
+      cr1 = create_revision!(channel, "scopegrp1aa", ~U[2026-04-01 10:00:00Z])
+      cr2 = create_revision!(channel, "scopegrp2bb", ~U[2026-04-02 10:00:00Z])
+
+      load_option!("services.nginx.enable", cr1)
+
+      opt = create_option!("services.postgresql.enable")
 
       OptionRevision.load!(%{
-        option_id: other.id,
+        option_id: opt.id,
         channel_revision_id: cr2.id,
         description: "desc",
         type: "boolean",
@@ -57,12 +93,47 @@ defmodule Tracker.Nixpkgs.OptionRevisionTest do
         read_only: false
       })
 
-      names =
-        cr1.id
-        |> OptionRevision.list_names_by_channel_revision!()
-        |> Enum.map(& &1.option_name)
+      assert OptionRevision.subgroup_counts(cr1.id, "services") == [{"services.nginx", 1}]
+    end
+  end
 
-      assert names == ["boot.loader.grub.enable", "services.nginx.enable"]
+  describe "list_direct_by_channel_revision_and_prefix/2" do
+    test "empty prefix returns only depth-1 options" do
+      channel = create_channel!("nixos-unstable")
+      cr = create_revision!(channel, "direct1aaa1", ~U[2026-04-01 10:00:00Z])
+
+      for name <- ["docs", "allowAliases", "services.nginx.enable"] do
+        load_option!(name, cr)
+      end
+
+      names =
+        cr.id
+        |> OptionRevision.list_direct_by_channel_revision_and_prefix!("")
+        |> Enum.map(& &1.option.name)
+
+      assert names == ["allowAliases", "docs"]
+    end
+
+    test "returns the prefix option itself and its direct children, sorted" do
+      channel = create_channel!("nixos-unstable")
+      cr = create_revision!(channel, "direct2bbb2", ~U[2026-04-01 10:00:00Z])
+
+      for name <- [
+            "services.nginx",
+            "services.nginx.user",
+            "services.nginx.enable",
+            "services.nginx.virtualHosts.example.serverName",
+            "services.nginxStable.enable"
+          ] do
+        load_option!(name, cr)
+      end
+
+      names =
+        cr.id
+        |> OptionRevision.list_direct_by_channel_revision_and_prefix!("services.nginx")
+        |> Enum.map(& &1.option.name)
+
+      assert names == ["services.nginx", "services.nginx.enable", "services.nginx.user"]
     end
   end
 
