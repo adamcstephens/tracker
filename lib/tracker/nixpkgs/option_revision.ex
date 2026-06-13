@@ -14,8 +14,7 @@ defmodule Tracker.Nixpkgs.OptionRevision do
     define :list_by_channel_revision,
       args: [:channel_revision_id, {:optional, :search}, {:optional, :prefix}]
 
-    define :list_names_by_channel_revision, args: [:channel_revision_id]
-    define :list_by_channel_revision_and_prefix, args: [:channel_revision_id, :prefix]
+    define :list_direct_by_channel_revision_and_prefix, args: [:channel_revision_id, :prefix]
     define :list_by_channel_revision_and_file_ids, args: [:channel_revision_id, :file_ids]
     define :all_by_channel_revision, args: [:channel_revision_id]
   end
@@ -58,30 +57,23 @@ defmodule Tracker.Nixpkgs.OptionRevision do
              )
     end
 
-    read :list_names_by_channel_revision do
+    read :list_direct_by_channel_revision_and_prefix do
+      description "The option at the prefix itself plus its direct children, fully loaded for display. An empty prefix returns the depth-1 options."
+
       argument :channel_revision_id, :integer, allow_nil?: false
-
-      # Names only — selecting the metadata columns would drag megabytes of
-      # descriptions/examples along for a whole channel (~20k options).
-      prepare build(
-                select: [:id, :option_id, :channel_revision_id],
-                load: [:option_name],
-                sort: [option_name: :asc]
-              )
-
-      filter expr(channel_revision_id == ^arg(:channel_revision_id))
-    end
-
-    read :list_by_channel_revision_and_prefix do
-      argument :channel_revision_id, :integer, allow_nil?: false
-      argument :prefix, :string, allow_nil?: false
+      argument :prefix, :string, default: ""
 
       prepare build(sort: [option_name: :asc], load: [option: [:packages], files: []])
 
       filter expr(
                channel_revision_id == ^arg(:channel_revision_id) and
-                 (option.name == ^arg(:prefix) or
-                    fragment("? LIKE ? || '.%'", option.name, ^arg(:prefix)))
+                 if is_nil(^arg(:prefix)) or ^arg(:prefix) == "" do
+                   fragment("? NOT LIKE '%.%'", option.name)
+                 else
+                   option.name == ^arg(:prefix) or
+                     (fragment("? LIKE ? || '.%'", option.name, ^arg(:prefix)) and
+                        fragment("? NOT LIKE ? || '.%.%'", option.name, ^arg(:prefix)))
+                 end
              )
     end
 
@@ -247,6 +239,43 @@ defmodule Tracker.Nixpkgs.OptionRevision do
       end
     end)
     |> Enum.sort_by(&{&1.option_name, &1.field})
+  end
+
+  @doc """
+  Returns a sorted `[{subgroup, count}, ...]` list for the tree view of a
+  channel revision's options under the given prefix.
+
+  A subgroup is the first `depth(prefix) + 1` dot-separated segments of an
+  option name; only options strictly deeper than the subgroup itself are
+  counted, mirroring the split between child cards and leaf options. Raw SQL
+  because a GROUP BY over a derived name isn't expressible as an Ash read —
+  hydrating every revision under `services` just to count names costs seconds.
+  """
+  def subgroup_counts(channel_revision_id, prefix \\ "") do
+    {pattern, depth} =
+      case prefix do
+        "" -> {"%.%", 0}
+        _ -> {prefix <> ".%.%", length(String.split(prefix, "."))}
+      end
+
+    group_regex = "^(?:[^.]+\\.){#{depth}}[^.]+"
+
+    {:ok, %{rows: rows}} =
+      Tracker.Repo.query(
+        """
+        SELECT substring(o.name FROM $3), count(*)
+        FROM option_revisions r
+        JOIN options o ON o.id = r.option_id
+        WHERE r.channel_revision_id = $1
+          AND o.name LIKE $2
+        GROUP BY 1
+        """,
+        [channel_revision_id, pattern, group_regex]
+      )
+
+    rows
+    |> Enum.map(fn [name, count] -> {name, count} end)
+    |> Enum.sort_by(fn {name, _count} -> name end)
   end
 
   @doc """
