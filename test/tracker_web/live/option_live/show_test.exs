@@ -148,6 +148,23 @@ defmodule TrackerWeb.OptionLive.ShowTest do
     assert html =~ "nixos/modules/services/web-servers/nginx/location-options.nix"
   end
 
+  describe "settable-set options merge into their child card (trk-317)" do
+    test "an option that is also a group renders only as a child card", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/options/services.nginx")
+
+      # virtualHosts is an attrsOf-submodule option with deeper children:
+      # it keeps its child card but loses the duplicate leaf detail row.
+      assert html =~ ~s(href="/options/services.nginx.virtualHosts")
+      refute html =~ ~s(id="opt-services.nginx.virtualHosts")
+    end
+
+    test "the option still renders as self on its own page", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/options/services.nginx.virtualHosts")
+
+      assert html =~ ~s(<em class="tail">self</em>)
+    end
+  end
+
   test "an option matching the prefix renders as italic self", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/options/services.nginx.virtualHosts")
 

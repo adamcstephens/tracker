@@ -367,6 +367,8 @@ defmodule TrackerWeb.OptionLive.Show do
         cr -> load_prefix_view(cr.id, prefix)
       end
 
+    leaf_options = drop_settable_set_duplicates(subgroups, leaf_options)
+
     recent_prs = if search == "", do: recent_prs_for_files(files), else: []
 
     socket = load_matches(socket)
@@ -485,6 +487,17 @@ defmodule TrackerWeb.OptionLive.Show do
       )
 
     {subgroups, leaf_revs, []}
+  end
+
+  # An attrsOf-submodule option like services.bitcoind is both a real option
+  # and a group with deeper children, so it would render twice: once as a child
+  # card and once as a leaf detail row. Drop the duplicate leaf — its full
+  # detail still renders as the self row on its own page. A subgroup never
+  # equals the page prefix, so the self row is never dropped here.
+  defp drop_settable_set_duplicates(subgroups, leaf_revs) do
+    group_names = MapSet.new(subgroups, fn {name, _count} -> name end)
+
+    Enum.reject(leaf_revs, fn rev -> MapSet.member?(group_names, rev.option.name) end)
   end
 
   defp load_prefix_view(channel_revision_id, prefix) do
