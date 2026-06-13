@@ -98,7 +98,7 @@
           />
           <.link
             :if={@page_search.mode == :active and @page_search.value != ""}
-            navigate={clear_search_path(@page_search)}
+            navigate={@page_search.clear_to || clear_search_path(@page_search)}
             class="app-search__clear"
             aria-label="Clear search"
             title="Clear search"
