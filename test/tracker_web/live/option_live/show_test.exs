@@ -220,6 +220,27 @@ defmodule TrackerWeb.OptionLive.ShowTest do
     assert html =~ "doesn&#39;t have options"
   end
 
+  test "all-channels lens prompts for a channel instead of falling back", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/options/services.nginx")
+
+    send(view.pid, {:set_lens, "all", ""})
+    html = render(view)
+
+    assert html =~ "Select a channel"
+    assert html =~ "lens-attention"
+    refute html =~ "Options at this prefix"
+    refute html =~ "child-card"
+  end
+
+  test "an explicit ?channel= override trumps the all-channels prompt", %{conn: conn} do
+    conn = Plug.Test.init_test_session(conn, %{"lens_channel_name" => "all"})
+
+    {:ok, _view, html} = live(conn, ~p"/options/services.nginx?channel=nixos-unstable")
+
+    refute html =~ "Select a channel"
+    assert html =~ "Options at this prefix"
+  end
+
   test "lens change patches the URL and reloads", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/options/services.nginx")
 

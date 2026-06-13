@@ -318,10 +318,11 @@ defmodule TrackerWeb.OptionLive.Show do
     channel = Map.get(params, "channel", default_channel)
     rev = Map.get(params, "rev", default_rev)
 
-    # The root view has no channel of its own to fall back to: with the lens
-    # on "All channels" (and no explicit ?channel=) it only prompts for one.
+    # Options only exist per channel, so "All channels" has nothing honest to
+    # show — every options page prompts for one instead of silently falling
+    # back to a default. An explicit ?channel= override still wins.
     select_channel? =
-      prefix == "" and lens != nil and lens.all? and not Map.has_key?(params, "channel")
+      lens != nil and lens.all? and not Map.has_key?(params, "channel")
 
     channel_revision =
       if select_channel?, do: nil, else: resolve_channel_revision(channel, rev)
