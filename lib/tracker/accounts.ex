@@ -9,5 +9,6 @@ defmodule Tracker.Accounts do
     resource Tracker.Accounts.ApiToken
     resource Tracker.Accounts.Token
     resource Tracker.Accounts.User
+    resource Tracker.Accounts.UserIdentity
   end
 end

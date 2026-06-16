@@ -28,6 +28,7 @@ defmodule Tracker.Accounts.User do
         token_url "https://github.com/login/oauth/access_token"
         user_url "https://api.github.com/user"
         code_verifier true
+        identity_resource Tracker.Accounts.UserIdentity
       end
     end
 
@@ -78,6 +79,7 @@ defmodule Tracker.Accounts.User do
       upsert_fields [:github_username]
 
       change AshAuthentication.GenerateTokenChange
+      change AshAuthentication.Strategy.OAuth2.IdentityChange
 
       change fn changeset, _ ->
         user_info = Ash.Changeset.get_argument(changeset, :user_info)
