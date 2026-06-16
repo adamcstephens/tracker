@@ -7,8 +7,6 @@ defmodule Tracker.Ingestion.PipelineStarter do
   links to enforce sequential execution.
   """
 
-  require Logger
-
   alias Tracker.Ingestion.{IngestionRun, Pipeline, StepGraph, StepWorker}
   alias Tracker.Nixpkgs.{Channel, ReleaseCache}
 

@@ -28,13 +28,11 @@ defmodule TrackerWeb.CodeHighlight do
   defp highlight(code, language) do
     # html_linked emits class names instead of inline theme colors, so the
     # stylesheets linked in root.html.heex can follow prefers-color-scheme.
-    case Lumis.highlight(code, formatter: {:html_linked, language: language}) do
-      {:ok, html} ->
-        html
-
-      {:error, _} ->
-        {:safe, escaped} = Phoenix.HTML.html_escape(code)
-        "<pre><code>#{escaped}</code></pre>"
-    end
+    {:ok, html} = Lumis.highlight(code, formatter: {:html_linked, language: language})
+    html
+  rescue
+    Lumis.HighlightError ->
+      {:safe, escaped} = Phoenix.HTML.html_escape(code)
+      "<pre><code>#{escaped}</code></pre>"
   end
 end
