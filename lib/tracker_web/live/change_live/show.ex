@@ -319,7 +319,6 @@ defmodule TrackerWeb.ChangeLive.Show do
   defp relative(s) when s < 86_400 * 365, do: "#{div(s, 86_400 * 30)}mo ago"
   defp relative(s), do: "#{div(s, 86_400 * 365)}y ago"
 
-  defp format_datetime(nil), do: "—"
   defp format_datetime(dt), do: Calendar.strftime(dt, "%Y-%m-%d %H:%M")
 
   defp pluralize_namespaces(1), do: "namespace"

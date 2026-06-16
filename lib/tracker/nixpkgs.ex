@@ -1,8 +1,6 @@
 defmodule Tracker.Nixpkgs do
   use Ash.Domain, otp_app: :tracker, extensions: [AshAdmin.Domain, AshJsonApi.Domain]
 
-  require Logger
-
   admin do
     show? true
     show_resources [Tracker.Nixpkgs.Channel]

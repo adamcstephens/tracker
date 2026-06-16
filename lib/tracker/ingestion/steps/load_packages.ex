@@ -9,8 +9,6 @@ defmodule Tracker.Ingestion.Steps.LoadPackages do
 
   @behaviour Tracker.Ingestion.Step
 
-  require Logger
-
   alias Tracker.Ingestion.{Helpers, PackageStream, StepGraph}
   alias Tracker.Nixpkgs.ChannelFetcher
 
