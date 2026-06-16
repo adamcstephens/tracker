@@ -27,6 +27,10 @@ defmodule Tracker.Accounts.User do
         authorize_url "https://github.com/login/oauth/authorize"
         token_url "https://github.com/login/oauth/access_token"
         user_url "https://api.github.com/user"
+        # GitHub doesn't send an `email_verified` claim and we never store
+        # emails, so there's nothing to leave unverified. Trusting it just
+        # silences the add-on warning without changing behaviour.
+        trust_email_verified? true
         code_verifier true
         identity_resource Tracker.Accounts.UserIdentity
       end
