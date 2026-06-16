@@ -19,9 +19,9 @@
           ...
         }:
         let
-          beamPackages = pkgs.beamMinimal28Packages.extend (
+          beamPackages = pkgs.beamMinimal29Packages.extend (
             _: prev: {
-              elixir = prev.elixir_1_19;
+              elixir = prev.elixir_1_20;
             }
           );
         in
