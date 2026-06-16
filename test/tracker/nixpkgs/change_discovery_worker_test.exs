@@ -442,9 +442,7 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorkerTest do
         reason: :rate_limited,
         message: "API rate limit exceeded",
         code: 403,
-        operation: nil,
         source: nil,
-        stacktrace: [],
         step: nil
       }
 
@@ -459,9 +457,7 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorkerTest do
         reason: :server_error,
         message: "Internal Server Error",
         code: 500,
-        operation: nil,
         source: nil,
-        stacktrace: [],
         step: nil
       }
 

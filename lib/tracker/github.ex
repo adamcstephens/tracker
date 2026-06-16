@@ -12,7 +12,7 @@ defmodule Tracker.GitHub do
   an installation token scoped to the configured installation.
   """
   def installation_token! do
-    app = GitHub.app(:tracker)
+    app = GitHub.app()
     installation_id = github_config!(:installation_id)
 
     {:ok, %{token: token}} =

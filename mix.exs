@@ -56,13 +56,10 @@ defmodule Tracker.MixProject do
       {:floki, ">= 0.30.0", only: :test},
       {:lazy_html, ">= 0.1.0", only: :test},
       {:gettext, "~> 1.0"},
-      # for oapi_github
-      {:httpoison, "~> 2.2"},
       {:igniter, "~> 0.5", only: [:dev, :test]},
       {:jason, "~> 1.2"},
       {:lumis, "~> 0.5.0"},
       {:jose, "~> 1.11"},
-      {:oapi_github, "~> 0.3.3"},
       {:oban, "~> 2.0"},
       {:oban_met, "~> 1.1"},
       {:oban_web, "~> 2.12"},

@@ -56,21 +56,9 @@ if config_env() != :test do
       client_id: github_client_id,
       client_secret: github_client_secret,
       redirect_uri: System.fetch_env!("TRACKER_GITHUB_REDIRECT_URI"),
-      installation_id: github_installation_id
-    ]
-
-  config :oapi_github,
-    app_name: "Tracker",
-    apps: [
-      {:tracker, github_app_id, github_app_private_key}
-    ],
-    default_auth: {github_client_id, github_client_secret},
-    stack: [
-      {GitHub.Plugin.JasonSerializer, :encode_body, []},
-      {Tracker.GitHub.ReqClient, :request, []},
-      {GitHub.Plugin.JasonSerializer, :decode_body, []},
-      {GitHub.Plugin.TypedDecoder, :decode_response, []},
-      {GitHub.Plugin.TypedDecoder, :normalize_errors, []}
+      installation_id: github_installation_id,
+      app_id: github_app_id,
+      app_private_key: github_app_private_key
     ]
 end
 
