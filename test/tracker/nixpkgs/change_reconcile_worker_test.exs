@@ -130,9 +130,7 @@ defmodule Tracker.Nixpkgs.ChangeReconcileWorkerTest do
         reason: :rate_limited,
         message: "rate limited",
         code: 403,
-        operation: nil,
         source: nil,
-        stacktrace: [],
         step: nil
       }
 
