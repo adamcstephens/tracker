@@ -118,8 +118,11 @@ defmodule Tracker.Nixpkgs.Maintainer do
     |> Map.keys()
     |> by_githubs!()
     |> Enum.each(fn m ->
+      # `by_githubs!` can match a stored handle that has no exact key in `desired`
+      # (so `target` is nil) -- only reassign when an incoming id actually claims
+      # the handle, otherwise there is nothing to move it to.
       target = desired[m.github]
-      if target != m.github_id, do: reassign_github_id!(m, %{github_id: target})
+      if target && target != m.github_id, do: reassign_github_id!(m, %{github_id: target})
     end)
   end
 
