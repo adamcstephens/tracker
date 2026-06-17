@@ -13,6 +13,8 @@ defmodule Tracker.Nixpkgs.Maintainer do
     define :get_by_github, action: :read, get_by: [:github]
     define :get_by_github_id, action: :read, get_by: [:github_id]
     define :id_map, action: :id_map
+    define :by_githubs, args: [:githubs]
+    define :reassign_github_id
   end
 
   actions do
@@ -43,11 +45,20 @@ defmodule Tracker.Nixpkgs.Maintainer do
              )
     end
 
+    read :by_githubs do
+      argument :githubs, {:array, :string}, allow_nil?: false
+      filter expr(github in ^arg(:githubs))
+    end
+
     create :bulk_upsert do
       accept [:github_id, :github]
       upsert? true
       upsert_identity :unique_github_id
       upsert_fields [:github, :updated_at]
+    end
+
+    update :reassign_github_id do
+      accept [:github_id]
     end
   end
 
@@ -83,6 +94,8 @@ defmodule Tracker.Nixpkgs.Maintainer do
   @max_batch div(65_535, @ash_cols)
 
   def bulk_upsert_all(records) do
+    reconcile_moved_handles(records)
+
     records
     |> Stream.chunk_every(@max_batch)
     |> Enum.each(fn chunk ->
@@ -90,6 +103,31 @@ defmodule Tracker.Nixpkgs.Maintainer do
         batch_size: @max_batch,
         return_errors?: true
       )
+    end)
+  end
+
+  # The `:bulk_upsert` action keys on `github_id`, but a github handle can move to
+  # a different `github_id` (e.g. nixpkgs correcting a maintainer's githubId). The
+  # incoming row would then collide with the stale holder on the `unique_github`
+  # identity, which an ON CONFLICT (github_id) upsert cannot absorb — aborting the
+  # whole batch. Give each handle to its current github_id before upserting by
+  # reassigning the stale row's id in place: a correction that preserves the PK
+  # and its FK links, leaving no duplicate handle for the upsert to trip on.
+  defp reconcile_moved_handles(records) do
+    desired =
+      for r <- records,
+          handle = r[:github],
+          id = r[:github_id],
+          handle && id,
+          into: %{},
+          do: {handle, id}
+
+    desired
+    |> Map.keys()
+    |> by_githubs!()
+    |> Enum.each(fn m ->
+      target = desired[m.github]
+      if target != m.github_id, do: reassign_github_id!(m, %{github_id: target})
     end)
   end
 

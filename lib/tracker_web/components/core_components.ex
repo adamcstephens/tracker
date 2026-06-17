@@ -44,8 +44,7 @@ defmodule TrackerWeb.CoreComponents do
             type="button"
             aria-label={gettext("close")}
             rel="prev"
-          >
-          </button>
+          ></button>
         </header>
         <div id={"#{@id}-content"}>
           {render_slot(@inner_block)}
