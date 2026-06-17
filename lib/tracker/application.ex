@@ -13,6 +13,9 @@ defmodule Tracker.Application do
       Tracker.Repo,
       {Tracker.GitServer, Application.get_env(:tracker, Tracker.GitServer, [])},
       Tracker.GitHub.RateLimitCache,
+      # Isolates ingestion step execution so a step crash (including one from a
+      # linked subtask) is reported back rather than killing the StepWorker.
+      {Task.Supervisor, name: Tracker.Ingestion.StepTaskSupervisor},
       {Oban,
        AshOban.config(
          Application.fetch_env!(:tracker, :ash_domains),
