@@ -17,10 +17,16 @@ defmodule Tracker.Ingestion.StepWorker do
 
   alias Tracker.Ingestion.{Pipeline, StepContext, StepGraph}
 
+  @task_supervisor Tracker.Ingestion.StepTaskSupervisor
+
+  # `run_isolated/2` enforces the per-step timeout itself; this Oban-level timeout
+  # is a generous backstop in case the worker wedges outside the isolated task.
+  @timeout_backstop :timer.seconds(30)
+
   @impl Oban.Worker
   def timeout(%Oban.Job{args: %{"step" => step_name}}) do
     step = String.to_existing_atom(step_name)
-    StepGraph.step_module(step).timeout()
+    StepGraph.step_module(step).timeout() + @timeout_backstop
   end
 
   @impl Oban.Worker
@@ -88,12 +94,35 @@ defmodule Tracker.Ingestion.StepWorker do
   end
 
   defp execute_step(step_module, step, ctx, job) do
-    case step_module.run(ctx) do
+    case run_isolated(fn -> step_module.run(ctx) end, step_module.timeout()) do
       :ok ->
         handle_step_success(ctx.pipeline, step)
 
       {:error, reason} ->
         handle_step_failure(ctx.pipeline, step, reason, job)
+    end
+  end
+
+  @doc """
+  Runs a step function under a supervised, non-linked task and normalizes the
+  outcome to `:ok` or `{:error, reason}`.
+
+  A step can fail by returning `{:error, reason}`, by raising, or by crashing a
+  linked subtask (e.g. a `Task.async` inside the step). The last case kills the
+  task that runs `fun` but — because the task is started `async_nolink` — leaves
+  the calling worker alive to record the failure instead of being taken down by
+  the link.
+  """
+  @spec run_isolated((-> :ok | {:error, term()}), timeout()) :: :ok | {:error, term()}
+  def run_isolated(fun, timeout) when is_function(fun, 0) do
+    task = Task.Supervisor.async_nolink(@task_supervisor, fun)
+
+    case Task.yield(task, timeout) || Task.shutdown(task) do
+      {:ok, :ok} -> :ok
+      {:ok, {:error, reason}} -> {:error, reason}
+      {:ok, other} -> {:error, {:unexpected_step_return, other}}
+      {:exit, reason} -> {:error, reason}
+      nil -> {:error, {:step_timeout, timeout}}
     end
   end
 
