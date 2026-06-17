@@ -44,14 +44,7 @@ defmodule Tracker.Nixpkgs.ChangePackage do
   @max_batch div(65_535, @ash_cols)
 
   def bulk_create_all(records) do
-    records
-    |> Stream.chunk_every(@max_batch)
-    |> Enum.each(fn chunk ->
-      Ash.bulk_create(chunk, __MODULE__, :load,
-        batch_size: @max_batch,
-        return_errors?: true
-      )
-    end)
+    Tracker.Nixpkgs.BulkCreate.run!(records, __MODULE__, :load, @max_batch)
   end
 
   @doc """
