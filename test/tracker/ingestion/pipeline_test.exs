@@ -241,16 +241,32 @@ defmodule Tracker.Ingestion.PipelineTest do
   end
 
   describe "next_pending_for_channel" do
-    test "returns pending pipelines ordered by sequence", %{channel: channel} do
+    test "returns the earliest pending pipeline by released_at, even with tied sequence",
+         %{channel: channel} do
       run = create_run!()
-      create_pipeline!(run, channel, %{revision: "rev3", sequence: 2})
-      create_pipeline!(run, channel, %{revision: "rev1", sequence: 0})
-      create_pipeline!(run, channel, %{revision: "rev2", sequence: 1})
+      # Pipelines created across separate sync batches all carry sequence 0, so the
+      # backlog must be drained in revision-chronological (released_at) order.
+      create_pipeline!(run, channel, %{
+        revision: "rev_late",
+        sequence: 0,
+        released_at: ~U[2025-06-15 00:00:00Z]
+      })
+
+      create_pipeline!(run, channel, %{
+        revision: "rev_early",
+        sequence: 0,
+        released_at: ~U[2025-06-10 00:00:00Z]
+      })
+
+      create_pipeline!(run, channel, %{
+        revision: "rev_mid",
+        sequence: 0,
+        released_at: ~U[2025-06-12 00:00:00Z]
+      })
 
       [first | _] = Pipeline.next_pending_for_channel!(channel.id)
 
-      assert first.revision == "rev1"
-      assert first.sequence == 0
+      assert first.revision == "rev_early"
     end
 
     test "excludes non-pending pipelines", %{channel: channel} do
