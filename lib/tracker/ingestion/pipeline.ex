@@ -58,7 +58,11 @@ defmodule Tracker.Ingestion.Pipeline do
     read :next_pending_for_channel do
       argument :channel_id, :integer, allow_nil?: false
 
-      prepare build(sort: [{:sequence, :asc}], limit: 1)
+      # Order by released_at: `sequence` only orders within a single sync batch and
+      # is not monotonic across batches, so a backlog of pending pipelines from
+      # different syncs (all sequence 0) must be drained in revision-chronological
+      # order to satisfy the predecessor chain.
+      prepare build(sort: [{:released_at, :asc}, {:sequence, :asc}], limit: 1)
       filter expr(channel_id == ^arg(:channel_id) and status == :pending)
     end
 
