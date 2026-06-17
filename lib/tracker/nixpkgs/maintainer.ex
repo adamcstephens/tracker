@@ -95,15 +95,7 @@ defmodule Tracker.Nixpkgs.Maintainer do
 
   def bulk_upsert_all(records) do
     reconcile_moved_handles(records)
-
-    records
-    |> Stream.chunk_every(@max_batch)
-    |> Enum.each(fn chunk ->
-      Ash.bulk_create(chunk, __MODULE__, :bulk_upsert,
-        batch_size: @max_batch,
-        return_errors?: true
-      )
-    end)
+    Tracker.Nixpkgs.BulkCreate.run!(records, __MODULE__, :bulk_upsert, @max_batch)
   end
 
   # The `:bulk_upsert` action keys on `github_id`, but a github handle can move to

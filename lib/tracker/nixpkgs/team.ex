@@ -85,14 +85,7 @@ defmodule Tracker.Nixpkgs.Team do
   @max_batch div(65_535, @ash_cols)
 
   def bulk_upsert_all(records) do
-    records
-    |> Stream.chunk_every(@max_batch)
-    |> Enum.each(fn chunk ->
-      Ash.bulk_create(chunk, __MODULE__, :bulk_upsert,
-        batch_size: @max_batch,
-        return_errors?: true
-      )
-    end)
+    Tracker.Nixpkgs.BulkCreate.run!(records, __MODULE__, :bulk_upsert, @max_batch)
   end
 
   identities do
