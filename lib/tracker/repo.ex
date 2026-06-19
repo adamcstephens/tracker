@@ -4,7 +4,7 @@ defmodule Tracker.Repo do
 
   def installed_extensions do
     # Add extensions here, and the migration generator will install them.
-    ["ash-functions", "citext", "pg_trgm"]
+    ["ash-functions", "citext", "pg_trgm", "btree_gist"]
   end
 
   # Don't open unnecessary transactions

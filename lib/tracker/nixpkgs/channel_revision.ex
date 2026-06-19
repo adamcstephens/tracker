@@ -190,8 +190,6 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
       attribute_type :integer
       allow_nil? true
     end
-
-    has_many :option_revisions, Tracker.Nixpkgs.OptionRevision
   end
 
   identities do

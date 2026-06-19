@@ -13,7 +13,7 @@
       "type": "bigint"
     },
     {
-      "allow_nil?": true,
+      "allow_nil?": false,
       "default": "nil",
       "generated?": false,
       "precision": null,
@@ -21,83 +21,8 @@
       "references": null,
       "scale": null,
       "size": null,
-      "source": "description",
-      "type": "text"
-    },
-    {
-      "allow_nil?": true,
-      "default": "nil",
-      "generated?": false,
-      "precision": null,
-      "primary_key?": false,
-      "references": null,
-      "scale": null,
-      "size": null,
-      "source": "type",
-      "type": "text"
-    },
-    {
-      "allow_nil?": true,
-      "default": "nil",
-      "generated?": false,
-      "precision": null,
-      "primary_key?": false,
-      "references": null,
-      "scale": null,
-      "size": null,
-      "source": "default",
-      "type": "text"
-    },
-    {
-      "allow_nil?": true,
-      "default": "nil",
-      "generated?": false,
-      "precision": null,
-      "primary_key?": false,
-      "references": null,
-      "scale": null,
-      "size": null,
-      "source": "example",
-      "type": "text"
-    },
-    {
-      "allow_nil?": true,
-      "default": "false",
-      "generated?": false,
-      "precision": null,
-      "primary_key?": false,
-      "references": null,
-      "scale": null,
-      "size": null,
-      "source": "read_only",
-      "type": "boolean"
-    },
-    {
-      "allow_nil?": true,
-      "default": "nil",
-      "generated?": false,
-      "precision": null,
-      "primary_key?": false,
-      "references": null,
-      "scale": null,
-      "size": null,
-      "source": "loc",
-      "type": [
-        "array",
-        "text"
-      ]
-    },
-    {
-      "allow_nil?": true,
-      "default": "nil",
-      "generated?": false,
-      "precision": null,
-      "primary_key?": false,
-      "references": null,
-      "scale": null,
-      "size": null,
-      "source": "related_packages",
-      "type": "text"
+      "source": "valid",
+      "type": "tstzrange"
     },
     {
       "allow_nil?": false,
@@ -142,7 +67,38 @@
           "global": null,
           "strategy": null
         },
-        "name": "option_revisions_option_id_fkey",
+        "name": "option_span_files_channel_id_fkey",
+        "on_delete": null,
+        "on_update": null,
+        "primary_key?": true,
+        "schema": "public",
+        "table": "channels"
+      },
+      "scale": null,
+      "size": null,
+      "source": "channel_id",
+      "type": "bigint"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": {
+        "deferrable": false,
+        "destination_attribute": "id",
+        "destination_attribute_default": null,
+        "destination_attribute_generated": null,
+        "index?": false,
+        "match_type": null,
+        "match_with": null,
+        "multitenancy": {
+          "attribute": null,
+          "global": null,
+          "strategy": null
+        },
+        "name": "option_span_files_option_id_fkey",
         "on_delete": null,
         "on_update": null,
         "primary_key?": true,
@@ -173,16 +129,16 @@
           "global": null,
           "strategy": null
         },
-        "name": "option_revisions_channel_revision_id_fkey",
+        "name": "option_span_files_file_id_fkey",
         "on_delete": null,
         "on_update": null,
         "primary_key?": true,
         "schema": "public",
-        "table": "channel_revisions"
+        "table": "files"
       },
       "scale": null,
       "size": null,
-      "source": "channel_revision_id",
+      "source": "file_id",
       "type": "bigint"
     }
   ],
@@ -190,29 +146,25 @@
   "check_constraints": [],
   "create_table_options": null,
   "custom_indexes": [],
-  "custom_statements": [],
-  "has_create_action": true,
-  "hash": "A09BF3926FD991B2884ED1E27CCCBA7BB463F8F3A269605792E49AFB7339AD55",
-  "identities": [
+  "custom_statements": [
     {
-      "all_tenants?": false,
-      "base_filter": null,
-      "index_name": "option_revisions_unique_option_revision_index",
-      "keys": [
-        {
-          "type": "atom",
-          "value": "channel_revision_id"
-        },
-        {
-          "type": "atom",
-          "value": "option_id"
-        }
-      ],
-      "name": "unique_option_revision",
-      "nils_distinct?": true,
-      "where": null
+      "code?": false,
+      "down": "ALTER TABLE option_span_files DROP CONSTRAINT option_span_files_no_overlap",
+      "global?": false,
+      "name": "option_span_files_no_overlap",
+      "up": "ALTER TABLE option_span_files ADD CONSTRAINT option_span_files_no_overlap EXCLUDE USING gist (channel_id WITH =, option_id WITH =, file_id WITH =, valid WITH &&)"
+    },
+    {
+      "code?": false,
+      "down": "DROP INDEX option_span_files_current",
+      "global?": false,
+      "name": "option_span_files_current",
+      "up": "CREATE INDEX option_span_files_current ON option_span_files (channel_id, option_id, file_id) WHERE upper_inf(valid)"
     }
   ],
+  "has_create_action": false,
+  "hash": "E06828A38EC53A3EC8DE412636425780196BDEAD0DFE7AD0296F53F9F04AC1B6",
+  "identities": [],
   "multitenancy": {
     "attribute": null,
     "global": null,
@@ -220,5 +172,5 @@
   },
   "repo": "Elixir.Tracker.Repo",
   "schema": null,
-  "table": "option_revisions"
+  "table": "option_span_files"
 }

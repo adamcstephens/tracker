@@ -14,6 +14,18 @@
     },
     {
       "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "attribute",
+      "type": "text"
+    },
+    {
+      "allow_nil?": false,
       "default": "fragment(\"(now() AT TIME ZONE 'utc')\")",
       "generated?": false,
       "precision": null,
@@ -37,7 +49,7 @@
       "type": "utc_datetime_usec"
     },
     {
-      "allow_nil?": false,
+      "allow_nil?": true,
       "default": "nil",
       "generated?": false,
       "precision": null,
@@ -55,20 +67,20 @@
           "global": null,
           "strategy": null
         },
-        "name": "option_revision_files_option_revision_id_fkey",
+        "name": "packages_package_family_id_fkey",
         "on_delete": null,
         "on_update": null,
         "primary_key?": true,
         "schema": "public",
-        "table": "option_revisions"
+        "table": "package_families"
       },
       "scale": null,
       "size": null,
-      "source": "option_revision_id",
+      "source": "package_family_id",
       "type": "bigint"
     },
     {
-      "allow_nil?": false,
+      "allow_nil?": true,
       "default": "nil",
       "generated?": false,
       "precision": null,
@@ -86,16 +98,16 @@
           "global": null,
           "strategy": null
         },
-        "name": "option_revision_files_file_id_fkey",
+        "name": "packages_package_variant_group_id_fkey",
         "on_delete": null,
         "on_update": null,
         "primary_key?": true,
         "schema": "public",
-        "table": "files"
+        "table": "package_variant_groups"
       },
       "scale": null,
       "size": null,
-      "source": "file_id",
+      "source": "package_variant_group_id",
       "type": "bigint"
     }
   ],
@@ -107,12 +119,12 @@
       "all_tenants?": false,
       "concurrently": false,
       "error_fields": [
-        "file_id"
+        "inserted_at"
       ],
       "fields": [
         {
           "type": "atom",
-          "value": "file_id"
+          "value": "inserted_at"
         }
       ],
       "include": null,
@@ -127,24 +139,20 @@
     }
   ],
   "custom_statements": [],
-  "has_create_action": false,
-  "hash": "8C47F9E6CA42CC381E8E7FBBD1A6A5D990EB331C7F2EE7B0AC3CCC0EC378A2BE",
+  "has_create_action": true,
+  "hash": "28739362ED9A1AF40F533BAB534A9C7396FCCA01D0CD51A6E8765B04923F077B",
   "identities": [
     {
       "all_tenants?": false,
       "base_filter": null,
-      "index_name": "option_revision_files_unique_revision_file_index",
+      "index_name": "packages_unique_attribute_index",
       "keys": [
         {
           "type": "atom",
-          "value": "option_revision_id"
-        },
-        {
-          "type": "atom",
-          "value": "file_id"
+          "value": "attribute"
         }
       ],
-      "name": "unique_revision_file",
+      "name": "unique_attribute",
       "nils_distinct?": true,
       "where": null
     }
@@ -156,5 +164,5 @@
   },
   "repo": "Elixir.Tracker.Repo",
   "schema": null,
-  "table": "option_revision_files"
+  "table": "packages"
 }
