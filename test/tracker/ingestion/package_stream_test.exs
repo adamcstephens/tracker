@@ -163,6 +163,33 @@ defmodule Tracker.Ingestion.PackageStreamTest do
       assert reason =~ "version"
     end
 
+    test "delivers all messages synchronously before returning :ok" do
+      br = Tracker.PackageStreamFixtures.small_packages_br()
+      assert :ok = PackageStream.stream_packages(br, self())
+
+      # A synchronous DirtyCpu NIF only returns :ok once decompress + parse
+      # have run to completion, so every message is already in our mailbox.
+      # assert_received / `after 0` check the mailbox without blocking.
+      assert_received {:packages, _}
+      assert :ok = drain_until_done()
+    end
+
+    test "drives from a separate process while the receiver drains concurrently" do
+      # Mirrors Tracker.Ingestion.Steps.LoadPackages: the blocking NIF runs in
+      # a Task with this process as the receiver, so batches are drained while
+      # the Task is still blocked rather than piling in the NIF caller's mailbox.
+      br = Tracker.PackageStreamFixtures.small_packages_br()
+      parent = self()
+
+      task = Task.async(fn -> PackageStream.stream_packages(br, parent) end)
+
+      packages = collect_packages()
+      assert :ok = Task.await(task, 10_000)
+
+      assert map_size(packages) == 7
+      assert packages["hello"][:version] == "2.12.1"
+    end
+
     test "packages without meta have nil optional fields" do
       br = Tracker.PackageStreamFixtures.small_packages_br()
       :ok = PackageStream.stream_packages(br, self())
@@ -200,6 +227,18 @@ defmodule Tracker.Ingestion.PackageStreamTest do
     after
       10_000 ->
         raise "Timed out waiting for package stream messages"
+    end
+  end
+
+  # Drains already-delivered package batches until the {:done, _} marker,
+  # never blocking — an empty mailbox means messages were not delivered
+  # synchronously.
+  defp drain_until_done do
+    receive do
+      {:done, _meta} -> :ok
+      {:packages, _entries} -> drain_until_done()
+    after
+      0 -> flunk("expected all stream messages to be delivered before :ok returned")
     end
   end
 
