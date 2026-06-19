@@ -21,7 +21,94 @@
       "references": null,
       "scale": null,
       "size": null,
+      "source": "valid",
+      "type": "tstzrange"
+    },
+    {
+      "allow_nil?": true,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "description",
+      "type": "text"
+    },
+    {
+      "allow_nil?": true,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
       "source": "type",
+      "type": "text"
+    },
+    {
+      "allow_nil?": true,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "default",
+      "type": "text"
+    },
+    {
+      "allow_nil?": true,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "example",
+      "type": "text"
+    },
+    {
+      "allow_nil?": true,
+      "default": "false",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "read_only",
+      "type": "boolean"
+    },
+    {
+      "allow_nil?": true,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "loc",
+      "type": [
+        "array",
+        "text"
+      ]
+    },
+    {
+      "allow_nil?": true,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "related_packages",
       "type": "text"
     },
     {
@@ -67,16 +154,16 @@
           "global": null,
           "strategy": null
         },
-        "name": "package_events_package_id_fkey",
+        "name": "option_spans_channel_id_fkey",
         "on_delete": null,
         "on_update": null,
         "primary_key?": true,
         "schema": "public",
-        "table": "packages"
+        "table": "channels"
       },
       "scale": null,
       "size": null,
-      "source": "package_id",
+      "source": "channel_id",
       "type": "bigint"
     },
     {
@@ -98,16 +185,16 @@
           "global": null,
           "strategy": null
         },
-        "name": "package_events_channel_revision_id_fkey",
+        "name": "option_spans_option_id_fkey",
         "on_delete": null,
         "on_update": null,
         "primary_key?": true,
         "schema": "public",
-        "table": "channel_revisions"
+        "table": "options"
       },
       "scale": null,
       "size": null,
-      "source": "channel_revision_id",
+      "source": "option_id",
       "type": "bigint"
     }
   ],
@@ -115,9 +202,24 @@
   "check_constraints": [],
   "create_table_options": null,
   "custom_indexes": [],
-  "custom_statements": [],
-  "has_create_action": true,
-  "hash": "B545CE9AF71BCDFB4B548D6396B3975C8C5C817CDA9CA4113C4A5FC818666EAA",
+  "custom_statements": [
+    {
+      "code?": false,
+      "down": "ALTER TABLE option_spans DROP CONSTRAINT option_spans_no_overlap",
+      "global?": false,
+      "name": "option_spans_no_overlap",
+      "up": "ALTER TABLE option_spans ADD CONSTRAINT option_spans_no_overlap EXCLUDE USING gist (channel_id WITH =, option_id WITH =, valid WITH &&)"
+    },
+    {
+      "code?": false,
+      "down": "DROP INDEX option_spans_current",
+      "global?": false,
+      "name": "option_spans_current",
+      "up": "CREATE INDEX option_spans_current ON option_spans (channel_id, option_id) WHERE upper_inf(valid)"
+    }
+  ],
+  "has_create_action": false,
+  "hash": "FA55A61DA8B6A20F5E5002E4199E1AA81333A0EBF29D7E992B9F9AB58583712A",
   "identities": [],
   "multitenancy": {
     "attribute": null,
@@ -126,5 +228,5 @@
   },
   "repo": "Elixir.Tracker.Repo",
   "schema": null,
-  "table": "package_events"
+  "table": "option_spans"
 }

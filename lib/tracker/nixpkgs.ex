@@ -15,20 +15,18 @@ defmodule Tracker.Nixpkgs do
     resource Tracker.Nixpkgs.PackageFamily
     resource Tracker.Nixpkgs.PackageVariantGroup
     resource Tracker.Nixpkgs.Package
-    resource Tracker.Nixpkgs.PackageRevision
+    resource Tracker.Nixpkgs.PackageSpan
     resource Tracker.Nixpkgs.ChannelRevision
     resource Tracker.Nixpkgs.Maintainer
     resource Tracker.Nixpkgs.Team
     resource Tracker.Nixpkgs.PackageMaintainer
     resource Tracker.Nixpkgs.PackageTeam
     resource Tracker.Nixpkgs.TeamMember
-    resource Tracker.Nixpkgs.PackageEvent
     resource Tracker.Nixpkgs.Option
-    resource Tracker.Nixpkgs.OptionRevision
-    resource Tracker.Nixpkgs.OptionEvent
+    resource Tracker.Nixpkgs.OptionSpan
     resource Tracker.Nixpkgs.OptionPackage
     resource Tracker.Nixpkgs.File
-    resource Tracker.Nixpkgs.OptionRevisionFile
+    resource Tracker.Nixpkgs.OptionSpanFile
     resource Tracker.Nixpkgs.Change
     resource Tracker.Nixpkgs.ChangePackage
     resource Tracker.Nixpkgs.ChangeBranch

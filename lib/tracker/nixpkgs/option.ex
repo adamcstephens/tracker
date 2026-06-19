@@ -61,7 +61,7 @@ defmodule Tracker.Nixpkgs.Option do
   end
 
   relationships do
-    has_many :option_revisions, Tracker.Nixpkgs.OptionRevision
+    has_many :spans, Tracker.Nixpkgs.OptionSpan
 
     many_to_many :packages, Tracker.Nixpkgs.Package do
       through Tracker.Nixpkgs.OptionPackage

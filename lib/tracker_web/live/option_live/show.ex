@@ -282,7 +282,8 @@ defmodule TrackerWeb.OptionLive.Show do
   defp tail(name, ""), do: name
   defp tail(name, prefix), do: String.slice(name, String.length(prefix) + 1, String.length(name))
 
-  defp option_packages(%Tracker.Nixpkgs.OptionRevision{option: %{packages: packages}}),
+  # NOTE: OptionRevision removed in spans P0; rewritten to OptionSpan in P4 (trk-322).
+  defp option_packages(%{option: %{packages: packages}}),
     do: packages
 
   defp option_packages(_), do: []

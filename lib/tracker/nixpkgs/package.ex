@@ -50,7 +50,7 @@ defmodule Tracker.Nixpkgs.Package do
                  true
                end and
                  if not is_nil(^arg(:channel_id)) do
-                   exists(revisions, channel_revision.channel_id == ^arg(:channel_id))
+                   exists(spans, channel_id == ^arg(:channel_id))
                  else
                    true
                  end
@@ -82,7 +82,7 @@ defmodule Tracker.Nixpkgs.Package do
                    true
                  end and
                  if not is_nil(^arg(:channel_id)) do
-                   exists(revisions, channel_revision.channel_id == ^arg(:channel_id))
+                   exists(spans, channel_id == ^arg(:channel_id))
                  else
                    true
                  end
@@ -114,7 +114,7 @@ defmodule Tracker.Nixpkgs.Package do
                    true
                  end and
                  if not is_nil(^arg(:channel_id)) do
-                   exists(revisions, channel_revision.channel_id == ^arg(:channel_id))
+                   exists(spans, channel_id == ^arg(:channel_id))
                  else
                    true
                  end
@@ -130,7 +130,7 @@ defmodule Tracker.Nixpkgs.Package do
         allow_nil? false
       end
 
-      prepare build(sort: :package_set)
+      prepare build(sort: :attribute)
       filter expr(package_family_id == ^arg(:package_family_id) and id != ^arg(:exclude_id))
     end
 
@@ -189,32 +189,12 @@ defmodule Tracker.Nixpkgs.Package do
     end
 
     create :bulk_upsert do
-      accept [
-        :attribute,
-        :description,
-        :homepage,
-        :position,
-        :licenses,
-        :package_family_id,
-        :package_variant_group_id,
-        :package_set,
-        :set_version
-      ]
+      accept [:attribute, :package_family_id, :package_variant_group_id]
 
       upsert? true
       upsert_identity :unique_attribute
 
-      upsert_fields [
-        :description,
-        :homepage,
-        :position,
-        :licenses,
-        :package_family_id,
-        :package_variant_group_id,
-        :package_set,
-        :set_version,
-        :updated_at
-      ]
+      upsert_fields [:package_family_id, :package_variant_group_id, :updated_at]
     end
   end
 
@@ -225,13 +205,6 @@ defmodule Tracker.Nixpkgs.Package do
       allow_nil? false
       public? true
     end
-
-    attribute :description, :string, public?: true
-    attribute :homepage, {:array, :string}, public?: true
-    attribute :position, :string, public?: true
-    attribute :licenses, {:array, :string}, public?: true
-    attribute :package_set, :string, public?: true
-    attribute :set_version, :string, public?: true
 
     timestamps()
   end
@@ -247,7 +220,7 @@ defmodule Tracker.Nixpkgs.Package do
       allow_nil? true
     end
 
-    has_many :revisions, Tracker.Nixpkgs.PackageRevision
+    has_many :spans, Tracker.Nixpkgs.PackageSpan
 
     has_many :package_maintainers, Tracker.Nixpkgs.PackageMaintainer
     has_many :package_teams, Tracker.Nixpkgs.PackageTeam
@@ -285,27 +258,22 @@ defmodule Tracker.Nixpkgs.Package do
     identity :unique_attribute, [:attribute]
   end
 
-  # 11 columns: attribute, description, homepage, position, licenses,
-  # package_family_id, package_variant_group_id, package_set, set_version, inserted_at, updated_at
-  @insert_cols 11
+  # 5 columns: attribute, package_family_id, package_variant_group_id,
+  # inserted_at, updated_at
+  @insert_cols 5
   @max_rows div(65_535, @insert_cols)
 
   @doc """
   Bulk upsert packages using raw Ecto insert_all for performance.
 
-  Handles chunking internally based on PostgreSQL's parameter limit.
-  Expects an enumerable of maps with keys: :attribute, and optionally :description,
-  :homepage, :position, :licenses, :package_family_id, :package_set, :set_version.
+  Handles chunking internally based on PostgreSQL's parameter limit. `packages`
+  is identity-only; mutable metadata lives on `Tracker.Nixpkgs.PackageSpan`.
+  Expects an enumerable of maps with keys: :attribute, and optionally
+  :package_family_id, :package_variant_group_id.
   """
   @upsert_fields [
-    :description,
-    :homepage,
-    :position,
-    :licenses,
     :package_family_id,
     :package_variant_group_id,
-    :package_set,
-    :set_version,
     :updated_at
   ]
 
