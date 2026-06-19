@@ -2,13 +2,14 @@ default:
     just -l
 
 pc *ARGS:
-    process-compose --use-uds {{ARGS}}
+    process-compose --use-uds {{ ARGS }}
 
 services:
     just pc up --detached
     mix ecto.setup
 
 dev:
+    if [ ! -d deps ]; then mix deps.get; fi
     if [ mix.exs -nt mix.lock ]; then mix deps.get; fi
     just services
     iex -S mix phx.server

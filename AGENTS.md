@@ -23,7 +23,6 @@
 
 ## Testing
 
-- Test nix end to end with `just check-e2e`
 - You can access the dev server live over tidewave project_eval, allowing for introspection of a live environment.
 
 ## Workspace setup
