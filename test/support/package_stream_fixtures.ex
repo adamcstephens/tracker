@@ -91,6 +91,21 @@ defmodule Tracker.PackageStreamFixtures do
   end
 
   @doc """
+  Returns a brotli-compressed packages.json with `count` valid packages,
+  used to exercise multi-batch streaming (batch size is 500 in the NIF).
+  """
+  def large_packages_br(count) do
+    packages =
+      Map.new(1..count, fn i ->
+        {"pkg_#{i}", %{"version" => "1.0.#{i}", "meta" => %{"description" => "package #{i}"}}}
+      end)
+
+    %{"version" => 2, "packages" => packages}
+    |> Jason.encode!()
+    |> ExBrotli.compress!()
+  end
+
+  @doc """
   Returns a brotli-compressed packages.json with a wrong version.
   """
   def wrong_version_br do

@@ -174,6 +174,23 @@ defmodule Tracker.Ingestion.PackageStreamTest do
       assert :ok = drain_until_done()
     end
 
+    test "streams a large package set across multiple 500-entry batches" do
+      count = 1200
+      br = Tracker.PackageStreamFixtures.large_packages_br(count)
+      assert :ok = PackageStream.stream_packages(br, self())
+
+      batches = collect_batches()
+
+      # 1200 packages at batch size 500 => 500 + 500 + 200, exercising the
+      # per-batch OwnedEnv build/send/free across more than one batch.
+      assert Enum.map(batches, &length/1) == [500, 500, 200]
+
+      all = batches |> List.flatten() |> Map.new()
+      assert map_size(all) == count
+      assert all["pkg_1"][:version] == "1.0.1"
+      assert all["pkg_1200"][:version] == "1.0.1200"
+    end
+
     test "drives from a separate process while the receiver drains concurrently" do
       # Mirrors Tracker.Ingestion.Steps.LoadPackages: the blocking NIF runs in
       # a Task with this process as the receiver, so batches are drained while
@@ -227,6 +244,18 @@ defmodule Tracker.Ingestion.PackageStreamTest do
     after
       10_000 ->
         raise "Timed out waiting for package stream messages"
+    end
+  end
+
+  # Collects each {:packages, entries} batch as a separate list (preserving
+  # batch boundaries) until {:done, _}. Relies on synchronous delivery: every
+  # message is already in the mailbox by the time :ok returns.
+  defp collect_batches(acc \\ []) do
+    receive do
+      {:packages, entries} -> collect_batches([entries | acc])
+      {:done, _meta} -> Enum.reverse(acc)
+    after
+      0 -> flunk("expected all stream messages to be delivered before :ok returned")
     end
   end
 
