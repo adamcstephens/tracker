@@ -259,26 +259,31 @@ fn encode_team<'a>(env: Env<'a>, t: &TeamInfo) -> Term<'a> {
 const SEND_BATCH_SIZE: usize = 500;
 
 /// Seed for deserializing the "packages" object, sending batched entries via enif_send.
-struct PackagesStreamSeed<'a> {
+struct PackagesStreamSeed<'a, 'env> {
+    caller_env: Env<'env>,
     pid: &'a LocalPid,
 }
 
-impl<'de, 'a> DeserializeSeed<'de> for PackagesStreamSeed<'a> {
+impl<'de, 'a, 'env> DeserializeSeed<'de> for PackagesStreamSeed<'a, 'env> {
     type Value = ();
 
     fn deserialize<D>(self, deserializer: D) -> Result<(), D::Error>
     where
         D: Deserializer<'de>,
     {
-        deserializer.deserialize_map(PackagesVisitor { pid: self.pid })
+        deserializer.deserialize_map(PackagesVisitor {
+            caller_env: self.caller_env,
+            pid: self.pid,
+        })
     }
 }
 
-struct PackagesVisitor<'a> {
+struct PackagesVisitor<'a, 'env> {
+    caller_env: Env<'env>,
     pid: &'a LocalPid,
 }
 
-impl<'de, 'a> Visitor<'de> for PackagesVisitor<'a> {
+impl<'de, 'a, 'env> Visitor<'de> for PackagesVisitor<'a, 'env> {
     type Value = ();
 
     fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -298,7 +303,7 @@ impl<'de, 'a> Visitor<'de> for PackagesVisitor<'a> {
                 batch.push((attr, entry));
 
                 if batch.len() >= SEND_BATCH_SIZE {
-                    send_batch(self.pid, &batch)
+                    send_batch(self.caller_env, self.pid, &batch)
                         .map_err(|_| de::Error::custom("caller process is dead"))?;
                     batch.clear();
                 }
@@ -307,7 +312,7 @@ impl<'de, 'a> Visitor<'de> for PackagesVisitor<'a> {
 
         // Flush remaining entries
         if !batch.is_empty() {
-            send_batch(self.pid, &batch)
+            send_batch(self.caller_env, self.pid, &batch)
                 .map_err(|_| de::Error::custom("caller process is dead"))?;
         }
 
@@ -315,13 +320,51 @@ impl<'de, 'a> Visitor<'de> for PackagesVisitor<'a> {
     }
 }
 
+/// Send a message built in a fresh process-independent env to `pid`, from
+/// inside a NIF running on a (dirty) scheduler thread.
+///
+/// `OwnedEnv::send_and_clear` can't be used here: it asserts the current
+/// thread is *unmanaged* and panics on a scheduler thread. The supported path
+/// is `enif_send` with the live callback env as the caller env and the owned
+/// env as the message env. The message is copied into `pid`'s mailbox, then
+/// the owned env (and its per-batch terms) is freed on drop — so memory stays
+/// bounded to one batch instead of accumulating in the callback env.
+fn send_from_nif<F>(
+    caller_env: Env,
+    pid: &LocalPid,
+    build: F,
+) -> Result<(), rustler::env::SendError>
+where
+    F: for<'a> FnOnce(Env<'a>) -> Term<'a>,
+{
+    let msg_env = OwnedEnv::new();
+
+    // NIF_ENV and NIF_TERM are plain copyable handles that don't borrow `env`.
+    let (raw_env, raw_msg) = msg_env.run(|env| (env.as_c_arg(), build(env).as_c_arg()));
+
+    // SAFETY:
+    // - `caller_env` is the live NIF callback env: `stream_packages` runs
+    //   synchronously on the scheduler thread that entered it, so it is valid.
+    // - `raw_env`/`raw_msg` belong to `msg_env`, which is alive for the whole
+    //   call and freed exactly once on drop after this send.
+    // - enif_send copies `raw_msg` into `pid`'s mailbox; it neither frees
+    //   `msg_env` nor retains a reference past the call.
+    let res =
+        unsafe { rustler::sys::enif_send(caller_env.as_c_arg(), pid.as_c_arg(), raw_env, raw_msg) };
+
+    if res == 1 {
+        Ok(())
+    } else {
+        Err(rustler::env::SendError)
+    }
+}
+
 fn send_batch(
+    caller_env: Env,
     pid: &LocalPid,
     batch: &[(String, PackageEntry)],
 ) -> Result<(), rustler::env::SendError> {
-    let mut owned_env = OwnedEnv::new();
-    let pid = pid.clone();
-    owned_env.send_and_clear(&pid, |env| {
+    send_from_nif(caller_env, pid, |env| {
         let entries: Vec<Term> = batch
             .iter()
             .map(|(attr, entry)| encode_package_tuple(env, attr, entry))
@@ -331,11 +374,12 @@ fn send_batch(
 }
 
 /// Visitor for the top-level JSON object {"version": N, "packages": {...}}.
-struct TopLevelVisitor<'a> {
+struct TopLevelVisitor<'a, 'env> {
+    caller_env: Env<'env>,
     pid: &'a LocalPid,
 }
 
-impl<'de, 'a> Visitor<'de> for TopLevelVisitor<'a> {
+impl<'de, 'a, 'env> Visitor<'de> for TopLevelVisitor<'a, 'env> {
     type Value = u64;
 
     fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -365,7 +409,10 @@ impl<'de, 'a> Visitor<'de> for TopLevelVisitor<'a> {
                             )));
                         }
                     }
-                    map.next_value_seed(PackagesStreamSeed { pid: self.pid })?;
+                    map.next_value_seed(PackagesStreamSeed {
+                        caller_env: self.caller_env,
+                        pid: self.pid,
+                    })?;
                     packages_seen = true;
                 }
                 _ => {
@@ -388,7 +435,7 @@ impl<'de, 'a> Visitor<'de> for TopLevelVisitor<'a> {
     }
 }
 
-fn stream_from_reader<R: Read>(reader: R, pid: &LocalPid) -> Result<u64, String> {
+fn stream_from_reader<R: Read>(reader: R, env: Env, pid: &LocalPid) -> Result<u64, String> {
     // Decompress fully into a Rust-owned buffer, then parse from memory.
     // serde_json::from_reader reads byte-by-byte which is slow through
     // the brotli streaming decoder. Decompressing first into a Vec<u8>
@@ -403,13 +450,15 @@ fn stream_from_reader<R: Read>(reader: R, pid: &LocalPid) -> Result<u64, String>
 
     let mut deser = serde_json::Deserializer::from_slice(&decompressed);
     deser
-        .deserialize_map(TopLevelVisitor { pid })
+        .deserialize_map(TopLevelVisitor {
+            caller_env: env,
+            pid,
+        })
         .map_err(|e| e.to_string())
 }
 
-fn send_done(pid: &LocalPid, version: u64) {
-    let mut owned_env = OwnedEnv::new();
-    let _ = owned_env.send_and_clear(pid, |env| {
+fn send_done(caller_env: Env, pid: &LocalPid, version: u64) {
+    let _ = send_from_nif(caller_env, pid, |env| {
         let version_key = atoms::version().encode(env);
         let version_val = version.encode(env);
         let meta = Term::map_from_arrays(env, &[version_key], &[version_val])
@@ -418,39 +467,31 @@ fn send_done(pid: &LocalPid, version: u64) {
     });
 }
 
-fn send_error(pid: &LocalPid, reason: &str) {
-    let mut owned_env = OwnedEnv::new();
-    let _ = owned_env.send_and_clear(pid, |env| (atoms::error(), reason.encode(env)).encode(env));
+fn send_error(caller_env: Env, pid: &LocalPid, reason: &str) {
+    let _ = send_from_nif(caller_env, pid, |env| {
+        (atoms::error(), reason.encode(env)).encode(env)
+    });
 }
 
 // ---------------------------------------------------------------------------
 // NIF entry point
 // ---------------------------------------------------------------------------
 
-#[rustler::nif]
+// Runs on a dirty CPU scheduler (decompress + parse is CPU-bound). The
+// scheduler thread is owned, tracked, and drained by the runtime, so there
+// is no detached thread to outlive a module unload or VM shutdown. The work
+// is synchronous: the `data` binary stays borrowed for the whole call, so we
+// read straight from `data.as_slice()` with no owning copy. The caller is
+// expected to run this in its own process (e.g. a Task) so batched sends to
+// `caller` are drained concurrently rather than piling in its own mailbox.
+#[rustler::nif(schedule = "DirtyCpu")]
 fn stream_packages(env: Env, data: Binary, caller: LocalPid) -> Atom {
-    // Copy compressed data into owned Vec since Binary borrows from env
-    let owned_data = data.as_slice().to_vec();
-    let pid = caller;
+    let reader = brotli::Decompressor::new(data.as_slice(), 4096);
 
-    // Spawn an unmanaged OS thread so we can use OwnedEnv::send_and_clear
-    std::thread::spawn(move || {
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            let reader = brotli::Decompressor::new(owned_data.as_slice(), 4096);
-
-            match stream_from_reader(reader, &pid) {
-                Ok(version) => send_done(&pid, version),
-                Err(reason) => send_error(&pid, &reason),
-            }
-        }));
-
-        if result.is_err() {
-            send_error(&pid, "NIF panicked");
-        }
-    });
-
-    // Prevent env from being used after this point
-    let _ = env;
+    match stream_from_reader(reader, env, &caller) {
+        Ok(version) => send_done(env, &caller, version),
+        Err(reason) => send_error(env, &caller, &reason),
+    }
 
     atoms::ok()
 }

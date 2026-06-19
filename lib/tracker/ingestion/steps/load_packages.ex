@@ -23,9 +23,15 @@ defmodule Tracker.Ingestion.Steps.LoadPackages do
     channel = Ash.get!(Tracker.Nixpkgs.Channel, pipeline.channel_id)
     include_metadata? = channel.name == StepGraph.metadata_channel()
 
-    :ok = PackageStream.stream_packages(compressed, self())
+    # stream_packages/2 is a synchronous DirtyCpu NIF that blocks its caller
+    # until decompress + parse finish. Run it in a Task so this process stays
+    # free to drain the {:packages, _} batches it sends concurrently; piling
+    # them in the NIF caller's own mailbox would deadlock.
+    parent = self()
+    stream_task = Task.async(fn -> PackageStream.stream_packages(compressed, parent) end)
 
     packages = collect_all_packages()
+    :ok = Task.await(stream_task, @stream_timeout)
 
     {extracted, maint_data, team_data, joins} =
       extract_packages(packages, include_metadata?)
