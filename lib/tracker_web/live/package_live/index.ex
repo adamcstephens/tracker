@@ -122,9 +122,10 @@ defmodule TrackerWeb.PackageLive.Index do
       )
 
     pagination = TableParams.apply_pagination(tp, page, :packages)
+    rows = TrackerWeb.PackageRows.with_current_descriptions(pagination.stream_results)
 
     socket
-    |> stream(:packages, pagination.stream_results, reset: true)
+    |> stream(:packages, rows, reset: true)
     |> assign(:has_prev_page?, pagination.has_prev_page?)
     |> assign(:has_next_page?, pagination.has_next_page?)
     |> assign(:total_pages, pagination.total_pages)

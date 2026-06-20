@@ -9,7 +9,6 @@ defmodule Tracker.Ingestion.StepGraphTest do
 
       assert :create_revision in steps
       assert :load_packages in steps
-      assert :detect_package_events in steps
       assert :finalize in steps
       refute :load_options in steps
       refute :link_options in steps
@@ -21,7 +20,6 @@ defmodule Tracker.Ingestion.StepGraphTest do
 
       assert :create_revision in steps
       assert :load_packages in steps
-      assert :detect_package_events in steps
       assert :finalize in steps
       assert :load_options in steps
       assert :link_options in steps
@@ -56,15 +54,15 @@ defmodule Tracker.Ingestion.StepGraphTest do
       refute :finalize in ready
     end
 
-    test "after load_packages, detect_package_events is ready" do
+    test "after load_packages alone, link_options is not yet ready" do
       active = StepGraph.steps_for("nixos-unstable")
       completed = [:create_revision, :load_packages]
 
       ready = StepGraph.ready_steps(active, completed)
 
-      assert :detect_package_events in ready
       # link_options not yet ready — needs load_options too
       refute :link_options in ready
+      assert :load_options in ready
     end
 
     test "link_options ready only when both load_packages and load_options complete" do
@@ -74,7 +72,6 @@ defmodule Tracker.Ingestion.StepGraphTest do
       ready = StepGraph.ready_steps(active, completed)
 
       assert :link_options in ready
-      assert :detect_package_events in ready
       assert :detect_option_events in ready
     end
 
@@ -105,7 +102,7 @@ defmodule Tracker.Ingestion.StepGraphTest do
 
     test "non-nixos channel: finalize ready after base steps" do
       active = StepGraph.steps_for("nixpkgs-unstable")
-      completed = [:create_revision, :load_packages, :detect_package_events]
+      completed = [:create_revision, :load_packages]
 
       ready = StepGraph.ready_steps(active, completed)
 
@@ -114,12 +111,12 @@ defmodule Tracker.Ingestion.StepGraphTest do
 
     test "skipped dependencies are treated as satisfied" do
       # If load_options is not in active_steps, link_options' dep on it is satisfied
-      active = [:create_revision, :load_packages, :detect_package_events, :finalize]
-      completed = [:create_revision, :load_packages]
+      active = [:create_revision, :load_packages, :finalize]
+      completed = [:create_revision]
 
       ready = StepGraph.ready_steps(active, completed)
 
-      assert :detect_package_events in ready
+      assert :load_packages in ready
       # link_options is not active, so not in ready
       refute :link_options in ready
     end

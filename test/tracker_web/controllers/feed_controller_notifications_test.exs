@@ -37,10 +37,16 @@ defmodule TrackerWeb.FeedControllerNotificationsTest do
     user = register_user!()
     pkg = package!("vim")
     chan = channel!("nixos-unstable")
-    prev = channel_revision!(chan)
-    rev = channel_revision!(chan, %{previous_channel_revision_id: prev.id})
-    package_revision!(pkg, prev, "9.0")
-    package_revision!(pkg, rev, "9.1")
+    prev = channel_revision!(chan, %{released_at: ~U[2026-02-01 00:00:00Z]})
+
+    rev =
+      channel_revision!(chan, %{
+        previous_channel_revision_id: prev.id,
+        released_at: ~U[2026-02-02 00:00:00Z]
+      })
+
+    apply_package_revision!(prev, [{pkg, "9.0"}])
+    apply_package_revision!(rev, [{pkg, "9.1"}])
 
     notification!(user, %{
       type: :package_version_changed,

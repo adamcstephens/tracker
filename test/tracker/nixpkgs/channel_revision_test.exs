@@ -1,6 +1,7 @@
 defmodule Tracker.Nixpkgs.ChannelRevisionTest do
   use Tracker.DataCase, async: true
 
+  alias Tracker.Fixtures
   alias Tracker.Nixpkgs.{Channel, ChannelRevision}
 
   defp create_channel!(name) do
@@ -87,7 +88,7 @@ defmodule Tracker.Nixpkgs.ChannelRevisionTest do
     end
   end
 
-  describe "diff_between/2" do
+  describe "version_diff/2" do
     setup do
       channel = create_channel!("nixos-unstable")
 
@@ -106,85 +107,36 @@ defmodule Tracker.Nixpkgs.ChannelRevisionTest do
           previous_channel_revision_id: from_rev.id
         })
 
-      pkg =
-        Tracker.Nixpkgs.Package
-        |> Ash.Changeset.for_create(:create, %{attribute: "diff-between-pkg"})
-        |> Ash.create!()
+      changed = Fixtures.package!("diff-changed")
+      removed = Fixtures.package!("diff-removed")
+      added = Fixtures.package!("diff-added")
 
-      Tracker.Nixpkgs.PackageRevision.load!(%{
-        version: "1.0.0",
-        package_id: pkg.id,
-        channel_revision_id: from_rev.id
-      })
-
-      Tracker.Nixpkgs.PackageRevision.load!(%{
-        version: "1.1.0",
-        package_id: pkg.id,
-        channel_revision_id: to_rev.id
-      })
-
-      Tracker.Nixpkgs.PackageEvent
-      |> Ash.Changeset.for_create(:create, %{
-        type: :added,
-        package_id: pkg.id,
-        channel_revision_id: to_rev.id
-      })
-      |> Ash.create!()
-
-      %{"diff-between.opt" => opt_id} =
-        Tracker.Nixpkgs.Option.bulk_upsert_all([%{name: "diff-between.opt"}])
-
-      Tracker.Nixpkgs.OptionRevision.load!(%{
-        option_id: opt_id,
-        channel_revision_id: from_rev.id,
-        description: "old",
-        type: "boolean",
-        default: "false",
-        example: nil,
-        read_only: false
-      })
-
-      Tracker.Nixpkgs.OptionRevision.load!(%{
-        option_id: opt_id,
-        channel_revision_id: to_rev.id,
-        description: "new",
-        type: "boolean",
-        default: "false",
-        example: nil,
-        read_only: false
-      })
-
-      Tracker.Nixpkgs.OptionEvent
-      |> Ash.Changeset.for_create(:create, %{
-        type: :added,
-        option_id: opt_id,
-        channel_revision_id: to_rev.id
-      })
-      |> Ash.create!()
+      Fixtures.apply_package_revision!(from_rev, [{changed, "1.0.0"}, {removed, "9.0"}])
+      Fixtures.apply_package_revision!(to_rev, [{changed, "1.1.0"}, {added, "2.0"}])
+      Fixtures.remove_package!(to_rev, removed)
 
       %{from_rev: from_rev, to_rev: to_rev}
     end
 
-    test "returns a RevisionDiff populated from the four sources", %{
+    test "reconstructs version changes (including added/removed) from spans", %{
       from_rev: from_rev,
       to_rev: to_rev
     } do
-      diff = ChannelRevision.diff_between(from_rev, to_rev)
+      diff = ChannelRevision.version_diff(from_rev, to_rev)
+      by_attr = Map.new(diff, &{&1.attribute, &1})
 
-      assert %ChannelRevision.RevisionDiff{} = diff
-      assert [pkg_event] = diff.package_events
-      assert pkg_event.type == :added
+      assert map_size(by_attr) == 3
+      assert by_attr["diff-changed"].old_version == "1.0.0"
+      assert by_attr["diff-changed"].new_version == "1.1.0"
+      assert by_attr["diff-added"].old_version == nil
+      assert by_attr["diff-added"].new_version == "2.0"
+      assert by_attr["diff-removed"].old_version == "9.0"
+      assert by_attr["diff-removed"].new_version == nil
+    end
 
-      assert [version_change] = diff.version_changes
-      assert version_change.attribute == "diff-between-pkg"
-      assert version_change.old_version == "1.0.0"
-      assert version_change.new_version == "1.1.0"
-
-      assert [opt_event] = diff.option_events
-      assert opt_event.type == :added
-
-      assert [metadata_change] = diff.option_metadata_changes
-      assert metadata_change.option_name == "diff-between.opt"
+    test "omits packages whose version is unchanged", %{from_rev: from_rev, to_rev: to_rev} do
+      diff = ChannelRevision.version_diff(from_rev, to_rev)
+      refute Enum.any?(diff, &(&1.old_version == &1.new_version))
     end
   end
 end

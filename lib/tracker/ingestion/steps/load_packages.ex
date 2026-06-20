@@ -180,26 +180,37 @@ defmodule Tracker.Ingestion.Steps.LoadPackages do
             else: nil
 
         %{attribute: attribute}
-        |> Helpers.maybe_put(:description, entry[:description])
-        |> Helpers.maybe_put(:homepage, entry[:homepage])
-        |> Helpers.maybe_put(:position, entry[:position])
-        |> Helpers.maybe_put(:licenses, entry[:licenses])
         |> Helpers.maybe_put(:package_family_id, family_id)
         |> Helpers.maybe_put(:package_variant_group_id, variant_group_id)
-        |> Helpers.maybe_put(:package_set, parsed.package_set)
-        |> Helpers.maybe_put(:set_version, parsed.set_version)
       end)
       |> Tracker.Nixpkgs.Package.bulk_upsert_all()
 
-    packages
-    |> Enum.map(fn {attribute, entry} ->
-      %{
-        package_id: Map.fetch!(id_map, attribute),
-        channel_revision_id: channel_revision.id,
-        version: entry.version
-      }
-    end)
-    |> Tracker.Nixpkgs.PackageRevision.bulk_insert_all()
+    # Version + metadata are temporal: fold this revision's full set into the
+    # package spans. The set was just streamed in full, so it is complete —
+    # absent packages are genuine removals.
+    incoming =
+      Enum.map(packages, fn {attribute, entry} ->
+        parsed = Map.fetch!(parsed_attrs, attribute)
+
+        %{
+          package_id: Map.fetch!(id_map, attribute),
+          version: entry[:version],
+          description: entry[:description],
+          homepage: entry[:homepage],
+          licenses: entry[:licenses],
+          position: entry[:position],
+          package_set: parsed.package_set,
+          set_version: parsed.set_version
+        }
+      end)
+
+    Tracker.Nixpkgs.SpanEngine.diff_and_apply(
+      Tracker.Nixpkgs.PackageSpan.spec(),
+      channel_revision.channel_id,
+      channel_revision.released_at,
+      incoming,
+      complete?: true
+    )
 
     id_map
   end

@@ -76,21 +76,8 @@ defmodule TrackerWeb.FeedControllerTest do
         |> Ash.Changeset.for_create(:create, %{attribute: "feed-test-pkg"})
         |> Ash.create!()
 
-      Tracker.Nixpkgs.PackageRevision
-      |> Ash.Changeset.for_create(:load, %{
-        version: "1.0.0",
-        package_id: package.id,
-        channel_revision_id: cr1.id
-      })
-      |> Ash.create!()
-
-      Tracker.Nixpkgs.PackageRevision
-      |> Ash.Changeset.for_create(:load, %{
-        version: "2.0.0",
-        package_id: package.id,
-        channel_revision_id: cr2.id
-      })
-      |> Ash.create!()
+      Tracker.Fixtures.apply_package_revision!(cr1, [{package, "1.0.0"}])
+      Tracker.Fixtures.apply_package_revision!(cr2, [{package, "2.0.0"}])
 
       :ok
     end

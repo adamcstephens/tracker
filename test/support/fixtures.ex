@@ -2,6 +2,7 @@ defmodule Tracker.Fixtures do
   @moduledoc """
   Test helpers for setting up ingestion data.
   """
+  require Ash.Query
 
   @doc """
   Registers a user via the GitHub strategy, returning the persisted user.
@@ -67,24 +68,66 @@ defmodule Tracker.Fixtures do
     Tracker.Nixpkgs.ChannelRevision.create!(Map.merge(base, attrs))
   end
 
-  @doc "Creates a package revision (a package present at a version in a channel revision)."
-  def package_revision!(package, channel_revision, version \\ nil) do
-    version = version || "1.0.#{System.unique_integer([:positive])}"
+  @doc """
+  Opens/updates package spans for a revision via the engine, mirroring
+  ingestion. `package_versions` is a list of `{package, version}` or
+  `{package, payload_map}`.
 
-    Tracker.Nixpkgs.PackageRevision.load!(%{
-      package_id: package.id,
-      channel_revision_id: channel_revision.id,
-      version: version
-    })
+  Defaults to `complete?: false` so it only touches the listed packages — a
+  partial set never closes other packages' open spans. Use `remove_package!/2`
+  to model a removal, or pass `complete?: true` when applying a channel's full
+  set. Returns the engine's `%{added, changed, removed, left}` counts.
+  """
+  def apply_package_revision!(channel_revision, package_versions, opts \\ []) do
+    incoming =
+      Enum.map(package_versions, fn
+        {package, version} when is_binary(version) ->
+          package_payload(package, %{version: version})
+
+        {package, %{} = attrs} ->
+          package_payload(package, attrs)
+      end)
+
+    Tracker.Nixpkgs.SpanEngine.diff_and_apply(
+      Tracker.Nixpkgs.PackageSpan.spec(),
+      channel_revision.channel_id,
+      channel_revision.released_at,
+      incoming,
+      Keyword.put_new(opts, :complete?, false)
+    )
   end
 
-  @doc "Creates a package event (:added or :removed) for a channel revision."
-  def package_event!(type, package, channel_revision) do
-    Tracker.Nixpkgs.PackageEvent.create!(%{
-      type: type,
-      package_id: package.id,
-      channel_revision_id: channel_revision.id
-    })
+  @doc """
+  Closes a package's open span in the revision's channel at its `released_at`,
+  modelling a removal (the package is absent from that revision onward).
+  """
+  def remove_package!(channel_revision, package) do
+    open_ids =
+      package.id
+      |> Tracker.Nixpkgs.PackageSpan.by_package!(channel_revision.channel_id)
+      |> Enum.filter(
+        &match?(%Postgrex.Range{upper: upper} when upper in [nil, :unbound], &1.valid)
+      )
+      |> Enum.map(& &1.id)
+
+    unless open_ids == [] do
+      Tracker.Nixpkgs.PackageSpan
+      |> Ash.Query.filter(id in ^open_ids)
+      |> Ash.bulk_update!(:close, %{closed_at: channel_revision.released_at},
+        strategy: [:atomic],
+        authorize?: false,
+        return_records?: false
+      )
+    end
+
+    :ok
+  end
+
+  defp package_payload(package, attrs) do
+    Tracker.Nixpkgs.PackageSpan.payload_columns()
+    |> Map.new(&{&1, nil})
+    |> Map.put(:package_id, package.id)
+    |> Map.merge(attrs)
   end
 
   @doc "Records a notification for a user via the fan-out path, returning the row."

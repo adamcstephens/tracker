@@ -5,11 +5,14 @@ defmodule Tracker.Ingestion.StepGraph do
 
   The graph:
 
-      create_revision ─┬─ load_packages ───── detect_package_events
-                       │                └──┐
-                       └─ load_options ────┼─ link_options
+      create_revision ─┬─ load_packages ──┐
+                       │              │   │
+                       └─ load_options ┼── link_options
                        (nixos-* only)  │  └─ detect_option_events
                                        └─ finalize (all active done)
+
+  Package added/removed/version-change events are derived from span boundaries
+  on read, so there is no package-event detection step.
   """
 
   @metadata_channel "nixos-unstable-small"
@@ -18,7 +21,6 @@ defmodule Tracker.Ingestion.StepGraph do
     create_revision: [],
     load_packages: [:create_revision],
     load_options: [:create_revision],
-    detect_package_events: [:load_packages],
     link_options: [:load_packages, :load_options],
     detect_option_events: [:load_options],
     finalize: :all_active
@@ -28,7 +30,6 @@ defmodule Tracker.Ingestion.StepGraph do
     create_revision: Tracker.Ingestion.Steps.CreateRevision,
     load_packages: Tracker.Ingestion.Steps.LoadPackages,
     load_options: Tracker.Ingestion.Steps.LoadOptions,
-    detect_package_events: Tracker.Ingestion.Steps.DetectPackageEvents,
     link_options: Tracker.Ingestion.Steps.LinkOptions,
     detect_option_events: Tracker.Ingestion.Steps.DetectOptionEvents,
     finalize: Tracker.Ingestion.Steps.Finalize
@@ -37,12 +38,12 @@ defmodule Tracker.Ingestion.StepGraph do
   @doc """
   Returns the list of active steps for a given channel.
 
-  All channels get: create_revision, load_packages, detect_package_events, finalize.
+  All channels get: create_revision, load_packages, finalize.
   Channels starting with "nixos-" additionally get: load_options, link_options, detect_option_events.
   """
   @spec steps_for(String.t()) :: [atom()]
   def steps_for(channel) do
-    base = [:create_revision, :load_packages, :detect_package_events, :finalize]
+    base = [:create_revision, :load_packages, :finalize]
 
     if String.starts_with?(channel, "nixos-") do
       base ++ [:load_options, :link_options, :detect_option_events]

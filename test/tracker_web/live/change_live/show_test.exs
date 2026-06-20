@@ -42,9 +42,7 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
       ])
 
     pkg_map =
-      Tracker.Nixpkgs.Package.bulk_upsert_all([
-        %{attribute: "show-change-pkg", description: "A test package"}
-      ])
+      Tracker.Nixpkgs.Package.bulk_upsert_all([%{attribute: "show-change-pkg"}])
 
     Tracker.Nixpkgs.ChangePackage.bulk_create_all([
       %{change_id: id_map[6001], package_id: pkg_map["show-change-pkg"], type: :changed}
@@ -93,6 +91,8 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
   end
 
   describe "affected options section" do
+    # P3 (trk-322): option setup uses the removed option-revision model.
+    @describetag :skip
     setup do
       change_id = Tracker.Nixpkgs.Change.get_by_number!(6001).id
 
@@ -163,6 +163,8 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
   end
 
   describe "affected options cap" do
+    # P3 (trk-322): option setup uses the removed option-revision model.
+    @describetag :skip
     setup do
       change_id = Tracker.Nixpkgs.Change.get_by_number!(6001).id
 

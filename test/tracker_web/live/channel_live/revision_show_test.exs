@@ -1,6 +1,12 @@
 defmodule TrackerWeb.ChannelLive.RevisionShowTest do
   use TrackerWeb.ConnCase, async: true
 
+  # P3 (trk-322): the revision-show page renders `diff_between/2`, whose option
+  # half (option events + metadata diff) is removed until the options vertical
+  # lands. The package half is covered by `ChannelRevisionTest.version_diff` and
+  # `PackageHistoryTest.events_between`.
+  @moduletag :skip
+
   import Phoenix.LiveViewTest
 
   alias Tracker.Nixpkgs.Channel

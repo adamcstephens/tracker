@@ -119,10 +119,16 @@ defmodule TrackerWeb.NotificationPresenterTest do
     defp version_bump!(user, attribute, old_version, new_version) do
       pkg = package!(attribute)
       chan = channel!()
-      prev = channel_revision!(chan)
-      rev = channel_revision!(chan, %{previous_channel_revision_id: prev.id})
-      package_revision!(pkg, prev, old_version)
-      package_revision!(pkg, rev, new_version)
+      prev = channel_revision!(chan, %{released_at: ~U[2026-02-01 00:00:00Z]})
+
+      rev =
+        channel_revision!(chan, %{
+          previous_channel_revision_id: prev.id,
+          released_at: ~U[2026-02-02 00:00:00Z]
+        })
+
+      apply_package_revision!(prev, [{pkg, old_version}])
+      apply_package_revision!(rev, [{pkg, new_version}])
 
       notification!(user, %{
         type: :package_version_changed,
@@ -150,7 +156,7 @@ defmodule TrackerWeb.NotificationPresenterTest do
       chan = channel!()
       # no predecessor revision recorded
       rev = channel_revision!(chan)
-      package_revision!(pkg, rev, "2.0")
+      apply_package_revision!(rev, [{pkg, "2.0"}])
 
       notification!(user, %{
         type: :package_version_changed,

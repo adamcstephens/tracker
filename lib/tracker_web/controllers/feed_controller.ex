@@ -174,7 +174,7 @@ defmodule TrackerWeb.FeedController do
       end
 
     {results, _count} =
-      Tracker.Nixpkgs.PackageRevision.version_changes_by_package(package_id,
+      Tracker.Nixpkgs.PackageHistory.version_changes_by_package(package_id,
         channel_id: channel_id,
         sort_by: :released_at,
         sort_dir: :desc,
