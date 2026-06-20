@@ -33,6 +33,38 @@ defmodule Tracker.Nixpkgs.OptionSpanFile do
 
   actions do
     defaults [:read]
+
+    read :open_for_channel do
+      description "Currently-open spans (unbounded upper) for a channel."
+      argument :channel_id, :integer, allow_nil?: false
+      filter expr(channel_id == ^arg(:channel_id) and fragment("upper_inf(?)", valid))
+    end
+
+    read :at do
+      description "Spans valid at a point in time for a channel."
+      argument :channel_id, :integer, allow_nil?: false
+      argument :at, :utc_datetime, allow_nil?: false
+
+      filter expr(
+               channel_id == ^arg(:channel_id) and
+                 fragment("? @> ?::timestamptz", valid, ^arg(:at))
+             )
+    end
+
+    create :open do
+      accept [:channel_id, :option_id, :file_id, :valid]
+    end
+
+    update :close do
+      argument :closed_at, :utc_datetime, allow_nil?: false
+
+      change atomic_update(
+               :valid,
+               expr(
+                 fragment("tstzrange(lower(?), ?::timestamptz, '[)')", valid, ^arg(:closed_at))
+               )
+             )
+    end
   end
 
   attributes do
