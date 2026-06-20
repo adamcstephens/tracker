@@ -26,7 +26,7 @@ defmodule Tracker.Nixpkgs do
     resource Tracker.Nixpkgs.OptionSpan
     resource Tracker.Nixpkgs.OptionPackage
     resource Tracker.Nixpkgs.File
-    resource Tracker.Nixpkgs.OptionSpanFile
+    resource Tracker.Nixpkgs.OptionFileSpan
     resource Tracker.Nixpkgs.Change
     resource Tracker.Nixpkgs.ChangePackage
     resource Tracker.Nixpkgs.ChangeBranch

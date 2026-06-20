@@ -67,7 +67,7 @@
           "global": null,
           "strategy": null
         },
-        "name": "option_span_files_channel_id_fkey",
+        "name": "option_file_spans_channel_id_fkey",
         "on_delete": null,
         "on_update": null,
         "primary_key?": true,
@@ -98,7 +98,7 @@
           "global": null,
           "strategy": null
         },
-        "name": "option_span_files_option_id_fkey",
+        "name": "option_file_spans_option_id_fkey",
         "on_delete": null,
         "on_update": null,
         "primary_key?": true,
@@ -129,7 +129,7 @@
           "global": null,
           "strategy": null
         },
-        "name": "option_span_files_file_id_fkey",
+        "name": "option_file_spans_file_id_fkey",
         "on_delete": null,
         "on_update": null,
         "primary_key?": true,
@@ -149,17 +149,17 @@
   "custom_statements": [
     {
       "code?": false,
-      "down": "ALTER TABLE option_span_files DROP CONSTRAINT option_span_files_no_overlap",
+      "down": "ALTER TABLE option_file_spans DROP CONSTRAINT option_file_spans_no_overlap",
       "global?": false,
-      "name": "option_span_files_no_overlap",
-      "up": "ALTER TABLE option_span_files ADD CONSTRAINT option_span_files_no_overlap EXCLUDE USING gist (channel_id WITH =, option_id WITH =, file_id WITH =, valid WITH &&)"
+      "name": "option_file_spans_no_overlap",
+      "up": "ALTER TABLE option_file_spans ADD CONSTRAINT option_file_spans_no_overlap EXCLUDE USING gist (channel_id WITH =, option_id WITH =, file_id WITH =, valid WITH &&)"
     },
     {
       "code?": false,
-      "down": "DROP INDEX option_span_files_current",
+      "down": "DROP INDEX option_file_spans_current",
       "global?": false,
-      "name": "option_span_files_current",
-      "up": "CREATE INDEX option_span_files_current ON option_span_files (channel_id, option_id, file_id) WHERE upper_inf(valid)"
+      "name": "option_file_spans_current",
+      "up": "CREATE INDEX option_file_spans_current ON option_file_spans (channel_id, option_id, file_id) WHERE upper_inf(valid)"
     }
   ],
   "has_create_action": false,
@@ -172,5 +172,5 @@
   },
   "repo": "Elixir.Tracker.Repo",
   "schema": null,
-  "table": "option_span_files"
+  "table": "option_file_spans"
 }

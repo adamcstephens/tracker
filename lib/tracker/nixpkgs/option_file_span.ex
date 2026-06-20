@@ -1,4 +1,4 @@
-defmodule Tracker.Nixpkgs.OptionSpanFile do
+defmodule Tracker.Nixpkgs.OptionFileSpan do
   @moduledoc """
   Validity-interval ("span") of an option↔file membership within a channel.
 
@@ -11,18 +11,18 @@ defmodule Tracker.Nixpkgs.OptionSpanFile do
   use Ash.Resource, otp_app: :tracker, domain: Tracker.Nixpkgs, data_layer: AshPostgres.DataLayer
 
   postgres do
-    table "option_span_files"
+    table "option_file_spans"
     repo Tracker.Repo
 
     custom_statements do
-      statement :option_span_files_no_overlap do
-        up "ALTER TABLE option_span_files ADD CONSTRAINT option_span_files_no_overlap EXCLUDE USING gist (channel_id WITH =, option_id WITH =, file_id WITH =, valid WITH &&)"
-        down "ALTER TABLE option_span_files DROP CONSTRAINT option_span_files_no_overlap"
+      statement :option_file_spans_no_overlap do
+        up "ALTER TABLE option_file_spans ADD CONSTRAINT option_file_spans_no_overlap EXCLUDE USING gist (channel_id WITH =, option_id WITH =, file_id WITH =, valid WITH &&)"
+        down "ALTER TABLE option_file_spans DROP CONSTRAINT option_file_spans_no_overlap"
       end
 
-      statement :option_span_files_current do
-        up "CREATE INDEX option_span_files_current ON option_span_files (channel_id, option_id, file_id) WHERE upper_inf(valid)"
-        down "DROP INDEX option_span_files_current"
+      statement :option_file_spans_current do
+        up "CREATE INDEX option_file_spans_current ON option_file_spans (channel_id, option_id, file_id) WHERE upper_inf(valid)"
+        down "DROP INDEX option_file_spans_current"
       end
     end
   end
