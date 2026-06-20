@@ -23,6 +23,8 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
     define :latest_by_channel, args: [:channel_id]
     define :without_options, args: [:channel_id]
     define :by_channel_asc, args: [:channel_id]
+    define :by_released_ats, args: [:channel_id, :released_ats]
+    define :by_ids, args: [:ids]
   end
 
   actions do
@@ -101,6 +103,21 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
 
       prepare build(sort: [{:released_at, :asc}])
       filter expr(channel_id == ^arg(:channel_id))
+    end
+
+    read :by_released_ats do
+      description "Revisions on a channel matching specific release timestamps."
+      argument :channel_id, :integer, allow_nil?: false
+      argument :released_ats, {:array, :utc_datetime}, allow_nil?: false
+
+      filter expr(channel_id == ^arg(:channel_id) and released_at in ^arg(:released_ats))
+    end
+
+    read :by_ids do
+      description "Revisions matching a set of ids."
+      argument :ids, {:array, :integer}, allow_nil?: false
+
+      filter expr(id in ^arg(:ids))
     end
 
     read :without_options do
@@ -224,13 +241,8 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
   """
   def diff_between(from_rev, to_rev) do
     %RevisionDiff{
-      package_events:
-        Tracker.Nixpkgs.PackageEvent.list_between_revisions!(
-          to_rev.channel_id,
-          from_rev.released_at,
-          to_rev.released_at
-        ),
-      version_changes: version_diff(from_rev.id, to_rev.id),
+      package_events: Tracker.Nixpkgs.PackageHistory.events_between(to_rev, from_rev.released_at),
+      version_changes: version_diff(from_rev, to_rev),
       option_events:
         Tracker.Nixpkgs.OptionEvent.list_between_revisions!(
           to_rev.channel_id,
@@ -244,32 +256,34 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
 
   @doc """
   Returns version changes between two channel revisions as a list of
-  `VersionDiff` structs.
+  `VersionDiff` structs, reconstructed from package spans at each revision's
+  `released_at`.
 
-  Only includes packages where the version differs (including added/removed).
+  Only includes packages where the version differs (including added/removed),
+  sorted by attribute.
   """
-  def version_diff(old_rev_id, new_rev_id) do
-    %{rows: rows} =
-      Tracker.Repo.query!(
-        """
-        WITH old_revs AS (
-          SELECT package_id, version FROM package_revisions WHERE channel_revision_id = $1
-        ),
-        new_revs AS (
-          SELECT package_id, version FROM package_revisions WHERE channel_revision_id = $2
-        )
-        SELECT p.attribute, o.version, n.version
-        FROM old_revs o
-        FULL OUTER JOIN new_revs n ON o.package_id = n.package_id
-        JOIN packages p ON p.id = COALESCE(n.package_id, o.package_id)
-        WHERE o.version IS DISTINCT FROM n.version
-        ORDER BY p.attribute
-        """,
-        [old_rev_id, new_rev_id]
-      )
+  def version_diff(from_rev, to_rev) do
+    channel_id = to_rev.channel_id
+    old = versions_at(channel_id, from_rev.released_at)
+    new = versions_at(channel_id, to_rev.released_at)
 
-    Enum.map(rows, fn [attribute, old_version, new_version] ->
-      %VersionDiff{attribute: attribute, old_version: old_version, new_version: new_version}
+    (Map.keys(old) ++ Map.keys(new))
+    |> Enum.uniq()
+    |> Enum.map(fn attribute ->
+      %VersionDiff{
+        attribute: attribute,
+        old_version: Map.get(old, attribute),
+        new_version: Map.get(new, attribute)
+      }
     end)
+    |> Enum.filter(&(&1.old_version != &1.new_version))
+    |> Enum.sort_by(& &1.attribute)
+  end
+
+  # %{attribute => version} reconstructed from the channel's spans at `at`.
+  defp versions_at(channel_id, at) do
+    channel_id
+    |> Tracker.Nixpkgs.PackageSpan.at!(at, load: [:package])
+    |> Map.new(fn span -> {span.package.attribute, span.version} end)
   end
 end

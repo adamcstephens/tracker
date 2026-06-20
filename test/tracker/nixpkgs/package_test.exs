@@ -1,7 +1,8 @@
 defmodule Tracker.Nixpkgs.PackageTest do
   use Tracker.DataCase, async: true
 
-  alias Tracker.Nixpkgs.{Channel, ChannelRevision, Package, PackageRevision}
+  alias Tracker.Fixtures
+  alias Tracker.Nixpkgs.{Channel, ChannelRevision, Package}
 
   defp create_channel!(name) do
     Channel.create!(%{
@@ -28,14 +29,10 @@ defmodule Tracker.Nixpkgs.PackageTest do
     |> then(&Ash.get!(Package, &1))
   end
 
+  # Opens a package span so the package is "current" in the channel (the
+  # `upper_inf` semi-join used by list/by_maintainer/by_team).
   defp create_revision!(package, channel_revision, version) do
-    PackageRevision
-    |> Ash.Changeset.for_create(:load, %{
-      version: version,
-      package_id: package.id,
-      channel_revision_id: channel_revision.id
-    })
-    |> Ash.create!()
+    Fixtures.apply_package_revision!(channel_revision, [{package, version}])
   end
 
   describe "bulk_upsert_all/1" do
@@ -55,44 +52,29 @@ defmodule Tracker.Nixpkgs.PackageTest do
       assert is_integer(id_map["git"])
     end
 
-    test "returns ids for upserted (existing) records" do
-      Package.bulk_upsert_all([%{attribute: "vim", description: "old"}])
-
-      id_map = Package.bulk_upsert_all([%{attribute: "vim", description: "new"}])
+    test "returns the same id when upserting an existing attribute" do
+      first = Package.bulk_upsert_all([%{attribute: "vim"}])
+      id_map = Package.bulk_upsert_all([%{attribute: "vim"}])
 
       assert map_size(id_map) == 1
-      assert is_integer(id_map["vim"])
+      assert id_map["vim"] == first["vim"]
 
       package = Ash.get!(Package, %{attribute: "vim"})
       assert package.id == id_map["vim"]
-      assert package.description == "new"
     end
 
-    test "upsert without metadata fields preserves existing metadata" do
-      Package.bulk_upsert_all([
-        %{
-          attribute: "curl",
-          description: "A command line tool",
-          homepage: ["https://curl.se"],
-          position: "pkgs/tools/networking/curl/default.nix",
-          licenses: ["MIT"]
-        }
-      ])
+    test "upserts family and variant FKs (identity-only, no metadata)" do
+      group =
+        Tracker.Nixpkgs.PackageVariantGroup
+        |> Ash.Changeset.for_create(:bulk_upsert, %{position: "pkgs/test/curl.nix:1"})
+        |> Ash.create!()
 
-      # Upsert a batch without metadata fields (simulates non-metadata channel).
-      # The batch must contain multiple records so Ecto unions the keys across
-      # the chunk, causing missing keys to be inserted as NULL.
-      Package.bulk_upsert_all([
-        %{attribute: "curl", package_set: "top-level"},
-        %{attribute: "wget"}
-      ])
+      Package.bulk_upsert_all([%{attribute: "curl"}])
+      id_map = Package.bulk_upsert_all([%{attribute: "curl", package_variant_group_id: group.id}])
 
-      package = Ash.get!(Package, %{attribute: "curl"})
-      assert package.description == "A command line tool"
-      assert package.homepage == ["https://curl.se"]
-      assert package.position == "pkgs/tools/networking/curl/default.nix"
-      assert package.licenses == ["MIT"]
-      assert package.package_set == "top-level"
+      package = Ash.get!(Package, id_map["curl"])
+      assert package.package_variant_group_id == group.id
+      refute Map.has_key?(package, :description)
     end
 
     test "accumulates ids across chunks" do

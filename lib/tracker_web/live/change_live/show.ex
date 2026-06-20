@@ -534,7 +534,9 @@ defmodule TrackerWeb.ChangeLive.Show do
     total_pages = if package_count > 0, do: ceil(package_count / tp.page_size), else: 0
 
     socket
-    |> stream(:packages, page.results, reset: true)
+    |> stream(:packages, TrackerWeb.PackageRows.with_current_descriptions(page.results),
+      reset: true
+    )
     |> assign(:package_count, package_count)
     |> assign(
       :packages_enabled?,

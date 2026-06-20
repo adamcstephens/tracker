@@ -50,7 +50,10 @@ defmodule Tracker.Nixpkgs.Package do
                  true
                end and
                  if not is_nil(^arg(:channel_id)) do
-                   exists(spans, channel_id == ^arg(:channel_id))
+                   exists(
+                     spans,
+                     channel_id == ^arg(:channel_id) and fragment("upper_inf(?)", valid)
+                   )
                  else
                    true
                  end
@@ -82,7 +85,10 @@ defmodule Tracker.Nixpkgs.Package do
                    true
                  end and
                  if not is_nil(^arg(:channel_id)) do
-                   exists(spans, channel_id == ^arg(:channel_id))
+                   exists(
+                     spans,
+                     channel_id == ^arg(:channel_id) and fragment("upper_inf(?)", valid)
+                   )
                  else
                    true
                  end
@@ -114,7 +120,10 @@ defmodule Tracker.Nixpkgs.Package do
                    true
                  end and
                  if not is_nil(^arg(:channel_id)) do
-                   exists(spans, channel_id == ^arg(:channel_id))
+                   exists(
+                     spans,
+                     channel_id == ^arg(:channel_id) and fragment("upper_inf(?)", valid)
+                   )
                  else
                    true
                  end

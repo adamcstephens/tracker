@@ -49,13 +49,7 @@ defmodule TrackerWeb.PackageLive.IndexTest do
         |> Ash.Changeset.for_create(:create, %{attribute: "lens-out-pkg"})
         |> Ash.create!()
 
-      Tracker.Nixpkgs.PackageRevision
-      |> Ash.Changeset.for_create(:load, %{
-        version: "1.0",
-        package_id: pkg_in.id,
-        channel_revision_id: cr.id
-      })
-      |> Ash.create!()
+      Tracker.Fixtures.apply_package_revision!(cr, [{pkg_in, "1.0"}])
 
       %{channel: channel, pkg_in: pkg_in, pkg_out: pkg_out}
     end
@@ -95,13 +89,7 @@ defmodule TrackerWeb.PackageLive.IndexTest do
         })
         |> Ash.create!()
 
-      Tracker.Nixpkgs.PackageRevision
-      |> Ash.Changeset.for_create(:load, %{
-        version: "3.0",
-        package_id: pkg_out.id,
-        channel_revision_id: cr2.id
-      })
-      |> Ash.create!()
+      Tracker.Fixtures.apply_package_revision!(cr2, [{pkg_out, "3.0"}])
 
       # Simulate JS connect_params carrying the lens from a previous page
       conn = Phoenix.LiveViewTest.put_connect_params(conn, %{"_lens_channel" => channel2.name})
@@ -133,13 +121,7 @@ defmodule TrackerWeb.PackageLive.IndexTest do
         })
         |> Ash.create!()
 
-      Tracker.Nixpkgs.PackageRevision
-      |> Ash.Changeset.for_create(:load, %{
-        version: "2.0",
-        package_id: pkg_out.id,
-        channel_revision_id: cr2.id
-      })
-      |> Ash.create!()
+      Tracker.Fixtures.apply_package_revision!(cr2, [{pkg_out, "2.0"}])
 
       {:ok, view, _html} = live(conn, ~p"/packages")
 
@@ -183,6 +165,42 @@ defmodule TrackerWeb.PackageLive.IndexTest do
     substring_idx = Enum.find_index(order, &(&1 == "emacs-firefox-plugin"))
 
     assert dot_segment_idx < substring_idx
+  end
+
+  describe "current description column" do
+    test "shows a package's current description from the metadata channel", %{conn: conn} do
+      channel =
+        Tracker.Nixpkgs.Channel.create!(%{
+          name: "nixos-unstable-small",
+          display_name: "nixos-unstable-small",
+          status: :active,
+          is_stable: true
+        })
+
+      cr =
+        Tracker.Nixpkgs.ChannelRevision
+        |> Ash.Changeset.for_create(:create, %{
+          channel_id: channel.id,
+          revision: "ddd4444",
+          released_at: ~U[2025-01-04 00:00:00Z]
+        })
+        |> Ash.create!()
+
+      pkg =
+        Tracker.Nixpkgs.Package
+        |> Ash.Changeset.for_create(:create, %{attribute: "desc-col-pkg"})
+        |> Ash.create!()
+
+      Tracker.Fixtures.apply_package_revision!(cr, [
+        {pkg, %{version: "9.9", description: "A current-state description"}}
+      ])
+
+      conn = Phoenix.LiveViewTest.put_connect_params(conn, %{"_lens_channel" => channel.name})
+      {:ok, _view, html} = live(conn, ~p"/packages")
+
+      assert html =~ "desc-col-pkg"
+      assert html =~ "A current-state description"
+    end
   end
 
   describe "fuzzy matching" do

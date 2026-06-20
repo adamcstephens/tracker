@@ -17,7 +17,7 @@ defmodule TrackerWeb.NotificationPresenter do
   """
   use TrackerWeb, :verified_routes
 
-  alias Tracker.Nixpkgs.PackageRevision
+  alias Tracker.Nixpkgs.PackageHistory
   alias TrackerWeb.NotificationPresenter.TypeMeta
 
   # Display order for filters and summaries.
@@ -59,7 +59,7 @@ defmodule TrackerWeb.NotificationPresenter do
 
   @doc """
   Resolves the old→new version bump for each `:package_version_changed`
-  notification on a page, in one batched `PackageRevision` lookup. Returns
+  notification on a page, in one batched span reconstruction. Returns
   a map of notification id to `{old_version, new_version}`, with entries
   only where both versions resolve; `hero/2` and `describe/2` fall back to
   the version-less copy for the rest.
@@ -93,9 +93,7 @@ defmodule TrackerWeb.NotificationPresenter do
 
     package_ids = targets |> Enum.map(fn {_id, pkg, _rev, _prev} -> pkg end) |> Enum.uniq()
 
-    revision_ids
-    |> PackageRevision.for_revisions_packages!(package_ids, authorize?: false)
-    |> Map.new(fn pr -> {{pr.package_id, pr.channel_revision_id}, pr.version} end)
+    PackageHistory.versions_at_revisions(revision_ids, package_ids)
   end
 
   @doc """

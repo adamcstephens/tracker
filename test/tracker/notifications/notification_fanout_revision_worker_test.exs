@@ -8,8 +8,14 @@ defmodule Tracker.Notifications.NotificationFanoutRevisionWorkerTest do
 
   defp channel_with_revisions do
     chan = channel!()
-    prev = channel_revision!(chan)
-    rev = channel_revision!(chan, %{previous_channel_revision_id: prev.id})
+    prev = channel_revision!(chan, %{released_at: ~U[2026-01-01 00:00:00Z]})
+
+    rev =
+      channel_revision!(chan, %{
+        previous_channel_revision_id: prev.id,
+        released_at: ~U[2026-01-02 00:00:00Z]
+      })
+
     {chan, prev, rev}
   end
 
@@ -46,8 +52,8 @@ defmodule Tracker.Notifications.NotificationFanoutRevisionWorkerTest do
       user = register_user!()
       {_chan, prev, rev} = channel_with_revisions()
       pkg = package!()
-      package_revision!(pkg, prev, "1.0")
-      package_revision!(pkg, rev, "2.0")
+      apply_package_revision!(prev, [{pkg, "1.0"}])
+      apply_package_revision!(rev, [{pkg, "2.0"}])
       {:ok, _} = PackageSubscription.subscribe(pkg.id, nil, actor: user)
 
       assert :ok = Worker.run(channel_revision_id: rev.id)
@@ -61,8 +67,8 @@ defmodule Tracker.Notifications.NotificationFanoutRevisionWorkerTest do
       user = register_user!()
       {_chan, prev, rev} = channel_with_revisions()
       pkg = package!()
-      package_revision!(pkg, prev, "1.0")
-      package_revision!(pkg, rev, "1.0")
+      apply_package_revision!(prev, [{pkg, "1.0"}])
+      apply_package_revision!(rev, [{pkg, "1.0"}])
       {:ok, _} = PackageSubscription.subscribe(pkg.id, nil, actor: user)
 
       assert :ok = Worker.run(channel_revision_id: rev.id)
@@ -73,7 +79,8 @@ defmodule Tracker.Notifications.NotificationFanoutRevisionWorkerTest do
       user = register_user!()
       {_chan, _prev, rev} = channel_with_revisions()
       pkg = package!()
-      package_event!(:added, pkg, rev)
+      # present at rev but not at prev → added
+      apply_package_revision!(rev, [{pkg, "1.0"}])
       {:ok, _} = PackageSubscription.subscribe(pkg.id, nil, actor: user)
 
       assert :ok = Worker.run(channel_revision_id: rev.id)
@@ -82,9 +89,11 @@ defmodule Tracker.Notifications.NotificationFanoutRevisionWorkerTest do
 
     test "notifies on a removed package" do
       user = register_user!()
-      {_chan, _prev, rev} = channel_with_revisions()
+      {_chan, prev, rev} = channel_with_revisions()
       pkg = package!()
-      package_event!(:removed, pkg, rev)
+      # present at prev, removed at rev
+      apply_package_revision!(prev, [{pkg, "1.0"}])
+      remove_package!(rev, pkg)
       {:ok, _} = PackageSubscription.subscribe(pkg.id, nil, actor: user)
 
       assert :ok = Worker.run(channel_revision_id: rev.id)
@@ -95,8 +104,8 @@ defmodule Tracker.Notifications.NotificationFanoutRevisionWorkerTest do
       user = register_user!()
       {chan, prev, rev} = channel_with_revisions()
       pkg = package!()
-      package_revision!(pkg, prev, "1.0")
-      package_revision!(pkg, rev, "2.0")
+      apply_package_revision!(prev, [{pkg, "1.0"}])
+      apply_package_revision!(rev, [{pkg, "2.0"}])
       # subscribed to a *different* channel: no notification
       {:ok, _} = PackageSubscription.subscribe(pkg.id, channel!().id, actor: user)
 
@@ -114,7 +123,7 @@ defmodule Tracker.Notifications.NotificationFanoutRevisionWorkerTest do
       chan = channel!()
       rev = channel_revision!(chan)
       pkg = package!()
-      package_revision!(pkg, rev, "1.0")
+      apply_package_revision!(rev, [{pkg, "1.0"}])
       {:ok, _} = PackageSubscription.subscribe(pkg.id, nil, actor: user)
 
       assert :ok = Worker.run(channel_revision_id: rev.id)
@@ -127,8 +136,8 @@ defmodule Tracker.Notifications.NotificationFanoutRevisionWorkerTest do
       user = register_user!()
       {chan, prev, rev} = channel_with_revisions()
       pkg = package!()
-      package_revision!(pkg, prev, "1.0")
-      package_revision!(pkg, rev, "2.0")
+      apply_package_revision!(prev, [{pkg, "1.0"}])
+      apply_package_revision!(rev, [{pkg, "2.0"}])
       {:ok, _} = ChannelSubscription.subscribe(chan.id, actor: user)
       {:ok, _} = PackageSubscription.subscribe(pkg.id, nil, actor: user)
 

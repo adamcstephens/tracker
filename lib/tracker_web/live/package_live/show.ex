@@ -29,22 +29,22 @@ defmodule TrackerWeb.PackageLive.Show do
       </:actions>
     </.header>
 
-    <p :if={@package.description}>{@package.description}</p>
+    <p :if={@package_meta.description}>{@package_meta.description}</p>
 
     <.list>
       <:item title="Attribute">{@package.attribute}</:item>
-      <:item :if={@package.homepage} title="Homepage">
-        <span :for={url <- @package.homepage}>
+      <:item :if={@package_meta.homepage} title="Homepage">
+        <span :for={url <- @package_meta.homepage}>
           <a href={url} target="_blank" rel="noopener noreferrer">
             {url}
           </a>
         </span>
       </:item>
-      <:item :if={@package.position} title="Position">
-        <.nixpkgs_position position={@package.position} />
+      <:item :if={@package_meta.position} title="Position">
+        <.nixpkgs_position position={@package_meta.position} />
       </:item>
-      <:item :if={@package.licenses} title="License">
-        {Enum.join(@package.licenses, ", ")}
+      <:item :if={@package_meta.licenses} title="License">
+        {Enum.join(@package_meta.licenses, ", ")}
       </:item>
     </.list>
 
@@ -211,7 +211,7 @@ defmodule TrackerWeb.PackageLive.Show do
       <:col :let={rev} field={:version} label="Version" sortable>
         <.github_version_link
           version={rev.version}
-          position={@package.position}
+          position={@package_meta.position}
           revision={rev_revision(rev)}
         />
       </:col>
@@ -295,7 +295,7 @@ defmodule TrackerWeb.PackageLive.Show do
     """
   end
 
-  alias Tracker.Nixpkgs.PackageRevision.VersionChange
+  alias Tracker.Nixpkgs.PackageHistory.VersionChange
 
   defp rev_channel(%VersionChange{channel_name: channel_name}), do: channel_name
   defp rev_channel(%{channel_revision: %{channel: %{name: name}}}), do: name
@@ -324,14 +324,22 @@ defmodule TrackerWeb.PackageLive.Show do
         load: [:maintainers, :teams, :options]
       )
 
-    family_siblings = load_family_siblings(package)
+    package_meta = load_current_meta(package.id)
+    family_siblings = package |> load_family_siblings() |> decorate_siblings()
     variant_siblings = load_variant_siblings(package)
-    option_ids = Enum.map(package.options, & &1.id)
-
+    # The linked-options section still reads option metadata from the (P3) option
+    # revision model; skip the query when the package has no options so the page
+    # renders. P3 migrates this onto option spans.
     option_revisions =
-      option_ids
-      |> Tracker.Nixpkgs.OptionRevision.latest_by_option_ids!()
-      |> Map.new(&{&1.option_id, &1})
+      case Enum.map(package.options, & &1.id) do
+        [] ->
+          %{}
+
+        option_ids ->
+          option_ids
+          |> Tracker.Nixpkgs.OptionRevision.latest_by_option_ids!()
+          |> Map.new(&{&1.option_id, &1})
+      end
 
     tp = TableParams.from_params(params, @table_opts)
     version_filter = params["version"] || ""
@@ -352,6 +360,7 @@ defmodule TrackerWeb.PackageLive.Show do
      socket
      |> assign(:page_title, package.attribute)
      |> assign(:package, package)
+     |> assign(:package_meta, package_meta)
      |> assign(:subscribed?, package_subscribed?(socket.assigns.current_user, package.id))
      |> assign(:family_siblings, family_siblings)
      |> assign(:variant_siblings, variant_siblings)
@@ -434,13 +443,14 @@ defmodule TrackerWeb.PackageLive.Show do
             tp.sort_dir,
             channel_id,
             version_filter,
-            tp.offset
+            tp.offset,
+            tp.page_size
           )
 
         {result.results, result.count, result.more?}
       else
         {results, count} =
-          Tracker.Nixpkgs.PackageRevision.version_changes_by_package(package_id,
+          Tracker.Nixpkgs.PackageHistory.version_changes_by_package(package_id,
             channel_id: channel_id,
             version: version_filter,
             sort_by: tp.sort_by,
@@ -544,15 +554,22 @@ defmodule TrackerWeb.PackageLive.Show do
      )}
   end
 
-  defp load_revisions(package_id, sort_by, sort_dir, channel_id, version_filter, offset) do
-    result =
-      Tracker.Nixpkgs.PackageRevision.list_by_package!(package_id, channel_id, version_filter,
-        query: [sort: [{sort_by, sort_dir}]],
-        page: [offset: offset, count: true]
-      )
-
-    loaded_results = Ash.load!(result.results, channel_revision: [:channel])
-    %{result | results: loaded_results}
+  defp load_revisions(
+         package_id,
+         sort_by,
+         sort_dir,
+         channel_id,
+         version_filter,
+         offset,
+         page_size
+       ) do
+    Tracker.Nixpkgs.PackageHistory.revisions_by_package(package_id, channel_id,
+      version: version_filter,
+      sort_by: sort_by,
+      sort_dir: sort_dir,
+      limit: page_size,
+      offset: offset
+    )
   end
 
   defp load_recent_changes(package_id, channel_name) do
@@ -565,6 +582,49 @@ defmodule TrackerWeb.PackageLive.Show do
     Tracker.Nixpkgs.Package.family_siblings!(package.package_family_id, package.id)
   end
 
+  # Family-sibling display labels: package_set / set_version are derived from the
+  # attribute, so no current-state lookup is needed.
+  defp decorate_siblings(siblings) do
+    Enum.map(siblings, fn sibling ->
+      parsed = Tracker.Nixpkgs.PackageSetMapping.parse(sibling.attribute)
+
+      %{
+        attribute: sibling.attribute,
+        package_set: parsed.package_set,
+        set_version: parsed.set_version
+      }
+    end)
+  end
+
+  # Current package metadata (description/homepage/position/licenses) is served
+  # from the open span in the metadata channel, where that metadata is ingested.
+  defp load_current_meta(package_id) do
+    span =
+      case metadata_channel_id() do
+        nil ->
+          nil
+
+        channel_id ->
+          channel_id
+          |> Tracker.Nixpkgs.PackageHistory.current_metadata([package_id])
+          |> Map.get(package_id)
+      end
+
+    %{
+      description: span && span.description,
+      homepage: span && span.homepage,
+      position: span && span.position,
+      licenses: span && span.licenses
+    }
+  end
+
+  defp metadata_channel_id do
+    case Tracker.Nixpkgs.Channel.by_name(Tracker.Ingestion.StepGraph.metadata_channel()) do
+      {:ok, channel} -> channel.id
+      _ -> nil
+    end
+  end
+
   defp load_variant_siblings(%{package_variant_group_id: nil}), do: []
 
   defp load_variant_siblings(package) do
@@ -572,7 +632,6 @@ defmodule TrackerWeb.PackageLive.Show do
   end
 
   defp load_package_events(package_id, channel_id) do
-    Tracker.Nixpkgs.PackageEvent.list_by_package!(package_id, channel_id)
-    |> Ash.load!(channel_revision: [:channel])
+    Tracker.Nixpkgs.PackageHistory.events_by_package(package_id, channel_id)
   end
 end

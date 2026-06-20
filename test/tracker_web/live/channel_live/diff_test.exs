@@ -1,6 +1,12 @@
 defmodule TrackerWeb.ChannelLive.DiffTest do
   use TrackerWeb.ConnCase, async: true
 
+  # P3 (trk-322): the diff page's `diff_between/2` straddles packages (migrated
+  # here) and options (option events + metadata diff), removed until the options
+  # vertical lands. The package half is covered by
+  # `ChannelRevisionTest.version_diff` and `PackageHistoryTest.events_between`.
+  @moduletag :skip
+
   import Phoenix.LiveViewTest
 
   alias Tracker.Nixpkgs.Channel

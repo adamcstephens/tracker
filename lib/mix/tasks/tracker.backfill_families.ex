@@ -1,9 +1,10 @@
 defmodule Mix.Tasks.Tracker.BackfillFamilies do
-  @shortdoc "Backfills package_family_id, package_set, and set_version for existing packages"
+  @shortdoc "Backfills package_family_id for existing packages"
   @moduledoc """
   Parses all existing package attributes through PackageSetMapping,
-  creates missing PackageFamily records, and updates packages with
-  family associations and parsed set metadata.
+  creates missing PackageFamily records, and associates packages with
+  their family. (`package_set`/`set_version` are derived from the attribute
+  at read time, not stored.)
 
   ## Usage
 
@@ -64,10 +65,7 @@ defmodule Mix.Tasks.Tracker.BackfillFamilies do
           do: Map.get(family_id_map, {p.family_name, p.ecosystem || ""}),
           else: nil
 
-      %{attribute: attribute}
-      |> maybe_put(:package_family_id, family_id)
-      |> maybe_put(:package_set, p.package_set)
-      |> maybe_put(:set_version, p.set_version)
+      maybe_put(%{attribute: attribute}, :package_family_id, family_id)
     end)
     |> Stream.chunk_every(@chunk_size)
     |> Enum.each(fn chunk ->

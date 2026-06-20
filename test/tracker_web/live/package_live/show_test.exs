@@ -41,21 +41,8 @@ defmodule TrackerWeb.PackageLive.ShowTest do
       |> Ash.Changeset.for_create(:create, %{attribute: "pkgshow-hello"})
       |> Ash.create!()
 
-    Tracker.Nixpkgs.PackageRevision
-    |> Ash.Changeset.for_create(:load, %{
-      version: "2.12.1",
-      package_id: package.id,
-      channel_revision_id: cr1.id
-    })
-    |> Ash.create!()
-
-    Tracker.Nixpkgs.PackageRevision
-    |> Ash.Changeset.for_create(:load, %{
-      version: "2.13.0",
-      package_id: package.id,
-      channel_revision_id: cr2.id
-    })
-    |> Ash.create!()
+    Tracker.Fixtures.apply_package_revision!(cr1, [{package, "2.12.1"}])
+    Tracker.Fixtures.apply_package_revision!(cr2, [{package, "2.13.0"}])
 
     %{
       package: package,
@@ -82,13 +69,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
         released_at: ~U[2026-03-20 10:00:00Z]
       })
 
-    Tracker.Nixpkgs.PackageRevision
-    |> Ash.Changeset.for_create(:load, %{
-      version: "3.0.0",
-      package_id: package.id,
-      channel_revision_id: cr3.id
-    })
-    |> Ash.create!()
+    Tracker.Fixtures.apply_package_revision!(cr3, [{package, "3.0.0"}])
 
     Tracker.Nixpkgs.ChannelRevision.record_result!(cr3, %{result: :success})
 
@@ -168,21 +149,8 @@ defmodule TrackerWeb.PackageLive.ShowTest do
         released_at: ~U[2025-09-29 10:56:00Z]
       })
 
-    Tracker.Nixpkgs.PackageRevision
-    |> Ash.Changeset.for_create(:load, %{
-      version: "6.16.0",
-      package_id: pkg.id,
-      channel_revision_id: cr_aug.id
-    })
-    |> Ash.create!()
-
-    Tracker.Nixpkgs.PackageRevision
-    |> Ash.Changeset.for_create(:load, %{
-      version: "6.17.0",
-      package_id: pkg.id,
-      channel_revision_id: cr_sep.id
-    })
-    |> Ash.create!()
+    Tracker.Fixtures.apply_package_revision!(cr_aug, [{pkg, "6.16.0"}])
+    Tracker.Fixtures.apply_package_revision!(cr_sep, [{pkg, "6.17.0"}])
 
     {:ok, _view, html} = live(conn, ~p"/packages/crossmonth-pkg")
 
@@ -249,18 +217,14 @@ defmodule TrackerWeb.PackageLive.ShowTest do
     Tracker.Nixpkgs.Package
     |> Ash.Changeset.for_create(:bulk_upsert, %{
       attribute: "python313Packages.numpy",
-      package_family_id: family.id,
-      package_set: "python313Packages",
-      set_version: "3.13"
+      package_family_id: family.id
     })
     |> Ash.create!()
 
     Tracker.Nixpkgs.Package
     |> Ash.Changeset.for_create(:bulk_upsert, %{
       attribute: "python312Packages.numpy",
-      package_family_id: family.id,
-      package_set: "python312Packages",
-      set_version: "3.12"
+      package_family_id: family.id
     })
     |> Ash.create!()
 
@@ -318,6 +282,9 @@ defmodule TrackerWeb.PackageLive.ShowTest do
   end
 
   describe "linked options" do
+    # P3 (trk-322): the linked-options section still reads the option-revision
+    # model, which is removed until the options vertical lands.
+    @describetag :skip
     setup %{package: package, cr1: cr1} do
       option =
         Tracker.Nixpkgs.Option
@@ -374,13 +341,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
           released_at: ~U[2026-03-10 10:00:00Z]
         })
 
-      Tracker.Nixpkgs.PackageRevision
-      |> Ash.Changeset.for_create(:load, %{
-        version: "2.12.1",
-        package_id: package.id,
-        channel_revision_id: cr3.id
-      })
-      |> Ash.create!()
+      Tracker.Fixtures.apply_package_revision!(cr3, [{package, "2.12.1"}])
 
       # Add a fourth unstable revision with a new version (real change)
       cr4 =
@@ -390,13 +351,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
           released_at: ~U[2026-03-20 10:00:00Z]
         })
 
-      Tracker.Nixpkgs.PackageRevision
-      |> Ash.Changeset.for_create(:load, %{
-        version: "2.14.0",
-        package_id: package.id,
-        channel_revision_id: cr4.id
-      })
-      |> Ash.create!()
+      Tracker.Fixtures.apply_package_revision!(cr4, [{package, "2.14.0"}])
 
       %{cr3: cr3, cr4: cr4}
     end
@@ -540,22 +495,18 @@ defmodule TrackerWeb.PackageLive.ShowTest do
   end
 
   describe "lifecycle events lens filtering" do
-    setup %{package: package, cr1: cr1, cr2: cr2} do
-      Tracker.Nixpkgs.PackageEvent
-      |> Ash.Changeset.for_create(:create, %{
-        type: :added,
-        package_id: package.id,
-        channel_revision_id: cr1.id
-      })
-      |> Ash.create!()
+    # The top-level setup leaves the package open in unstable (an "added"
+    # boundary) and open in stable; here we close the stable span so stable
+    # also shows a "removed" boundary.
+    setup %{package: package, channel_stable: channel_stable} do
+      cr_remove =
+        Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
+          channel_id: channel_stable.id,
+          revision: "stableremove1234",
+          released_at: ~U[2026-04-01 10:00:00Z]
+        })
 
-      Tracker.Nixpkgs.PackageEvent
-      |> Ash.Changeset.for_create(:create, %{
-        type: :removed,
-        package_id: package.id,
-        channel_revision_id: cr2.id
-      })
-      |> Ash.create!()
+      Tracker.Fixtures.remove_package!(cr_remove, package)
 
       :ok
     end
@@ -566,6 +517,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
     } do
       {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}")
 
+      # Unstable: package is still present → only an "added" boundary.
       assert html =~ "Lifecycle Events"
       assert html =~ "added"
       refute html =~ "removed"
@@ -581,8 +533,8 @@ defmodule TrackerWeb.PackageLive.ShowTest do
       send(view.pid, {:set_lens, channel_stable.name, ""})
       html = render(view)
 
+      # Stable: the package was added then removed → a "removed" boundary.
       assert html =~ "removed"
-      refute html =~ "added"
     end
   end
 
