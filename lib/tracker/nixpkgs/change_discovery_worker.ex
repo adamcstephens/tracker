@@ -327,7 +327,7 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorker do
   """
   def backfill do
     token = Tracker.GitHub.installation_token!()
-    cutoff = DateTime.utc_now() |> DateTime.add(-@checkpoint_floor_days, :day)
+    cutoff = DateTime.utc_now() |> DateTime.add(-checkpoint_floor_days(), :day)
     Logger.info(msg: "discovery backfill started", since: cutoff)
     started_at = System.monotonic_time()
 
@@ -369,7 +369,7 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorker do
   artifact expiry window.
   """
   def checkpoint do
-    floor = DateTime.utc_now() |> DateTime.add(-@checkpoint_floor_days, :day)
+    floor = DateTime.utc_now() |> DateTime.add(-checkpoint_floor_days(), :day)
 
     case Change.max_gh_updated_at() do
       {:ok, %DateTime{} = dt} ->
@@ -379,5 +379,10 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorker do
       _ ->
         floor
     end
+  end
+
+  defp checkpoint_floor_days do
+    Application.get_env(:tracker, __MODULE__, [])
+    |> Keyword.get(:checkpoint_floor_days, @checkpoint_floor_days)
   end
 end

@@ -557,6 +557,16 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorkerTest do
 
       assert DateTime.diff(got, floor) |> abs() < 5
     end
+
+    test "honors a configured floor window over the 90-day default" do
+      Application.put_env(:tracker, ChangeDiscoveryWorker, checkpoint_floor_days: 1)
+      on_exit(fn -> Application.delete_env(:tracker, ChangeDiscoveryWorker) end)
+
+      floor = DateTime.utc_now() |> DateTime.add(-1, :day)
+      got = ChangeDiscoveryWorker.checkpoint()
+
+      assert DateTime.diff(got, floor) |> abs() < 5
+    end
   end
 
   describe "parse_pr_payload/1" do

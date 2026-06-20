@@ -28,6 +28,8 @@ config :tracker, TrackerWeb.Endpoint,
 
 config :ash_authentication, debug_authentication_failures?: false
 
+config :tracker, Tracker.Nixpkgs.ChangeDiscoveryWorker, checkpoint_floor_days: 1
+
 # ## SSL Support
 #
 # In order to use HTTPS in development, a self-signed
