@@ -26,4 +26,10 @@ defmodule Tracker.Nixpkgs.Types.TstzRange do
   def dump_to_native(nil, _constraints), do: {:ok, nil}
   def dump_to_native(%Postgrex.Range{} = range, _constraints), do: {:ok, range}
   def dump_to_native(_other, _constraints), do: :error
+
+  # Supports closing a span via an atomic expression update
+  # (`tstzrange(lower(valid), closed_at)`); the fragment already yields a
+  # tstzrange, so pass it through unchanged.
+  @impl true
+  def cast_atomic(expr, _constraints), do: {:atomic, expr}
 end
