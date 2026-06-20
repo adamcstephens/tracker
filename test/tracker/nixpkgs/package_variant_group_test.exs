@@ -1,6 +1,8 @@
 defmodule Tracker.Nixpkgs.PackageVariantGroupTest do
   use Tracker.DataCase, async: true
 
+  require Ash.Query
+
   alias Tracker.Nixpkgs.PackageVariantGroup
 
   describe "bulk_upsert_all/1" do
@@ -33,6 +35,29 @@ defmodule Tracker.Nixpkgs.PackageVariantGroupTest do
     test "returns empty map for empty input" do
       id_map = PackageVariantGroup.bulk_upsert_all([])
       assert id_map == %{}
+    end
+
+    test "writes rows in position order regardless of input order (deadlock guard)" do
+      # Shared across channels; concurrent upserts deadlock unless every writer
+      # locks rows in one global order (trk-330). Fresh rows' id order reveals
+      # the write order.
+      shuffled = ~w(
+        pkgs/z/generic.nix:1
+        pkgs/a/generic.nix:1
+        pkgs/m/generic.nix:1
+        pkgs/a/generic.nix:2
+      )
+
+      PackageVariantGroup.bulk_upsert_all(Enum.map(shuffled, &%{position: &1}))
+
+      ordered_by_id =
+        PackageVariantGroup
+        |> Ash.Query.filter(position in ^shuffled)
+        |> Ash.Query.sort(id: :asc)
+        |> Ash.read!()
+        |> Enum.map(& &1.position)
+
+      assert ordered_by_id == Enum.sort(shuffled)
     end
   end
 end
