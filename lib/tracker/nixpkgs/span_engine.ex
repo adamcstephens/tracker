@@ -146,6 +146,11 @@ defmodule Tracker.Nixpkgs.SpanEngine do
   defp close(_spec, [], _released_at), do: :ok
 
   defp close(spec, ids, released_at) do
+    # Lock the closed rows in a deterministic (id) order. Defensive: spans are
+    # per-channel (channel_id is in the key), so concurrent channels never touch
+    # the same span rows — see trk-330.
+    ids = Enum.sort(ids)
+
     spec.resource
     |> Ash.Query.filter(id in ^ids)
     |> Ash.bulk_update!(:close, %{closed_at: released_at},
@@ -168,8 +173,11 @@ defmodule Tracker.Nixpkgs.SpanEngine do
       upper_inclusive: false
     }
 
+    # Insert in a deterministic (key) order — defensive, as above (trk-330).
     records =
-      Enum.map(items, fn item ->
+      items
+      |> Enum.sort_by(spec.key_fn)
+      |> Enum.map(fn item ->
         item
         |> Map.take(spec.key_columns ++ spec.payload_columns)
         |> Map.put(:channel_id, channel_id)

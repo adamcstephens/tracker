@@ -1,6 +1,8 @@
 defmodule Tracker.Nixpkgs.PackageTest do
   use Tracker.DataCase, async: true
 
+  require Ash.Query
+
   alias Tracker.Fixtures
   alias Tracker.Nixpkgs.{Channel, ChannelRevision, Package}
 
@@ -75,6 +77,25 @@ defmodule Tracker.Nixpkgs.PackageTest do
       package = Ash.get!(Package, id_map["curl"])
       assert package.package_variant_group_id == group.id
       refute Map.has_key?(package, :description)
+    end
+
+    test "writes rows in attribute order regardless of input order (deadlock guard)" do
+      # Concurrent channel ingestions upsert the shared `packages` table; if each
+      # writer locks rows in a different order they deadlock (trk-330). Sorting by
+      # the conflict key gives every writer one global lock order. A single
+      # INSERT assigns bigserial ids in VALUES order, so fresh rows' id order
+      # reveals the write order.
+      shuffled = ~w(dlg-mango dlg-apple dlg-cherry dlg-banana dlg-date)
+      Package.bulk_upsert_all(Enum.map(shuffled, &%{attribute: &1}))
+
+      ordered_by_id =
+        Package
+        |> Ash.Query.filter(attribute in ^shuffled)
+        |> Ash.Query.sort(id: :asc)
+        |> Ash.read!()
+        |> Enum.map(& &1.attribute)
+
+      assert ordered_by_id == Enum.sort(shuffled)
     end
 
     test "accumulates ids across chunks" do

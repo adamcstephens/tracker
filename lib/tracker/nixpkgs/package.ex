@@ -290,6 +290,10 @@ defmodule Tracker.Nixpkgs.Package do
     now = DateTime.utc_now(:second)
 
     records
+    # Sort by the conflict target so every concurrent writer acquires row locks
+    # in one global order; otherwise overlapping multi-channel upserts deadlock
+    # (trk-330).
+    |> Enum.sort_by(& &1.attribute)
     |> Stream.map(fn record ->
       record
       |> Map.put(:inserted_at, now)
