@@ -103,7 +103,7 @@ defmodule Tracker.Repo.Migrations.SpansTargetSchema do
           null: false
     end
 
-    create table(:option_span_files, primary_key: false) do
+    create table(:option_file_spans, primary_key: false) do
       add :id, :bigserial, null: false, primary_key: true
       add :valid, :tstzrange, null: false
 
@@ -118,7 +118,7 @@ defmodule Tracker.Repo.Migrations.SpansTargetSchema do
       add :channel_id,
           references(:channels,
             column: :id,
-            name: "option_span_files_channel_id_fkey",
+            name: "option_file_spans_channel_id_fkey",
             type: :bigint,
             prefix: "public"
           ),
@@ -127,7 +127,7 @@ defmodule Tracker.Repo.Migrations.SpansTargetSchema do
       add :option_id,
           references(:options,
             column: :id,
-            name: "option_span_files_option_id_fkey",
+            name: "option_file_spans_option_id_fkey",
             type: :bigint,
             prefix: "public"
           ),
@@ -136,7 +136,7 @@ defmodule Tracker.Repo.Migrations.SpansTargetSchema do
       add :file_id,
           references(:files,
             column: :id,
-            name: "option_span_files_file_id_fkey",
+            name: "option_file_spans_file_id_fkey",
             type: :bigint,
             prefix: "public"
           ),
@@ -144,11 +144,11 @@ defmodule Tracker.Repo.Migrations.SpansTargetSchema do
     end
 
     execute("""
-    ALTER TABLE option_span_files ADD CONSTRAINT option_span_files_no_overlap EXCLUDE USING gist (channel_id WITH =, option_id WITH =, file_id WITH =, valid WITH &&)
+    ALTER TABLE option_file_spans ADD CONSTRAINT option_file_spans_no_overlap EXCLUDE USING gist (channel_id WITH =, option_id WITH =, file_id WITH =, valid WITH &&)
     """)
 
     execute("""
-    CREATE INDEX option_span_files_current ON option_span_files (channel_id, option_id, file_id) WHERE upper_inf(valid)
+    CREATE INDEX option_file_spans_current ON option_file_spans (channel_id, option_id, file_id) WHERE upper_inf(valid)
     """)
 
     execute("""
@@ -186,20 +186,20 @@ defmodule Tracker.Repo.Migrations.SpansTargetSchema do
     """)
 
     execute("""
-    DROP INDEX option_span_files_current
+    DROP INDEX option_file_spans_current
     """)
 
     execute("""
-    ALTER TABLE option_span_files DROP CONSTRAINT option_span_files_no_overlap
+    ALTER TABLE option_file_spans DROP CONSTRAINT option_file_spans_no_overlap
     """)
 
-    drop constraint(:option_span_files, "option_span_files_channel_id_fkey")
+    drop constraint(:option_file_spans, "option_file_spans_channel_id_fkey")
 
-    drop constraint(:option_span_files, "option_span_files_option_id_fkey")
+    drop constraint(:option_file_spans, "option_file_spans_option_id_fkey")
 
-    drop constraint(:option_span_files, "option_span_files_file_id_fkey")
+    drop constraint(:option_file_spans, "option_file_spans_file_id_fkey")
 
-    drop table(:option_span_files)
+    drop table(:option_file_spans)
 
     drop constraint(:option_spans, "option_spans_channel_id_fkey")
 

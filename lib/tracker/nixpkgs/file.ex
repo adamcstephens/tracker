@@ -54,7 +54,7 @@ defmodule Tracker.Nixpkgs.File do
   end
 
   relationships do
-    has_many :option_span_files, Tracker.Nixpkgs.OptionSpanFile
+    has_many :option_file_spans, Tracker.Nixpkgs.OptionFileSpan
     has_many :change_files, Tracker.Nixpkgs.ChangeFile
   end
 
