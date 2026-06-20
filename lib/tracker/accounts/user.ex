@@ -52,6 +52,8 @@ defmodule Tracker.Accounts.User do
 
   code_interface do
     define :create_service_account, args: [:name, :roles]
+    define :grant_admin
+    define :get_by_github_username, args: [:github_username]
     define :set_live_ui
     define :rotate_feed_token
     define :by_feed_token, args: [:feed_token], not_found_error?: false
@@ -104,6 +106,17 @@ defmodule Tracker.Accounts.User do
       prepare AshAuthentication.Preparations.FilterBySubject
     end
 
+    update :grant_admin do
+      description "Elevate a user by adding the :admin role, preserving existing roles."
+      require_atomic? false
+      accept []
+
+      change fn changeset, _context ->
+        roles = Ash.Changeset.get_attribute(changeset, :roles) || []
+        Ash.Changeset.change_attribute(changeset, :roles, [:admin | roles])
+      end
+    end
+
     update :set_live_ui do
       require_atomic? false
       accept [:live_ui]
@@ -123,6 +136,13 @@ defmodule Tracker.Accounts.User do
       end
     end
 
+    read :get_by_github_username do
+      description "Look up a user by their GitHub username."
+      get? true
+      argument :github_username, :string, allow_nil?: false
+      filter expr(github_username == ^arg(:github_username))
+    end
+
     read :by_feed_token do
       description "Look up a user by their notifications-feed token."
       get? true
@@ -137,6 +157,10 @@ defmodule Tracker.Accounts.User do
     end
 
     bypass action(:create_service_account) do
+      authorize_if {Tracker.Accounts.Checks.ActorHasRole, role: :admin}
+    end
+
+    bypass action(:grant_admin) do
       authorize_if {Tracker.Accounts.Checks.ActorHasRole, role: :admin}
     end
 

@@ -102,6 +102,51 @@ defmodule Tracker.Accounts.UserTest do
     end
   end
 
+  describe "get_by_github_username" do
+    test "returns the user with the given github username" do
+      user = register_via_github!(%{"login" => "octocat"})
+
+      found = User.get_by_github_username!("octocat", authorize?: false)
+
+      assert found.id == user.id
+    end
+
+    test "raises when no user matches" do
+      assert_raise Ash.Error.Invalid, fn ->
+        User.get_by_github_username!("nobody", authorize?: false)
+      end
+    end
+  end
+
+  describe "grant_admin" do
+    test "admin can elevate another user to admin, preserving existing roles" do
+      admin = register_via_github!() |> with_roles!([:admin])
+      user = register_via_github!()
+
+      elevated = User.grant_admin!(user, actor: admin)
+
+      assert Enum.sort(elevated.roles) == [:admin, :user]
+    end
+
+    test "is idempotent when the user is already an admin" do
+      admin = register_via_github!() |> with_roles!([:admin])
+      user = register_via_github!() |> with_roles!([:user, :admin])
+
+      elevated = User.grant_admin!(user, actor: admin)
+
+      assert Enum.sort(elevated.roles) == [:admin, :user]
+    end
+
+    test "non-admin actor is forbidden" do
+      non_admin = register_via_github!()
+      user = register_via_github!()
+
+      assert_raise Ash.Error.Forbidden, fn ->
+        User.grant_admin!(user, actor: non_admin)
+      end
+    end
+  end
+
   describe "live_ui preference" do
     test "defaults to true on registration" do
       user = register_via_github!()
