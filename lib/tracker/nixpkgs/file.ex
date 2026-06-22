@@ -9,7 +9,6 @@ defmodule Tracker.Nixpkgs.File do
   code_interface do
     define :read
     define :get_by_path, args: [:path]
-    define :files_for_prefix, args: [:prefix, :channel_revision_id]
   end
 
   actions do
@@ -25,21 +24,8 @@ defmodule Tracker.Nixpkgs.File do
       filter expr(path == ^arg(:path))
     end
 
-    read :files_for_prefix do
-      argument :prefix, :string, allow_nil?: false
-      argument :channel_revision_id, :integer, allow_nil?: false
-
-      prepare build(sort: :path)
-
-      filter expr(
-               exists(
-                 option_revision_files,
-                 option_revision.channel_revision_id == ^arg(:channel_revision_id) and
-                   (option_revision.option.name == ^arg(:prefix) or
-                      fragment("? LIKE ? || '.%'", option_revision.option.name, ^arg(:prefix)))
-               )
-             )
-    end
+    # files_for_prefix (the option↔file "Defined in" set) is rebuilt on option
+    # file spans in trk-323 (P4).
   end
 
   attributes do

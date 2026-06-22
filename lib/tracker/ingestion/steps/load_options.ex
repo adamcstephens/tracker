@@ -1,12 +1,14 @@
 defmodule Tracker.Ingestion.Steps.LoadOptions do
   @moduledoc """
-  Fetches options.json.br and bulk upserts options, option revisions, files,
-  and option-revision-file links.
+  Fetches options.json.br, upserts options, and folds this revision's full
+  option set into metadata spans via the diff_and_apply engine.
+
+  Option↔file (declaration) membership is a separate span vertical (trk-323).
   """
 
   @behaviour Tracker.Ingestion.Step
 
-  alias Tracker.Nixpkgs.ChannelFetcher
+  alias Tracker.Nixpkgs.{ChannelFetcher, Option, OptionSpan, SpanEngine}
 
   @impl true
   def timeout, do: :timer.minutes(15)
@@ -15,16 +17,16 @@ defmodule Tracker.Ingestion.Steps.LoadOptions do
   def run(%Tracker.Ingestion.StepContext{pipeline: pipeline, channel_revision: channel_revision}) do
     options_map = ChannelFetcher.fetch_options(pipeline.base_url)
 
-    option_records =
-      Enum.map(options_map, fn {name, _entry} -> %{name: name} end)
+    option_records = Enum.map(options_map, fn {name, _entry} -> %{name: name} end)
+    option_id_map = Option.bulk_upsert_all(option_records)
 
-    option_id_map = Tracker.Nixpkgs.Option.bulk_upsert_all(option_records)
-
-    revision_records =
+    # Metadata is temporal: fold this revision's full set into the option spans.
+    # The set was just fetched in full, so it is complete — absent options are
+    # genuine removals.
+    incoming =
       Enum.map(options_map, fn {name, entry} ->
         %{
           option_id: Map.fetch!(option_id_map, name),
-          channel_revision_id: channel_revision.id,
           description: entry["description"],
           type: entry["type"],
           default: extract_text(entry["default"]),
@@ -35,31 +37,13 @@ defmodule Tracker.Ingestion.Steps.LoadOptions do
         }
       end)
 
-    option_revision_id_map = Tracker.Nixpkgs.OptionRevision.bulk_insert_all(revision_records)
-
-    declaration_paths =
-      options_map
-      |> Enum.flat_map(fn {_name, entry} -> entry["declarations"] || [] end)
-      |> Enum.map(&Tracker.Nixpkgs.File.normalize_path/1)
-      |> Enum.uniq()
-
-    file_id_map = Tracker.Nixpkgs.File.bulk_upsert_all(declaration_paths)
-
-    option_revision_file_records =
-      options_map
-      |> Enum.flat_map(fn {name, entry} ->
-        option_id = Map.fetch!(option_id_map, name)
-        revision_id = Map.fetch!(option_revision_id_map, option_id)
-
-        (entry["declarations"] || [])
-        |> Enum.map(&Tracker.Nixpkgs.File.normalize_path/1)
-        |> Enum.uniq()
-        |> Enum.map(fn path ->
-          %{option_revision_id: revision_id, file_id: Map.fetch!(file_id_map, path)}
-        end)
-      end)
-
-    Tracker.Nixpkgs.OptionRevisionFile.bulk_insert_all(option_revision_file_records)
+    SpanEngine.diff_and_apply(
+      OptionSpan.spec(),
+      channel_revision.channel_id,
+      channel_revision.released_at,
+      incoming,
+      complete?: true
+    )
 
     :ok
   end

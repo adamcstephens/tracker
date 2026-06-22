@@ -282,30 +282,17 @@ defmodule TrackerWeb.PackageLive.ShowTest do
   end
 
   describe "linked options" do
-    # P3 (trk-322): the linked-options section still reads the option-revision
-    # model, which is removed until the options vertical lands.
-    @describetag :skip
     setup %{package: package, cr1: cr1} do
-      option =
-        Tracker.Nixpkgs.Option
-        |> Ash.Changeset.for_create(:bulk_upsert, %{
-          name: "services.hello.enable"
-        })
-        |> Ash.create!()
+      option = Tracker.Fixtures.option!("services.hello.enable")
 
       Tracker.Nixpkgs.OptionPackage.load!(%{
         option_id: option.id,
         package_id: package.id
       })
 
-      Tracker.Nixpkgs.OptionRevision
-      |> Ash.Changeset.for_create(:load, %{
-        option_id: option.id,
-        channel_revision_id: cr1.id,
-        type: "boolean",
-        description: "Whether to enable hello service."
-      })
-      |> Ash.create!()
+      Tracker.Fixtures.apply_option_revision!(cr1, [
+        {option, %{type: "boolean", description: "Whether to enable hello service."}}
+      ])
 
       %{option: option}
     end

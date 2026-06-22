@@ -21,7 +21,6 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
     define :find_by_hash, args: [:hash]
     define :find_by_channel_hash, args: [:channel_id, :hash]
     define :latest_by_channel, args: [:channel_id]
-    define :without_options, args: [:channel_id]
     define :by_channel_asc, args: [:channel_id]
     define :by_released_ats, args: [:channel_id, :released_ats]
     define :by_ids, args: [:ids]
@@ -118,18 +117,6 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
       argument :ids, {:array, :integer}, allow_nil?: false
 
       filter expr(id in ^arg(:ids))
-    end
-
-    read :without_options do
-      argument :channel_id, :integer, allow_nil?: false
-
-      prepare build(sort: [{:released_at, :asc}])
-
-      filter expr(
-               channel_id == ^arg(:channel_id) and
-                 result == :success and
-                 not exists(option_revisions, true)
-             )
     end
 
     read :latest_by_channel do
@@ -243,14 +230,8 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
     %RevisionDiff{
       package_events: Tracker.Nixpkgs.PackageHistory.events_between(to_rev, from_rev.released_at),
       version_changes: version_diff(from_rev, to_rev),
-      option_events:
-        Tracker.Nixpkgs.OptionEvent.list_between_revisions!(
-          to_rev.channel_id,
-          from_rev.released_at,
-          to_rev.released_at
-        ),
-      option_metadata_changes:
-        Tracker.Nixpkgs.OptionRevision.metadata_diff(from_rev.id, to_rev.id)
+      option_events: Tracker.Nixpkgs.OptionHistory.events_between(to_rev, from_rev.released_at),
+      option_metadata_changes: Tracker.Nixpkgs.OptionHistory.metadata_diff(from_rev, to_rev)
     }
   end
 

@@ -91,7 +91,8 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
   end
 
   describe "affected options section" do
-    # P3 (trk-322): option setup uses the removed option-revision model.
+    # Deferred to trk-323 (P4): the affected-options section maps change files to
+    # the options they declare — option↔file membership, built on option file spans.
     @describetag :skip
     setup do
       change_id = Tracker.Nixpkgs.Change.get_by_number!(6001).id
@@ -163,7 +164,8 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
   end
 
   describe "affected options cap" do
-    # P3 (trk-322): option setup uses the removed option-revision model.
+    # Deferred to trk-323 (P4): the affected-options section maps change files to
+    # the options they declare — option↔file membership, built on option file spans.
     @describetag :skip
     setup do
       change_id = Tracker.Nixpkgs.Change.get_by_number!(6001).id

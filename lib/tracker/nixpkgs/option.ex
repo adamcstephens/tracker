@@ -83,40 +83,12 @@ defmodule Tracker.Nixpkgs.Option do
   covering every option affected by the given change *as seen in the given
   channel revision*.
 
-  Scoping to a single channel revision is what keeps this query tractable
-  on changes that touch foundational files — without it the join fans out
-  across every channel revision each option has ever appeared in.
-
-  An option with no dots in its name is returned under its bare name as
-  the prefix. Otherwise the prefix is the first two dot-separated segments
-  (e.g. `services.nginx.virtualHosts` → `services.nginx`).
+  Maps the change's touched files to the options those files declare — option↔
+  file membership, which lands on option file spans in trk-323 (P4). Returns
+  `[]` until then.
   """
-  def prefix_counts_by_change_and_channel_revision(change_id, channel_revision_id) do
-    file_ids =
-      change_id
-      |> Tracker.Nixpkgs.ChangeFile.file_ids_for_change!()
-      |> Enum.map(& &1.file_id)
-
-    case file_ids do
-      [] ->
-        []
-
-      _ ->
-        Tracker.Nixpkgs.OptionRevision.list_by_channel_revision_and_file_ids!(
-          channel_revision_id,
-          file_ids
-        )
-        |> Enum.map(&fold_to_prefix(&1.option.name))
-        |> Enum.frequencies()
-        |> Enum.sort_by(fn {prefix, _count} -> prefix end)
-    end
-  end
-
-  defp fold_to_prefix(name) do
-    case String.split(name, ".") do
-      [single] -> single
-      [a, b | _] -> a <> "." <> b
-    end
+  def prefix_counts_by_change_and_channel_revision(_change_id, _channel_revision_id) do
+    []
   end
 
   @doc """

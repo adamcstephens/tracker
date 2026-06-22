@@ -327,19 +327,12 @@ defmodule TrackerWeb.PackageLive.Show do
     package_meta = load_current_meta(package.id)
     family_siblings = package |> load_family_siblings() |> decorate_siblings()
     variant_siblings = load_variant_siblings(package)
-    # The linked-options section still reads option metadata from the (P3) option
-    # revision model; skip the query when the package has no options so the page
-    # renders. P3 migrates this onto option spans.
+    # The linked-options section shows each option's current metadata, served
+    # from its open span (most-recent across channels).
     option_revisions =
-      case Enum.map(package.options, & &1.id) do
-        [] ->
-          %{}
-
-        option_ids ->
-          option_ids
-          |> Tracker.Nixpkgs.OptionRevision.latest_by_option_ids!()
-          |> Map.new(&{&1.option_id, &1})
-      end
+      package.options
+      |> Enum.map(& &1.id)
+      |> Tracker.Nixpkgs.OptionHistory.current_metadata()
 
     tp = TableParams.from_params(params, @table_opts)
     version_filter = params["version"] || ""

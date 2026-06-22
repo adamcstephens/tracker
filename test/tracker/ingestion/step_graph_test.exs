@@ -12,7 +12,6 @@ defmodule Tracker.Ingestion.StepGraphTest do
       assert :finalize in steps
       refute :load_options in steps
       refute :link_options in steps
-      refute :detect_option_events in steps
     end
 
     test "nixos channel gets options steps" do
@@ -23,7 +22,6 @@ defmodule Tracker.Ingestion.StepGraphTest do
       assert :finalize in steps
       assert :load_options in steps
       assert :link_options in steps
-      assert :detect_option_events in steps
     end
 
     test "nixos-unstable-small gets options steps" do
@@ -31,7 +29,6 @@ defmodule Tracker.Ingestion.StepGraphTest do
 
       assert :load_options in steps
       assert :link_options in steps
-      assert :detect_option_events in steps
     end
   end
 
@@ -72,7 +69,6 @@ defmodule Tracker.Ingestion.StepGraphTest do
       ready = StepGraph.ready_steps(active, completed)
 
       assert :link_options in ready
-      assert :detect_option_events in ready
     end
 
     test "finalize ready only when all other active steps complete" do
@@ -92,12 +88,12 @@ defmodule Tracker.Ingestion.StepGraphTest do
 
       completed =
         active
-        |> Enum.reject(&(&1 in [:finalize, :detect_option_events]))
+        |> Enum.reject(&(&1 in [:finalize, :link_options]))
 
       ready = StepGraph.ready_steps(active, completed)
 
       refute :finalize in ready
-      assert :detect_option_events in ready
+      assert :link_options in ready
     end
 
     test "non-nixos channel: finalize ready after base steps" do
