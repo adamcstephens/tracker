@@ -8,11 +8,11 @@ defmodule Tracker.Ingestion.StepGraph do
       create_revision ─┬─ load_packages ──┐
                        │              │   │
                        └─ load_options ┼── link_options
-                       (nixos-* only)  │  └─ detect_option_events
+                       (nixos-* only)  │
                                        └─ finalize (all active done)
 
-  Package added/removed/version-change events are derived from span boundaries
-  on read, so there is no package-event detection step.
+  Package and option added/removed/version-change events are derived from span
+  boundaries on read, so there is no event-detection step for either.
   """
 
   @metadata_channel "nixos-unstable-small"
@@ -22,7 +22,6 @@ defmodule Tracker.Ingestion.StepGraph do
     load_packages: [:create_revision],
     load_options: [:create_revision],
     link_options: [:load_packages, :load_options],
-    detect_option_events: [:load_options],
     finalize: :all_active
   }
 
@@ -31,7 +30,6 @@ defmodule Tracker.Ingestion.StepGraph do
     load_packages: Tracker.Ingestion.Steps.LoadPackages,
     load_options: Tracker.Ingestion.Steps.LoadOptions,
     link_options: Tracker.Ingestion.Steps.LinkOptions,
-    detect_option_events: Tracker.Ingestion.Steps.DetectOptionEvents,
     finalize: Tracker.Ingestion.Steps.Finalize
   }
 
@@ -39,14 +37,14 @@ defmodule Tracker.Ingestion.StepGraph do
   Returns the list of active steps for a given channel.
 
   All channels get: create_revision, load_packages, finalize.
-  Channels starting with "nixos-" additionally get: load_options, link_options, detect_option_events.
+  Channels starting with "nixos-" additionally get: load_options, link_options.
   """
   @spec steps_for(String.t()) :: [atom()]
   def steps_for(channel) do
     base = [:create_revision, :load_packages, :finalize]
 
     if String.starts_with?(channel, "nixos-") do
-      base ++ [:load_options, :link_options, :detect_option_events]
+      base ++ [:load_options, :link_options]
     else
       base
     end

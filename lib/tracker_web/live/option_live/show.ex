@@ -169,13 +169,7 @@ defmodule TrackerWeb.OptionLive.Show do
                     <.link navigate={~p"/packages/#{pkg.attribute}"}>{pkg.attribute}</.link>
                   </span>
                 </dd>
-
-                <dt :if={rev.files != []}>Defined in</dt>
-                <dd :if={rev.files != []}>
-                  <span :for={file <- rev.files}>
-                    <.declaration_link path={file.path} channel_revision={@channel_revision} />
-                  </span>
-                </dd>
+                <%!-- Per-option "Defined in" file lists come from option↔file spans (trk-323, P4). --%>
               </dl>
             </details>
           </li>
@@ -282,7 +276,6 @@ defmodule TrackerWeb.OptionLive.Show do
   defp tail(name, ""), do: name
   defp tail(name, prefix), do: String.slice(name, String.length(prefix) + 1, String.length(name))
 
-  # NOTE: OptionRevision removed in spans P0; rewritten to OptionSpan in P4 (trk-322).
   defp option_packages(%{option: %{packages: packages}}),
     do: packages
 
@@ -364,13 +357,15 @@ defmodule TrackerWeb.OptionLive.Show do
       case channel_revision do
         nil -> {[], [], []}
         _cr when search != "" -> {[], [], []}
-        cr when prefix == "" -> load_root_view(cr.id)
-        cr -> load_prefix_view(cr.id, prefix)
+        cr when prefix == "" -> load_root_view(cr)
+        cr -> load_prefix_view(cr, prefix)
       end
 
     leaf_options = drop_settable_set_duplicates(subgroups, leaf_options)
 
-    recent_prs = if search == "", do: recent_prs_for_files(files), else: []
+    # "Defined in" file sets and the recent-PRs-touching-those-files list both
+    # depend on option↔file spans, wired in trk-323 (P4).
+    recent_prs = []
 
     socket = load_matches(socket)
 
@@ -393,8 +388,9 @@ defmodule TrackerWeb.OptionLive.Show do
 
     if channel_revision && search != "" do
       page =
-        Tracker.Nixpkgs.OptionRevision.list_by_channel_revision!(
-          channel_revision.id,
+        Tracker.Nixpkgs.OptionSpan.list_by_channel!(
+          channel_revision.channel_id,
+          channel_revision.released_at,
           search,
           prefix,
           page: [offset: offset, count: true]
@@ -468,22 +464,21 @@ defmodule TrackerWeb.OptionLive.Show do
     end
   end
 
-  defp recent_prs_for_files([]), do: []
-
-  defp recent_prs_for_files(files) do
-    Tracker.Nixpkgs.Change.by_files!(Enum.map(files, & &1.id), 10)
-  end
-
   # Both tree views are assembled from three narrow queries — subgroup counts
   # aggregated in the database, full detail for only the handful of leaf rows
   # the page renders, and the subtree's file set for Defined-in/recent PRs.
   # Hydrating every revision under a big prefix like `services` costs seconds.
-  defp load_root_view(channel_revision_id) do
-    subgroups = Tracker.Nixpkgs.OptionRevision.subgroup_counts(channel_revision_id)
+  defp load_root_view(channel_revision) do
+    subgroups =
+      Tracker.Nixpkgs.OptionHistory.subgroup_counts(
+        channel_revision.channel_id,
+        channel_revision.released_at
+      )
 
     leaf_revs =
-      Tracker.Nixpkgs.OptionRevision.list_direct_by_channel_revision_and_prefix!(
-        channel_revision_id,
+      Tracker.Nixpkgs.OptionSpan.list_direct_by_prefix!(
+        channel_revision.channel_id,
+        channel_revision.released_at,
         ""
       )
 
@@ -501,18 +496,23 @@ defmodule TrackerWeb.OptionLive.Show do
     Enum.reject(leaf_revs, fn rev -> MapSet.member?(group_names, rev.option.name) end)
   end
 
-  defp load_prefix_view(channel_revision_id, prefix) do
-    subgroups = Tracker.Nixpkgs.OptionRevision.subgroup_counts(channel_revision_id, prefix)
-
-    leaf_revs =
-      Tracker.Nixpkgs.OptionRevision.list_direct_by_channel_revision_and_prefix!(
-        channel_revision_id,
+  defp load_prefix_view(channel_revision, prefix) do
+    subgroups =
+      Tracker.Nixpkgs.OptionHistory.subgroup_counts(
+        channel_revision.channel_id,
+        channel_revision.released_at,
         prefix
       )
 
-    files = Tracker.Nixpkgs.File.files_for_prefix!(prefix, channel_revision_id)
+    leaf_revs =
+      Tracker.Nixpkgs.OptionSpan.list_direct_by_prefix!(
+        channel_revision.channel_id,
+        channel_revision.released_at,
+        prefix
+      )
 
-    {subgroups, leaf_revs, files}
+    # "Defined in" file sets come from option↔file spans, wired in trk-323 (P4).
+    {subgroups, leaf_revs, []}
   end
 
   defp parent_prefix(name) do

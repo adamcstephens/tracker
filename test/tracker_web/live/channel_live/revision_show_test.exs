@@ -1,129 +1,54 @@
 defmodule TrackerWeb.ChannelLive.RevisionShowTest do
   use TrackerWeb.ConnCase, async: true
 
-  # P3 (trk-322): the revision-show page renders `diff_between/2`, whose option
-  # half (option events + metadata diff) is removed until the options vertical
-  # lands. The package half is covered by `ChannelRevisionTest.version_diff` and
-  # `PackageHistoryTest.events_between`.
-  @moduletag :skip
-
   import Phoenix.LiveViewTest
 
-  alias Tracker.Nixpkgs.Channel
+  alias Tracker.Fixtures
 
   setup do
-    channel_unstable =
-      Channel.create!(%{
-        name: "nixos-unstable",
-        display_name: "NixOS Unstable",
-        status: :active,
-        is_stable: false
-      })
-
-    channel_stable =
-      Channel.create!(%{
-        name: "nixos-24.11",
-        display_name: "NixOS 24.11",
-        status: :active,
-        is_stable: true
-      })
+    channel_unstable = Fixtures.channel!("nixos-unstable")
+    channel_stable = Fixtures.channel!("nixos-24.11")
 
     cr1 =
-      Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
-        channel_id: channel_unstable.id,
+      Fixtures.channel_revision!(channel_unstable, %{
         revision: "rev111aaa222333",
         released_at: ~U[2026-03-01 10:00:00Z]
       })
 
     cr2 =
-      Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
-        channel_id: channel_unstable.id,
+      Fixtures.channel_revision!(channel_unstable, %{
         revision: "rev222bbb444555",
         released_at: ~U[2026-03-15 10:00:00Z],
         previous_channel_revision_id: cr1.id
       })
 
     cr_no_prev =
-      Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
-        channel_id: channel_stable.id,
+      Fixtures.channel_revision!(channel_stable, %{
         revision: "rev333fff666777",
         released_at: ~U[2026-03-20 10:00:00Z]
       })
 
-    pkg_hello =
-      Tracker.Nixpkgs.Package
-      |> Ash.Changeset.for_create(:create, %{attribute: "revshow-hello"})
-      |> Ash.create!()
+    hello = Fixtures.package!("revshow-hello")
+    added = Fixtures.package!("revshow-added")
 
-    # hello: version changed between cr1 and cr2
-    Tracker.Nixpkgs.PackageRevision.load!(%{
-      version: "2.12.1",
-      package_id: pkg_hello.id,
-      channel_revision_id: cr1.id
-    })
+    # hello: version changed between cr1 and cr2; added: appears only in cr2.
+    Fixtures.apply_package_revision!(cr1, [{hello, "2.12.1"}])
+    Fixtures.apply_package_revision!(cr2, [{hello, "2.13.0"}, {added, "1.0.0"}])
 
-    Tracker.Nixpkgs.PackageRevision.load!(%{
-      version: "2.13.0",
-      package_id: pkg_hello.id,
-      channel_revision_id: cr2.id
-    })
+    opt_changed = Fixtures.option!("revshow.opt.changed")
+    opt_added = Fixtures.option!("revshow.opt.added")
 
-    # Event: hello was added in cr2
-    Tracker.Nixpkgs.PackageEvent
-    |> Ash.Changeset.for_create(:create, %{
-      type: :added,
-      package_id: pkg_hello.id,
-      channel_revision_id: cr2.id
-    })
-    |> Ash.create!()
+    Fixtures.apply_option_revision!(cr1, [
+      {opt_changed, %{description: "Revshow old description.", type: "boolean", default: "false"}}
+    ])
 
-    %{"revshow.opt.changed" => opt_changed_id, "revshow.opt.added" => opt_added_id} =
-      Tracker.Nixpkgs.Option.bulk_upsert_all([
-        %{name: "revshow.opt.changed"},
-        %{name: "revshow.opt.added"}
-      ])
+    Fixtures.apply_option_revision!(cr2, [
+      {opt_changed,
+       %{description: "Revshow new description.", type: "boolean", default: "false"}},
+      {opt_added, %{description: "Revshow added option.", type: "boolean", default: "false"}}
+    ])
 
-    # opt_changed: present in both cr1 and cr2 with a different description
-    Tracker.Nixpkgs.OptionRevision.load!(%{
-      option_id: opt_changed_id,
-      channel_revision_id: cr1.id,
-      description: "Revshow old description.",
-      type: "boolean",
-      default: "false",
-      example: nil,
-      read_only: false
-    })
-
-    Tracker.Nixpkgs.OptionRevision.load!(%{
-      option_id: opt_changed_id,
-      channel_revision_id: cr2.id,
-      description: "Revshow new description.",
-      type: "boolean",
-      default: "false",
-      example: nil,
-      read_only: false
-    })
-
-    # opt_added: only in cr2
-    Tracker.Nixpkgs.OptionRevision.load!(%{
-      option_id: opt_added_id,
-      channel_revision_id: cr2.id,
-      description: "Revshow added option.",
-      type: "boolean",
-      default: "false",
-      example: nil,
-      read_only: false
-    })
-
-    Tracker.Nixpkgs.OptionEvent
-    |> Ash.Changeset.for_create(:create, %{
-      type: :added,
-      option_id: opt_added_id,
-      channel_revision_id: cr2.id
-    })
-    |> Ash.create!()
-
-    %{cr1: cr1, cr2: cr2, cr_no_prev: cr_no_prev, pkg_hello: pkg_hello}
+    %{cr1: cr1, cr2: cr2, cr_no_prev: cr_no_prev}
   end
 
   test "renders revision metadata", %{conn: conn, cr2: cr2} do

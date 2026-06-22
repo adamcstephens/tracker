@@ -160,11 +160,17 @@ defmodule Tracker.Fixtures do
     })
   end
 
-  @doc """
-  Loads options data into the database for a channel revision.
+  @doc "Creates (upserts) an option with a unique name."
+  def option!(name \\ nil) do
+    name = name || "opt-#{System.unique_integer([:positive])}"
+    Tracker.Nixpkgs.Option.bulk_upsert!(name)
+  end
 
-  Accepts a raw options map (as from options.json) and a channel revision.
-  Upserts options, option revisions, files, and option-revision-file links.
+  @doc """
+  Loads a channel revision's full option set into metadata spans via the engine,
+  mirroring ingestion. Accepts a raw options map (as from options.json).
+
+  Applies as a *complete* revision: options absent from the map are closed.
   """
   def load_options(options_map, channel_revision) do
     option_records =
@@ -172,11 +178,9 @@ defmodule Tracker.Fixtures do
 
     option_id_map = Tracker.Nixpkgs.Option.bulk_upsert_all(option_records)
 
-    revision_records =
+    incoming =
       Enum.map(options_map, fn {name, entry} ->
-        %{
-          option_id: Map.fetch!(option_id_map, name),
-          channel_revision_id: channel_revision.id,
+        option_payload(Map.fetch!(option_id_map, name), %{
           description: entry["description"],
           type: entry["type"],
           default: extract_text(entry["default"]),
@@ -184,36 +188,73 @@ defmodule Tracker.Fixtures do
           read_only: entry["readOnly"] || false,
           loc: entry["loc"],
           related_packages: entry["relatedPackages"]
-        }
+        })
       end)
 
-    option_revision_id_map = Tracker.Nixpkgs.OptionRevision.bulk_insert_all(revision_records)
-
-    declaration_paths =
-      options_map
-      |> Enum.flat_map(fn {_name, entry} -> entry["declarations"] || [] end)
-      |> Enum.map(&Tracker.Nixpkgs.File.normalize_path/1)
-      |> Enum.uniq()
-
-    file_id_map = Tracker.Nixpkgs.File.bulk_upsert_all(declaration_paths)
-
-    option_revision_file_records =
-      options_map
-      |> Enum.flat_map(fn {name, entry} ->
-        option_id = Map.fetch!(option_id_map, name)
-        revision_id = Map.fetch!(option_revision_id_map, option_id)
-
-        (entry["declarations"] || [])
-        |> Enum.map(&Tracker.Nixpkgs.File.normalize_path/1)
-        |> Enum.uniq()
-        |> Enum.map(fn path ->
-          %{option_revision_id: revision_id, file_id: Map.fetch!(file_id_map, path)}
-        end)
-      end)
-
-    Tracker.Nixpkgs.OptionRevisionFile.bulk_insert_all(option_revision_file_records)
+    Tracker.Nixpkgs.SpanEngine.diff_and_apply(
+      Tracker.Nixpkgs.OptionSpan.spec(),
+      channel_revision.channel_id,
+      channel_revision.released_at,
+      incoming,
+      complete?: true
+    )
 
     :ok
+  end
+
+  @doc """
+  Opens/updates option metadata spans for a revision via the engine. `options`
+  is a list of `{option, payload_map}`.
+
+  Defaults to `complete?: false` so it only touches the listed options. Use
+  `remove_option!/2` to model a removal, or pass `complete?: true` for a full
+  set. Returns the engine's `%{added, changed, removed, left}` counts.
+  """
+  def apply_option_revision!(channel_revision, options, opts \\ []) do
+    incoming =
+      Enum.map(options, fn {option, %{} = attrs} -> option_payload(option.id, attrs) end)
+
+    Tracker.Nixpkgs.SpanEngine.diff_and_apply(
+      Tracker.Nixpkgs.OptionSpan.spec(),
+      channel_revision.channel_id,
+      channel_revision.released_at,
+      incoming,
+      Keyword.put_new(opts, :complete?, false)
+    )
+  end
+
+  @doc """
+  Closes an option's open span in the revision's channel at its `released_at`,
+  modelling a removal (the option is absent from that revision onward).
+  """
+  def remove_option!(channel_revision, option) do
+    open_ids =
+      option.id
+      |> Tracker.Nixpkgs.OptionSpan.by_option!(channel_revision.channel_id)
+      |> Enum.filter(
+        &match?(%Postgrex.Range{upper: upper} when upper in [nil, :unbound], &1.valid)
+      )
+      |> Enum.map(& &1.id)
+
+    unless open_ids == [] do
+      Tracker.Nixpkgs.OptionSpan
+      |> Ash.Query.filter(id in ^open_ids)
+      |> Ash.bulk_update!(:close, %{closed_at: channel_revision.released_at},
+        strategy: [:atomic],
+        authorize?: false,
+        return_records?: false
+      )
+    end
+
+    :ok
+  end
+
+  defp option_payload(option_id, attrs) do
+    Tracker.Nixpkgs.OptionSpan.payload_columns()
+    |> Map.new(&{&1, nil})
+    |> Map.put(:read_only, false)
+    |> Map.put(:option_id, option_id)
+    |> Map.merge(attrs)
   end
 
   defp extract_text(%{"text" => text}), do: text

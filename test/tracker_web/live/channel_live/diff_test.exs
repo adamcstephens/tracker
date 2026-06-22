@@ -1,161 +1,61 @@
 defmodule TrackerWeb.ChannelLive.DiffTest do
   use TrackerWeb.ConnCase, async: true
 
-  # P3 (trk-322): the diff page's `diff_between/2` straddles packages (migrated
-  # here) and options (option events + metadata diff), removed until the options
-  # vertical lands. The package half is covered by
-  # `ChannelRevisionTest.version_diff` and `PackageHistoryTest.events_between`.
-  @moduletag :skip
-
   import Phoenix.LiveViewTest
 
-  alias Tracker.Nixpkgs.Channel
+  alias Tracker.Fixtures
 
   setup do
-    channel =
-      Channel.create!(%{
-        name: "nixos-unstable",
-        display_name: "NixOS Unstable",
-        status: :active,
-        is_stable: false
-      })
+    channel = Fixtures.channel!("nixos-unstable")
 
     cr1 =
-      Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
-        channel_id: channel.id,
+      Fixtures.channel_revision!(channel, %{
         revision: "dif111aaa222333",
         released_at: ~U[2026-03-01 10:00:00Z]
       })
 
     cr2 =
-      Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
-        channel_id: channel.id,
+      Fixtures.channel_revision!(channel, %{
         revision: "dif222bbb444555",
         released_at: ~U[2026-03-15 10:00:00Z],
         previous_channel_revision_id: cr1.id
       })
 
-    pkg_hello =
-      Tracker.Nixpkgs.Package
-      |> Ash.Changeset.for_create(:create, %{attribute: "diff-hello"})
-      |> Ash.create!()
+    hello = Fixtures.package!("diff-hello")
+    added = Fixtures.package!("diff-added-pkg")
+    gone = Fixtures.package!("diff-gone-pkg")
+    stay = Fixtures.package!("diff-stay")
 
-    pkg_world =
-      Tracker.Nixpkgs.Package
-      |> Ash.Changeset.for_create(:create, %{attribute: "diff-world"})
-      |> Ash.create!()
+    Fixtures.apply_package_revision!(cr1, [
+      {hello, "2.12.1"},
+      {gone, "0.5.0"},
+      {stay, "1.0.0"}
+    ])
 
-    pkg_gone =
-      Tracker.Nixpkgs.Package
-      |> Ash.Changeset.for_create(:create, %{attribute: "diff-gone-pkg"})
-      |> Ash.create!()
+    Fixtures.apply_package_revision!(cr2, [
+      {hello, "2.13.0"},
+      {added, "1.0.0"},
+      {stay, "1.0.0"}
+    ])
 
-    # hello: version changed between revisions
-    Tracker.Nixpkgs.PackageRevision.load!(%{
-      version: "2.12.1",
-      package_id: pkg_hello.id,
-      channel_revision_id: cr1.id
-    })
+    Fixtures.remove_package!(cr2, gone)
 
-    Tracker.Nixpkgs.PackageRevision.load!(%{
-      version: "2.13.0",
-      package_id: pkg_hello.id,
-      channel_revision_id: cr2.id
-    })
+    opt_changed = Fixtures.option!("diff.opt.changed")
+    opt_added = Fixtures.option!("diff.opt.added")
 
-    # world: same version in both (unchanged)
-    Tracker.Nixpkgs.PackageRevision.load!(%{
-      version: "1.0.0",
-      package_id: pkg_world.id,
-      channel_revision_id: cr1.id
-    })
+    Fixtures.apply_option_revision!(cr1, [
+      {opt_changed, %{description: "Old description.", type: "boolean", default: "false"}}
+    ])
 
-    Tracker.Nixpkgs.PackageRevision.load!(%{
-      version: "1.0.0",
-      package_id: pkg_world.id,
-      channel_revision_id: cr2.id
-    })
+    Fixtures.apply_option_revision!(cr2, [
+      {opt_changed, %{description: "New description.", type: "boolean", default: "false"}},
+      {opt_added, %{description: "Just added.", type: "boolean", default: "false"}}
+    ])
 
-    # gone-pkg: only in cr1, removed in cr2
-    Tracker.Nixpkgs.PackageRevision.load!(%{
-      version: "0.5.0",
-      package_id: pkg_gone.id,
-      channel_revision_id: cr1.id
-    })
-
-    # Event: world was added in cr2
-    Tracker.Nixpkgs.PackageEvent
-    |> Ash.Changeset.for_create(:create, %{
-      type: :added,
-      package_id: pkg_world.id,
-      channel_revision_id: cr2.id
-    })
-    |> Ash.create!()
-
-    %{"diff.opt.changed" => opt_changed_id, "diff.opt.added" => opt_added_id} =
-      Tracker.Nixpkgs.Option.bulk_upsert_all([
-        %{name: "diff.opt.changed"},
-        %{name: "diff.opt.added"}
-      ])
-
-    # opt_changed: present in both, with differing description
-    Tracker.Nixpkgs.OptionRevision.load!(%{
-      option_id: opt_changed_id,
-      channel_revision_id: cr1.id,
-      description: "Old description.",
-      type: "boolean",
-      default: "false",
-      example: nil,
-      read_only: false
-    })
-
-    Tracker.Nixpkgs.OptionRevision.load!(%{
-      option_id: opt_changed_id,
-      channel_revision_id: cr2.id,
-      description: "New description.",
-      type: "boolean",
-      default: "false",
-      example: nil,
-      read_only: false
-    })
-
-    # opt_added: only in cr2
-    Tracker.Nixpkgs.OptionRevision.load!(%{
-      option_id: opt_added_id,
-      channel_revision_id: cr2.id,
-      description: "Just added.",
-      type: "boolean",
-      default: "false",
-      example: nil,
-      read_only: false
-    })
-
-    Tracker.Nixpkgs.OptionEvent
-    |> Ash.Changeset.for_create(:create, %{
-      type: :added,
-      option_id: opt_added_id,
-      channel_revision_id: cr2.id
-    })
-    |> Ash.create!()
-
-    %{
-      cr1: cr1,
-      cr2: cr2,
-      pkg_hello: pkg_hello,
-      pkg_world: pkg_world,
-      pkg_gone: pkg_gone
-    }
+    %{cr1: cr1, cr2: cr2}
   end
 
   test "renders diff page with short hashes", %{conn: conn, cr1: cr1, cr2: cr2} do
-    {:ok, _view, html} =
-      live(conn, ~p"/channels/nixos-unstable/diff/#{cr1.revision}/#{cr2.revision}")
-
-    assert html =~ String.slice(cr1.revision, 0, 7)
-    assert html =~ String.slice(cr2.revision, 0, 7)
-  end
-
-  test "renders diff page with full hashes", %{conn: conn, cr1: cr1, cr2: cr2} do
     {:ok, _view, html} =
       live(conn, ~p"/channels/nixos-unstable/diff/#{cr1.revision}/#{cr2.revision}")
 
@@ -167,7 +67,7 @@ defmodule TrackerWeb.ChannelLive.DiffTest do
     {:ok, _view, html} =
       live(conn, ~p"/channels/nixos-unstable/diff/#{cr1.revision}/#{cr2.revision}")
 
-    assert html =~ "diff-world"
+    assert html =~ "diff-added-pkg"
     assert html =~ "added"
   end
 
@@ -192,9 +92,9 @@ defmodule TrackerWeb.ChannelLive.DiffTest do
     {:ok, view, _html} =
       live(conn, ~p"/channels/nixos-unstable/diff/#{cr1.revision}/#{cr2.revision}")
 
-    # diff-world is 1.0.0 in both revisions - it should not appear in the version changes table
+    # diff-stay is 1.0.0 in both revisions - it should not appear in version changes
     version_changes_html = view |> element("section:last-of-type table") |> render()
-    refute version_changes_html =~ ">diff-world<"
+    refute version_changes_html =~ ">diff-stay<"
   end
 
   test "returns 404 for unknown revision", %{conn: conn, cr1: cr1} do

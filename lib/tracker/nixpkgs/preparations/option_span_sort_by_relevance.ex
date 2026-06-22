@@ -1,4 +1,4 @@
-defmodule Tracker.Nixpkgs.Preparations.OptionRevisionSortByRelevance do
+defmodule Tracker.Nixpkgs.Preparations.OptionSpanSortByRelevance do
   use Ash.Resource.Preparation
 
   import Ash.Expr
