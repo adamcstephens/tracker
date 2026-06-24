@@ -139,4 +139,55 @@ defmodule Tracker.Nixpkgs.ChannelRevisionTest do
       refute Enum.any?(diff, &(&1.old_version == &1.new_version))
     end
   end
+
+  describe "diff_between/2 — arbitrary (non-adjacent) revisions" do
+    test "computes the net diff across a skipped revision" do
+      channel = create_channel!("nixos-unstable")
+
+      rev1 =
+        ChannelRevision.create!(%{
+          channel_id: channel.id,
+          revision: "arba1",
+          released_at: ~U[2026-04-01 10:00:00Z]
+        })
+
+      rev2 =
+        ChannelRevision.create!(%{
+          channel_id: channel.id,
+          revision: "arbb2",
+          released_at: ~U[2026-04-08 10:00:00Z],
+          previous_channel_revision_id: rev1.id
+        })
+
+      rev3 =
+        ChannelRevision.create!(%{
+          channel_id: channel.id,
+          revision: "arbc3",
+          released_at: ~U[2026-04-15 10:00:00Z],
+          previous_channel_revision_id: rev2.id
+        })
+
+      a = Fixtures.package!("arb-a")
+      b = Fixtures.package!("arb-b")
+      c = Fixtures.package!("arb-c")
+
+      Fixtures.apply_package_revision!(rev1, [{a, "1.0"}, {b, "1.0"}])
+      # Intermediate revision the arbitrary diff must see through, not stop at.
+      Fixtures.apply_package_revision!(rev2, [{a, "2.0"}, {b, "1.0"}])
+      Fixtures.apply_package_revision!(rev3, [{a, "3.0"}, {c, "1.0"}])
+      Fixtures.remove_package!(rev3, b)
+
+      diff = ChannelRevision.diff_between(rev1, rev3)
+      versions = Map.new(diff.version_changes, &{&1.attribute, {&1.old_version, &1.new_version}})
+      events = Map.new(diff.package_events, &{&1.package.attribute, &1.type})
+
+      assert versions == %{
+               "arb-a" => {"1.0", "3.0"},
+               "arb-b" => {"1.0", nil},
+               "arb-c" => {nil, "1.0"}
+             }
+
+      assert events == %{"arb-b" => :removed, "arb-c" => :added}
+    end
+  end
 end
