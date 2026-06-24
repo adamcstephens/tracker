@@ -228,44 +228,22 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
   metadata changes.
   """
   def diff_between(from_rev, to_rev) do
+    pkg = Tracker.Nixpkgs.PackageHistory.diff_between(to_rev, from_rev.released_at)
+    opt = Tracker.Nixpkgs.OptionHistory.diff_between(to_rev, from_rev.released_at)
+
     %RevisionDiff{
-      package_events: Tracker.Nixpkgs.PackageHistory.events_between(to_rev, from_rev.released_at),
-      version_changes: version_diff(from_rev, to_rev),
-      option_events: Tracker.Nixpkgs.OptionHistory.events_between(to_rev, from_rev.released_at),
-      option_metadata_changes: Tracker.Nixpkgs.OptionHistory.metadata_diff(from_rev, to_rev)
+      package_events: pkg.events,
+      version_changes: pkg.version_changes,
+      option_events: opt.events,
+      option_metadata_changes: opt.metadata_changes
     }
   end
 
   @doc """
-  Returns version changes between two channel revisions as a list of
-  `VersionDiff` structs, reconstructed from package spans at each revision's
-  `released_at`.
-
-  Only includes packages where the version differs (including added/removed),
-  sorted by attribute.
+  Version changes between two channel revisions as `VersionDiff` structs — only
+  packages whose version differs (added/removed included), sorted by attribute.
   """
   def version_diff(from_rev, to_rev) do
-    channel_id = to_rev.channel_id
-    old = versions_at(channel_id, from_rev.released_at)
-    new = versions_at(channel_id, to_rev.released_at)
-
-    (Map.keys(old) ++ Map.keys(new))
-    |> Enum.uniq()
-    |> Enum.map(fn attribute ->
-      %VersionDiff{
-        attribute: attribute,
-        old_version: Map.get(old, attribute),
-        new_version: Map.get(new, attribute)
-      }
-    end)
-    |> Enum.filter(&(&1.old_version != &1.new_version))
-    |> Enum.sort_by(& &1.attribute)
-  end
-
-  # %{attribute => version} reconstructed from the channel's spans at `at`.
-  defp versions_at(channel_id, at) do
-    channel_id
-    |> Tracker.Nixpkgs.PackageSpan.at!(at, load: [:package])
-    |> Map.new(fn span -> {span.package.attribute, span.version} end)
+    Tracker.Nixpkgs.PackageHistory.diff_between(to_rev, from_rev.released_at).version_changes
   end
 end

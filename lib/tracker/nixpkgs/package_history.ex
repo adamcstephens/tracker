@@ -9,6 +9,7 @@ defmodule Tracker.Nixpkgs.PackageHistory do
   """
 
   alias Tracker.Nixpkgs.{ChannelRevision, PackageSpan}
+  alias Tracker.Nixpkgs.ChannelRevision.VersionDiff
 
   defmodule Event do
     @moduledoc "A derived package lifecycle event (added/removed) at a revision."
@@ -321,29 +322,80 @@ defmodule Tracker.Nixpkgs.PackageHistory do
   end
 
   @doc """
-  Net package added/removed events between two points on a channel: packages
-  present at `to_rev` but not at `from_at` are `:added`, and vice versa for
-  `:removed`. Both are attributed to `to_rev` (the boundary revision).
+  Package diff between two points on a channel as `%{events, version_changes}`,
+  from a single DB-side set-diff so only changed rows reach Elixir. Correct for
+  any revision pair, adjacent or not. `events` are added/removed packages
+  attributed to `to_rev`; `version_changes` are `VersionDiff`s where the version
+  differs (added/removed included).
+  """
+  @spec diff_between(ChannelRevision.t(), DateTime.t()) :: %{
+          events: [Event.t()],
+          version_changes: [VersionDiff.t()]
+        }
+  def diff_between(to_rev, from_at) do
+    rows = diff_rows(to_rev.channel_id, from_at, to_rev.released_at)
+
+    version_changes =
+      Enum.map(rows, fn r ->
+        %VersionDiff{
+          attribute: r.attribute,
+          old_version: r.old_version,
+          new_version: r.new_version
+        }
+      end)
+
+    %{events: package_events(rows, to_rev), version_changes: version_changes}
+  end
+
+  @doc """
+  Net package added/removed events between two points on a channel, attributed
+  to `to_rev`.
   """
   @spec events_between(ChannelRevision.t(), DateTime.t()) :: [Event.t()]
-  def events_between(to_rev, from_at) do
-    channel_id = to_rev.channel_id
-    old = PackageSpan.at!(channel_id, from_at, load: [:package])
-    new = PackageSpan.at!(channel_id, to_rev.released_at, load: [:package])
+  def events_between(to_rev, from_at), do: diff_between(to_rev, from_at).events
 
-    old_ids = MapSet.new(old, & &1.package_id)
-    new_ids = MapSet.new(new, & &1.package_id)
+  defp package_events(rows, to_rev) do
+    for r <- rows, not (r.in_old and r.in_new) do
+      %Event{
+        type: if(r.in_new, do: :added, else: :removed),
+        package: %Tracker.Nixpkgs.Package{id: r.package_id, attribute: r.attribute},
+        channel_revision: to_rev
+      }
+    end
+  end
 
-    added =
-      for span <- new, not MapSet.member?(old_ids, span.package_id) do
-        %Event{type: :added, package: span.package, channel_revision: to_rev}
-      end
+  # DB-side set-diff of the two point-in-time sets; valid @> rides the span GiST
+  # index, bounding cost to one revision's size rather than total history.
+  defp diff_rows(channel_id, from_at, to_at) do
+    {:ok, %{rows: rows}} =
+      Tracker.Repo.query(
+        """
+        WITH a AS (SELECT package_id, version FROM package_spans
+                   WHERE channel_id = $1 AND valid @> $2::timestamptz),
+             b AS (SELECT package_id, version FROM package_spans
+                   WHERE channel_id = $1 AND valid @> $3::timestamptz)
+        SELECT pk.attribute,
+               a.package_id IS NOT NULL AS in_old,
+               b.package_id IS NOT NULL AS in_new,
+               a.version, b.version,
+               COALESCE(a.package_id, b.package_id) AS package_id
+        FROM a FULL OUTER JOIN b ON a.package_id = b.package_id
+        JOIN packages pk ON pk.id = COALESCE(a.package_id, b.package_id)
+        WHERE a.version IS DISTINCT FROM b.version
+        ORDER BY pk.attribute
+        """,
+        [channel_id, from_at, to_at]
+      )
 
-    removed =
-      for span <- old, not MapSet.member?(new_ids, span.package_id) do
-        %Event{type: :removed, package: span.package, channel_revision: to_rev}
-      end
-
-    added ++ removed
+    Enum.map(rows, fn [attribute, in_old, in_new, old_version, new_version, package_id] ->
+      %{
+        attribute: attribute,
+        in_old: in_old,
+        in_new: in_new,
+        old_version: old_version,
+        new_version: new_version,
+        package_id: package_id
+      }
+    end)
   end
 end
