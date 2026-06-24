@@ -17,6 +17,9 @@ defmodule Tracker.Nixpkgs.SpanEngine do
 
   alias Tracker.Nixpkgs.SpanEngine.Spec
 
+  # Bounded so each statement stays under the bind-param limit and DB timeout.
+  @default_batch_size 5_000
+
   @doc """
   Applies one revision's `incoming` set to the channel's spans at `released_at`.
 
@@ -33,6 +36,7 @@ defmodule Tracker.Nixpkgs.SpanEngine do
         }
   def diff_and_apply(%Spec{} = spec, channel_id, released_at, incoming, opts \\ []) do
     complete? = Keyword.get(opts, :complete?, true)
+    batch_size = Keyword.get(opts, :batch_size, @default_batch_size)
 
     open_by_key = Map.new(load_open(spec, channel_id), &{spec.key_fn.(&1), &1})
     incoming_by_key = Map.new(incoming, &{spec.key_fn.(&1), &1})
@@ -59,14 +63,17 @@ defmodule Tracker.Nixpkgs.SpanEngine do
         []
       end
 
-    # One transaction per revision: a mid-revision failure rolls back the whole
-    # revision rather than leaving spans half-applied. Close before open —
-    # reopening at T while the prior span is still unbounded would overlap and
-    # trip the EXCLUDE constraint.
-    Tracker.Repo.transaction(fn ->
-      close(spec, changed_ids ++ removed_ids, released_at)
-      open(spec, channel_id, released_at, to_open)
-    end)
+    # Close before open: a still-unbounded prior span would overlap the EXCLUDE constraint.
+    case Tracker.Repo.transaction(fn ->
+           close(spec, changed_ids ++ removed_ids, released_at, batch_size)
+           open(spec, channel_id, released_at, to_open, batch_size)
+         end) do
+      {:ok, _} ->
+        :ok
+
+      {:error, reason} ->
+        raise "SpanEngine.diff_and_apply: span write failed for #{inspect(spec.resource)}: #{inspect(reason)}"
+    end
 
     %{
       added: length(to_open) - length(changed_ids),
@@ -143,29 +150,34 @@ defmodule Tracker.Nixpkgs.SpanEngine do
     |> Ash.read!(authorize?: false)
   end
 
-  defp close(_spec, [], _released_at), do: :ok
+  defp close(_spec, [], _released_at, _batch_size), do: :ok
 
-  defp close(spec, ids, released_at) do
-    # Lock the closed rows in a deterministic (id) order. Defensive: spans are
-    # per-channel (channel_id is in the key), so concurrent channels never touch
-    # the same span rows — see trk-330.
-    ids = Enum.sort(ids)
-
-    spec.resource
-    |> Ash.Query.filter(id in ^ids)
-    |> Ash.bulk_update!(:close, %{closed_at: released_at},
-      strategy: [:atomic],
-      authorize?: false,
-      return_errors?: true,
-      return_records?: false
-    )
+  defp close(spec, ids, released_at, batch_size) do
+    # Deterministic order avoids lock-ordering deadlocks.
+    ids
+    |> Enum.sort()
+    |> Enum.chunk_every(batch_size)
+    |> Enum.each(fn chunk ->
+      spec.resource
+      |> Ash.Query.filter(id in ^chunk)
+      |> Ash.bulk_update!(:close, %{closed_at: released_at},
+        strategy: [:atomic],
+        authorize?: false,
+        return_errors?: true,
+        return_records?: false,
+        stop_on_error?: true
+      )
+    end)
 
     :ok
   end
 
-  defp open(_spec, _channel_id, _released_at, []), do: :ok
+  defp open(_spec, _channel_id, _released_at, [], _batch_size), do: :ok
 
-  defp open(spec, channel_id, released_at, items) do
+  defp open(spec, channel_id, released_at, items, batch_size) do
+    table = AshPostgres.DataLayer.Info.table(spec.resource)
+    now = DateTime.utc_now()
+
     range = %Postgrex.Range{
       lower: released_at,
       upper: :unbound,
@@ -173,22 +185,21 @@ defmodule Tracker.Nixpkgs.SpanEngine do
       upper_inclusive: false
     }
 
-    # Insert in a deterministic (key) order — defensive, as above (trk-330).
-    records =
-      items
-      |> Enum.sort_by(spec.key_fn)
-      |> Enum.map(fn item ->
-        item
-        |> Map.take(spec.key_columns ++ spec.payload_columns)
-        |> Map.put(:channel_id, channel_id)
-        |> Map.put(:valid, range)
-      end)
+    take = spec.key_columns ++ spec.payload_columns
 
-    Ash.bulk_create!(records, spec.resource, :open,
-      authorize?: false,
-      return_errors?: true,
-      return_records?: false
-    )
+    # Deterministic order avoids lock-ordering deadlocks.
+    items
+    |> Enum.sort_by(spec.key_fn)
+    |> Enum.map(fn item ->
+      item
+      |> Map.take(take)
+      |> Map.put(:channel_id, channel_id)
+      |> Map.put(:valid, range)
+      |> Map.put(:inserted_at, now)
+      |> Map.put(:updated_at, now)
+    end)
+    |> Enum.chunk_every(batch_size)
+    |> Enum.each(fn batch -> Tracker.Repo.insert_all(table, batch) end)
 
     :ok
   end
