@@ -219,6 +219,22 @@ defmodule Tracker.Nixpkgs.SpanEngineTest do
     end
   end
 
+  describe "fingerprint stability" do
+    test "a payload with trailing whitespace does not churn across revisions" do
+      channel = channel!()
+      pkg = package!()
+
+      SpanEngine.diff_and_apply(spec(), channel.id, @t1, [item(pkg, "1.0", "a desc\n")])
+
+      SpanEngine.diff_and_apply(spec(), channel.id, @t2, [item(pkg, "1.0", "a desc\n")],
+        complete?: true
+      )
+
+      assert all_spans(channel.id, pkg.id) |> length() == 1
+      assert SpanEngine.reconstruct(spec(), channel.id, @t1)[[pkg.id]].description == "a desc\n"
+    end
+  end
+
   defp bound?(actual, expected), do: DateTime.compare(actual, expected) == :eq
 
   defp all_spans(channel_id, package_id) do
