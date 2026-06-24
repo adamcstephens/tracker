@@ -133,6 +133,40 @@ defmodule Tracker.Nixpkgs.SpanEngineTest do
     end
   end
 
+  describe "diff_and_apply/5 — batched writes" do
+    test "opens every span when the open set spans multiple batches" do
+      channel = channel!()
+      pkgs = for _ <- 1..5, do: package!()
+      items = Enum.map(pkgs, &item(&1, "1.0", "a"))
+
+      SpanEngine.diff_and_apply(spec(), channel.id, @t1, items, batch_size: 2)
+
+      assert SpanEngine.reconstruct(spec(), channel.id, @t1) |> map_size() == 5
+    end
+
+    test "closes every changed span when the close set spans multiple batches" do
+      channel = channel!()
+      pkgs = for _ <- 1..5, do: package!()
+      SpanEngine.diff_and_apply(spec(), channel.id, @t1, Enum.map(pkgs, &item(&1, "1.0")))
+
+      SpanEngine.diff_and_apply(spec(), channel.id, @t2, Enum.map(pkgs, &item(&1, "2.0")),
+        batch_size: 2
+      )
+
+      recon = SpanEngine.reconstruct(spec(), channel.id, @t2)
+      assert map_size(recon) == 5
+      assert Enum.all?(recon, fn {_k, v} -> v.version == "2.0" end)
+    end
+
+    test "raises (no silent success) when a span write fails" do
+      pkg = package!()
+
+      assert_raise Postgrex.Error, fn ->
+        SpanEngine.diff_and_apply(spec(), 999_999, @t1, [item(pkg, "1.0", "a")])
+      end
+    end
+  end
+
   describe "replay/3" do
     test "folds revisions in chronological order, gating on completeness" do
       channel = channel!()
