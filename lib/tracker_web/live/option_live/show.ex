@@ -169,7 +169,12 @@ defmodule TrackerWeb.OptionLive.Show do
                     <.link navigate={~p"/packages/#{pkg.attribute}"}>{pkg.attribute}</.link>
                   </span>
                 </dd>
-                <%!-- Per-option "Defined in" file lists come from option↔file spans (trk-323, P4). --%>
+                <dt :if={files_for(@files_by_option, rev.option_id) != []}>Defined in</dt>
+                <dd :if={files_for(@files_by_option, rev.option_id) != []}>
+                  <span :for={file <- files_for(@files_by_option, rev.option_id)}>
+                    <.declaration_link path={file.path} channel_revision={@channel_revision} />
+                  </span>
+                </dd>
               </dl>
             </details>
           </li>
@@ -363,9 +368,10 @@ defmodule TrackerWeb.OptionLive.Show do
 
     leaf_options = drop_settable_set_duplicates(subgroups, leaf_options)
 
-    # "Defined in" file sets and the recent-PRs-touching-those-files list both
-    # depend on option↔file spans, wired in trk-323 (P4).
-    recent_prs = []
+    # Per-option "Defined in" links (inside each leaf accordion) and the
+    # recent-PRs-touching-the-subtree's-files list both ride option↔file spans.
+    files_by_option = files_by_option(channel_revision, leaf_options)
+    recent_prs = recent_prs_for_files(files)
 
     socket = load_matches(socket)
 
@@ -377,8 +383,33 @@ defmodule TrackerWeb.OptionLive.Show do
     |> assign(:subgroups, subgroups)
     |> assign(:leaf_options, leaf_options)
     |> assign(:files, files)
+    |> assign(:files_by_option, files_by_option)
     |> assign(:recent_prs, recent_prs)
     |> assign(:nothing_here?, nothing_here?)
+  end
+
+  # Per-leaf-option declaration files at the revision, as
+  # `%{option_id => [file]}`, for the in-accordion "Defined in" links.
+  defp files_by_option(_channel_revision, []), do: %{}
+
+  defp files_by_option(channel_revision, leaf_options) do
+    option_ids = Enum.map(leaf_options, & &1.option_id)
+
+    channel_revision.channel_id
+    |> Tracker.Nixpkgs.OptionFileSpan.files_for_options_at!(
+      channel_revision.released_at,
+      option_ids
+    )
+    |> Enum.group_by(& &1.option_id, & &1.file)
+    |> Map.new(fn {option_id, files} -> {option_id, Enum.sort_by(files, & &1.path)} end)
+  end
+
+  defp files_for(files_by_option, option_id), do: Map.get(files_by_option, option_id, [])
+
+  defp recent_prs_for_files([]), do: []
+
+  defp recent_prs_for_files(files) do
+    Tracker.Nixpkgs.Change.by_files!(Enum.map(files, & &1.id), 10)
   end
 
   # The fuzzy-ranked flat list of matches under the prefix, paginated.
@@ -511,8 +542,14 @@ defmodule TrackerWeb.OptionLive.Show do
         prefix
       )
 
-    # "Defined in" file sets come from option↔file spans, wired in trk-323 (P4).
-    {subgroups, leaf_revs, []}
+    files =
+      Tracker.Nixpkgs.File.files_for_prefix!(
+        prefix,
+        channel_revision.channel_id,
+        channel_revision.released_at
+      )
+
+    {subgroups, leaf_revs, files}
   end
 
   defp parent_prefix(name) do

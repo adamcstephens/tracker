@@ -83,12 +83,40 @@ defmodule Tracker.Nixpkgs.Option do
   covering every option affected by the given change *as seen in the given
   channel revision*.
 
-  Maps the change's touched files to the options those files declare — option↔
-  file membership, which lands on option file spans in trk-323 (P4). Returns
-  `[]` until then.
+  Maps the change's touched files to the options those files declare via the
+  option↔file membership spans valid at the revision's `released_at`. Scoping to
+  one revision keeps the query tractable on changes that touch foundational
+  files. An option with no dots is returned under its bare name; otherwise the
+  prefix is the first two dot-separated segments.
   """
-  def prefix_counts_by_change_and_channel_revision(_change_id, _channel_revision_id) do
-    []
+  def prefix_counts_by_change_and_channel_revision(change_id, channel_revision_id) do
+    file_ids =
+      change_id
+      |> Tracker.Nixpkgs.ChangeFile.file_ids_for_change!()
+      |> Enum.map(& &1.file_id)
+
+    case file_ids do
+      [] ->
+        []
+
+      _ ->
+        cr = Tracker.Nixpkgs.ChannelRevision.get_by_id!(channel_revision_id)
+
+        cr.channel_id
+        |> Tracker.Nixpkgs.OptionFileSpan.options_for_files_at!(cr.released_at, file_ids)
+        |> Enum.map(& &1.option.name)
+        |> Enum.uniq()
+        |> Enum.map(&fold_to_prefix/1)
+        |> Enum.frequencies()
+        |> Enum.sort_by(fn {prefix, _count} -> prefix end)
+    end
+  end
+
+  defp fold_to_prefix(name) do
+    case String.split(name, ".") do
+      [single] -> single
+      [a, b | _] -> a <> "." <> b
+    end
   end
 
   @doc """

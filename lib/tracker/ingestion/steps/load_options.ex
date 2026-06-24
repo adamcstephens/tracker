@@ -3,12 +3,15 @@ defmodule Tracker.Ingestion.Steps.LoadOptions do
   Fetches options.json.br, upserts options, and folds this revision's full
   option set into metadata spans via the diff_and_apply engine.
 
-  Option↔file (declaration) membership is a separate span vertical (trk-323).
+  The same snapshot also drives option↔file (declaration) membership spans:
+  because both span sets come from one complete fetch, every membership key's
+  option is present in the revision's option set, upholding the "file-membership
+  span ⊆ option existence span" invariant without an FK.
   """
 
   @behaviour Tracker.Ingestion.Step
 
-  alias Tracker.Nixpkgs.{ChannelFetcher, Option, OptionSpan, SpanEngine}
+  alias Tracker.Nixpkgs.{ChannelFetcher, File, Option, OptionFileSpan, OptionSpan, SpanEngine}
 
   @impl true
   def timeout, do: :timer.minutes(15)
@@ -45,7 +48,40 @@ defmodule Tracker.Ingestion.Steps.LoadOptions do
       complete?: true
     )
 
+    load_option_files(options_map, option_id_map, channel_revision)
+
     :ok
+  end
+
+  # Folds option↔file (declaration) membership into spans. Membership carries no
+  # payload, so a span is open exactly while the file declares the option; a
+  # file move closes the old path's key and opens the new one.
+  defp load_option_files(options_map, option_id_map, channel_revision) do
+    paths =
+      options_map
+      |> Enum.flat_map(fn {_name, entry} -> entry["declarations"] || [] end)
+      |> Enum.map(&File.normalize_path/1)
+      |> Enum.uniq()
+
+    file_id_map = File.bulk_upsert_all(paths)
+
+    incoming =
+      for {name, entry} <- options_map,
+          path <- entry["declarations"] || [],
+          uniq: true do
+        %{
+          option_id: Map.fetch!(option_id_map, name),
+          file_id: Map.fetch!(file_id_map, File.normalize_path(path))
+        }
+      end
+
+    SpanEngine.diff_and_apply(
+      OptionFileSpan.spec(),
+      channel_revision.channel_id,
+      channel_revision.released_at,
+      incoming,
+      complete?: true
+    )
   end
 
   defp extract_text(%{"text" => text}), do: text
