@@ -9,6 +9,7 @@ defmodule Tracker.Nixpkgs.File do
   code_interface do
     define :read
     define :get_by_path, args: [:path]
+    define :files_for_prefix, args: [:prefix, :channel_id, :at]
   end
 
   actions do
@@ -24,8 +25,25 @@ defmodule Tracker.Nixpkgs.File do
       filter expr(path == ^arg(:path))
     end
 
-    # files_for_prefix (the option↔file "Defined in" set) is rebuilt on option
-    # file spans in trk-323 (P4).
+    read :files_for_prefix do
+      description "Files declaring any option at/under the prefix, as seen in a channel at a point in time (the 'Defined in' set)."
+
+      argument :prefix, :string, allow_nil?: false
+      argument :channel_id, :integer, allow_nil?: false
+      argument :at, :utc_datetime, allow_nil?: false
+
+      prepare build(sort: [path: :asc])
+
+      filter expr(
+               exists(
+                 option_file_spans,
+                 channel_id == ^arg(:channel_id) and
+                   fragment("? @> ?::timestamptz", valid, ^arg(:at)) and
+                   (option.name == ^arg(:prefix) or
+                      fragment("? LIKE ? || '.%'", option.name, ^arg(:prefix)))
+               )
+             )
+    end
   end
 
   attributes do

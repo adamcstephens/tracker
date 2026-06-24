@@ -140,8 +140,6 @@ defmodule TrackerWeb.OptionLive.ShowTest do
     assert html =~ ~s(data-copy="services.nginx.enable")
   end
 
-  # Deferred to trk-323 (P4): "Defined in" file sets come from option↔file spans.
-  @tag :skip
   test "pure group prefix lists a top-level Defined-in section", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/options/services")
 
@@ -173,8 +171,6 @@ defmodule TrackerWeb.OptionLive.ShowTest do
     assert html =~ ~s(<em class="tail">self</em>)
   end
 
-  # Deferred to trk-323 (P4): "Defined in" file sets come from option↔file spans.
-  @tag :skip
   test "prefix with leaf options omits the top-level Defined-in section", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/options/services.nginx")
 
@@ -184,8 +180,6 @@ defmodule TrackerWeb.OptionLive.ShowTest do
     refute html =~ "nixos/modules/services/web-servers/nginx/location-options.nix"
   end
 
-  # Deferred to trk-323 (P4): per-option file links come from option↔file spans.
-  @tag :skip
   test "leaf options are linked to their files", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/options/services.nginx")
 
@@ -375,8 +369,6 @@ defmodule TrackerWeb.OptionLive.ShowTest do
     assert html =~ "Options at this prefix"
   end
 
-  # Deferred to trk-323 (P4): the prefix's file set comes from option↔file spans.
-  @tag :skip
   test "lists recent PRs whose change_files intersect the prefix's file set", %{conn: conn} do
     %{id: change_id} =
       Tracker.Nixpkgs.Change

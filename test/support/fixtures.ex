@@ -199,7 +199,40 @@ defmodule Tracker.Fixtures do
       complete?: true
     )
 
+    load_option_files(options_map, option_id_map, channel_revision)
+
     :ok
+  end
+
+  # Folds the revision's option↔file (declaration) membership into option-file
+  # spans, mirroring ingestion. Options absent of declarations contribute
+  # nothing, so existing metadata-only fixtures are a no-op here.
+  defp load_option_files(options_map, option_id_map, channel_revision) do
+    paths =
+      options_map
+      |> Enum.flat_map(fn {_name, entry} -> entry["declarations"] || [] end)
+      |> Enum.map(&Tracker.Nixpkgs.File.normalize_path/1)
+      |> Enum.uniq()
+
+    file_id_map = Tracker.Nixpkgs.File.bulk_upsert_all(paths)
+
+    incoming =
+      for {name, entry} <- options_map,
+          path <- entry["declarations"] || [],
+          uniq: true do
+        %{
+          option_id: Map.fetch!(option_id_map, name),
+          file_id: Map.fetch!(file_id_map, Tracker.Nixpkgs.File.normalize_path(path))
+        }
+      end
+
+    Tracker.Nixpkgs.SpanEngine.diff_and_apply(
+      Tracker.Nixpkgs.OptionFileSpan.spec(),
+      channel_revision.channel_id,
+      channel_revision.released_at,
+      incoming,
+      complete?: true
+    )
   end
 
   @doc """

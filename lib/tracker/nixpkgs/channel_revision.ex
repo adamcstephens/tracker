@@ -24,6 +24,7 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
     define :by_channel_asc, args: [:channel_id]
     define :by_released_ats, args: [:channel_id, :released_ats]
     define :by_ids, args: [:ids]
+    define :get_by_id, action: :read, get_by: [:id]
   end
 
   actions do
