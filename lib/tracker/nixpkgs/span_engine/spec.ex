@@ -4,7 +4,7 @@ defmodule Tracker.Nixpkgs.SpanEngine.Spec do
   table (packages, options, option↔file) unchanged.
 
   * `resource` — the span Ash resource (must expose `:open_for_channel`, `:at`,
-    `:open`, `:close`).
+    `:close`; the engine inserts opens directly via `Repo.insert_all`).
   * `key_columns` — identity beyond `channel_id` (e.g. `[:package_id]`,
     `[:option_id, :file_id]`).
   * `payload_columns` — the fingerprinted, reconstructable fields (`[]` for

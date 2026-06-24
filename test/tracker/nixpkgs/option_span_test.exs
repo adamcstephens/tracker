@@ -122,6 +122,24 @@ defmodule Tracker.Nixpkgs.OptionSpanTest do
     end
   end
 
+  describe "fingerprint stability" do
+    test "an option whose description has trailing whitespace does not churn" do
+      channel = Fixtures.channel!("nixos-unstable")
+      rev1 = revision!(channel, "trimws01", ~U[2026-04-01 10:00:00Z])
+      rev2 = revision!(channel, "trimws02", ~U[2026-04-02 10:00:00Z], rev1)
+      opt = Fixtures.option!("services.x")
+
+      attrs = %{description: "Enable X.\n", type: "boolean"}
+      Fixtures.apply_option_revision!(rev1, [{opt, attrs}])
+      Fixtures.apply_option_revision!(rev2, [{opt, attrs}])
+
+      assert opt.id |> OptionSpan.by_option!(channel.id) |> length() == 1
+
+      assert SpanEngine.reconstruct(OptionSpan.spec(), channel.id, rev1.released_at)[[opt.id]].description ==
+               "Enable X.\n"
+    end
+  end
+
   describe "subgroup_counts/3" do
     test "counts options strictly deeper than each subgroup at the prefix" do
       {channel, rev, _opts} = setup_tree()

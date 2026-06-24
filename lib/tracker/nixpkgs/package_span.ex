@@ -130,21 +130,6 @@ defmodule Tracker.Nixpkgs.PackageSpan do
              )
     end
 
-    create :open do
-      accept [
-        :channel_id,
-        :package_id,
-        :valid,
-        :version,
-        :description,
-        :homepage,
-        :licenses,
-        :position,
-        :package_set,
-        :set_version
-      ]
-    end
-
     update :close do
       argument :closed_at, :utc_datetime, allow_nil?: false
 

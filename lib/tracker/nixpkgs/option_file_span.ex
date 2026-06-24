@@ -84,10 +84,6 @@ defmodule Tracker.Nixpkgs.OptionFileSpan do
              )
     end
 
-    create :open do
-      accept [:channel_id, :option_id, :file_id, :valid]
-    end
-
     update :close do
       argument :closed_at, :utc_datetime, allow_nil?: false
 

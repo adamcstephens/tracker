@@ -184,21 +184,6 @@ defmodule Tracker.Nixpkgs.OptionSpan do
              )
     end
 
-    create :open do
-      accept [
-        :channel_id,
-        :option_id,
-        :valid,
-        :description,
-        :type,
-        :default,
-        :example,
-        :read_only,
-        :loc,
-        :related_packages
-      ]
-    end
-
     update :close do
       argument :closed_at, :utc_datetime, allow_nil?: false
 
