@@ -312,5 +312,41 @@ defmodule Tracker.Nixpkgs.ReleaseCacheTest do
       assert length(releases) == 1
       assert hd(releases).base_url =~ "abc1234"
     end
+
+    test "parse_releases accepts an earlier `from` to include older releases" do
+      contents = [
+        %{
+          "Key" => "nixos/unstable/nixos-unstable-new.abc1234",
+          "LastModified" => "2025-06-15T10:00:00Z"
+        },
+        %{
+          "Key" => "nixos/unstable/nixos-unstable-old.def5678",
+          "LastModified" => "2021-05-01T00:00:00Z"
+        }
+      ]
+
+      releases = ReleaseCache.parse_releases(contents, ~U[2020-03-27 00:00:00Z])
+
+      assert length(releases) == 2
+    end
+
+    test "parse_releases excludes releases newer than `until`, bounding a window" do
+      contents = [
+        %{
+          "Key" => "nixos/unstable/nixos-unstable-late.aaa",
+          "LastModified" => "2021-09-01T00:00:00Z"
+        },
+        %{
+          "Key" => "nixos/unstable/nixos-unstable-early.bbb",
+          "LastModified" => "2021-04-01T00:00:00Z"
+        }
+      ]
+
+      releases =
+        ReleaseCache.parse_releases(contents, ~U[2021-01-01 00:00:00Z], ~U[2021-06-01 00:00:00Z])
+
+      assert length(releases) == 1
+      assert hd(releases).base_url =~ "bbb"
+    end
   end
 end

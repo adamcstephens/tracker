@@ -17,10 +17,13 @@ defmodule Tracker.Nixpkgs.ReleaseCache do
 
   @releases_base_url "https://releases.nixos.org"
 
-  # Oldest release date we'll ingest. packages.json.br was introduced around
-  # 2020-03-27 02:16:34 (first seen on nixos-unstable-small), but we default
-  # to 2025-01-01 for now.
-  @release_cutoff_date ~U[2025-01-01T00:00:00Z]
+  # Conservative default; historical backfills pass an earlier `from:` to reach
+  # back to 2020-03-27, where packages.json.br first appears.
+  @default_release_cutoff ~U[2025-01-01T00:00:00Z]
+
+  @doc "The configured default release cutoff (overridable via app env)."
+  def default_cutoff,
+    do: Application.get_env(:tracker, :release_cutoff_date, @default_release_cutoff)
 
   defmodule Release do
     use TypedStruct
@@ -76,6 +79,10 @@ defmodule Tracker.Nixpkgs.ReleaseCache do
   Synchronously refreshes a single channel's release listing.
 
   Options:
+    - `from` - oldest `released_at` to include; overrides the default cutoff so
+      historical backfills can reach earlier than the conservative default.
+    - `until` - newest `released_at` to include; bounds a backfill to a window so
+      the earliest history can be ingested without resolving every later release.
     - `releases_fetcher` - 1-arity function from channel name to a list of
       `%Release{}`. Defaults to fetching from S3. Useful in tests.
   """
@@ -119,7 +126,9 @@ defmodule Tracker.Nixpkgs.ReleaseCache do
   end
 
   @doc false
-  def parse_releases(contents) do
+  def parse_releases(contents, from \\ nil, until \\ nil) do
+    from = from || default_cutoff()
+
     contents
     |> List.wrap()
     |> Enum.map(fn %{"Key" => key, "LastModified" => last_modified} ->
@@ -131,7 +140,8 @@ defmodule Tracker.Nixpkgs.ReleaseCache do
       }
     end)
     |> Enum.reject(fn release ->
-      DateTime.before?(release.released_at, @release_cutoff_date)
+      DateTime.before?(release.released_at, from) or
+        (until != nil and DateTime.after?(release.released_at, until))
     end)
     |> Enum.sort_by(& &1.released_at, {:desc, DateTime})
   end
@@ -249,7 +259,9 @@ defmodule Tracker.Nixpkgs.ReleaseCache do
   end
 
   def handle_call({:refresh_channel, channel, opts}, _from, state) do
-    fetcher = Keyword.get(opts, :releases_fetcher, &fetch_and_parse/1)
+    from = Keyword.get(opts, :from)
+    until = Keyword.get(opts, :until)
+    fetcher = Keyword.get(opts, :releases_fetcher, fn ch -> fetch_and_parse(ch, from, until) end)
     existing = Map.get(state.releases, channel, [])
     releases = channel |> fetcher.() |> merge_revisions(existing)
     {:reply, :ok, %{state | releases: Map.put(state.releases, channel, releases)}}
@@ -287,8 +299,8 @@ defmodule Tracker.Nixpkgs.ReleaseCache do
     end)
   end
 
-  defp fetch_and_parse(channel) do
-    channel |> fetch_releases() |> parse_releases()
+  defp fetch_and_parse(channel, from \\ nil, until \\ nil) do
+    channel |> fetch_releases() |> parse_releases(from, until)
   end
 
   defp merge_revisions(fresh_releases, existing_releases) do
