@@ -293,21 +293,19 @@ defmodule Tracker.Nixpkgs.ReleaseCacheTest do
   end
 
   describe "release cutoff" do
-    test "parse_releases excludes releases older than the cutoff date" do
-      # Simulate S3 contents with one old and one new release
+    test "parse_releases excludes releases older than the default cutoff (2021-10-07)" do
       contents = [
         %{
           "Key" => "nixos/unstable/nixos-unstable-new.abc1234",
-          "LastModified" => "2025-06-15T10:00:00Z"
+          "LastModified" => "2022-01-01T10:00:00Z"
         },
         %{
           "Key" => "nixos/unstable/nixos-unstable-old.def5678",
-          "LastModified" => "2024-12-31T23:59:59Z"
+          "LastModified" => "2021-09-01T23:59:59Z"
         }
       ]
 
-      releases =
-        ReleaseCache.parse_releases(contents)
+      releases = ReleaseCache.parse_releases(contents)
 
       assert length(releases) == 1
       assert hd(releases).base_url =~ "abc1234"
