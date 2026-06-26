@@ -4,7 +4,13 @@ defmodule Tracker.Ingestion.Steps.CreateRevisionTest do
   alias Tracker.Ingestion.{IngestionRun, Pipeline}
   alias Tracker.Ingestion.StepContext
   alias Tracker.Ingestion.Steps.CreateRevision
-  alias Tracker.Nixpkgs.{Channel, ChangeBranchDetectionWorker, ChannelRevision}
+
+  alias Tracker.Nixpkgs.{
+    Channel,
+    ChangeBranchDetectionWorker,
+    ChannelRevision,
+    ChannelRevisionLinkWorker
+  }
 
   setup do
     channel =
@@ -31,12 +37,15 @@ defmodule Tracker.Ingestion.Steps.CreateRevisionTest do
     %{channel: channel, pipeline: pipeline}
   end
 
-  test "creates ChannelRevision and enqueues ChangeBranchDetectionWorker", %{pipeline: pipeline} do
+  test "creates ChannelRevision and enqueues downstream workers off the ingestion queue", %{
+    pipeline: pipeline
+  } do
     assert :ok = CreateRevision.run(%StepContext{pipeline: pipeline})
 
     assert {:ok, %ChannelRevision{}} =
              ChannelRevision.find(pipeline.channel_id, pipeline.revision)
 
-    assert_enqueued(worker: ChangeBranchDetectionWorker)
+    assert_enqueued(worker: ChangeBranchDetectionWorker, queue: :branch_detection)
+    assert_enqueued(worker: ChannelRevisionLinkWorker, queue: :revision_link)
   end
 end

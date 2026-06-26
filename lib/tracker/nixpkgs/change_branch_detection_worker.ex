@@ -23,7 +23,7 @@ defmodule Tracker.Nixpkgs.ChangeBranchDetectionWorker do
   transition was applied via `bulk_upsert_all` (which bypasses Ash
   actions).
   """
-  use Oban.Worker, queue: :ingestion, max_attempts: 5, unique: [period: 60]
+  use Oban.Worker, queue: :branch_detection, max_attempts: 5, unique: [period: 60]
 
   require Logger
 

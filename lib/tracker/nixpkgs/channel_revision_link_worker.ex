@@ -38,7 +38,7 @@ defmodule Tracker.Nixpkgs.ChannelRevisionLinkWorker do
   """
 
   use Oban.Worker,
-    queue: :ingestion,
+    queue: :revision_link,
     max_attempts: 5,
     unique: [period: 60, keys: [:channel_revision_id]]
 
