@@ -28,16 +28,7 @@ defmodule Tracker.Ingestion.Steps.LoadOptions do
     # genuine removals.
     incoming =
       Enum.map(options_map, fn {name, entry} ->
-        %{
-          option_id: Map.fetch!(option_id_map, name),
-          description: entry["description"],
-          type: entry["type"],
-          default: extract_text(entry["default"]),
-          example: extract_text(entry["example"]),
-          read_only: entry["readOnly"] || false,
-          loc: entry["loc"],
-          related_packages: entry["relatedPackages"]
-        }
+        OptionSpan.payload_from_entry(Map.fetch!(option_id_map, name), entry)
       end)
 
     SpanEngine.diff_and_apply(
@@ -83,7 +74,4 @@ defmodule Tracker.Ingestion.Steps.LoadOptions do
       complete?: true
     )
   end
-
-  defp extract_text(%{"text" => text}), do: text
-  defp extract_text(_), do: nil
 end

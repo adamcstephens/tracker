@@ -60,16 +60,8 @@ defmodule Tracker.Nixpkgs.SpanBackfill do
   defp verify_options(cr, options, option_ids) do
     expected =
       Map.new(options, fn {name, entry} ->
-        {[option_ids[name]],
-         %{
-           description: entry["description"],
-           type: entry["type"],
-           default: extract_text(entry["default"]),
-           example: extract_text(entry["example"]),
-           read_only: entry["readOnly"] || false,
-           loc: entry["loc"],
-           related_packages: entry["relatedPackages"]
-         }}
+        payload = OptionSpan.payload_from_entry(option_ids[name], entry)
+        {[option_ids[name]], Map.delete(payload, :option_id)}
       end)
 
     SpanEngine.verify(OptionSpan.spec(), cr.channel_id, cr.released_at, expected)
@@ -158,7 +150,4 @@ defmodule Tracker.Nixpkgs.SpanBackfill do
       @stream_timeout -> raise "PackageStream timed out"
     end
   end
-
-  defp extract_text(%{"text" => text}), do: text
-  defp extract_text(_), do: nil
 end
