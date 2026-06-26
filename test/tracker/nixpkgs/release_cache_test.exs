@@ -293,15 +293,15 @@ defmodule Tracker.Nixpkgs.ReleaseCacheTest do
   end
 
   describe "release cutoff" do
-    test "parse_releases excludes releases older than the default cutoff (2021-10-07)" do
+    test "parse_releases excludes releases older than the default cutoff (2020-03-27)" do
       contents = [
         %{
           "Key" => "nixos/unstable/nixos-unstable-new.abc1234",
-          "LastModified" => "2022-01-01T10:00:00Z"
+          "LastModified" => "2020-06-01T10:00:00Z"
         },
         %{
           "Key" => "nixos/unstable/nixos-unstable-old.def5678",
-          "LastModified" => "2021-09-01T23:59:59Z"
+          "LastModified" => "2020-01-01T23:59:59Z"
         }
       ]
 

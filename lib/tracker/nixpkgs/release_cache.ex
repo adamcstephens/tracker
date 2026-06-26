@@ -17,12 +17,8 @@ defmodule Tracker.Nixpkgs.ReleaseCache do
 
   @releases_base_url "https://releases.nixos.org"
 
-  # Default floor: the 2021-10-07 nixos-unstable bump where options.json began
-  # consistently stringifying `default`/`example`. Earlier revisions carry
-  # structured (non-string) values ingestion can't yet store, so reaching before
-  # this date needs an explicit earlier `from:` (and that ingestion fix).
-  # packages.json.br was introduced 2020-03-27
-  @default_release_cutoff ~U[2021-10-07T00:00:00Z]
+  # Default floor: 2020-03-27, where packages.json.br first appears.
+  @default_release_cutoff ~U[2020-03-27T00:00:00Z]
 
   @doc "The configured default release cutoff (overridable via app env)."
   def default_cutoff,

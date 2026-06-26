@@ -180,15 +180,7 @@ defmodule Tracker.Fixtures do
 
     incoming =
       Enum.map(options_map, fn {name, entry} ->
-        option_payload(Map.fetch!(option_id_map, name), %{
-          description: entry["description"],
-          type: entry["type"],
-          default: extract_text(entry["default"]),
-          example: extract_text(entry["example"]),
-          read_only: entry["readOnly"] || false,
-          loc: entry["loc"],
-          related_packages: entry["relatedPackages"]
-        })
+        Tracker.Nixpkgs.OptionSpan.payload_from_entry(Map.fetch!(option_id_map, name), entry)
       end)
 
     Tracker.Nixpkgs.SpanEngine.diff_and_apply(
@@ -289,7 +281,4 @@ defmodule Tracker.Fixtures do
     |> Map.put(:option_id, option_id)
     |> Map.merge(attrs)
   end
-
-  defp extract_text(%{"text" => text}), do: text
-  defp extract_text(_), do: nil
 end

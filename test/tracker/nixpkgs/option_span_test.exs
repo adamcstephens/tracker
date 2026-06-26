@@ -156,4 +156,44 @@ defmodule Tracker.Nixpkgs.OptionSpanTest do
       assert OptionHistory.subgroup_counts(channel.id, rev.released_at) == [{"services", 4}]
     end
   end
+
+  describe "payload_from_entry/2" do
+    test "maps fields and stringifies structured/typed default/example/description" do
+      entry = %{
+        "description" => %{"_type" => "literalDocBook", "text" => "A desc."},
+        "type" => "boolean",
+        "default" => %{"_type" => "literalExpression", "text" => "false"},
+        "example" => %{"wan" => %{"mode" => "vepa"}},
+        "readOnly" => true,
+        "loc" => ["services", "x"],
+        "relatedPackages" => "pkgs.x"
+      }
+
+      assert OptionSpan.payload_from_entry(42, entry) == %{
+               option_id: 42,
+               description: "A desc.",
+               type: "boolean",
+               default: "false",
+               example: ~s({"wan":{"mode":"vepa"}}),
+               read_only: true,
+               loc: ["services", "x"],
+               related_packages: "pkgs.x"
+             }
+    end
+
+    test "defaults read_only to false and tolerates missing fields" do
+      payload = OptionSpan.payload_from_entry(1, %{"type" => "str"})
+      assert payload.read_only == false
+      assert payload.description == nil
+      assert payload.loc == nil
+    end
+
+    test "JSON-encodes structured values deterministically" do
+      entry = %{"default" => %{"a" => 1, "b" => 2}}
+      p1 = OptionSpan.payload_from_entry(1, entry)
+      p2 = OptionSpan.payload_from_entry(1, entry)
+      assert p1.default == p2.default
+      assert Jason.decode!(p1.default) == %{"a" => 1, "b" => 2}
+    end
+  end
 end

@@ -67,6 +67,27 @@ defmodule Tracker.Nixpkgs.OptionSpan do
   @spec payload_columns() :: [atom()]
   def payload_columns, do: @payload_columns
 
+  @doc "The span payload for one options.json entry."
+  @spec payload_from_entry(integer(), map()) :: map()
+  def payload_from_entry(option_id, entry) do
+    %{
+      option_id: option_id,
+      description: text(entry["description"]),
+      type: text(entry["type"]),
+      default: text(entry["default"]),
+      example: text(entry["example"]),
+      read_only: entry["readOnly"] || false,
+      loc: entry["loc"],
+      related_packages: text(entry["relatedPackages"])
+    }
+  end
+
+  # Historical options.json wraps/structures these fields; store them as text.
+  defp text(nil), do: nil
+  defp text(value) when is_binary(value), do: value
+  defp text(%{"text" => inner}), do: text(inner)
+  defp text(other), do: Jason.encode!(other)
+
   actions do
     defaults [:read]
 
