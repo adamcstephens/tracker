@@ -65,8 +65,8 @@ struct MaintainerInfo {
 
 #[derive(serde::Deserialize, Debug, PartialEq, Clone)]
 struct TeamInfo {
-    #[serde(rename = "shortName")]
-    short_name: String,
+    #[serde(default, rename = "shortName")]
+    short_name: Option<String>,
     scope: Option<String>,
     github: Option<String>,
     #[serde(rename = "githubId")]
@@ -224,13 +224,22 @@ fn encode_maintainer<'a>(env: Env<'a>, m: &MaintainerInfo) -> Term<'a> {
 }
 
 fn encode_teams<'a>(env: Env<'a>, teams: &[TeamInfo]) -> Term<'a> {
-    let terms: Vec<Term<'a>> = teams.iter().map(|t| encode_team(env, t)).collect();
+    // nixpkgs occasionally lists a maintainer-shaped object (no `shortName`) in
+    // a package's `teams`; drop those rather than fail the whole stream.
+    let terms: Vec<Term<'a>> = teams
+        .iter()
+        .filter_map(|t| {
+            t.short_name
+                .as_deref()
+                .map(|name| encode_team(env, t, name))
+        })
+        .collect();
     terms.encode(env)
 }
 
-fn encode_team<'a>(env: Env<'a>, t: &TeamInfo) -> Term<'a> {
+fn encode_team<'a>(env: Env<'a>, t: &TeamInfo, short_name: &str) -> Term<'a> {
     let mut keys = vec![atoms::short_name().encode(env)];
-    let mut vals = vec![t.short_name.as_str().encode(env)];
+    let mut vals = vec![short_name.encode(env)];
 
     if let Some(ref s) = t.scope {
         keys.push(atoms::scope().encode(env));
@@ -543,8 +552,21 @@ mod tests {
 
         let teams = meta.teams.unwrap();
         assert_eq!(teams.len(), 1);
-        assert_eq!(teams[0].short_name, "nixos-team");
+        assert_eq!(teams[0].short_name, Some("nixos-team".to_string()));
         assert_eq!(teams[0].members.as_ref().unwrap().len(), 1);
+    }
+
+    // A maintainer-shaped object (no shortName) in `teams` must parse without
+    // error so a single malformed entry can't fail the whole package stream.
+    #[test]
+    fn test_team_without_short_name_parses() {
+        let json = r#"{"version": "1.0", "meta": {"teams": [
+            {"email": "me@example.com", "github": "alice", "githubId": 1, "name": "Alice"}
+        ]}}"#;
+        let entry: PackageEntry = serde_json::from_str(json).unwrap();
+        let teams = entry.meta.unwrap().teams.unwrap();
+        assert_eq!(teams.len(), 1);
+        assert_eq!(teams[0].short_name, None);
     }
 
     // Test homepage normalization: bare string -> vec
