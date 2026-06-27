@@ -119,21 +119,26 @@ defmodule Tracker.Nixpkgs.PackageHistory do
   event carries the `channel_revision` (with `:channel`) at its boundary, newest
   first.
   """
-  @spec events_by_package(integer(), integer()) :: [Event.t()]
+  @spec events_by_package(integer(), integer() | nil) :: [Event.t()]
   def events_by_package(package_id, channel_id) do
-    spans =
+    boundaries =
       package_id
       |> PackageSpan.by_package!(channel_id)
-      |> Enum.sort_by(& &1.valid.lower, DateTime)
+      |> Enum.group_by(& &1.channel_id)
+      |> Enum.flat_map(fn {cid, spans} ->
+        spans
+        |> Enum.sort_by(& &1.valid.lower, DateTime)
+        |> boundary_events()
+        |> Enum.map(fn {type, at} -> {cid, type, at} end)
+      end)
 
-    boundaries = boundary_events(spans)
-    revisions = boundary_revision_map(channel_id, boundaries)
+    revisions = boundary_revision_map(boundaries)
 
     boundaries
-    |> Enum.map(fn {type, at} ->
+    |> Enum.map(fn {cid, type, at} ->
       %Event{
         type: type,
-        channel_revision: Map.fetch!(revisions, released_at_second(at))
+        channel_revision: Map.fetch!(revisions, {cid, released_at_second(at)})
       }
     end)
     |> Enum.sort_by(& &1.channel_revision.released_at, {:desc, DateTime})
@@ -161,14 +166,17 @@ defmodule Tracker.Nixpkgs.PackageHistory do
     end
   end
 
-  defp boundary_revision_map(_channel_id, []), do: %{}
+  defp boundary_revision_map([]), do: %{}
 
-  defp boundary_revision_map(channel_id, boundaries) do
-    ats = boundaries |> Enum.map(fn {_type, at} -> at end) |> Enum.uniq()
-
-    channel_id
-    |> ChannelRevision.by_released_ats!(ats, load: [:channel])
-    |> Map.new(fn rev -> {released_at_second(rev.released_at), rev} end)
+  defp boundary_revision_map(boundaries) do
+    boundaries
+    |> Enum.group_by(fn {cid, _type, _at} -> cid end, fn {_cid, _type, at} -> at end)
+    |> Enum.flat_map(fn {channel_id, ats} ->
+      channel_id
+      |> ChannelRevision.by_released_ats!(Enum.uniq(ats), load: [:channel])
+      |> Enum.map(fn rev -> {{channel_id, released_at_second(rev.released_at)}, rev} end)
+    end)
+    |> Map.new()
   end
 
   @doc """

@@ -47,6 +47,47 @@ defmodule Tracker.Nixpkgs.PackageHistoryTest do
     end
   end
 
+  describe "events_by_package/2" do
+    test "derives added/removed boundaries for a single channel" do
+      channel = Fixtures.channel!("evt-chan")
+      cr1 = revision!(channel, "ebp1aaa", ~U[2026-04-01 10:00:00Z])
+      cr2 = revision!(channel, "ebp2bbb", ~U[2026-04-15 10:00:00Z], cr1)
+
+      pkg = Fixtures.package!("ebp-pkg")
+      Fixtures.apply_package_revision!(cr1, [{pkg, "1.0"}])
+      Fixtures.apply_package_revision!(cr2, [{pkg, "1.0"}])
+      Fixtures.remove_package!(cr2, pkg)
+
+      events = PackageHistory.events_by_package(pkg.id, channel.id)
+
+      assert [%{type: :removed}, %{type: :added}] = events
+      assert Enum.all?(events, &(&1.channel_revision.channel.name == "evt-chan"))
+    end
+
+    test "merges boundaries across channels when channel_id is nil" do
+      unstable = Fixtures.channel!("ebp-unstable")
+      stable = Fixtures.channel!("ebp-stable")
+      pkg = Fixtures.package!("ebp-multi")
+
+      cr_u = revision!(unstable, "ebpu111", ~U[2026-04-01 10:00:00Z])
+      cr_s1 = revision!(stable, "ebps111", ~U[2026-04-05 10:00:00Z])
+      cr_s2 = revision!(stable, "ebps222", ~U[2026-04-10 10:00:00Z], cr_s1)
+
+      Fixtures.apply_package_revision!(cr_u, [{pkg, "1.0"}])
+      Fixtures.apply_package_revision!(cr_s1, [{pkg, "1.0"}])
+      Fixtures.remove_package!(cr_s2, pkg)
+
+      events = PackageHistory.events_by_package(pkg.id, nil)
+
+      types_by_channel =
+        Enum.map(events, &{&1.channel_revision.channel.name, &1.type})
+
+      assert {"ebp-unstable", :added} in types_by_channel
+      assert {"ebp-stable", :added} in types_by_channel
+      assert {"ebp-stable", :removed} in types_by_channel
+    end
+  end
+
   describe "version_changes_by_package/2" do
     setup do
       channel = Fixtures.channel!("unstable")

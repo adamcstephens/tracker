@@ -83,6 +83,14 @@ defmodule TrackerWeb.PackageLive.ShowTest do
     assert html =~ "pkgshow-hello"
   end
 
+  test "loads with the lens set to all channels", %{conn: conn, package: package} do
+    {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}?lens_channel=all")
+
+    assert html =~ "pkgshow-hello"
+    assert html =~ "2.12.1"
+    assert html =~ "2.13.0"
+  end
+
   test "displays revision with version and channel", %{conn: conn, package: package} do
     {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}")
 
