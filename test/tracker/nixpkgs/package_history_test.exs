@@ -261,4 +261,27 @@ defmodule Tracker.Nixpkgs.PackageHistoryTest do
       assert count == 0
     end
   end
+
+  describe "revisions_by_package/3" do
+    test "reconstructs versions across channels when channel_id is nil" do
+      unstable = Fixtures.channel!("rbp-unstable")
+      stable = Fixtures.channel!("rbp-stable")
+      pkg = Fixtures.package!("rbp-pkg")
+
+      cr_u = revision!(unstable, "rbpu111", ~U[2026-04-01 10:00:00Z])
+      cr_s = revision!(stable, "rbps111", ~U[2026-04-05 10:00:00Z])
+
+      Fixtures.apply_package_revision!(cr_u, [{pkg, "1.0"}])
+      Fixtures.apply_package_revision!(cr_s, [{pkg, "2.0"}])
+
+      %{results: results, count: count} = PackageHistory.revisions_by_package(pkg.id, nil)
+
+      assert count == 2
+
+      by_channel =
+        Map.new(results, &{&1.channel_revision.channel.name, &1.version})
+
+      assert by_channel == %{"rbp-unstable" => "1.0", "rbp-stable" => "2.0"}
+    end
+  end
 end

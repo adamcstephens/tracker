@@ -201,24 +201,28 @@ defmodule Tracker.Nixpkgs.PackageHistory do
   Options: `:version` (substring filter), `:sort_by`/`:sort_dir`, `:limit`,
   `:offset` (default 0).
   """
-  @spec revisions_by_package(integer(), integer(), keyword()) :: %{
+  @spec revisions_by_package(integer(), integer() | nil, keyword()) :: %{
           results: [map()],
           count: non_neg_integer(),
           more?: boolean()
         }
   def revisions_by_package(package_id, channel_id, opts \\ []) do
-    spans = PackageSpan.by_package!(package_id, channel_id)
     limit = Keyword.get(opts, :limit)
     offset = Keyword.get(opts, :offset, 0)
 
     rows =
-      channel_id
-      |> ChannelRevision.by_channel_asc!(load: [:channel])
-      |> Enum.flat_map(fn rev ->
-        case covering_span(spans, rev.released_at) do
-          nil -> []
-          span -> [%{version: span.version, channel_revision: rev}]
-        end
+      package_id
+      |> PackageSpan.by_package!(channel_id)
+      |> Enum.group_by(& &1.channel_id)
+      |> Enum.flat_map(fn {cid, spans} ->
+        cid
+        |> ChannelRevision.by_channel_asc!(load: [:channel])
+        |> Enum.flat_map(fn rev ->
+          case covering_span(spans, rev.released_at) do
+            nil -> []
+            span -> [%{version: span.version, channel_revision: rev}]
+          end
+        end)
       end)
       |> maybe_filter_version(Keyword.get(opts, :version))
       |> sort_revisions(
