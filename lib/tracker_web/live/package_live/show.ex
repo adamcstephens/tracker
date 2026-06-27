@@ -342,9 +342,12 @@ defmodule TrackerWeb.PackageLive.Show do
       Phoenix.PubSub.subscribe(Tracker.PubSub, "changes:updated")
 
       if socket.assigns.lens do
+        scope =
+          if socket.assigns.lens.all?, do: "any", else: socket.assigns.lens.channel.id
+
         Phoenix.PubSub.subscribe(
           Tracker.PubSub,
-          "channel_revisions:#{socket.assigns.lens.channel.id}:completed"
+          "channel_revisions:#{scope}:completed"
         )
       end
     end
