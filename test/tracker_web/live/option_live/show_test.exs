@@ -205,6 +205,155 @@ defmodule TrackerWeb.OptionLive.ShowTest do
     assert html =~ ">Type<"
   end
 
+  describe "option description renders nixos-render-docs markdown (trk-342)" do
+    setup do
+      channel =
+        Channel.create!(%{
+          name: "markdown-test",
+          display_name: "Markdown Test",
+          status: :active,
+          is_stable: true
+        })
+
+      cr =
+        Tracker.Nixpkgs.ChannelRevision.create!(%{
+          channel_id: channel.id,
+          revision: "mdtestabc12345",
+          released_at: ~U[2026-03-15 10:00:00Z]
+        })
+
+      Tracker.Nixpkgs.ChannelRevision.record_result!(cr, %{result: :success})
+      cr = Tracker.Nixpkgs.ChannelRevision.record_options_result!(cr, %{options_result: :success})
+
+      %{channel_revision: cr}
+    end
+
+    defp render_description(conn, cr, description) do
+      Fixtures.load_options(
+        %{
+          "services.example.enable" => %{
+            "declarations" => ["nixos/modules/services/example/default.nix"],
+            "description" => description,
+            "loc" => ["services", "example", "enable"],
+            "readOnly" => false,
+            "type" => "boolean"
+          }
+        },
+        cr
+      )
+
+      {:ok, _view, html} = live(conn, "/options/services.example.enable?channel=markdown-test")
+
+      html
+      |> Floki.parse_document!()
+      |> Floki.find(".nixos-markdown")
+      |> Floki.raw_html()
+    end
+
+    test "preserves paragraph breaks instead of collapsing newlines", %{
+      conn: conn,
+      channel_revision: cr
+    } do
+      html = render_description(conn, cr, "First paragraph.\n\nSecond paragraph.")
+
+      assert html =~ "<p>First paragraph.</p>"
+      assert html =~ "<p>Second paragraph.</p>"
+    end
+
+    test "renders a .note admonition as a callout instead of literal :::", %{
+      conn: conn,
+      channel_revision: cr
+    } do
+      html = render_description(conn, cr, "::: {.note}\nHeads up, this matters.\n:::\n")
+
+      refute html =~ ":::"
+      assert html =~ "Heads up, this matters."
+      assert html =~ "markdown-alert-note"
+    end
+
+    test "closes an admonition at end-of-string when the fence is never closed", %{
+      conn: conn,
+      channel_revision: cr
+    } do
+      html = render_description(conn, cr, "::: {.note}\nUnterminated note.")
+
+      refute html =~ ":::"
+      assert html =~ "Unterminated note."
+      assert html =~ "markdown-alert-note"
+    end
+
+    test "renders a .warning admonition as a callout instead of literal :::", %{
+      conn: conn,
+      channel_revision: cr
+    } do
+      html = render_description(conn, cr, "::: {.warning}\nThis could break things.\n:::\n")
+
+      refute html =~ ":::"
+      assert html =~ "This could break things."
+      assert html =~ "markdown-alert-warning"
+    end
+
+    test "renders [text](url) links as anchor tags", %{conn: conn, channel_revision: cr} do
+      html =
+        render_description(conn, cr, "See [the manual](https://example.com/manual) for details.")
+
+      assert html =~ ~s(<a href="https://example.com/manual")
+      assert html =~ "the manual"
+    end
+
+    test "renders <url> autolinks as anchor tags", %{conn: conn, channel_revision: cr} do
+      html = render_description(conn, cr, "See <https://example.com/manual> for details.")
+
+      assert html =~ ~s(<a href="https://example.com/manual")
+    end
+
+    test "links {option} roles to the tracker's own option page", %{
+      conn: conn,
+      channel_revision: cr
+    } do
+      html = render_description(conn, cr, "Set {option}`services.nginx.enable` to enable it.")
+
+      refute html =~ "{option}"
+      assert html =~ ~s(<a href="/options/services.nginx.enable")
+      assert html =~ "<code>services.nginx.enable</code>"
+    end
+
+    test "links {option} roles unconditionally, without checking the option exists", %{
+      conn: conn,
+      channel_revision: cr
+    } do
+      html = render_description(conn, cr, "See {option}`does.not.exist` for more.")
+
+      assert html =~ ~s(<a href="/options/does.not.exist")
+    end
+
+    test "strips {manpage} role prefix, keeping the code span", %{
+      conn: conn,
+      channel_revision: cr
+    } do
+      html = render_description(conn, cr, "See {manpage}`nginx.conf(5)`.")
+
+      refute html =~ "{manpage}"
+      assert html =~ "<code>nginx.conf(5)</code>"
+    end
+
+    test "sanitizes a script tag out of the description", %{conn: conn, channel_revision: cr} do
+      html = render_description(conn, cr, "Enable this<script>alert(1)</script> option.")
+
+      refute html =~ "<script>"
+      refute html =~ "</script>"
+    end
+
+    test "sanitizes an onclick attribute out of the description", %{
+      conn: conn,
+      channel_revision: cr
+    } do
+      html = render_description(conn, cr, "<b onclick=\"evil()\">bold</b> text")
+
+      refute html =~ "onclick"
+    end
+  end
+
   test "a single option is expanded by default", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/options/services.nginx.enable")
 
