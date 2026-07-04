@@ -59,6 +59,7 @@ defmodule Tracker.MixProject do
       {:igniter, "~> 0.5", only: [:dev, :test]},
       {:jason, "~> 1.2"},
       {:lumis, "~> 0.6"},
+      {:mdex, "~> 0.13.3"},
       {:jose, "~> 1.11"},
       {:oban, "~> 2.0"},
       {:oban_met, "~> 1.1"},

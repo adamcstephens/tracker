@@ -155,7 +155,7 @@ defmodule TrackerWeb.OptionLive.Show do
                 </dd>
 
                 <dt :if={rev.description}>Description</dt>
-                <dd :if={rev.description}>{rev.description}</dd>
+                <dd :if={rev.description}><.nixos_markdown text={rev.description} /></dd>
 
                 <dt :if={rev.default}>Default</dt>
                 <dd :if={rev.default}><.code_block code={rev.default} /></dd>
@@ -299,6 +299,82 @@ defmodule TrackerWeb.OptionLive.Show do
     ~H"""
     <code>{@path}</code>
     """
+  end
+
+  # Renders the nixos-render-docs CommonMark dialect used in NixOS option
+  # descriptions: standard Markdown plus fenced-div admonitions and inline
+  # `{role}` spans.
+  defp nixos_markdown(assigns) do
+    html = markdown_to_html(assigns.text)
+    assigns = assign(assigns, :html, html)
+
+    ~H"""
+    <div class="nixos-markdown">{Phoenix.HTML.raw(@html)}</div>
+    """
+  end
+
+  @admonition_classes %{
+    "note" => "NOTE",
+    "tip" => "TIP",
+    "important" => "IMPORTANT",
+    "warning" => "WARNING",
+    "caution" => "CAUTION"
+  }
+
+  defp markdown_to_html(text) do
+    text
+    |> preprocess_admonitions()
+    |> preprocess_inline_roles()
+    |> MDEx.to_html!(
+      extension: [alerts: true, autolink: true],
+      sanitize: MDEx.Document.default_sanitize_options(),
+      syntax_highlight: [engine: :lumis, opts: [formatter: :html_linked]]
+    )
+  end
+
+  # nixos-render-docs fenced divs (`::: {.note} ... :::`) map 1:1 onto GFM
+  # alert types, which MDEx already renders as styled callouts. Some
+  # descriptions never close the fence before the string ends (the upstream
+  # doc pipeline treats EOF as an implicit close), so the closing `:::` is
+  # optional here too.
+  defp preprocess_admonitions(text) do
+    Regex.replace(
+      ~r/^:::[ \t]*\{\.(note|tip|important|warning|caution)\}[ \t]*\n(.*?)(?:\n:::[ \t]*$|\z)/ms,
+      text,
+      fn _whole, class, body ->
+        alert = Map.fetch!(@admonition_classes, class)
+
+        quoted =
+          body
+          |> String.split("\n")
+          |> Enum.map_join("\n", fn
+            "" -> ">"
+            line -> "> " <> line
+          end)
+
+        "> [!#{alert}]\n" <> quoted
+      end
+    )
+  end
+
+  defp preprocess_inline_roles(text) do
+    text
+    |> link_option_roles()
+    |> strip_role_prefixes()
+  end
+
+  # {option}`name` always points at the tracker's own option page, regardless
+  # of whether that option exists at the channel/revision being viewed.
+  defp link_option_roles(text) do
+    Regex.replace(~r/\{option\}`([^`]*)`/, text, fn _whole, name ->
+      "[`#{name}`](#{~p"/options/#{name}"})"
+    end)
+  end
+
+  # Remaining inline roles like `{manpage}`x`` carry a role prefix ahead of a
+  # code span; render as plain code rather than resolving the role to a link.
+  defp strip_role_prefixes(text) do
+    Regex.replace(~r/\{[a-zA-Z][\w-]*\}(`[^`]*`)/, text, "\\1")
   end
 
   @impl true

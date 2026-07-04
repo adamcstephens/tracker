@@ -1245,6 +1245,54 @@ a.revision-link {
 	overflow-x: auto;
 }
 
+/* Rendered description markdown: paragraphs, inline code chips, links, and
+   GFM-alert admonitions (mapped from nixos-render-docs fenced divs). */
+.option-show .opt-detail dd .nixos-markdown p {
+	margin: 0 0 0.6em;
+}
+
+.option-show .opt-detail dd .nixos-markdown p:last-child {
+	margin-bottom: 0;
+}
+
+.option-show .opt-detail dd .nixos-markdown code {
+	background: var(--surface-2);
+	padding: 0.125em 0.375em;
+	border-radius: var(--radius-sm);
+}
+
+.option-show .opt-detail dd .nixos-markdown a {
+	color: var(--accent);
+}
+
+.option-show .opt-detail dd .nixos-markdown .markdown-alert {
+	margin: 0.6em 0;
+	padding: 8px 12px;
+	border-left: 3px solid var(--accent);
+	background: var(--surface-inset);
+	border-radius: 0 6px 6px 0;
+}
+
+.option-show .opt-detail dd .nixos-markdown .markdown-alert p:first-child {
+	margin: 0 0 4px;
+	font-size: 0.75rem;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	font-weight: 600;
+}
+
+.option-show .opt-detail dd .nixos-markdown .markdown-alert-tip {
+	border-left-color: var(--good);
+}
+
+.option-show .opt-detail dd .nixos-markdown .markdown-alert-warning {
+	border-left-color: var(--warn);
+}
+
+.option-show .opt-detail dd .nixos-markdown .markdown-alert-caution {
+	border-left-color: var(--danger);
+}
+
 /* Defined in — plain borderless mono rows. */
 .option-show .opt-defined {
 	list-style: none;
