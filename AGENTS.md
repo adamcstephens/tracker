@@ -6,8 +6,9 @@
 - formatting done, `just format`
 - tests pass, `just test`
 - code committed with all ticket changes included
+  - Prefer no or very short commit body
   - Ticket ID in the body
-  - Co-Authored-By line always included
+  - Assisted-By line always included
 - *important* After committing, stop and get user approval for completion.
 - ticket marked complete once approved
 
