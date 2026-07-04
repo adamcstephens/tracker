@@ -343,8 +343,4 @@ defmodule Tracker.Nixpkgs.ChannelTest do
       assert loaded.build_problem? == false
     end
   end
-
-  # seed!/0 tests live in channel_seed_test.exs (async: false)
-  # because seed! uses hardcoded channel names that conflict with
-  # other async tests doing upserts on the same names.
 end
