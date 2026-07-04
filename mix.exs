@@ -52,7 +52,7 @@ defmodule Tracker.MixProject do
       {:ecto_sql, "~> 3.10"},
       {:esbuild, "~> 0.8", runtime: Mix.env() == :dev},
       {:ex_brotli, "~> 0.6.0"},
-      {:finch, "~> 0.13"},
+      {:finch, "~> 0.23"},
       {:floki, ">= 0.30.0", only: :test},
       {:lazy_html, ">= 0.1.0", only: :test},
       {:gettext, "~> 1.0"},
