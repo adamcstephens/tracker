@@ -145,9 +145,24 @@ defmodule Tracker.Nixpkgs.ReleaseCache do
     |> Enum.sort_by(& &1.released_at, {:desc, DateTime})
   end
 
-  defp channel_to_s3_prefix("nixos-" <> rest), do: "nixos/#{rest}/"
-  defp channel_to_s3_prefix("nixpkgs-" <> rest), do: "nixpkgs/#{rest}/"
-  defp channel_to_s3_prefix(channel), do: "#{channel}/"
+  # nixpkgs-unstable has no grouping directory: its snapshots are top-level
+  # siblings under `nixpkgs/` (`nixpkgs/nixpkgs-<X.Y>pre<rev>.<sha>/`),
+  # interleaved with the darwin channels and pre-2020 tags. So it lists the
+  # whole `nixpkgs/` tree and relies on `release_key?/2` to keep only its own
+  # snapshots. Every other channel lives under a dedicated prefix.
+  @doc false
+  def s3_prefix("nixos-" <> rest), do: "nixos/#{rest}/"
+  def s3_prefix("nixpkgs-unstable"), do: "nixpkgs/"
+  def s3_prefix("nixpkgs-" <> rest), do: "nixpkgs/#{rest}/"
+  def s3_prefix(channel), do: "#{channel}/"
+
+  @nixpkgs_unstable_snapshot ~r{^nixpkgs/nixpkgs-\d+\.\d+pre\d+\.[0-9a-f]+$}
+
+  @doc false
+  def release_key?("nixpkgs-unstable", key),
+    do: Regex.match?(@nixpkgs_unstable_snapshot, key)
+
+  def release_key?(_channel, _key), do: true
 
   defp fetch_releases(channel) do
     req_s3 = Req.new() |> ReqS3.attach()
@@ -332,12 +347,16 @@ defmodule Tracker.Nixpkgs.ReleaseCache do
 
   defp fetch_releases(req_s3, channel, marker, acc) do
     params =
-      [delimiter: "/", prefix: channel_to_s3_prefix(channel)]
+      [delimiter: "/", prefix: s3_prefix(channel)]
       |> then(fn p -> if marker, do: Keyword.put(p, :marker, marker), else: p end)
 
     resp = Req.get!(req_s3, url: "s3://nix-releases", params: params)
     body = resp.body["ListBucketResult"]
-    contents = body["Contents"] |> List.wrap()
+
+    contents =
+      body["Contents"]
+      |> List.wrap()
+      |> Enum.filter(&release_key?(channel, &1["Key"]))
 
     all_contents = acc ++ contents
 
