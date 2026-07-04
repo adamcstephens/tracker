@@ -43,7 +43,7 @@ defmodule TrackerWeb.LensComponent do
         action="/lens"
         phx-change="set_lens"
         phx-target={@myself}
-        class="lens__form"
+        class={["lens__form", @lens.disabled? && "lens--disabled"]}
       >
         <input type="hidden" name="_csrf_token" value={Phoenix.Controller.get_csrf_token()} />
         <span class="lens-label">Channel</span>

@@ -1858,6 +1858,31 @@ a.revision-link {
 	flex-shrink: 0;
 }
 
+/* Inert search (channel pages): visibly dead, not just unresponsive. */
+.app-search--inert {
+	background: var(--surface-2);
+	cursor: not-allowed;
+	opacity: 0.5;
+}
+
+.app-search--inert:focus-within {
+	border-color: var(--line);
+	background: var(--surface-2);
+}
+
+/* The whole box already fades; keep the button from fading twice. */
+.app-search--inert .app-search__submit,
+.app-search--inert .app-search__field,
+.app-search--inert input[type="search"] {
+	cursor: not-allowed;
+	opacity: 1;
+}
+
+/* The "/" shortcut can't focus a disabled input — don't advertise it. */
+.app-search--inert .app-search__hint {
+	display: none;
+}
+
 /* Lens chip — divided pill */
 .app-header__lens-slot {
 	display: flex;
@@ -1949,6 +1974,28 @@ a.revision-link {
 	height: 100%;
 	opacity: 0;
 	cursor: pointer;
+}
+
+/* Disabled lens (channel pages): the disabled attribute sits on the
+   invisible overlay select, so grey the whole pill explicitly. */
+.lens__form.lens--disabled {
+	background: var(--surface-2);
+	cursor: not-allowed;
+	opacity: 0.5;
+}
+
+.lens--disabled .lens__select {
+	cursor: not-allowed;
+}
+
+/* The whole pill already fades; keep the button from fading twice. */
+.lens--disabled .lens__submit:disabled {
+	cursor: not-allowed;
+	opacity: 1;
+}
+
+.lens--disabled .lens-dot {
+	background: var(--text-3);
 }
 
 .lens-rev {

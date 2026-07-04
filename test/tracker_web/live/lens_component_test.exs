@@ -78,6 +78,20 @@ defmodule TrackerWeb.LensComponentTest do
     assert Floki.find(form, "button[type=submit]") != []
   end
 
+  test "channel pages grey out the lens and search", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/channels")
+
+    assert html =~ "lens--disabled"
+    assert html =~ "app-search--inert"
+  end
+
+  test "regular pages do not grey out the lens", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/packages")
+
+    refute html =~ "lens--disabled"
+    refute html =~ "app-search--inert"
+  end
+
   test "renders the channel's latest revision when none is pinned", %{conn: conn} do
     suffix = System.unique_integer([:positive])
 
