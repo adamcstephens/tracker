@@ -276,6 +276,47 @@ defmodule Tracker.Nixpkgs.ReleaseCacheTest do
     end
   end
 
+  describe "s3_prefix/1" do
+    test "nixos channels map to their grouping directory" do
+      assert ReleaseCache.s3_prefix("nixos-unstable") == "nixos/unstable/"
+      assert ReleaseCache.s3_prefix("nixos-26.05-small") == "nixos/26.05-small/"
+    end
+
+    test "nixpkgs release channels map to their grouping directory" do
+      assert ReleaseCache.s3_prefix("nixpkgs-26.05-darwin") == "nixpkgs/26.05-darwin/"
+    end
+
+    test "nixpkgs-unstable lists the whole nixpkgs/ tree, having no grouping dir" do
+      assert ReleaseCache.s3_prefix("nixpkgs-unstable") == "nixpkgs/"
+    end
+  end
+
+  describe "release_key?/2" do
+    test "nixpkgs-unstable keeps only dated unstable snapshot markers" do
+      assert ReleaseCache.release_key?(
+               "nixpkgs-unstable",
+               "nixpkgs/nixpkgs-26.11pre1020805.89570f24e97e"
+             )
+
+      # darwin sibling channel under the shared nixpkgs/ prefix
+      refute ReleaseCache.release_key?("nixpkgs-unstable", "nixpkgs/26.05-darwin")
+
+      # ancient underscore-separated tag
+      refute ReleaseCache.release_key?(
+               "nixpkgs-unstable",
+               "nixpkgs/nixpkgs-1.0pre22121_e2e1526"
+             )
+
+      # ancient non-pre tag
+      refute ReleaseCache.release_key?("nixpkgs-unstable", "nixpkgs/nixpkgs-0.11")
+    end
+
+    test "other channels accept every key under their scoped prefix" do
+      assert ReleaseCache.release_key?("nixos-unstable", "nixos/unstable/nixos-26.05pre1.abc123")
+      assert ReleaseCache.release_key?("nixpkgs-26.05-darwin", "nixpkgs/26.05-darwin/whatever")
+    end
+  end
+
   describe "parse_releases/1" do
     test "parses released_at to DateTime" do
       contents = [
