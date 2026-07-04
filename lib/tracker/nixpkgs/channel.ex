@@ -155,25 +155,4 @@ defmodule Tracker.Nixpkgs.Channel do
   identities do
     identity :unique_name, [:name]
   end
-
-  @doc """
-  Seeds channels from the `:tracker, :channels` application config.
-
-  Uses upsert, so safe to call multiple times.
-  """
-  def seed! do
-    Application.fetch_env!(:tracker, :channels)
-    |> Enum.each(fn name ->
-      create!(%{
-        name: name,
-        display_name: name,
-        status: :active,
-        is_stable: stable?(name)
-      })
-    end)
-  end
-
-  defp stable?(name) do
-    Regex.match?(~r/^nixos-\d+\.\d+/, name)
-  end
 end

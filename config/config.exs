@@ -7,17 +7,6 @@
 # General application configuration
 import Config
 
-channels = [
-  "nixos-25.11",
-  "nixos-25.11-small",
-  "nixos-unstable",
-  "nixos-unstable-small",
-  "nixpkgs-unstable"
-]
-
-config :tracker,
-  channels: channels
-
 config :tracker, Oban,
   engine: Oban.Engines.Basic,
   notifier: Oban.Notifiers.Postgres,
