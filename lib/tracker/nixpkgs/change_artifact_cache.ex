@@ -21,7 +21,6 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCache do
     typedstruct enforce: true do
       field :version, integer(), default: 2
       field :run_id, integer() | nil, default: nil
-      field :names, [String.t()], default: []
       # Workflow source. `:merge` is the post-merge canonical comparison
       # (either via the historic Merge Group workflow or a worker
       # reconstruction); `:pr` is the in-flight PR-run comparison and
@@ -59,47 +58,48 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCache do
   end
 
   @doc """
-  Caches all artifacts from a workflow run in S3.
+  Caches the comparison artifact from a workflow run in S3.
 
   Checks the meta.etf sidecar first — if the cached run_id matches,
-  all artifacts are assumed present and no downloads occur. On a miss
-  or run_id mismatch, downloads and stores every artifact, then writes
-  updated metadata.
+  the comparison is assumed present and no download occurs. On a miss
+  or run_id mismatch, downloads and stores the run's `comparison`
+  artifact, then writes updated metadata. The run's other artifacts
+  are never read by anything and are not cached.
 
   Each artifact map must have `:name` and `:archive_download_url` keys.
 
   Options:
     * `:source` — `:merge` (default) or `:pr`. Records which workflow
-      produced these artifacts so that `fetch_comparison/2` can reject
+      produced the artifact so that `fetch_comparison/2` can reject
       a cache hit from the wrong source.
 
-  Returns `:ok` or `{:error, reason}` (stops on first download failure).
+  Returns `:ok`, `{:error, {:comparison_not_in_run, names}}` when the
+  run has no comparison artifact, or `{:error, reason}`.
   """
   def cache_run_artifacts(pr_number, run_id, artifacts, token, opts \\ []) do
     m_key = meta_key(pr_number)
     source = Keyword.get(opts, :source, :merge)
 
-    if run_cached?(m_key, run_id) do
-      Logger.debug(msg: "all artifacts cached", pr_number: pr_number, run_id: run_id)
-      :ok
-    else
-      Logger.debug(
-        msg: "caching artifacts",
-        pr_number: pr_number,
-        run_id: run_id,
-        count: length(artifacts)
-      )
+    cond do
+      run_cached?(m_key, run_id) ->
+        Logger.debug(msg: "comparison artifact cached", pr_number: pr_number, run_id: run_id)
+        :ok
 
-      names = Enum.map(artifacts, & &1.name)
+      comparison = Enum.find(artifacts, &(&1.name == "comparison")) ->
+        Logger.debug(msg: "caching comparison artifact", pr_number: pr_number, run_id: run_id)
 
-      case download_and_store_all(pr_number, artifacts, token, opts) do
-        :ok ->
-          store_meta(m_key, %Meta{run_id: run_id, names: names, source: source})
-          :ok
+        case download_artifact(comparison.archive_download_url, token, opts) do
+          {:ok, zip_body} ->
+            store_in_cache(cache_key(pr_number, "comparison"), zip_body)
+            store_meta(m_key, %Meta{run_id: run_id, source: source})
+            :ok
 
-        {:error, _} = error ->
-          error
-      end
+          {:error, _} = error ->
+            error
+        end
+
+      true ->
+        {:error, {:comparison_not_in_run, Enum.map(artifacts, & &1.name)}}
     end
   end
 
@@ -175,17 +175,8 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCache do
 
   defp read_or_miss(pr_number) do
     case read_artifact(pr_number, "comparison") do
-      {:ok, zip_body} ->
-        {:ok, zip_body}
-
-      :miss ->
-        case read_meta(pr_number) do
-          {:ok, %Meta{names: names}} when names != [] ->
-            {:error, {:comparison_not_in_run, names}}
-
-          _ ->
-            {:error, :not_cached}
-        end
+      {:ok, zip_body} -> {:ok, zip_body}
+      :miss -> {:error, :not_cached}
     end
   end
 
@@ -247,21 +238,6 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCache do
             false
         end
     end
-  end
-
-  defp download_and_store_all(pr_number, artifacts, token, opts) do
-    Enum.reduce_while(artifacts, :ok, fn artifact, :ok ->
-      key = cache_key(pr_number, artifact.name)
-
-      case download_artifact(artifact.archive_download_url, token, opts) do
-        {:ok, zip_body} ->
-          store_in_cache(key, zip_body)
-          {:cont, :ok}
-
-        {:error, _} = error ->
-          {:halt, error}
-      end
-    end)
   end
 
   defp store_in_cache(key, body) do

@@ -80,7 +80,7 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCacheTest do
 
     meta_key = ChangeArtifactCache.meta_key(pr_number)
     full_meta_key = "/#{config.bucket}/#{meta_key}"
-    meta = %ChangeArtifactCache.Meta{run_id: run_id, names: artifact_names}
+    meta = %ChangeArtifactCache.Meta{run_id: run_id}
     :ets.insert(store, {full_meta_key, :erlang.term_to_binary(meta)})
   end
 
@@ -142,22 +142,16 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCacheTest do
       {:ok, config: config}
     end
 
-    test "downloads and caches all artifacts on cache miss", %{config: _config} do
+    test "downloads and caches only the comparison artifact on cache miss", %{config: _config} do
       pr_number = System.unique_integer([:positive])
       run_id = 99001
       _store = stub_s3_store()
       artifacts = fake_artifacts(@all_artifact_names)
 
-      zips =
-        Map.new(@all_artifact_names, fn name ->
-          {name,
-           if(name == "comparison", do: build_comparison_zip(), else: build_dummy_zip(name))}
-        end)
-
       Req.Test.stub(__MODULE__.GitHub, fn conn ->
-        # Extract artifact name from URL
         name = conn.request_path |> String.split("/") |> Enum.at(-2)
-        Plug.Conn.send_resp(conn, 200, zips[name])
+        assert name == "comparison"
+        Plug.Conn.send_resp(conn, 200, build_comparison_zip())
       end)
 
       assert :ok =
@@ -169,14 +163,36 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCacheTest do
                  req_options: [plug: {Req.Test, __MODULE__.GitHub}]
                )
 
-      # Verify all artifacts + meta were stored
-      for name <- @all_artifact_names do
-        key = ChangeArtifactCache.cache_key(pr_number, name)
-        assert_received {:s3_put, "/test-bucket/" <> ^key}
-      end
+      comparison_key = ChangeArtifactCache.cache_key(pr_number, "comparison")
+      assert_received {:s3_put, "/test-bucket/" <> ^comparison_key}
 
       meta_key = ChangeArtifactCache.meta_key(pr_number)
       assert_received {:s3_put, "/test-bucket/" <> ^meta_key}
+
+      refute_received {:s3_put, _}
+    end
+
+    test "returns comparison_not_in_run when the run lacks a comparison artifact" do
+      pr_number = System.unique_integer([:positive])
+      run_id = 99001
+      _store = stub_s3_store()
+      names = ["diff-aarch64-linux", "diff-x86_64-linux"]
+      artifacts = fake_artifacts(names)
+
+      Req.Test.stub(__MODULE__.GitHub, fn _conn ->
+        flunk("GitHub should not be called when the run has no comparison artifact")
+      end)
+
+      assert {:error, {:comparison_not_in_run, ^names}} =
+               ChangeArtifactCache.cache_run_artifacts(
+                 pr_number,
+                 run_id,
+                 artifacts,
+                 "fake-token",
+                 req_options: [plug: {Req.Test, __MODULE__.GitHub}]
+               )
+
+      refute_received {:s3_put, _}
     end
 
     test "skips download when run_id matches cached meta", %{config: config} do
@@ -200,18 +216,18 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCacheTest do
                )
     end
 
-    test "re-downloads all artifacts when run_id differs", %{config: config} do
+    test "re-downloads the comparison artifact when run_id differs", %{config: config} do
       pr_number = System.unique_integer([:positive])
       old_run_id = 99001
       new_run_id = 99002
       store = stub_s3_store()
-      populate_cache(store, config, pr_number, old_run_id, @all_artifact_names)
+      populate_cache(store, config, pr_number, old_run_id, ["comparison"])
       artifacts = fake_artifacts(@all_artifact_names)
 
       Req.Test.stub(__MODULE__.GitHub, fn conn ->
         name = conn.request_path |> String.split("/") |> Enum.at(-2)
-        zip = if(name == "comparison", do: build_comparison_zip(), else: build_dummy_zip(name))
-        Plug.Conn.send_resp(conn, 200, zip)
+        assert name == "comparison"
+        Plug.Conn.send_resp(conn, 200, build_comparison_zip())
       end)
 
       assert :ok =
@@ -223,11 +239,8 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCacheTest do
                  req_options: [plug: {Req.Test, __MODULE__.GitHub}]
                )
 
-      # All artifacts should be re-stored
-      for name <- @all_artifact_names do
-        key = ChangeArtifactCache.cache_key(pr_number, name)
-        assert_received {:s3_put, "/test-bucket/" <> ^key}
-      end
+      comparison_key = ChangeArtifactCache.cache_key(pr_number, "comparison")
+      assert_received {:s3_put, "/test-bucket/" <> ^comparison_key}
     end
 
     test "returns artifact_expired when GitHub returns 410" do
@@ -345,15 +358,14 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCacheTest do
       assert {:error, :not_cached} = ChangeArtifactCache.fetch_comparison(pr_number)
     end
 
-    test "returns descriptive error when meta exists but comparison artifact is missing",
+    test "returns not_cached when meta exists but comparison artifact is missing",
          %{config: config} do
       pr_number = System.unique_integer([:positive])
       store = stub_s3_store()
       # Populate cache with non-comparison artifacts only
       populate_cache(store, config, pr_number, 99001, ["diff-aarch64-linux", "diff-x86_64-linux"])
 
-      assert {:error, {:comparison_not_in_run, ["diff-aarch64-linux", "diff-x86_64-linux"]}} =
-               ChangeArtifactCache.fetch_comparison(pr_number)
+      assert {:error, :not_cached} = ChangeArtifactCache.fetch_comparison(pr_number)
     end
 
     test "rejects PR-sourced cache when merged read is expected", %{config: config} do
@@ -363,7 +375,7 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCacheTest do
       zip_key = ChangeArtifactCache.cache_key(pr_number, "comparison")
       :ets.insert(store, {"/#{config.bucket}/#{zip_key}", zip_body})
 
-      meta = %ChangeArtifactCache.Meta{run_id: 1, names: ["comparison"], source: :pr}
+      meta = %ChangeArtifactCache.Meta{run_id: 1, source: :pr}
       meta_key = ChangeArtifactCache.meta_key(pr_number)
       :ets.insert(store, {"/#{config.bucket}/#{meta_key}", :erlang.term_to_binary(meta)})
 
@@ -384,8 +396,7 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCacheTest do
       # Simulate a meta serialized before :source existed — a struct with
       # the field absent. Deliberately constructing via Map.delete so
       # binary_to_term produces a key-less term.
-      legacy_meta =
-        Map.delete(%ChangeArtifactCache.Meta{run_id: 1, names: ["comparison"]}, :source)
+      legacy_meta = Map.delete(%ChangeArtifactCache.Meta{run_id: 1}, :source)
 
       meta_key = ChangeArtifactCache.meta_key(pr_number)
       :ets.insert(store, {"/#{config.bucket}/#{meta_key}", :erlang.term_to_binary(legacy_meta)})
@@ -427,7 +438,7 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCacheTest do
       zip_key = ChangeArtifactCache.cache_key(pr_number, "comparison")
       :ets.insert(store, {"/#{config.bucket}/#{zip_key}", zip_body})
 
-      meta = %ChangeArtifactCache.Meta{run_id: 1, names: ["comparison"], source: :merge}
+      meta = %ChangeArtifactCache.Meta{run_id: 1, source: :merge}
       meta_key = ChangeArtifactCache.meta_key(pr_number)
       :ets.insert(store, {"/#{config.bucket}/#{meta_key}", :erlang.term_to_binary(meta)})
 
