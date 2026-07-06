@@ -48,7 +48,6 @@ defmodule Tracker.Nixpkgs.ReconstructionJob.SubmitResult do
 
         meta = %Meta{
           run_id: nil,
-          names: ["comparison"],
           source: :merge,
           provenance: :reconstruction
         }
