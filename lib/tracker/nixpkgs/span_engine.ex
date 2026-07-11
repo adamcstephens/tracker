@@ -64,10 +64,13 @@ defmodule Tracker.Nixpkgs.SpanEngine do
       end
 
     # Close before open: a still-unbounded prior span would overlap the EXCLUDE constraint.
-    case Tracker.Repo.transaction(fn ->
-           close(spec, changed_ids ++ removed_ids, released_at, batch_size)
-           open(spec, channel_id, released_at, to_open, batch_size)
-         end) do
+    case Tracker.Repo.transaction(
+           fn ->
+             close(spec, changed_ids ++ removed_ids, released_at, batch_size)
+             open(spec, channel_id, released_at, to_open, batch_size)
+           end,
+           timeout: :timer.seconds(60)
+         ) do
       {:ok, _} ->
         :ok
 
