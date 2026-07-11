@@ -12,7 +12,7 @@ defmodule Tracker.Ingestion.Steps.CreateRevision do
     ChangeBranchDetectionWorker,
     ChannelRevision,
     ChannelRevisionLinkWorker,
-    ReleaseCache
+    Release
   }
 
   alias Tracker.Ingestion.Helpers
@@ -49,17 +49,13 @@ defmodule Tracker.Ingestion.Steps.CreateRevision do
   end
 
   defp find_previous_revision(channel_id, revision) do
-    channel = Ash.get!(Tracker.Nixpkgs.Channel, channel_id)
-
-    case ReleaseCache.find_previous_release(channel.name, revision) do
-      %ReleaseCache.Release{revision: prev_revision} when is_binary(prev_revision) ->
-        case ChannelRevision.find(channel_id, prev_revision) do
-          {:ok, rev} -> rev
-          _ -> nil
-        end
-
-      _ ->
-        nil
+    with {:ok, %Release{} = release} <- Release.find_by_revision(channel_id, revision),
+         {:ok, %Release{revision: prev_revision}} when is_binary(prev_revision) <-
+           Release.previous_before(channel_id, release.released_at),
+         {:ok, rev} <- ChannelRevision.find(channel_id, prev_revision) do
+      rev
+    else
+      _ -> nil
     end
   end
 end

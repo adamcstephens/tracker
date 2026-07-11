@@ -3,21 +3,15 @@ defmodule Tracker.Ingestion.CronWorkerTest do
 
   import ExUnit.CaptureLog
 
-  require Logger
-
   alias Tracker.Ingestion.{CronWorker, IngestionRun, Pipeline}
-  alias Tracker.Nixpkgs.{Channel, ReleaseCache}
-  alias Tracker.Nixpkgs.ReleaseCache.Release
+  alias Tracker.Nixpkgs.{Channel, Release}
 
-  @cache_name :cron_worker_test_cache
   @stub __MODULE__.Pointer
 
   @old_revision "aaa1111" <> String.duplicate("0", 33)
   @new_revision "ccc2222" <> String.duplicate("0", 33)
 
   setup do
-    {:ok, _pid} = ReleaseCache.start_link(name: @cache_name, load: false)
-
     channel =
       Channel.create!(%{
         name: "nixos-unstable",
@@ -41,25 +35,25 @@ defmodule Tracker.Ingestion.CronWorkerTest do
     |> Pipeline.start!()
     |> Pipeline.mark_completed!()
 
-    old_release = %Release{
+    old_release = %{
       base_url: "https://releases.nixos.org/nixos/unstable/nixos-25.05pre-aaa1111",
       released_at: ~U[2025-06-01 00:00:00Z],
       revision: @old_revision
     }
 
-    ReleaseCache.put_releases(@cache_name, "nixos-unstable", [old_release])
+    Release.upsert!(Map.put(old_release, :channel_id, channel.id))
 
-    Application.put_env(:tracker, :release_cache_name, @cache_name)
     Application.put_env(:tracker, :channel_pointer_req_options, plug: {Req.Test, @stub})
 
     on_exit(fn ->
-      Application.delete_env(:tracker, :release_cache_name)
       Application.delete_env(:tracker, :channel_pointer_req_options)
-      Application.delete_env(:tracker, :release_cache_fetcher)
+      Application.delete_env(:tracker, :releases_fetcher)
     end)
 
     {:ok, channel: channel, old_release: old_release}
   end
+
+  defp reload(channel), do: Ash.get!(Channel, channel.id)
 
   describe "perform/1" do
     test "304 from pointer is a noop", %{channel: channel} do
@@ -89,14 +83,14 @@ defmodule Tracker.Ingestion.CronWorkerTest do
       assert :ok = perform_job(CronWorker, %{}, queue: :ingestion)
       assert length(Pipeline.for_channel!(channel.id)) == before
 
-      pointer = ReleaseCache.get_pointer(@cache_name, "nixos-unstable")
-      assert pointer.revision == old_release.revision
-      assert pointer.etag == ~s("etag-v1")
-      assert pointer.last_modified == "Wed, 21 May 2026 12:00:00 GMT"
+      channel = reload(channel)
+      assert channel.pointer_revision == old_release.revision
+      assert channel.pointer_etag == ~s("etag-v1")
+      assert channel.pointer_last_modified == "Wed, 21 May 2026 12:00:00 GMT"
     end
 
     test "200 with new revision triggers refresh and creates a pipeline", %{channel: channel} do
-      new_release = %Release{
+      new_release = %{
         base_url: "https://releases.nixos.org/nixos/unstable/nixos-25.05pre-ccc2222",
         released_at: ~U[2025-06-20 00:00:00Z],
         revision: @new_revision
@@ -104,7 +98,7 @@ defmodule Tracker.Ingestion.CronWorkerTest do
 
       Application.put_env(
         :tracker,
-        :release_cache_fetcher,
+        :releases_fetcher,
         fn "nixos-unstable" -> [new_release] end
       )
 
@@ -118,30 +112,30 @@ defmodule Tracker.Ingestion.CronWorkerTest do
       assert :ok = perform_job(CronWorker, %{}, queue: :ingestion)
       assert length(Pipeline.for_channel!(channel.id)) == before + 1
 
-      assert ReleaseCache.get_pointer(@cache_name, "nixos-unstable").revision == @new_revision
+      assert reload(channel).pointer_revision == @new_revision
     end
 
     test "304 still syncs when stored pointer revision has no pipeline", %{channel: channel} do
       # Simulates production: a prior poll stored a pointer for a revision
       # that never got a pipeline. Upstream now returns 304 against the
       # conditional headers, but the cron should still detect the gap.
-      new_release = %Release{
+      new_release = %{
         base_url: "https://releases.nixos.org/nixos/unstable/nixos-25.05pre-ccc2222",
         released_at: ~U[2025-06-20 00:00:00Z],
         revision: @new_revision
       }
 
-      ReleaseCache.put_releases(@cache_name, "nixos-unstable", [new_release])
+      Release.upsert!(Map.put(new_release, :channel_id, channel.id))
 
-      ReleaseCache.put_pointer(@cache_name, "nixos-unstable", %{
-        etag: ~s("etag-v2"),
-        last_modified: "Wed, 25 May 2026 14:59:39 GMT",
-        revision: @new_revision
+      Channel.put_pointer!(channel, %{
+        pointer_etag: ~s("etag-v2"),
+        pointer_last_modified: "Wed, 25 May 2026 14:59:39 GMT",
+        pointer_revision: @new_revision
       })
 
       Application.put_env(
         :tracker,
-        :release_cache_fetcher,
+        :releases_fetcher,
         fn "nixos-unstable" -> [new_release] end
       )
 
@@ -154,19 +148,19 @@ defmodule Tracker.Ingestion.CronWorkerTest do
       assert length(Pipeline.for_channel!(channel.id)) == before + 1
     end
 
-    test "200 with new revision creates a pipeline even when ReleaseCache already knows the release",
+    test "200 with new revision creates a pipeline even when the release is already known",
          %{channel: channel, old_release: old_release} do
-      new_release = %Release{
+      new_release = %{
         base_url: "https://releases.nixos.org/nixos/unstable/nixos-25.05pre-ccc2222",
         released_at: ~U[2025-06-20 00:00:00Z],
         revision: @new_revision
       }
 
-      ReleaseCache.put_releases(@cache_name, "nixos-unstable", [new_release, old_release])
+      Release.upsert!(Map.put(new_release, :channel_id, channel.id))
 
       Application.put_env(
         :tracker,
-        :release_cache_fetcher,
+        :releases_fetcher,
         fn "nixos-unstable" -> [new_release, old_release] end
       )
 
@@ -181,11 +175,11 @@ defmodule Tracker.Ingestion.CronWorkerTest do
       assert length(Pipeline.for_channel!(channel.id)) == before + 1
     end
 
-    test "sends If-None-Match and If-Modified-Since from stored pointer" do
-      ReleaseCache.put_pointer(@cache_name, "nixos-unstable", %{
-        etag: ~s("prev-etag"),
-        last_modified: "Tue, 20 May 2026 00:00:00 GMT",
-        revision: @old_revision
+    test "sends If-None-Match and If-Modified-Since from stored pointer", %{channel: channel} do
+      Channel.put_pointer!(channel, %{
+        pointer_etag: ~s("prev-etag"),
+        pointer_last_modified: "Tue, 20 May 2026 00:00:00 GMT",
+        pointer_revision: @old_revision
       })
 
       test_pid = self()
@@ -227,6 +221,7 @@ defmodule Tracker.Ingestion.CronWorkerTest do
     test "succeeds with no active channels" do
       Tracker.Repo.delete_all(Tracker.Ingestion.Pipeline)
       Tracker.Repo.delete_all(Tracker.Ingestion.IngestionRun)
+      Tracker.Repo.delete_all(Tracker.Nixpkgs.Release)
       Tracker.Repo.delete_all(Tracker.Nixpkgs.Channel)
 
       assert :ok = perform_job(CronWorker, %{}, queue: :ingestion)

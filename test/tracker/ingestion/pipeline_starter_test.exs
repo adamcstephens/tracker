@@ -2,15 +2,11 @@ defmodule Tracker.Ingestion.PipelineStarterTest do
   use Tracker.DataCase, async: false
 
   alias Tracker.Ingestion.{IngestionRun, Pipeline, PipelineStarter}
-  alias Tracker.Nixpkgs.{Channel, ReleaseCache}
-  alias Tracker.Nixpkgs.ReleaseCache.Release
+  alias Tracker.Nixpkgs.{Channel, Release}
 
   @channel_name "nixos-unstable"
-  @cache_name :test_release_cache
 
   setup do
-    {:ok, _pid} = ReleaseCache.start_link(name: @cache_name, load: false)
-
     channel =
       Channel.create!(%{
         name: @channel_name,
@@ -19,33 +15,34 @@ defmodule Tracker.Ingestion.PipelineStarterTest do
         is_stable: false
       })
 
-    # Releases must be sorted desc (newest first) to match ReleaseCache's internal ordering
     releases = [
-      %Release{
-        base_url: "https://releases.nixos.org/nixos/unstable/nixos-25.05pre-ccc3333",
-        released_at: ~U[2025-06-20 00:00:00Z],
-        revision: "ccc3333" <> String.duplicate("0", 33)
+      %{
+        base_url: "https://releases.nixos.org/nixos/unstable/nixos-25.05pre-aaa1111",
+        released_at: ~U[2025-06-01 00:00:00Z],
+        revision: "aaa1111" <> String.duplicate("0", 33)
       },
-      %Release{
+      %{
         base_url: "https://releases.nixos.org/nixos/unstable/nixos-25.05pre-bbb2222",
         released_at: ~U[2025-06-10 00:00:00Z],
         revision: "bbb2222" <> String.duplicate("0", 33)
       },
-      %Release{
-        base_url: "https://releases.nixos.org/nixos/unstable/nixos-25.05pre-aaa1111",
-        released_at: ~U[2025-06-01 00:00:00Z],
-        revision: "aaa1111" <> String.duplicate("0", 33)
+      %{
+        base_url: "https://releases.nixos.org/nixos/unstable/nixos-25.05pre-ccc3333",
+        released_at: ~U[2025-06-20 00:00:00Z],
+        revision: "ccc3333" <> String.duplicate("0", 33)
       }
     ]
 
-    ReleaseCache.put_releases(@cache_name, @channel_name, releases)
+    for release <- releases do
+      Release.upsert!(Map.put(release, :channel_id, channel.id))
+    end
 
     {:ok, channel: channel}
   end
 
   describe "sync_channel/2 with bootstrap: false" do
     test "returns :noop when no completed pipelines exist", %{channel: channel} do
-      result = PipelineStarter.sync_channel(channel, cache: @cache_name)
+      result = PipelineStarter.sync_channel(channel)
 
       assert result == :noop
     end
@@ -66,7 +63,7 @@ defmodule Tracker.Ingestion.PipelineStarterTest do
       |> Pipeline.start!()
       |> Pipeline.mark_completed!()
 
-      {:ok, count} = PipelineStarter.sync_channel(channel, cache: @cache_name)
+      {:ok, count} = PipelineStarter.sync_channel(channel)
 
       assert count == 2
 
@@ -105,7 +102,7 @@ defmodule Tracker.Ingestion.PipelineStarterTest do
         ingestion_run_id: run.id
       })
 
-      {:ok, count} = PipelineStarter.sync_channel(channel, cache: @cache_name)
+      {:ok, count} = PipelineStarter.sync_channel(channel)
 
       # Only the third release should be created
       assert count == 1
@@ -114,11 +111,7 @@ defmodule Tracker.Ingestion.PipelineStarterTest do
 
   describe "sync_channel/2 with bootstrap: true" do
     test "creates pipelines for all releases", %{channel: channel} do
-      {:ok, count} =
-        PipelineStarter.sync_channel(channel,
-          bootstrap: true,
-          cache: @cache_name
-        )
+      {:ok, count} = PipelineStarter.sync_channel(channel, bootstrap: true)
 
       assert count == 3
     end
@@ -127,8 +120,7 @@ defmodule Tracker.Ingestion.PipelineStarterTest do
       {:ok, count} =
         PipelineStarter.sync_channel(channel,
           bootstrap: true,
-          after: ~U[2025-06-05 00:00:00Z],
-          cache: @cache_name
+          after: ~U[2025-06-05 00:00:00Z]
         )
 
       assert count == 2
@@ -137,11 +129,7 @@ defmodule Tracker.Ingestion.PipelineStarterTest do
 
   describe "predecessor linking" do
     test "each pipeline has correct predecessor_id", %{channel: channel} do
-      {:ok, _count} =
-        PipelineStarter.sync_channel(channel,
-          bootstrap: true,
-          cache: @cache_name
-        )
+      {:ok, _count} = PipelineStarter.sync_channel(channel, bootstrap: true)
 
       pipelines =
         Pipeline.for_channel!(channel.id)
@@ -175,7 +163,7 @@ defmodule Tracker.Ingestion.PipelineStarterTest do
         |> Pipeline.mark_completed!()
 
       # Sync creates new pipelines that link back to the prior run's pipeline
-      {:ok, _count} = PipelineStarter.sync_channel(channel, cache: @cache_name)
+      {:ok, _count} = PipelineStarter.sync_channel(channel)
 
       new_pipelines =
         Pipeline.for_channel!(channel.id)
@@ -205,22 +193,19 @@ defmodule Tracker.Ingestion.PipelineStarterTest do
       })
 
       assert_raise ArgumentError, fn ->
-        PipelineStarter.backfill_channel(channel, cache: @cache_name)
+        PipelineStarter.backfill_channel(channel)
       end
     end
 
     test "delegates to sync_channel with bootstrap: true", %{channel: channel} do
-      {:ok, count} = PipelineStarter.backfill_channel(channel, cache: @cache_name)
+      {:ok, count} = PipelineStarter.backfill_channel(channel)
 
       assert count == 3
     end
 
     test "passes after option through", %{channel: channel} do
       {:ok, count} =
-        PipelineStarter.backfill_channel(channel,
-          after: ~U[2025-06-05 00:00:00Z],
-          cache: @cache_name
-        )
+        PipelineStarter.backfill_channel(channel, after: ~U[2025-06-05 00:00:00Z])
 
       assert count == 2
     end

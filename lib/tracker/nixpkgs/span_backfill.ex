@@ -15,7 +15,7 @@ defmodule Tracker.Nixpkgs.SpanBackfill do
     Option,
     OptionFileSpan,
     OptionSpan,
-    ReleaseCache,
+    Release,
     SpanEngine
   }
 
@@ -32,7 +32,7 @@ defmodule Tracker.Nixpkgs.SpanBackfill do
   @spec run(String.t(), DateTime.t(), DateTime.t() | nil) :: :noop | {:ok, non_neg_integer()}
   def run(channel_name, from, until \\ nil) do
     channel = Channel.by_name!(channel_name)
-    :ok = ReleaseCache.refresh_channel(ReleaseCache, channel_name, from: from, until: until)
+    :ok = Release.refresh(channel, from: from, until: until)
     PipelineStarter.sync_channel(channel, bootstrap: true, after: from)
   end
 
