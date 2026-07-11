@@ -128,6 +128,33 @@ defmodule TrackerWeb.ChannelLive.IndexTest do
     assert html =~ "2026-04-02"
   end
 
+  test "sorts Latest Release chronologically", %{conn: conn} do
+    channel = Channel.by_name!("nixos-24.11")
+
+    Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
+      channel_id: channel.id,
+      revision: "mmm999nnn000ooo",
+      released_at: ~U[2026-04-02 09:00:00Z]
+    })
+
+    Channel.create!(%{
+      name: "nixos-25.05",
+      display_name: "NixOS 25.05",
+      status: :retired,
+      is_stable: true
+    })
+
+    {:ok, _view, html} = live(conn, ~p"/channels?sort_by=latest_release&sort_dir=desc")
+
+    positions =
+      for name <- ~w(nixos-24.11 nixos-unstable nixos-26.05 nixos-25.05) do
+        {pos, _} = :binary.match(html, ~s(/channels/#{name}"))
+        pos
+      end
+
+    assert positions == Enum.sort(positions)
+  end
+
   test "renders Pre-release badge for channels in pre_release status", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/channels")
 
