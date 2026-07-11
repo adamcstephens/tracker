@@ -148,7 +148,7 @@ defmodule TrackerWeb.ChannelLive.Index do
   defp sort_channels(channels, :count, dir), do: sort_by_field(channels, & &1.count, dir)
 
   defp sort_channels(channels, :latest_release, dir),
-    do: sort_by_field(channels, & &1.latest_release, dir)
+    do: Enum.sort_by(channels, &(&1.latest_release || ~U[0000-01-01 00:00:00Z]), {dir, DateTime})
 
   defp sort_by_field(channels, fun, :asc), do: Enum.sort_by(channels, fun, &<=/2)
   defp sort_by_field(channels, fun, :desc), do: Enum.sort_by(channels, fun, &>=/2)
