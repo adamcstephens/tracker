@@ -12,6 +12,7 @@ defmodule Tracker.Nixpkgs do
 
   resources do
     resource Tracker.Nixpkgs.Channel
+    resource Tracker.Nixpkgs.Release
     resource Tracker.Nixpkgs.PackageFamily
     resource Tracker.Nixpkgs.PackageVariantGroup
     resource Tracker.Nixpkgs.Package

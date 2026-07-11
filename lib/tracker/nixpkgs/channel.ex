@@ -24,6 +24,7 @@ defmodule Tracker.Nixpkgs.Channel do
     define :default_stable
     define :update_hydra_status
     define :update_status
+    define :put_pointer
   end
 
   actions do
@@ -76,6 +77,10 @@ defmodule Tracker.Nixpkgs.Channel do
 
     update :update_status do
       accept [:status]
+    end
+
+    update :put_pointer do
+      accept [:pointer_etag, :pointer_last_modified, :pointer_revision]
     end
   end
 
@@ -133,6 +138,18 @@ defmodule Tracker.Nixpkgs.Channel do
     end
 
     attribute :hydra_checked_at, :utc_datetime_usec do
+      public? true
+    end
+
+    attribute :pointer_etag, :string do
+      public? true
+    end
+
+    attribute :pointer_last_modified, :string do
+      public? true
+    end
+
+    attribute :pointer_revision, :string do
       public? true
     end
 

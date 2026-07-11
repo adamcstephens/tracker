@@ -4,9 +4,9 @@ defmodule Tracker.Ingestion.CronWorker do
 
   For each active channel, issues a conditional GET against
   `https://channels.nixos.org/<channel>/git-revision`. On `304` the worker
-  does nothing. On `200` it stores the new ETag/Last-Modified pointer and,
-  if no non-failed ingestion pipeline exists for that revision yet,
-  refreshes the channel's S3 listing and runs
+  does nothing. On `200` it stores the new ETag/Last-Modified pointer on the
+  channel and, if no non-failed ingestion pipeline exists for that revision
+  yet, refreshes the channel's release ledger and runs
   `PipelineStarter.sync_channel/1`.
   """
 
@@ -15,7 +15,7 @@ defmodule Tracker.Ingestion.CronWorker do
   require Logger
 
   alias Tracker.Ingestion.{Pipeline, PipelineStarter}
-  alias Tracker.Nixpkgs.{Channel, ReleaseCache}
+  alias Tracker.Nixpkgs.{Channel, Release}
 
   @pointer_base_url "https://channels.nixos.org"
 
@@ -28,11 +28,9 @@ defmodule Tracker.Ingestion.CronWorker do
     Logger.info(msg: "channel poll started", active_channels: length(channels))
     started_at = System.monotonic_time()
 
-    cache = cache_name()
-
     counts =
       Enum.reduce(channels, %{unchanged: 0, changed: 0, synced: 0, created: 0}, fn channel, acc ->
-        poll_channel(channel, cache, acc)
+        poll_channel(channel, acc)
       end)
 
     Logger.info(
@@ -49,16 +47,14 @@ defmodule Tracker.Ingestion.CronWorker do
     :ok
   end
 
-  defp poll_channel(channel, cache, acc) do
-    pointer = ReleaseCache.get_pointer(cache, channel.name)
-
-    case fetch_pointer(channel.name, pointer) do
+  defp poll_channel(channel, acc) do
+    case fetch_pointer(channel) do
       {:not_modified, _resp} ->
-        maybe_sync(channel, cache, pointer_revision(pointer), :not_modified, acc)
+        maybe_sync(channel, channel.pointer_revision, :not_modified, acc)
 
-      {:ok, new_pointer} ->
-        ReleaseCache.put_pointer(cache, channel.name, new_pointer)
-        maybe_sync(channel, cache, new_pointer.revision, :same_revision, acc)
+      {:ok, pointer} ->
+        channel = Channel.put_pointer!(channel, pointer)
+        maybe_sync(channel, channel.pointer_revision, :same_revision, acc)
 
       {:error, reason} ->
         Logger.warning(msg: "channel poll error", channel: channel.name, reason: inspect(reason))
@@ -66,17 +62,14 @@ defmodule Tracker.Ingestion.CronWorker do
     end
   end
 
-  defp maybe_sync(channel, cache, revision, unchanged_reason, acc) do
+  defp maybe_sync(channel, revision, unchanged_reason, acc) do
     if revision != nil and not pipeline_exists?(channel.id, revision) do
-      sync_after_pointer_change(channel, cache, %{acc | changed: acc.changed + 1})
+      sync_after_pointer_change(channel, %{acc | changed: acc.changed + 1})
     else
       Logger.debug(msg: "channel poll unchanged", channel: channel.name, reason: unchanged_reason)
       %{acc | unchanged: acc.unchanged + 1}
     end
   end
-
-  defp pointer_revision(nil), do: nil
-  defp pointer_revision(%{revision: revision}), do: revision
 
   defp pipeline_exists?(channel_id, revision) do
     case Pipeline.find(channel_id, revision) do
@@ -86,10 +79,10 @@ defmodule Tracker.Ingestion.CronWorker do
     end
   end
 
-  defp sync_after_pointer_change(channel, cache, acc) do
-    ReleaseCache.refresh_channel(cache, channel.name, releases_fetcher_opt())
+  defp sync_after_pointer_change(channel, acc) do
+    :ok = Release.refresh(channel, releases_fetcher_opt())
 
-    case PipelineStarter.sync_channel(channel, cache: cache) do
+    case PipelineStarter.sync_channel(channel) do
       {:ok, count} ->
         Logger.info(msg: "channel synced", channel: channel.name, created: count)
         %{acc | synced: acc.synced + 1, created: acc.created + count}
@@ -99,13 +92,13 @@ defmodule Tracker.Ingestion.CronWorker do
     end
   end
 
-  defp fetch_pointer(channel_name, pointer) do
-    headers = conditional_headers(pointer)
+  defp fetch_pointer(channel) do
+    headers = conditional_headers(channel)
 
     req =
       Keyword.merge(
         [
-          url: "#{@pointer_base_url}/#{channel_name}/git-revision",
+          url: "#{@pointer_base_url}/#{channel.name}/git-revision",
           headers: headers
         ],
         req_options()
@@ -127,12 +120,10 @@ defmodule Tracker.Ingestion.CronWorker do
     end
   end
 
-  defp conditional_headers(nil), do: []
-
-  defp conditional_headers(%{etag: etag, last_modified: lm}) do
+  defp conditional_headers(channel) do
     []
-    |> add_header("if-none-match", etag)
-    |> add_header("if-modified-since", lm)
+    |> add_header("if-none-match", channel.pointer_etag)
+    |> add_header("if-modified-since", channel.pointer_last_modified)
   end
 
   defp add_header(headers, _name, nil), do: headers
@@ -140,9 +131,9 @@ defmodule Tracker.Ingestion.CronWorker do
 
   defp pointer_from_response(%Req.Response{} = resp) do
     %{
-      etag: header(resp, "etag"),
-      last_modified: header(resp, "last-modified"),
-      revision: revision_from_body(resp.body)
+      pointer_etag: header(resp, "etag"),
+      pointer_last_modified: header(resp, "last-modified"),
+      pointer_revision: revision_from_body(resp.body)
     }
   end
 
@@ -162,16 +153,12 @@ defmodule Tracker.Ingestion.CronWorker do
 
   defp revision_from_body(_), do: nil
 
-  defp cache_name do
-    Application.get_env(:tracker, :release_cache_name, ReleaseCache)
-  end
-
   defp req_options do
     Application.get_env(:tracker, :channel_pointer_req_options, [])
   end
 
   defp releases_fetcher_opt do
-    case Application.get_env(:tracker, :release_cache_fetcher) do
+    case Application.get_env(:tracker, :releases_fetcher) do
       nil -> []
       fun when is_function(fun, 1) -> [releases_fetcher: fun]
     end
