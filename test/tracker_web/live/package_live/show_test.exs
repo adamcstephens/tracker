@@ -53,6 +53,89 @@ defmodule TrackerWeb.PackageLive.ShowTest do
     }
   end
 
+  describe "package metadata by lens" do
+    setup %{package: package, channel_stable: channel_stable} do
+      channel_meta =
+        Channel.create!(%{
+          name: "nixos-unstable-small",
+          display_name: "NixOS Unstable Small",
+          status: :active,
+          is_stable: false
+        })
+
+      cr_meta =
+        Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
+          channel_id: channel_meta.id,
+          revision: "meta111bbb222333",
+          released_at: ~U[2026-03-18 10:00:00Z]
+        })
+
+      Tracker.Fixtures.apply_package_revision!(cr_meta, [
+        {package, %{version: "2.14.0", description: "Meta-channel description"}}
+      ])
+
+      cr_stable_meta =
+        Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
+          channel_id: channel_stable.id,
+          revision: "stab111ccc222333",
+          released_at: ~U[2026-03-19 10:00:00Z]
+        })
+
+      Tracker.Fixtures.apply_package_revision!(cr_stable_meta, [
+        {package, %{version: "2.13.0", description: "Stable-channel description"}}
+      ])
+
+      %{channel_meta: channel_meta}
+    end
+
+    test "a specific channel lens shows that channel's metadata", %{
+      conn: conn,
+      package: package
+    } do
+      {:ok, _view, html} =
+        live(conn, ~p"/packages/#{package.attribute}?lens_channel=nixos-24.11")
+
+      assert html =~ "Stable-channel description"
+      refute html =~ "Meta-channel description"
+    end
+
+    test "the all-channels lens shows metadata-channel metadata", %{
+      conn: conn,
+      package: package
+    } do
+      {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}?lens_channel=all")
+
+      assert html =~ "Meta-channel description"
+      refute html =~ "Stable-channel description"
+    end
+
+    test "falls back to the metadata channel when the lens channel span has no metadata", %{
+      conn: conn,
+      package: package
+    } do
+      {:ok, _view, html} =
+        live(conn, ~p"/packages/#{package.attribute}?lens_channel=nixos-unstable")
+
+      assert html =~ "Meta-channel description"
+    end
+
+    test "a lens switch reloads metadata", %{
+      conn: conn,
+      package: package,
+      channel_stable: channel_stable
+    } do
+      {:ok, view, html} = live(conn, ~p"/packages/#{package.attribute}?lens_channel=all")
+
+      assert html =~ "Meta-channel description"
+
+      send(view.pid, {:set_lens, channel_stable.name, ""})
+      html = render(view)
+
+      assert html =~ "Stable-channel description"
+      refute html =~ "Meta-channel description"
+    end
+  end
+
   test "updates when a revision result is recorded for the lens channel", %{
     conn: conn,
     package: package,

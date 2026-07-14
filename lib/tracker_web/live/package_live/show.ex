@@ -324,7 +324,6 @@ defmodule TrackerWeb.PackageLive.Show do
         load: [:maintainers, :teams, :options]
       )
 
-    package_meta = load_current_meta(package.id)
     family_siblings = package |> load_family_siblings() |> decorate_siblings()
     variant_siblings = load_variant_siblings(package)
     # The linked-options section shows each option's current metadata, served
@@ -356,7 +355,6 @@ defmodule TrackerWeb.PackageLive.Show do
      socket
      |> assign(:page_title, package.attribute)
      |> assign(:package, package)
-     |> assign(:package_meta, package_meta)
      |> assign(:subscribed?, package_subscribed?(socket.assigns.current_user, package.id))
      |> assign(:family_siblings, family_siblings)
      |> assign(:variant_siblings, variant_siblings)
@@ -461,6 +459,7 @@ defmodule TrackerWeb.PackageLive.Show do
     total_pages = ceil(total_count / tp.page_size)
 
     socket
+    |> assign(:package_meta, load_current_meta(package_id, channel_id))
     |> assign(:recent_changes, recent_changes)
     |> assign(:package_events, package_events)
     |> assign(:revisions, revisions)
@@ -593,18 +592,11 @@ defmodule TrackerWeb.PackageLive.Show do
   end
 
   # Current package metadata (description/homepage/position/licenses) is served
-  # from the open span in the metadata channel, where that metadata is ingested.
-  defp load_current_meta(package_id) do
-    span =
-      case metadata_channel_id() do
-        nil ->
-          nil
-
-        channel_id ->
-          channel_id
-          |> Tracker.Nixpkgs.PackageHistory.current_metadata([package_id])
-          |> Map.get(package_id)
-      end
+  # from the open span in the lens channel; the metadata channel is the fallback
+  # for the all-channels lens, packages absent from the lens channel, and spans
+  # written before metadata was ingested on every channel.
+  defp load_current_meta(package_id, lens_channel_id) do
+    span = lens_meta_span(package_id, lens_channel_id) || metadata_channel_span(package_id)
 
     %{
       description: span && span.description,
@@ -612,6 +604,28 @@ defmodule TrackerWeb.PackageLive.Show do
       position: span && span.position,
       licenses: span && span.licenses
     }
+  end
+
+  defp lens_meta_span(_package_id, nil), do: nil
+
+  defp lens_meta_span(package_id, channel_id) do
+    case current_meta_span(package_id, channel_id) do
+      %{description: nil, homepage: nil, position: nil, licenses: nil} -> nil
+      span -> span
+    end
+  end
+
+  defp metadata_channel_span(package_id) do
+    case metadata_channel_id() do
+      nil -> nil
+      channel_id -> current_meta_span(package_id, channel_id)
+    end
+  end
+
+  defp current_meta_span(package_id, channel_id) do
+    channel_id
+    |> Tracker.Nixpkgs.PackageHistory.current_metadata([package_id])
+    |> Map.get(package_id)
   end
 
   defp metadata_channel_id do

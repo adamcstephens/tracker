@@ -21,7 +21,7 @@ defmodule Tracker.Ingestion.Steps.LoadPackages do
   def run(%Tracker.Ingestion.StepContext{pipeline: pipeline, channel_revision: channel_revision}) do
     compressed = ChannelFetcher.fetch_packages_compressed(pipeline.base_url)
     channel = Ash.get!(Tracker.Nixpkgs.Channel, pipeline.channel_id)
-    include_metadata? = channel.name == StepGraph.metadata_channel()
+    metadata_channel? = channel.name == StepGraph.metadata_channel()
 
     # stream_packages/2 is a synchronous DirtyCpu NIF that blocks its caller
     # until decompress + parse finish. Run it in a Task so this process stays
@@ -33,12 +33,11 @@ defmodule Tracker.Ingestion.Steps.LoadPackages do
     packages = collect_all_packages()
     :ok = Task.await(stream_task, @stream_timeout)
 
-    {extracted, maint_data, team_data, joins} =
-      extract_packages(packages, include_metadata?)
+    {extracted, maint_data, team_data, joins} = extract_packages(packages)
 
     id_map = load_packages(extracted, channel_revision)
 
-    if include_metadata? do
+    if metadata_channel? do
       load_maintainers_and_teams(id_map, maint_data, team_data, joins)
     end
 
@@ -66,14 +65,7 @@ defmodule Tracker.Ingestion.Steps.LoadPackages do
 
   # -- Package extraction --
 
-  defp extract_packages(packages, false) do
-    pkgs =
-      Map.new(packages, fn {attr, fields} -> {attr, %{version: fields[:version]}} end)
-
-    {pkgs, %{}, %{}, %{}}
-  end
-
-  defp extract_packages(packages, true) do
+  defp extract_packages(packages) do
     Enum.reduce(packages, {%{}, %{}, %{}, %{}}, fn {attr, fields},
                                                    {pkgs, maint_acc, team_acc, joins} ->
       entry =
