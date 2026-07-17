@@ -39,6 +39,7 @@ defmodule TrackerWeb.LensComponent do
     <div id="lens" class={["lens", @highlight && "lens-attention"]} phx-hook="LensCookie">
       <form
         :if={@lens != nil}
+        id="lens-form"
         method="post"
         action="/lens"
         phx-change="set_lens"

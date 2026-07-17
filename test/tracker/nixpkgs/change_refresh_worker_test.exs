@@ -361,7 +361,6 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorkerTest do
     test "emits structured start/stop logs with transition counts" do
       insert_change!(number: 200, state: :open, node_id: "pr_x", head_sha: "old")
       recorder = transition_recorder()
-      require Logger
       Logger.put_module_level(ChangeRefreshWorker, :info)
       on_exit(fn -> Logger.delete_module_level(ChangeRefreshWorker) end)
 

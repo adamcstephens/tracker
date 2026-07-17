@@ -3,8 +3,6 @@ defmodule Tracker.Nixpkgs.ChannelRevisionLinkWorkerTest do
 
   import ExUnit.CaptureLog
 
-  require Logger
-
   alias Tracker.GitServer
   alias Tracker.Nixpkgs.Change
   alias Tracker.Nixpkgs.ChangeBranch

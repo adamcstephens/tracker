@@ -162,6 +162,7 @@ defmodule TrackerWeb.PackageLive.Show do
       <h2>Revisions</h2>
 
       <form
+        id="revision-filters"
         method="get"
         action={~p"/packages/#{@package.attribute}"}
         phx-change="filter"

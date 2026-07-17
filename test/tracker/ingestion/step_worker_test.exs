@@ -22,8 +22,7 @@ defmodule Tracker.Ingestion.StepWorkerTest do
       # This is the failure mode that bypasses try/rescue: a linked subtask crash
       # would otherwise kill the worker process via the link.
       fun = fn ->
-        Map.new()
-        |> Task.async(fn -> Map.fetch!(%{}, :missing) end)
+        Task.async(fn -> raise "boom" end)
         |> Task.await()
       end
 

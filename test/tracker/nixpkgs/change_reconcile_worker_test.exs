@@ -3,8 +3,6 @@ defmodule Tracker.Nixpkgs.ChangeReconcileWorkerTest do
 
   import ExUnit.CaptureLog
 
-  require Logger
-
   alias Tracker.GitHub.GraphQL.PullRequest
   alias Tracker.Nixpkgs.Change
   alias Tracker.Nixpkgs.ChangeReconcileSkip

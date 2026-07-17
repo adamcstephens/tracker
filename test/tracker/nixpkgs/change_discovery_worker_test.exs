@@ -3,8 +3,6 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorkerTest do
 
   import ExUnit.CaptureLog
 
-  require Logger
-
   alias Tracker.GitHub.GraphQL.PullRequest
   alias Tracker.GitHub.RateLimitCache
   alias Tracker.Nixpkgs.Change

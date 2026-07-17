@@ -4,8 +4,6 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorkerTest do
   import Ecto.Query
   import ExUnit.CaptureLog
 
-  require Logger
-
   alias Tracker.GitHub.RateLimitCache
   alias Tracker.Nixpkgs.Change
   alias Tracker.Nixpkgs.ChangeArtifactRefreshWorker
