@@ -2,11 +2,16 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-parts.url = "github:hercules-ci/flake-parts";
+    sower.url = "git+https://codeberg.org/adamcstephens/sower.git?ref=main";
   };
 
   outputs =
     inputs@{ flake-parts, ... }:
     flake-parts.lib.mkFlake { inherit inputs; } {
+      imports = [
+        inputs.sower.flakeModules.sower
+      ];
+
       systems = [
         "x86_64-linux"
         "aarch64-darwin"
@@ -14,6 +19,7 @@
 
       perSystem =
         {
+          inputs',
           lib,
           pkgs,
           ...
@@ -26,28 +32,37 @@
           );
         in
         {
-          devShells.default = pkgs.mkShell {
-            packages = [
-              beamPackages.erlang
-              beamPackages.elixir
-              beamPackages.expert
-              beamPackages.hex
-              pkgs.dexter
+          devShells = {
+            ci = pkgs.mkShell {
+              packages = [
+                pkgs.niks3
+                inputs'.sower.packages.sower
+              ];
+            };
 
-              pkgs.cargo
-              pkgs.rustc
-              pkgs.rustfmt
+            default = pkgs.mkShell {
+              packages = [
+                beamPackages.erlang
+                beamPackages.elixir
+                beamPackages.expert
+                beamPackages.hex
+                pkgs.dexter
 
-              pkgs.postgresql
-              pkgs.process-compose
+                pkgs.cargo
+                pkgs.rustc
+                pkgs.rustfmt
 
-              pkgs.biome
-              pkgs.just
-            ]
-            ++ (lib.optionals pkgs.stdenv.isLinux [ pkgs.inotify-tools ]);
+                pkgs.postgresql
+                pkgs.process-compose
 
-            env = {
-              ESBUILD_PATH = lib.getExe pkgs.esbuild;
+                pkgs.biome
+                pkgs.just
+              ]
+              ++ (lib.optionals pkgs.stdenv.isLinux [ pkgs.inotify-tools ]);
+
+              env = {
+                ESBUILD_PATH = lib.getExe pkgs.esbuild;
+              };
             };
           };
 
