@@ -3,8 +3,6 @@ defmodule Tracker.Nixpkgs.ChangeArtifactReconcileWorkerTest do
 
   import ExUnit.CaptureLog
 
-  require Logger
-
   alias Tracker.Nixpkgs.Change
   alias Tracker.Nixpkgs.ChangeArtifactReconcileWorker
   alias Tracker.Nixpkgs.ChangeArtifactRefreshWorker
