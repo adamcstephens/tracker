@@ -110,7 +110,8 @@ config :tracker, Tracker.GitServer,
 
 # Configure esbuild (the version is required)
 config :esbuild,
-  version: "0.17.11",
+  version_check: false,
+  path: System.get_env("ESBUILD_PATH"),
   tracker: [
     args:
       ~w(js/app.js --bundle --target=es2017 --outdir=../priv/static/assets --external:/fonts/* --external:/images/*),
@@ -119,6 +120,10 @@ config :esbuild,
   ]
 
 config :mdex_native, syntax_highlighter: :lumis
+config :mdex_native, MDExNative.Native, skip_compilation?: true
+
+config :ex_brotli, ExBrotli, skip_compilation?: true
+config :lumis, Lumis.Native, skip_compilation?: true
 
 # Configures Elixir's Logger
 config :logger, :console,

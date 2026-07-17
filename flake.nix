@@ -45,6 +45,15 @@
               pkgs.just
             ]
             ++ (lib.optionals pkgs.stdenv.isLinux [ pkgs.inotify-tools ]);
+
+            env = {
+              ESBUILD_PATH = lib.getExe pkgs.esbuild;
+            };
+          };
+
+          packages = rec {
+            default = server;
+            server = pkgs.callPackage ./package.nix { inherit beamPackages; };
           };
         };
     };
