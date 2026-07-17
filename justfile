@@ -22,11 +22,18 @@ format:
 test:
     mix test
 
-update-deps:
+update-deps: update-elixir update-rust
+
+update-elixir:
     mix deps.clean --unused --unlock
     mix deps.update --all
     mix deps.get
     mix hex.outdated
+    mix hex.audit
+
+[working-directory('native/package_stream')]
+update-rust:
+    cargo update
 
 icons:
     mkdir -p priv/static/images/.tmp
