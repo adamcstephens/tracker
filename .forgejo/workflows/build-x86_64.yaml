@@ -1,0 +1,19 @@
+on:
+  push:
+
+env:
+  NIKS3_SERVER_URL: ${{ vars.NIKS3_SERVER_URL }}
+  SOWER_ENDPOINT: ${{ vars.SOWER_ENDPOINT }}
+
+jobs:
+  sower:
+    runs-on: local/x86_64-linux
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: sower build
+        run: |
+          printf '%s' '${{ secrets.NIKS3_AUTH_TOKEN }}' > ../niks3-token
+          export NIKS3_AUTH_TOKEN_FILE="$PWD/../niks3-token"
+          nix develop .#ci --command sower build --cache niks3:// --eval-jobs 12 .#sowerJobs.x86_64-linux --push
