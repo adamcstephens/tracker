@@ -23,7 +23,7 @@ mix-nix-lock:
     #!/usr/bin/env bash
     set -euo pipefail
     mix deps.get
-    mix deps.nix --output deps.nix --env prod --env test
+    mix deps.nix --output deps.nix --env prod --env test --no-app-config
     # lumis's published Cargo.lock pins the lumis crates as path deps it doesn't
     # ship, so re-resolve them from crates.io before vendoring for the nix build.
     crate=deps/lumis/native/lumis_nif

@@ -49,9 +49,10 @@ beamPackages.mixRelease rec {
       let
         # The workaround installs cargo's lib<crate>.so, but Rustler's
         # force-build load path is priv/native/<crate>.so; add the alias.
-        aliasNif =
+        fixNif =
           drv:
           drv.override (old: {
+            appConfigPath = ./config;
             preConfigure = (old.preConfigure or "") + ''
               for so in priv/native/lib*.so; do
                 [ -e "$so" ] || continue
@@ -61,9 +62,9 @@ beamPackages.mixRelease rec {
           });
       in
       {
-        mdex_native = aliasNif prev.mdex_native;
-        ex_brotli = aliasNif prev.ex_brotli;
-        lumis = aliasNif prev.lumis;
+        mdex_native = fixNif prev.mdex_native;
+        ex_brotli = fixNif prev.ex_brotli;
+        lumis = fixNif prev.lumis;
       };
   };
 
