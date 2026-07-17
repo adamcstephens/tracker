@@ -35,7 +35,7 @@ defmodule Tracker.MixProject do
   # Type `mix help deps` for examples and options.
   defp deps do
     [
-      {:mix_audit, "~> 2.0", only: [:test, :dev]},
+      {:deps_nix, "~> 3.0", only: [:dev]},
       {:usage_rules, "~> 1.0", only: [:dev]},
       {:tidewave, "~> 0.5", only: [:dev]},
       {:ash, "~> 3.0"},
@@ -80,7 +80,9 @@ defmodule Tracker.MixProject do
       {:telemetry_metrics, "~> 1.0"},
       {:telemetry_poller, "~> 1.0"},
       {:rustler, "~> 0.38.0", runtime: false},
-      {:typedstruct, "~> 0.5.4"}
+      {:typedstruct,
+       git: "https://github.com/saleyn/typedstruct.git",
+       ref: "a5939bb210619cd9c362b87094ee343c55494ec3"}
     ]
   end
 

@@ -19,6 +19,19 @@ format:
     cargo fmt --manifest-path native/package_stream/Cargo.toml
     biome format --write priv/static/css/app.css
 
+mix-nix-lock:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mix deps.get
+    mix deps.nix --output deps.nix --env prod --env test
+    # lumis's published Cargo.lock pins the lumis crates as path deps it doesn't
+    # ship, so re-resolve them from crates.io before vendoring for the nix build.
+    crate=deps/lumis/native/lumis_nif
+    awk 'BEGIN{RS="";ORS="\n\n"} { if (($0 ~ /name = "lumis"\n/ || $0 ~ /name = "lumis-core"\n/ || $0 ~ /name = "lumis-build"\n/) && $0 !~ /source = /) next; print }' "$crate/Cargo.lock" > "$crate/Cargo.lock.tmp"
+    mv "$crate/Cargo.lock.tmp" "$crate/Cargo.lock"
+    (cd "$crate" && cargo metadata --format-version 1 > /dev/null)
+    cp "$crate/Cargo.lock" nix/lumis_nif-Cargo.lock
+
 test:
     mix test
 
