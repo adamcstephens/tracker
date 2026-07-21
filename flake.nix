@@ -52,7 +52,7 @@
                 pkgs.rustc
                 pkgs.rustfmt
 
-                pkgs.postgresql
+                pkgs.postgresql_18
                 pkgs.process-compose
 
                 pkgs.biome
@@ -62,7 +62,14 @@
 
               env = {
                 ESBUILD_PATH = lib.getExe pkgs.esbuild;
+                # PGBINOLD = "${pkgs.postgresql_17}/bin";
+                # PGDATAOLD = ".services/postgres/data/17";
+                # PGDATANEW = ".services/postgres/data/18";
               };
+
+              shellHook = ''
+                export PGDATA="$PWD/.services/postgres/data/18"
+              '';
             };
           };
 

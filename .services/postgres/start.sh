@@ -1,16 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-DATADIR=.services/postgres/data
 SOCKDIR="$PWD/.services/postgres"
 
-if [ ! -d "$DATADIR" ]; then
-  initdb --username=postgres --pgdata="$DATADIR"
-  echo "unix_socket_directories = '$SOCKDIR'" >>"$DATADIR/postgresql.conf"
-  echo "listen_addresses = ''" >>"$DATADIR/postgresql.conf"
+if [ ! -d "$PGDATA" ]; then
+  initdb --username=postgres --pgdata="$PGDATA"
+  echo "unix_socket_directories = '$SOCKDIR'" >>"$PGDATA/postgresql.conf"
+  echo "listen_addresses = ''" >>"$PGDATA/postgresql.conf"
 fi
 
-exec postgres -D "$DATADIR" \
+exec postgres -D "$PGDATA" \
   -c shared_buffers=2GB \
   -c effective_cache_size=4GB \
   -c maintenance_work_mem=512MB \

@@ -11,4 +11,4 @@ processes:
     #   initial_delay_seconds: 2
     #   period_seconds: 2
     shutdown:
-      command: pg_ctl stop -D .services/postgres/data -m fast
+      command: pg_ctl stop -m fast
