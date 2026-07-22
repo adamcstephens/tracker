@@ -12,7 +12,31 @@ defmodule Tracker.Ingestion.Steps.LoadPackages do
   alias Tracker.Ingestion.{Helpers, PackageStream, StepGraph}
   alias Tracker.Nixpkgs.ChannelFetcher
 
+  require Logger
+
   @stream_timeout :timer.minutes(25)
+
+  @meta_fields [
+    :description,
+    :long_description,
+    :homepage,
+    :position,
+    :licenses,
+    :pname,
+    :outputs,
+    :default_output,
+    :main_program,
+    :broken,
+    :unfree,
+    :insecure,
+    :unsupported,
+    :known_vulnerabilities,
+    :platforms,
+    :bad_platforms,
+    :changelog,
+    :download_page,
+    :source_provenance
+  ]
 
   @impl true
   def timeout, do: :timer.minutes(30)
@@ -30,8 +54,12 @@ defmodule Tracker.Ingestion.Steps.LoadPackages do
     parent = self()
     stream_task = Task.async(fn -> PackageStream.stream_packages(compressed, parent) end)
 
-    packages = collect_all_packages()
+    {packages, stream_meta} = collect_all_packages()
     :ok = Task.await(stream_task, @stream_timeout)
+
+    Enum.each(stream_meta[:unknown_platform_patterns] || [], fn pattern ->
+      Logger.warning("LoadPackages: unknown platform pattern in packages.json: #{pattern}")
+    end)
 
     {extracted, maint_data, team_data, joins} = extract_packages(packages)
 
@@ -52,8 +80,8 @@ defmodule Tracker.Ingestion.Steps.LoadPackages do
         acc = Enum.reduce(entries, acc, fn {attr, fields}, a -> Map.put(a, attr, fields) end)
         collect_all_packages(acc)
 
-      {:done, _meta} ->
-        acc
+      {:done, meta} ->
+        {acc, meta}
 
       {:error, reason} ->
         raise "PackageStream NIF error: #{reason}"
@@ -69,11 +97,9 @@ defmodule Tracker.Ingestion.Steps.LoadPackages do
     Enum.reduce(packages, {%{}, %{}, %{}, %{}}, fn {attr, fields},
                                                    {pkgs, maint_acc, team_acc, joins} ->
       entry =
-        %{version: fields[:version]}
-        |> Helpers.maybe_put(:description, fields[:description])
-        |> Helpers.maybe_put(:homepage, fields[:homepage])
-        |> Helpers.maybe_put(:position, fields[:position])
-        |> Helpers.maybe_put(:licenses, fields[:licenses])
+        Enum.reduce(@meta_fields, %{version: fields[:version]}, fn key, entry ->
+          Helpers.maybe_put(entry, key, fields[key])
+        end)
 
       # Collect direct (non-team) maintainers
       non_team = fields[:maintainers] || []
@@ -184,16 +210,14 @@ defmodule Tracker.Ingestion.Steps.LoadPackages do
       Enum.map(packages, fn {attribute, entry} ->
         parsed = Map.fetch!(parsed_attrs, attribute)
 
-        %{
+        @meta_fields
+        |> Map.new(&{&1, entry[&1]})
+        |> Map.merge(%{
           package_id: Map.fetch!(id_map, attribute),
           version: entry[:version],
-          description: entry[:description],
-          homepage: entry[:homepage],
-          licenses: entry[:licenses],
-          position: entry[:position],
           package_set: parsed.package_set,
           set_version: parsed.set_version
-        }
+        })
       end)
 
     Tracker.Nixpkgs.SpanEngine.diff_and_apply(

@@ -136,6 +136,155 @@ defmodule TrackerWeb.PackageLive.ShowTest do
     end
   end
 
+  describe "extended metadata" do
+    setup %{cr1: cr1} do
+      rich =
+        Tracker.Nixpkgs.Package
+        |> Ash.Changeset.for_create(:create, %{attribute: "pkgshow-rich"})
+        |> Ash.create!()
+
+      Tracker.Fixtures.apply_package_revision!(cr1, [
+        {rich,
+         %{
+           version: "1.0",
+           description: "Rich metadata package",
+           pname: "rich-pname",
+           outputs: ["man", "out"],
+           default_output: "out",
+           long_description: "First rich line.\nSecond rich line.",
+           main_program: "richbin",
+           broken: true,
+           unfree: true,
+           insecure: true,
+           unsupported: true,
+           known_vulnerabilities: ["CVE-2024-0001: overflow"],
+           platforms: ["x86_64-linux", "mips64n32"],
+           bad_platforms: ["darwin"],
+           changelog: "https://example.com/NEWS",
+           download_page: "https://example.com/download",
+           source_provenance: ["binaryNativeCode"]
+         }}
+      ])
+
+      %{rich: rich}
+    end
+
+    test "shows the long description preserving line breaks", %{conn: conn, rich: rich} do
+      {:ok, _view, html} = live(conn, ~p"/packages/#{rich.attribute}")
+
+      assert html =~ "First rich line."
+      assert html =~ "Second rich line."
+      assert html =~ "white-space: pre-line"
+    end
+
+    test "shows outputs with the default output", %{conn: conn, rich: rich} do
+      {:ok, _view, html} = live(conn, ~p"/packages/#{rich.attribute}")
+
+      assert html =~ "Outputs"
+      assert html =~ "man, out"
+      assert html =~ "default: out"
+    end
+
+    test "shows the main program", %{conn: conn, rich: rich} do
+      {:ok, _view, html} = live(conn, ~p"/packages/#{rich.attribute}")
+
+      assert html =~ "Main program"
+      assert html =~ "richbin"
+    end
+
+    test "shows availability badges when flags are true", %{conn: conn, rich: rich} do
+      {:ok, _view, html} = live(conn, ~p"/packages/#{rich.attribute}")
+
+      assert html =~ "<mark>broken</mark>"
+      assert html =~ "<mark>unfree</mark>"
+      assert html =~ "<mark>insecure</mark>"
+      assert html =~ "<mark>unsupported</mark>"
+    end
+
+    test "hides availability badges when flags are absent", %{conn: conn, package: package} do
+      {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}")
+
+      refute html =~ "<mark>broken</mark>"
+      refute html =~ "<mark>unfree</mark>"
+    end
+
+    test "shows known vulnerabilities", %{conn: conn, rich: rich} do
+      {:ok, _view, html} = live(conn, ~p"/packages/#{rich.attribute}")
+
+      assert html =~ "CVE-2024-0001: overflow"
+    end
+
+    test "shows platforms and bad platforms collapsed", %{conn: conn, rich: rich} do
+      {:ok, _view, html} = live(conn, ~p"/packages/#{rich.attribute}")
+
+      assert html =~ "<details"
+      assert html =~ "Platforms (2)"
+      assert html =~ "x86_64-linux, mips64n32"
+      assert html =~ "Bad platforms (1)"
+      assert html =~ "darwin"
+    end
+
+    test "links changelog and download page", %{conn: conn, rich: rich} do
+      {:ok, _view, html} = live(conn, ~p"/packages/#{rich.attribute}")
+
+      assert html =~ "Changelog"
+      assert html =~ ~s|href="https://example.com/NEWS"|
+      assert html =~ "Download page"
+      assert html =~ ~s|href="https://example.com/download"|
+    end
+
+    test "shows source provenance", %{conn: conn, rich: rich} do
+      {:ok, _view, html} = live(conn, ~p"/packages/#{rich.attribute}")
+
+      assert html =~ "Source provenance"
+      assert html =~ "binaryNativeCode"
+    end
+
+    test "does not display pname", %{conn: conn, rich: rich} do
+      {:ok, _view, html} = live(conn, ~p"/packages/#{rich.attribute}")
+
+      refute html =~ "rich-pname"
+    end
+
+    test "a lens span with only extended metadata is not treated as empty", %{
+      conn: conn,
+      cr2: cr2
+    } do
+      pkg =
+        Tracker.Nixpkgs.Package
+        |> Ash.Changeset.for_create(:create, %{attribute: "pkgshow-extonly"})
+        |> Ash.create!()
+
+      channel_meta =
+        Channel.create!(%{
+          name: Tracker.Ingestion.StepGraph.metadata_channel(),
+          display_name: "Metadata Channel",
+          status: :active,
+          is_stable: false
+        })
+
+      cr_meta =
+        Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
+          channel_id: channel_meta.id,
+          revision: "meta999fff888777",
+          released_at: ~U[2026-03-18 10:00:00Z]
+        })
+
+      Tracker.Fixtures.apply_package_revision!(cr_meta, [
+        {pkg, %{version: "1.0", description: "Fallback description"}}
+      ])
+
+      Tracker.Fixtures.apply_package_revision!(cr2, [
+        {pkg, %{version: "1.0", main_program: "extbin"}}
+      ])
+
+      {:ok, _view, html} = live(conn, ~p"/packages/#{pkg.attribute}?lens_channel=nixos-24.11")
+
+      assert html =~ "extbin"
+      refute html =~ "Fallback description"
+    end
+  end
+
   test "updates when a revision result is recorded for the lens channel", %{
     conn: conn,
     package: package,

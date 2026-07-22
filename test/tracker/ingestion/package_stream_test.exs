@@ -11,9 +11,10 @@ defmodule Tracker.Ingestion.PackageStreamTest do
       packages = collect_packages()
       attrs = Map.keys(packages)
 
-      # Should have 7 valid packages (hello, multi_homepage, complex_licenses,
-      # string_license, single_license_object, with_maintainers, no_meta)
-      assert length(attrs) == 7
+      # Should have 8 valid packages (hello, platform_patterns, multi_homepage,
+      # complex_licenses, string_license, single_license_object,
+      # with_maintainers, no_meta)
+      assert length(attrs) == 8
 
       assert "hello" in attrs
       assert "no_meta" in attrs
@@ -92,6 +93,85 @@ defmodule Tracker.Ingestion.PackageStreamTest do
                "A program that produces a familiar, friendly greeting"
 
       assert packages["hello"][:position] == "pkgs/by-name/he/hello/package.nix"
+    end
+
+    test "includes pname, output names, and the default output" do
+      br = Tracker.PackageStreamFixtures.small_packages_br()
+      :ok = PackageStream.stream_packages(br, self())
+
+      packages = collect_packages()
+
+      assert packages["hello"][:pname] == "hello"
+      assert packages["hello"][:outputs] == ["man", "out"]
+      assert packages["hello"][:default_output] == "out"
+    end
+
+    test "tolerates a null outputs object" do
+      br = Tracker.PackageStreamFixtures.small_packages_br()
+      :ok = PackageStream.stream_packages(br, self())
+
+      packages = collect_packages()
+
+      assert is_nil(packages["platform_patterns"][:outputs])
+    end
+
+    test "includes extended meta fields" do
+      br = Tracker.PackageStreamFixtures.small_packages_br()
+      :ok = PackageStream.stream_packages(br, self())
+
+      packages = collect_packages()
+      pkg = packages["hello"]
+
+      assert pkg[:long_description] == "GNU Hello prints a greeting.\nIt is also a demo."
+      assert pkg[:main_program] == "hello"
+      assert pkg[:broken] == false
+      assert pkg[:unfree] == false
+      assert pkg[:changelog] == "https://www.gnu.org/software/hello/NEWS"
+      assert pkg[:download_page] == "https://ftp.gnu.org/gnu/hello/"
+      assert pkg[:source_provenance] == ["fromSource"]
+      assert pkg[:platforms] == ["x86_64-linux", "aarch64-darwin"]
+    end
+
+    test "includes availability flags and known vulnerabilities" do
+      br = Tracker.PackageStreamFixtures.small_packages_br()
+      :ok = PackageStream.stream_packages(br, self())
+
+      packages = collect_packages()
+      pkg = packages["platform_patterns"]
+
+      assert pkg[:insecure] == true
+      assert pkg[:unsupported] == true
+      assert pkg[:known_vulnerabilities] == ["CVE-2024-0001: buffer overflow"]
+    end
+
+    test "normalizes platform pattern objects to display names" do
+      br = Tracker.PackageStreamFixtures.small_packages_br()
+      :ok = PackageStream.stream_packages(br, self())
+
+      packages = collect_packages()
+      pkg = packages["platform_patterns"]
+
+      assert pkg[:platforms] == ["x86_64-linux", "mips64n32"]
+      assert pkg[:bad_platforms] == ["darwin"]
+    end
+
+    test "reports no unknown platform patterns for known data" do
+      br = Tracker.PackageStreamFixtures.small_packages_br()
+      :ok = PackageStream.stream_packages(br, self())
+
+      {_packages, meta} = collect_stream()
+      assert meta[:unknown_platform_patterns] == []
+    end
+
+    test "returns unmatched platform patterns in the done meta" do
+      br = Tracker.PackageStreamFixtures.unknown_platform_br()
+      :ok = PackageStream.stream_packages(br, self())
+
+      {packages, meta} = collect_stream()
+
+      assert packages["mystery"][:platforms] == ["unknown-platform"]
+      assert [pattern] = meta[:unknown_platform_patterns]
+      assert pattern =~ "frobnitz"
     end
 
     test "includes maintainer data" do
@@ -203,7 +283,7 @@ defmodule Tracker.Ingestion.PackageStreamTest do
       packages = collect_packages()
       assert :ok = Task.await(task, 10_000)
 
-      assert map_size(packages) == 7
+      assert map_size(packages) == 8
       assert packages["hello"][:version] == "2.12.1"
     end
 
@@ -221,6 +301,24 @@ defmodule Tracker.Ingestion.PackageStreamTest do
       assert is_nil(pkg[:licenses])
       assert is_nil(pkg[:maintainers])
       assert is_nil(pkg[:teams])
+    end
+  end
+
+  # Like collect_packages/1, but also returns the :done meta map.
+  defp collect_stream(acc \\ %{}) do
+    receive do
+      {:packages, entries} ->
+        acc = Enum.reduce(entries, acc, fn {attr, fields}, a -> Map.put(a, attr, fields) end)
+        collect_stream(acc)
+
+      {:done, meta} ->
+        {acc, meta}
+
+      {:error, reason} ->
+        raise "PackageStream NIF error: #{reason}"
+    after
+      10_000 ->
+        raise "Timed out waiting for package stream messages"
     end
   end
 

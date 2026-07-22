@@ -31,6 +31,18 @@ defmodule TrackerWeb.PackageLive.Show do
 
     <p :if={@package_meta.description}>{@package_meta.description}</p>
 
+    <p :if={availability_flags(@package_meta) != []}>
+      <mark :for={flag <- availability_flags(@package_meta)}>{flag}</mark>
+    </p>
+
+    <ul :if={@package_meta.known_vulnerabilities not in [nil, []]}>
+      <li :for={vuln <- @package_meta.known_vulnerabilities}><mark>{vuln}</mark></li>
+    </ul>
+
+    <p :if={@package_meta.long_description} style="white-space: pre-line;">
+      {@package_meta.long_description}
+    </p>
+
     <.list>
       <:item title="Attribute">{@package.attribute}</:item>
       <:item :if={@package_meta.homepage} title="Homepage">
@@ -46,7 +58,36 @@ defmodule TrackerWeb.PackageLive.Show do
       <:item :if={@package_meta.licenses} title="License">
         {Enum.join(@package_meta.licenses, ", ")}
       </:item>
+      <:item :if={@package_meta.main_program} title="Main program">
+        <code>{@package_meta.main_program}</code>
+      </:item>
+      <:item :if={@package_meta.outputs} title="Outputs">
+        {Enum.join(@package_meta.outputs, ", ")}<span :if={@package_meta.default_output}> (default: {@package_meta.default_output})</span>
+      </:item>
+      <:item :if={@package_meta.changelog} title="Changelog">
+        <a href={@package_meta.changelog} target="_blank" rel="noopener noreferrer">
+          {@package_meta.changelog}
+        </a>
+      </:item>
+      <:item :if={@package_meta.download_page} title="Download page">
+        <a href={@package_meta.download_page} target="_blank" rel="noopener noreferrer">
+          {@package_meta.download_page}
+        </a>
+      </:item>
+      <:item :if={@package_meta.source_provenance} title="Source provenance">
+        {Enum.join(@package_meta.source_provenance, ", ")}
+      </:item>
     </.list>
+
+    <details :if={@package_meta.platforms not in [nil, []]}>
+      <summary>Platforms ({length(@package_meta.platforms)})</summary>
+      <p>{Enum.join(@package_meta.platforms, ", ")}</p>
+    </details>
+
+    <details :if={@package_meta.bad_platforms not in [nil, []]}>
+      <summary>Bad platforms ({length(@package_meta.bad_platforms)})</summary>
+      <p>{Enum.join(@package_meta.bad_platforms, ", ")}</p>
+    </details>
 
     <dl :if={@package.teams != []}>
       <dt><strong>Teams</strong></dt>
@@ -592,28 +633,56 @@ defmodule TrackerWeb.PackageLive.Show do
     end)
   end
 
-  # Current package metadata (description/homepage/position/licenses) is served
-  # from the open span in the lens channel; the metadata channel is the fallback
-  # for the all-channels lens, packages absent from the lens channel, and spans
-  # written before metadata was ingested on every channel.
+  # The span metadata fields surfaced on this page; pname is stored on spans
+  # but not displayed, and doesn't count towards a span "having" metadata.
+  @meta_fields [
+    :description,
+    :long_description,
+    :homepage,
+    :position,
+    :licenses,
+    :main_program,
+    :outputs,
+    :default_output,
+    :broken,
+    :unfree,
+    :insecure,
+    :unsupported,
+    :known_vulnerabilities,
+    :platforms,
+    :bad_platforms,
+    :changelog,
+    :download_page,
+    :source_provenance
+  ]
+
+  @availability_flags [:broken, :unfree, :insecure, :unsupported]
+
+  defp availability_flags(package_meta) do
+    Enum.filter(@availability_flags, &(Map.get(package_meta, &1) == true))
+  end
+
+  # Current package metadata is served from the open span in the lens channel;
+  # the metadata channel is the fallback for the all-channels lens, packages
+  # absent from the lens channel, and spans written before metadata was
+  # ingested on every channel.
   defp load_current_meta(package_id, lens_channel_id) do
     span = lens_meta_span(package_id, lens_channel_id) || metadata_channel_span(package_id)
 
-    %{
-      description: span && span.description,
-      homepage: span && span.homepage,
-      position: span && span.position,
-      licenses: span && span.licenses
-    }
+    Map.new(@meta_fields, &{&1, span && Map.get(span, &1)})
   end
 
   defp lens_meta_span(_package_id, nil), do: nil
 
   defp lens_meta_span(package_id, channel_id) do
     case current_meta_span(package_id, channel_id) do
-      %{description: nil, homepage: nil, position: nil, licenses: nil} -> nil
-      span -> span
+      nil -> nil
+      span -> if meta_empty?(span), do: nil, else: span
     end
+  end
+
+  defp meta_empty?(span) do
+    Enum.all?(@meta_fields, &is_nil(Map.get(span, &1)))
   end
 
   defp metadata_channel_span(package_id) do

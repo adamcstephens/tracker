@@ -9,8 +9,7 @@ defmodule Tracker.Nixpkgs.PackageSpan do
   `channel_id = $c AND valid @> $released_at`; "current" is `upper_inf(valid)`.
 
   Payload (fingerprint basis) moved off the identity-only `packages` table:
-  `version`, `description`, `homepage`, `licenses`, `position`, `package_set`,
-  `set_version`.
+  `version` plus the packages.json metadata listed in `payload_columns/0`.
   """
   use Ash.Resource, otp_app: :tracker, domain: Tracker.Nixpkgs, data_layer: AshPostgres.DataLayer
 
@@ -50,7 +49,22 @@ defmodule Tracker.Nixpkgs.PackageSpan do
     :licenses,
     :position,
     :package_set,
-    :set_version
+    :set_version,
+    :pname,
+    :outputs,
+    :default_output,
+    :long_description,
+    :main_program,
+    :broken,
+    :unfree,
+    :insecure,
+    :unsupported,
+    :known_vulnerabilities,
+    :platforms,
+    :bad_platforms,
+    :changelog,
+    :download_page,
+    :source_provenance
   ]
 
   @doc """
@@ -157,6 +171,21 @@ defmodule Tracker.Nixpkgs.PackageSpan do
     attribute :position, :string, public?: true
     attribute :package_set, :string, public?: true
     attribute :set_version, :string, public?: true
+    attribute :pname, :string, public?: true
+    attribute :outputs, {:array, :string}, public?: true
+    attribute :default_output, :string, public?: true
+    attribute :long_description, :string, public?: true
+    attribute :main_program, :string, public?: true
+    attribute :broken, :boolean, public?: true
+    attribute :unfree, :boolean, public?: true
+    attribute :insecure, :boolean, public?: true
+    attribute :unsupported, :boolean, public?: true
+    attribute :known_vulnerabilities, {:array, :string}, public?: true
+    attribute :platforms, {:array, :string}, public?: true
+    attribute :bad_platforms, {:array, :string}, public?: true
+    attribute :changelog, :string, public?: true
+    attribute :download_page, :string, public?: true
+    attribute :source_provenance, {:array, :string}, public?: true
 
     timestamps()
   end

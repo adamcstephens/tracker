@@ -25,11 +25,38 @@ defmodule Tracker.PackageStreamFixtures do
       "packages" => %{
         "hello" => %{
           "version" => "2.12.1",
+          "pname" => "hello",
+          "outputs" => %{"out" => nil, "man" => nil},
+          "outputName" => "out",
           "meta" => %{
             "description" => "A program that produces a familiar, friendly greeting",
+            "longDescription" => "GNU Hello prints a greeting.\nIt is also a demo.",
             "homepage" => "https://www.gnu.org/software/hello/",
             "position" => "pkgs/by-name/he/hello/package.nix",
-            "license" => [%{"spdxId" => "GPL-3.0-or-later"}]
+            "license" => [%{"spdxId" => "GPL-3.0-or-later"}],
+            "mainProgram" => "hello",
+            "broken" => false,
+            "unfree" => false,
+            "changelog" => "https://www.gnu.org/software/hello/NEWS",
+            "downloadPage" => "https://ftp.gnu.org/gnu/hello/",
+            "sourceProvenance" => [%{"shortName" => "fromSource", "isSource" => true}],
+            "platforms" => ["x86_64-linux", "aarch64-darwin"]
+          }
+        },
+        "platform_patterns" => %{
+          "version" => "1.0",
+          "outputs" => nil,
+          "meta" => %{
+            "insecure" => true,
+            "unsupported" => true,
+            "knownVulnerabilities" => ["CVE-2024-0001: buffer overflow"],
+            "platforms" => [
+              "x86_64-linux",
+              %{"cpu" => %{"bits" => 64, "family" => "mips"}, "abi" => %{"abi" => "n32"}}
+            ],
+            "badPlatforms" => [
+              %{"kernel" => %{"families" => %{"darwin" => %{"name" => "darwin"}}}}
+            ]
           }
         },
         "empty_version" => %{
@@ -110,6 +137,26 @@ defmodule Tracker.PackageStreamFixtures do
   """
   def wrong_version_br do
     %{"version" => 99, "packages" => %{}}
+    |> Jason.encode!()
+    |> ExBrotli.compress!()
+  end
+
+  @doc """
+  Returns a brotli-compressed packages.json with a platform pattern that no
+  named pattern or conjunction matches.
+  """
+  def unknown_platform_br do
+    %{
+      "version" => 2,
+      "packages" => %{
+        "mystery" => %{
+          "version" => "1.0",
+          "meta" => %{
+            "platforms" => [%{"cpu" => %{"family" => "frobnitz"}}]
+          }
+        }
+      }
+    }
     |> Jason.encode!()
     |> ExBrotli.compress!()
   end
