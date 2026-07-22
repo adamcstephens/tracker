@@ -55,23 +55,29 @@ defmodule Tracker.Nixpkgs.Change do
       end
 
       filter expr(
-               if not is_nil(^arg(:search)) and ^arg(:search) != "" do
-                 fragment("strict_word_similarity(?, ?) > 0.4", ^arg(:search), title) or
-                   fragment("strict_word_similarity(?, ?) > 0.4", ^arg(:search), author) or
-                   contains(title, ^arg(:search)) or contains(author, ^arg(:search))
+               # an all-digit search is a PR number: exact match, ignoring lens/base_ref
+               if not is_nil(^arg(:search)) and
+                    fragment("?::text ~ '^[0-9]{1,9}$'", ^arg(:search)) do
+                 number == fragment("?::text::integer", ^arg(:search))
                else
-                 true
-               end and
-                 if not is_nil(^arg(:base_ref)) and ^arg(:base_ref) != "" do
-                   base_ref == ^arg(:base_ref)
+                 if not is_nil(^arg(:search)) and ^arg(:search) != "" do
+                   fragment("strict_word_similarity(?, ?) > 0.4", ^arg(:search), title) or
+                     fragment("strict_word_similarity(?, ?) > 0.4", ^arg(:search), author) or
+                     contains(title, ^arg(:search)) or contains(author, ^arg(:search))
                  else
                    true
                  end and
-                 if not is_nil(^arg(:channel_name)) do
-                   exists(change_branches, branch_name == ^arg(:channel_name))
-                 else
-                   true
-                 end
+                   if not is_nil(^arg(:base_ref)) and ^arg(:base_ref) != "" do
+                     base_ref == ^arg(:base_ref)
+                   else
+                     true
+                   end and
+                   if not is_nil(^arg(:channel_name)) do
+                     exists(change_branches, branch_name == ^arg(:channel_name))
+                   else
+                     true
+                   end
+               end
              )
     end
 

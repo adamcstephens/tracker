@@ -206,6 +206,105 @@ defmodule Tracker.Nixpkgs.ChangeTest do
     end
   end
 
+  describe "list/3 number search" do
+    setup do
+      channel =
+        Channel.create!(%{
+          name: "nixos-unstable",
+          display_name: "nixos-unstable",
+          status: :active,
+          is_stable: false
+        })
+
+      cr =
+        ChannelRevision
+        |> Ash.Changeset.for_create(:create, %{
+          channel_id: channel.id,
+          revision: "bbb2222",
+          released_at: ~U[2025-01-01 00:00:00Z]
+        })
+        |> Ash.create!()
+
+      id_map =
+        Change.bulk_upsert_all([
+          %{
+            number: 6101,
+            title: "first change",
+            state: :merged,
+            author: "alice",
+            base_ref: "master",
+            url: "https://github.com/NixOS/nixpkgs/pull/6101"
+          },
+          %{
+            number: 6102,
+            title: "second change",
+            state: :merged,
+            author: "bob",
+            base_ref: "master",
+            url: "https://github.com/NixOS/nixpkgs/pull/6102"
+          }
+        ])
+
+      Tracker.Nixpkgs.ChangeBranch.create!(%{
+        change_id: Map.fetch!(id_map, 6101),
+        branch_name: "nixos-unstable",
+        channel_revision_id: cr.id
+      })
+
+      %{
+        channel: channel,
+        first_id: Map.fetch!(id_map, 6101),
+        second_id: Map.fetch!(id_map, 6102)
+      }
+    end
+
+    test "matches the exact PR number", %{first_id: first_id, second_id: second_id} do
+      page = Change.list!("6101", nil, nil, page: [count: true])
+
+      ids = Enum.map(page.results, & &1.id)
+      assert first_id in ids
+      refute second_id in ids
+    end
+
+    test "does not prefix-match numbers" do
+      page = Change.list!("610", nil, nil, page: [count: true])
+
+      assert page.results == []
+    end
+
+    test "bypasses the channel filter", %{channel: channel, second_id: second_id} do
+      page = Change.list!("6102", nil, channel.name, page: [count: true])
+
+      assert [%{id: ^second_id}] = page.results
+    end
+
+    test "bypasses the base_ref filter", %{first_id: first_id} do
+      page = Change.list!("6101", "release-25.11", nil, page: [count: true])
+
+      assert [%{id: ^first_id}] = page.results
+    end
+
+    test "non-numeric search still matches titles", %{first_id: first_id, second_id: second_id} do
+      page = Change.list!("first", nil, nil, page: [count: true])
+
+      ids = Enum.map(page.results, & &1.id)
+      assert first_id in ids
+      refute second_id in ids
+    end
+
+    test "mixed alphanumeric search does not exact-match numbers" do
+      page = Change.list!("61x1", nil, nil, page: [count: true])
+
+      assert page.results == []
+    end
+
+    test "digit strings beyond integer range do not crash" do
+      page = Change.list!("99999999999", nil, nil, page: [count: true])
+
+      assert page.results == []
+    end
+  end
+
   describe "PR lifecycle fields" do
     test "accepts :draft state" do
       id_map =

@@ -120,6 +120,18 @@ defmodule TrackerWeb.ChangeLive.IndexTest do
     refute html =~ "5002"
   end
 
+  test "search filters by PR number", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/changes")
+
+    html =
+      view
+      |> element("form.app-search")
+      |> render_change(%{"search" => "5002"})
+
+    assert html =~ "Backport"
+    refute html =~ "5001"
+  end
+
   test "base_ref dropdown filters by branch", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/changes?base_ref=release-25.11")
 
