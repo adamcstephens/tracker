@@ -531,22 +531,15 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorkerTest do
 
   describe "checkpoint/0" do
     test "returns max gh_updated_at minus 60s overlap when newer than the 90-day floor" do
+      newer = DateTime.utc_now() |> DateTime.add(-5, :day) |> DateTime.truncate(:second)
+      older = DateTime.add(newer, -10, :day)
+
       Change.bulk_upsert_all([
-        %{
-          number: 9101,
-          title: "older",
-          state: :open,
-          gh_updated_at: ~U[2026-04-10 00:00:00Z]
-        },
-        %{
-          number: 9102,
-          title: "newer",
-          state: :open,
-          gh_updated_at: ~U[2026-04-20 00:00:00Z]
-        }
+        %{number: 9101, title: "older", state: :open, gh_updated_at: older},
+        %{number: 9102, title: "newer", state: :open, gh_updated_at: newer}
       ])
 
-      assert ChangeDiscoveryWorker.checkpoint() == ~U[2026-04-19 23:59:00Z]
+      assert ChangeDiscoveryWorker.checkpoint() == DateTime.add(newer, -60, :second)
     end
 
     test "returns the 90-day floor when the DB is empty" do
