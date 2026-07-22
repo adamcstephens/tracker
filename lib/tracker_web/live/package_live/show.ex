@@ -633,29 +633,6 @@ defmodule TrackerWeb.PackageLive.Show do
     end)
   end
 
-  # The span metadata fields surfaced on this page; pname is stored on spans
-  # but not displayed, and doesn't count towards a span "having" metadata.
-  @meta_fields [
-    :description,
-    :long_description,
-    :homepage,
-    :position,
-    :licenses,
-    :main_program,
-    :outputs,
-    :default_output,
-    :broken,
-    :unfree,
-    :insecure,
-    :unsupported,
-    :known_vulnerabilities,
-    :platforms,
-    :bad_platforms,
-    :changelog,
-    :download_page,
-    :source_provenance
-  ]
-
   @availability_flags [:broken, :unfree, :insecure, :unsupported]
 
   defp availability_flags(package_meta) do
@@ -669,7 +646,10 @@ defmodule TrackerWeb.PackageLive.Show do
   defp load_current_meta(package_id, lens_channel_id) do
     span = lens_meta_span(package_id, lens_channel_id) || metadata_channel_span(package_id)
 
-    Map.new(@meta_fields, &{&1, span && Map.get(span, &1)})
+    Map.new(
+      Tracker.Nixpkgs.PackageHistory.metadata_fields(),
+      &{&1, span && Map.get(span, &1)}
+    )
   end
 
   defp lens_meta_span(_package_id, nil), do: nil
@@ -677,12 +657,8 @@ defmodule TrackerWeb.PackageLive.Show do
   defp lens_meta_span(package_id, channel_id) do
     case current_meta_span(package_id, channel_id) do
       nil -> nil
-      span -> if meta_empty?(span), do: nil, else: span
+      span -> if Tracker.Nixpkgs.PackageHistory.metadata_missing?(span), do: nil, else: span
     end
-  end
-
-  defp meta_empty?(span) do
-    Enum.all?(@meta_fields, &is_nil(Map.get(span, &1)))
   end
 
   defp metadata_channel_span(package_id) do

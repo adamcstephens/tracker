@@ -203,6 +203,106 @@ defmodule TrackerWeb.PackageLive.IndexTest do
     end
   end
 
+  describe "lens-aware descriptions (trk-352)" do
+    setup do
+      meta_channel =
+        Tracker.Nixpkgs.Channel.create!(%{
+          name: Tracker.Ingestion.StepGraph.metadata_channel(),
+          display_name: "unstable-small",
+          status: :active,
+          is_stable: false
+        })
+
+      meta_cr =
+        Tracker.Nixpkgs.ChannelRevision
+        |> Ash.Changeset.for_create(:create, %{
+          channel_id: meta_channel.id,
+          revision: "eee5555",
+          released_at: ~U[2025-01-05 00:00:00Z]
+        })
+        |> Ash.create!()
+
+      lens_channel =
+        Tracker.Nixpkgs.Channel.create!(%{
+          name: "nixos-24.05",
+          display_name: "nixos-24.05",
+          status: :active,
+          is_stable: true
+        })
+
+      lens_cr =
+        Tracker.Nixpkgs.ChannelRevision
+        |> Ash.Changeset.for_create(:create, %{
+          channel_id: lens_channel.id,
+          revision: "fff6666",
+          released_at: ~U[2025-01-06 00:00:00Z]
+        })
+        |> Ash.create!()
+
+      pkg_both =
+        Tracker.Nixpkgs.Package
+        |> Ash.Changeset.for_create(:create, %{attribute: "lens-desc-pkg"})
+        |> Ash.create!()
+
+      pkg_premeta =
+        Tracker.Nixpkgs.Package
+        |> Ash.Changeset.for_create(:create, %{attribute: "premeta-desc-pkg"})
+        |> Ash.create!()
+
+      Tracker.Fixtures.apply_package_revision!(meta_cr, [
+        {pkg_both, %{version: "1.0", description: "Meta description"}},
+        {pkg_premeta, %{version: "1.0", description: "Fallback description"}}
+      ])
+
+      Tracker.Fixtures.apply_package_revision!(lens_cr, [
+        {pkg_both, %{version: "1.0", description: "Lens description"}},
+        {pkg_premeta, "1.0"}
+      ])
+
+      %{lens_channel: lens_channel}
+    end
+
+    test "prefers the lens channel's description", %{conn: conn, lens_channel: lens_channel} do
+      conn = put_connect_params(conn, %{"_lens_channel" => lens_channel.name})
+      {:ok, _view, html} = live(conn, ~p"/packages")
+
+      assert html =~ "Lens description"
+      refute html =~ "Meta description"
+    end
+
+    test "falls back to the metadata channel when the lens span has no metadata", %{
+      conn: conn,
+      lens_channel: lens_channel
+    } do
+      conn = put_connect_params(conn, %{"_lens_channel" => lens_channel.name})
+      {:ok, _view, html} = live(conn, ~p"/packages")
+
+      assert html =~ "premeta-desc-pkg"
+      assert html =~ "Fallback description"
+    end
+
+    test "all-channels lens reads from the metadata channel", %{conn: conn} do
+      conn = put_connect_params(conn, %{"_lens_channel" => "all"})
+      {:ok, _view, html} = live(conn, ~p"/packages")
+
+      assert html =~ "Meta description"
+      refute html =~ "Lens description"
+    end
+
+    test "lens switch swaps the shown description", %{conn: conn, lens_channel: lens_channel} do
+      conn = put_connect_params(conn, %{"_lens_channel" => lens_channel.name})
+      {:ok, view, html} = live(conn, ~p"/packages")
+
+      assert html =~ "Lens description"
+
+      send(view.pid, {:set_lens, "all", ""})
+      html = render(view)
+
+      assert html =~ "Meta description"
+      refute html =~ "Lens description"
+    end
+  end
+
   describe "fuzzy matching" do
     setup do
       for name <- ["python311", "python312", "numpy", "numpy-stubs"] do

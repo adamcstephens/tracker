@@ -534,7 +534,12 @@ defmodule TrackerWeb.ChangeLive.Show do
     total_pages = if package_count > 0, do: ceil(package_count / tp.page_size), else: 0
 
     socket
-    |> stream(:packages, TrackerWeb.PackageRows.with_current_descriptions(page.results),
+    |> stream(
+      :packages,
+      TrackerWeb.PackageRows.with_current_descriptions(
+        page.results,
+        TrackerWeb.Lens.channel_id(socket.assigns[:lens])
+      ),
       reset: true
     )
     |> assign(:package_count, package_count)

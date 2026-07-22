@@ -1,9 +1,10 @@
 defmodule TrackerWeb.PackageRows do
   @moduledoc """
-  Decorates identity-only `Package` rows with current-channel metadata for
-  browse tables. Package metadata (description, …) lives on spans now; the
-  current value is served from the open span in the metadata channel via the
-  `package_spans_current` partial index.
+  Decorates identity-only `Package` rows with current metadata for browse
+  tables. Package metadata (description, …) lives on spans; the current value
+  is served from the open span in the lens channel, falling back to the
+  metadata channel (all-channels lens, package absent from the lens channel,
+  or spans written before metadata was ingested on every channel).
   """
 
   alias Tracker.Ingestion.StepGraph
@@ -13,34 +14,38 @@ defmodule TrackerWeb.PackageRows do
   Maps packages to display rows carrying their current description:
   `%{id:, attribute:, inserted_at:, description:}`.
   """
-  def with_current_descriptions([]), do: []
+  def with_current_descriptions([], _lens_channel_id), do: []
 
-  def with_current_descriptions(packages) do
-    descriptions =
-      case metadata_channel_id() do
-        nil ->
-          %{}
-
-        channel_id ->
-          channel_id
-          |> PackageHistory.current_metadata(Enum.map(packages, & &1.id))
-          |> Map.new(fn {package_id, span} -> {package_id, span.description} end)
-      end
+  def with_current_descriptions(packages, lens_channel_id) do
+    package_ids = Enum.map(packages, & &1.id)
+    lens_spans = lens_spans(lens_channel_id, package_ids)
+    fallback_spans = metadata_channel_spans(package_ids -- Map.keys(lens_spans))
+    spans = Map.merge(fallback_spans, lens_spans)
 
     Enum.map(packages, fn package ->
+      span = Map.get(spans, package.id)
+
       %{
         id: package.id,
         attribute: package.attribute,
         inserted_at: Map.get(package, :inserted_at),
-        description: Map.get(descriptions, package.id)
+        description: span && span.description
       }
     end)
   end
 
-  defp metadata_channel_id do
+  defp lens_spans(nil, _package_ids), do: %{}
+
+  defp lens_spans(channel_id, package_ids) do
+    channel_id
+    |> PackageHistory.current_metadata(package_ids)
+    |> Map.reject(fn {_package_id, span} -> PackageHistory.metadata_missing?(span) end)
+  end
+
+  defp metadata_channel_spans(package_ids) do
     case Channel.by_name(StepGraph.metadata_channel()) do
-      {:ok, channel} -> channel.id
-      _ -> nil
+      {:ok, channel} -> PackageHistory.current_metadata(channel.id, package_ids)
+      _ -> %{}
     end
   end
 end

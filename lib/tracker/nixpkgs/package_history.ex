@@ -192,6 +192,43 @@ defmodule Tracker.Nixpkgs.PackageHistory do
     |> Map.new(&{&1.package_id, &1})
   end
 
+  # pname is stored on spans but doesn't count towards a span "having"
+  # metadata — it duplicates the attribute for display purposes.
+  @metadata_fields [
+    :description,
+    :long_description,
+    :homepage,
+    :position,
+    :licenses,
+    :main_program,
+    :outputs,
+    :default_output,
+    :broken,
+    :unfree,
+    :insecure,
+    :unsupported,
+    :known_vulnerabilities,
+    :platforms,
+    :bad_platforms,
+    :changelog,
+    :download_page,
+    :source_provenance
+  ]
+
+  @doc "The span fields that carry package metadata (as opposed to identity/version)."
+  @spec metadata_fields() :: [atom()]
+  def metadata_fields, do: @metadata_fields
+
+  @doc """
+  Whether a span carries no metadata at all — true for spans written before
+  metadata was ingested on every channel. Such spans should fall back to the
+  metadata channel for display.
+  """
+  @spec metadata_missing?(PackageSpan.t()) :: boolean()
+  def metadata_missing?(span) do
+    Enum.all?(@metadata_fields, &is_nil(Map.get(span, &1)))
+  end
+
   @doc """
   The package's version at every revision of a channel (the "all revisions"
   view), reconstructed by range-containment. Returns

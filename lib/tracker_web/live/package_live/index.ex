@@ -122,7 +122,7 @@ defmodule TrackerWeb.PackageLive.Index do
       )
 
     pagination = TableParams.apply_pagination(tp, page, :packages)
-    rows = TrackerWeb.PackageRows.with_current_descriptions(pagination.stream_results)
+    rows = TrackerWeb.PackageRows.with_current_descriptions(pagination.stream_results, channel_id)
 
     socket
     |> stream(:packages, rows, reset: true)
