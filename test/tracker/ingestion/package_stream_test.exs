@@ -11,10 +11,10 @@ defmodule Tracker.Ingestion.PackageStreamTest do
       packages = collect_packages()
       attrs = Map.keys(packages)
 
-      # Should have 8 valid packages (hello, platform_patterns, multi_homepage,
-      # complex_licenses, string_license, single_license_object,
+      # Should have 9 valid packages (hello, platform_patterns, multi_homepage,
+      # multi_changelog, complex_licenses, string_license, single_license_object,
       # with_maintainers, no_meta)
-      assert length(attrs) == 8
+      assert length(attrs) == 9
 
       assert "hello" in attrs
       assert "no_meta" in attrs
@@ -50,6 +50,18 @@ defmodule Tracker.Ingestion.PackageStreamTest do
       packages = collect_packages()
 
       assert packages["multi_homepage"][:homepage] == ["https://a.com", "https://b.com"]
+    end
+
+    test "passes through list changelog unchanged" do
+      br = Tracker.PackageStreamFixtures.small_packages_br()
+      :ok = PackageStream.stream_packages(br, self())
+
+      packages = collect_packages()
+
+      assert packages["multi_changelog"][:changelog] == [
+               "https://a.com/History.txt",
+               "https://b.com/releases/tag/v1"
+             ]
     end
 
     test "extracts licenses with spdxId > shortName > fullName fallback" do
@@ -126,7 +138,7 @@ defmodule Tracker.Ingestion.PackageStreamTest do
       assert pkg[:main_program] == "hello"
       assert pkg[:broken] == false
       assert pkg[:unfree] == false
-      assert pkg[:changelog] == "https://www.gnu.org/software/hello/NEWS"
+      assert pkg[:changelog] == ["https://www.gnu.org/software/hello/NEWS"]
       assert pkg[:download_page] == "https://ftp.gnu.org/gnu/hello/"
       assert pkg[:source_provenance] == ["fromSource"]
       assert pkg[:platforms] == ["x86_64-linux", "aarch64-darwin"]
@@ -283,7 +295,7 @@ defmodule Tracker.Ingestion.PackageStreamTest do
       packages = collect_packages()
       assert :ok = Task.await(task, 10_000)
 
-      assert map_size(packages) == 8
+      assert map_size(packages) == 9
       assert packages["hello"][:version] == "2.12.1"
     end
 

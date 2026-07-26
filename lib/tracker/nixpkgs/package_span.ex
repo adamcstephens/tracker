@@ -183,7 +183,7 @@ defmodule Tracker.Nixpkgs.PackageSpan do
     attribute :known_vulnerabilities, {:array, :string}, public?: true
     attribute :platforms, {:array, :string}, public?: true
     attribute :bad_platforms, {:array, :string}, public?: true
-    attribute :changelog, :string, public?: true
+    attribute :changelog, {:array, :string}, public?: true
     attribute :download_page, :string, public?: true
     attribute :source_provenance, {:array, :string}, public?: true
 

@@ -106,7 +106,7 @@ defmodule Tracker.Ingestion.Steps.LoadPackagesTest do
     assert span.unfree == false
     assert is_nil(span.insecure)
     assert is_nil(span.unsupported)
-    assert span.changelog == "https://www.gnu.org/software/hello/NEWS"
+    assert span.changelog == ["https://www.gnu.org/software/hello/NEWS"]
     assert span.download_page == "https://ftp.gnu.org/gnu/hello/"
     assert span.source_provenance == ["fromSource"]
     assert span.platforms == ["x86_64-linux", "aarch64-darwin"]

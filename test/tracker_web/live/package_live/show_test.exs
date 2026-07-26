@@ -160,7 +160,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
            known_vulnerabilities: ["CVE-2024-0001: overflow"],
            platforms: ["x86_64-linux", "mips64n32"],
            bad_platforms: ["darwin"],
-           changelog: "https://example.com/NEWS",
+           changelog: ["https://example.com/NEWS", "https://example.com/CHANGELOG"],
            download_page: "https://example.com/download",
            source_provenance: ["binaryNativeCode"]
          }}
@@ -229,6 +229,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
 
       assert html =~ "Changelog"
       assert html =~ ~s|href="https://example.com/NEWS"|
+      assert html =~ ~s|href="https://example.com/CHANGELOG"|
       assert html =~ "Download page"
       assert html =~ ~s|href="https://example.com/download"|
     end

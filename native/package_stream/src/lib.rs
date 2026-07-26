@@ -95,7 +95,8 @@ struct PackageMeta {
     bad_platforms_raw: Option<Vec<Value>>,
     #[serde(skip)]
     bad_platforms: Option<Vec<String>>,
-    changelog: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_changelog")]
+    changelog: Option<Vec<String>>,
     #[serde(rename = "downloadPage")]
     download_page: Option<String>,
     #[serde(
@@ -148,6 +149,25 @@ where
         opt.map(|raw| match raw {
             HomepageRaw::Single(s) => vec![s],
             HomepageRaw::Multiple(v) => v,
+        })
+    })
+}
+
+fn deserialize_changelog<'de, D>(deserializer: D) -> Result<Option<Vec<String>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(serde::Deserialize)]
+    #[serde(untagged)]
+    enum ChangelogRaw {
+        Single(String),
+        Multiple(Vec<String>),
+    }
+
+    Option::<ChangelogRaw>::deserialize(deserializer).map(|opt| {
+        opt.map(|raw| match raw {
+            ChangelogRaw::Single(s) => vec![s],
+            ChangelogRaw::Multiple(v) => v,
         })
     })
 }
@@ -540,7 +560,7 @@ fn encode_package_fields<'a>(env: Env<'a>, entry: &PackageEntry) -> Term<'a> {
         }
         if let Some(ref changelog) = meta.changelog {
             keys.push(atoms::changelog().encode(env));
-            vals.push(changelog.as_str().encode(env));
+            vals.push(encode_string_list(env, changelog));
         }
         if let Some(ref download_page) = meta.download_page {
             keys.push(atoms::download_page().encode(env));
@@ -989,6 +1009,39 @@ mod tests {
         assert_eq!(entry.meta.unwrap().homepage, None);
     }
 
+    // Test changelog normalization: bare string -> vec
+    #[test]
+    fn test_changelog_string_normalized_to_list() {
+        let json = r#"{"version": "1.0", "meta": {"changelog": "https://example.com/NEWS"}}"#;
+        let entry: PackageEntry = serde_json::from_str(json).unwrap();
+        assert_eq!(
+            entry.meta.unwrap().changelog,
+            Some(vec!["https://example.com/NEWS".to_string()])
+        );
+    }
+
+    // Test changelog normalization: list passes through (cryptopp ships two)
+    #[test]
+    fn test_changelog_list_passes_through() {
+        let json = r#"{"version": "1.0", "meta": {"changelog": ["https://a.com/History.txt", "https://b.com/releases/tag/v1"]}}"#;
+        let entry: PackageEntry = serde_json::from_str(json).unwrap();
+        assert_eq!(
+            entry.meta.unwrap().changelog,
+            Some(vec![
+                "https://a.com/History.txt".to_string(),
+                "https://b.com/releases/tag/v1".to_string()
+            ])
+        );
+    }
+
+    // Test changelog normalization: null -> None
+    #[test]
+    fn test_changelog_null() {
+        let json = r#"{"version": "1.0", "meta": {"changelog": null}}"#;
+        let entry: PackageEntry = serde_json::from_str(json).unwrap();
+        assert_eq!(entry.meta.unwrap().changelog, None);
+    }
+
     // Test license normalization: bare string -> vec
     #[test]
     fn test_license_string_normalized() {
@@ -1162,7 +1215,7 @@ mod tests {
         );
         assert_eq!(
             meta.changelog,
-            Some("https://example.com/changelog".to_string())
+            Some(vec!["https://example.com/changelog".to_string()])
         );
         assert_eq!(
             meta.download_page,

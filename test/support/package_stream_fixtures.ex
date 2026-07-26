@@ -71,6 +71,12 @@ defmodule Tracker.PackageStreamFixtures do
             "homepage" => ["https://a.com", "https://b.com"]
           }
         },
+        "multi_changelog" => %{
+          "version" => "1.0",
+          "meta" => %{
+            "changelog" => ["https://a.com/History.txt", "https://b.com/releases/tag/v1"]
+          }
+        },
         "complex_licenses" => %{
           "version" => "1.0",
           "meta" => %{

@@ -65,9 +65,11 @@ defmodule TrackerWeb.PackageLive.Show do
         {Enum.join(@package_meta.outputs, ", ")}<span :if={@package_meta.default_output}> (default: {@package_meta.default_output})</span>
       </:item>
       <:item :if={@package_meta.changelog} title="Changelog">
-        <a href={@package_meta.changelog} target="_blank" rel="noopener noreferrer">
-          {@package_meta.changelog}
-        </a>
+        <span :for={url <- @package_meta.changelog}>
+          <a href={url} target="_blank" rel="noopener noreferrer">
+            {url}
+          </a>
+        </span>
       </:item>
       <:item :if={@package_meta.download_page} title="Download page">
         <a href={@package_meta.download_page} target="_blank" rel="noopener noreferrer">
