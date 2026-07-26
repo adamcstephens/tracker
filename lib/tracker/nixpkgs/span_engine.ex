@@ -17,8 +17,13 @@ defmodule Tracker.Nixpkgs.SpanEngine do
 
   alias Tracker.Nixpkgs.SpanEngine.Spec
 
-  # Bounded so each statement stays under the bind-param limit and DB timeout.
+  # Bounded so each statement stays under the DB timeout.
   @default_batch_size 5_000
+
+  # Postgres refuses a statement carrying more than 65_535 bind parameters, and
+  # an insert spends one per column per row — so a row count alone can't bound a
+  # statement: widening the payload silently walks it into the ceiling.
+  @max_bind_params 65_535
 
   @doc """
   Applies one revision's `incoming` set to the channel's spans at `released_at`.
@@ -190,6 +195,10 @@ defmodule Tracker.Nixpkgs.SpanEngine do
 
     take = spec.key_columns ++ spec.payload_columns
 
+    # channel_id, valid, inserted_at, updated_at ride along on every row.
+    columns_per_row = length(take) + 4
+    rows_per_insert = min(batch_size, div(@max_bind_params, columns_per_row))
+
     # Deterministic order avoids lock-ordering deadlocks.
     items
     |> Enum.sort_by(spec.key_fn)
@@ -201,7 +210,7 @@ defmodule Tracker.Nixpkgs.SpanEngine do
       |> Map.put(:inserted_at, now)
       |> Map.put(:updated_at, now)
     end)
-    |> Enum.chunk_every(batch_size)
+    |> Enum.chunk_every(rows_per_insert)
     |> Enum.each(fn batch -> Tracker.Repo.insert_all(table, batch) end)
 
     :ok

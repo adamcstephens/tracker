@@ -158,6 +158,46 @@ defmodule Tracker.Nixpkgs.SpanEngineTest do
       assert Enum.all?(recon, fn {_k, v} -> v.version == "2.0" end)
     end
 
+    test "keeps a wide payload under the bind-parameter limit at the default batch size" do
+      # Postgres caps a statement at 65_535 bind parameters. PackageSpan's full
+      # payload is 27 columns per row, so a fixed 5_000-row batch overflows it.
+      channel = channel!()
+
+      wide_spec =
+        Spec.new(
+          resource: PackageSpan,
+          key_columns: [:package_id],
+          payload_columns: PackageSpan.payload_columns()
+        )
+
+      now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+      count = 2_500
+
+      {_, packages} =
+        Tracker.Repo.insert_all(
+          "packages",
+          Enum.map(1..count, fn i ->
+            %{
+              attribute: "wide-pkg-#{System.unique_integer([:positive])}-#{i}",
+              inserted_at: now,
+              updated_at: now
+            }
+          end),
+          returning: [:id]
+        )
+
+      items =
+        Enum.map(packages, fn %{id: id} ->
+          wide_spec.payload_columns
+          |> Map.new(&{&1, nil})
+          |> Map.merge(%{package_id: id, version: "1.0"})
+        end)
+
+      SpanEngine.diff_and_apply(wide_spec, channel.id, @t1, items)
+
+      assert SpanEngine.reconstruct(wide_spec, channel.id, @t1) |> map_size() == count
+    end
+
     test "raises (no silent success) when a span write fails" do
       pkg = package!()
 
