@@ -25,6 +25,11 @@ defmodule Tracker.Nixpkgs.SpanEngine do
   # statement: widening the payload silently walks it into the ceiling.
   @max_bind_params 65_535
 
+  # Close-before-open has to be one transaction, so the budget has to cover the
+  # worst case rather than the common one: a fingerprint change closes *and*
+  # reopens every span on the channel, ~288k row-writes at nixpkgs scale.
+  @transaction_timeout :timer.minutes(5)
+
   @doc """
   Applies one revision's `incoming` set to the channel's spans at `released_at`.
 
@@ -74,7 +79,7 @@ defmodule Tracker.Nixpkgs.SpanEngine do
              close(spec, changed_ids ++ removed_ids, released_at, batch_size)
              open(spec, channel_id, released_at, to_open, batch_size)
            end,
-           timeout: :timer.seconds(60)
+           timeout: @transaction_timeout
          ) do
       {:ok, _} ->
         :ok
