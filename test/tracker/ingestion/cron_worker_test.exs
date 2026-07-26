@@ -175,6 +175,60 @@ defmodule Tracker.Ingestion.CronWorkerTest do
       assert length(Pipeline.for_channel!(channel.id)) == before + 1
     end
 
+    test "retries a failed pipeline instead of re-creating its row", %{channel: channel} do
+      # The wedge: a failed pipeline used to look un-ingested, so every poll
+      # tried to insert a second row for the same revision and the job died on
+      # the unique_pipeline_channel_revision identity.
+      failed_release = %{
+        base_url: "https://releases.nixos.org/nixos/unstable/nixos-25.05pre-bbb2222",
+        released_at: ~U[2025-06-10 00:00:00Z],
+        revision: "bbb2222" <> String.duplicate("0", 33)
+      }
+
+      new_release = %{
+        base_url: "https://releases.nixos.org/nixos/unstable/nixos-25.05pre-ccc2222",
+        released_at: ~U[2025-06-20 00:00:00Z],
+        revision: @new_revision
+      }
+
+      Release.upsert!(Map.put(failed_release, :channel_id, channel.id))
+
+      run = IngestionRun.create!(%{type: :cron_update, started_at: DateTime.utc_now()})
+
+      failed =
+        Pipeline.create!(%{
+          channel_id: channel.id,
+          revision: failed_release.revision,
+          base_url: failed_release.base_url,
+          released_at: failed_release.released_at,
+          active_steps: [:create_revision, :load_packages, :detect_package_events, :finalize],
+          sequence: 0,
+          ingestion_run_id: run.id
+        })
+        |> Pipeline.start!()
+        |> Pipeline.mark_failed!(:load_packages, "PackageStream NIF error")
+
+      Application.put_env(
+        :tracker,
+        :releases_fetcher,
+        fn "nixos-unstable" -> [failed_release, new_release] end
+      )
+
+      Req.Test.stub(@stub, fn conn ->
+        Plug.Conn.send_resp(conn, 200, @new_revision <> "\n")
+      end)
+
+      assert :ok = perform_job(CronWorker, %{}, queue: :ingestion)
+
+      retried = Ash.get!(Pipeline, failed.id)
+      assert retried.status == :running
+      assert retried.retry_count == 1
+
+      assert [_] =
+               Pipeline.for_channel!(channel.id)
+               |> Enum.filter(&(&1.revision == failed_release.revision))
+    end
+
     test "sends If-None-Match and If-Modified-Since from stored pointer", %{channel: channel} do
       Channel.put_pointer!(channel, %{
         pointer_etag: ~s("prev-etag"),

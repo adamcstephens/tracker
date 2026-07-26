@@ -73,7 +73,6 @@ defmodule Tracker.Ingestion.CronWorker do
 
   defp pipeline_exists?(channel_id, revision) do
     case Pipeline.find(channel_id, revision) do
-      {:ok, %Pipeline{status: :failed}} -> false
       {:ok, %Pipeline{}} -> true
       _ -> false
     end

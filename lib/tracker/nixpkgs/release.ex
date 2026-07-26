@@ -99,18 +99,19 @@ defmodule Tracker.Nixpkgs.Release do
     end
 
     read :without_pipeline do
-      description "Known releases on a channel with no non-failed ingestion pipeline, oldest first."
+      description "Known releases on a channel with no ingestion pipeline at all, oldest first."
 
       argument :channel_id, :integer, allow_nil?: false
 
       prepare build(sort: [released_at: :asc])
 
+      # A failed pipeline still occupies its revision: retrying it is
+      # `PipelineStarter.advance_channel/1`'s job, never a second row.
       filter expr(
                channel_id == ^arg(:channel_id) and
                  not exists(
                    Tracker.Ingestion.Pipeline,
-                   channel_id == parent(channel_id) and revision == parent(revision) and
-                     status != :failed
+                   channel_id == parent(channel_id) and revision == parent(revision)
                  )
              )
     end

@@ -18,12 +18,25 @@ defmodule Tracker.Ingestion.Pipeline do
     define :set_channel_revision_id, args: [:channel_revision_id]
     define :mark_completed
     define :mark_failed, args: [:failed_step, :error]
+    define :mark_stuck, args: [:failed_step, :error]
+    define :clear_retries
     define :retry_from_step
     define :last_completed_for_channel, args: [:channel_id]
     define :for_channel, args: [:channel_id]
     define :next_pending_for_channel, args: [:channel_id]
+    define :oldest_incomplete_for_channel, args: [:channel_id], not_found_error?: false
     define :for_run, args: [:ingestion_run_id]
   end
+
+  @max_auto_retries 3
+
+  @doc """
+  How many times the cron may re-drive a failed pipeline before it goes
+  `:stuck`. Counted as consecutive failures, so any completed step restores the
+  full budget.
+  """
+  @spec max_auto_retries() :: pos_integer()
+  def max_auto_retries, do: @max_auto_retries
 
   actions do
     defaults [:read]
@@ -64,6 +77,16 @@ defmodule Tracker.Ingestion.Pipeline do
       # order to satisfy the predecessor chain.
       prepare build(sort: [{:released_at, :asc}, {:sequence, :asc}], limit: 1)
       filter expr(channel_id == ^arg(:channel_id) and status == :pending)
+    end
+
+    read :oldest_incomplete_for_channel do
+      description "The chain head: the oldest pipeline that has not completed."
+      get? true
+
+      argument :channel_id, :integer, allow_nil?: false
+
+      prepare build(sort: [{:released_at, :asc}, {:sequence, :asc}], limit: 1)
+      filter expr(channel_id == ^arg(:channel_id) and status != :completed)
     end
 
     read :last_completed_for_channel do
@@ -113,6 +136,22 @@ defmodule Tracker.Ingestion.Pipeline do
       change set_attribute(:status, :failed)
       change set_attribute(:failed_step, arg(:failed_step))
       change set_attribute(:error, arg(:error))
+      change increment(:retry_count)
+    end
+
+    update :mark_stuck do
+      description "Terminal failure: the auto-retry budget is spent, a human must intervene."
+
+      argument :failed_step, :atom, allow_nil?: false
+      argument :error, :string
+
+      change set_attribute(:status, :stuck)
+      change set_attribute(:failed_step, arg(:failed_step))
+      change set_attribute(:error, arg(:error))
+    end
+
+    update :clear_retries do
+      change set_attribute(:retry_count, 0)
     end
 
     update :retry_from_step do
@@ -143,7 +182,13 @@ defmodule Tracker.Ingestion.Pipeline do
 
     attribute :status, :atom do
       allow_nil? false
-      constraints one_of: [:pending, :running, :completed, :failed]
+      constraints one_of: [:pending, :running, :completed, :failed, :stuck]
+    end
+
+    attribute :retry_count, :integer do
+      description "Consecutive failures; reset whenever a step completes."
+      allow_nil? false
+      default 0
     end
 
     attribute :active_steps, {:array, :atom} do

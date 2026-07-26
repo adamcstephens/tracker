@@ -75,7 +75,7 @@ defmodule Tracker.Ingestion.PipelineStarterTest do
       assert length(pipelines) == 3
     end
 
-    test "skips releases that already have non-failed pipelines", %{channel: channel} do
+    test "skips releases that already have pipelines", %{channel: channel} do
       run = IngestionRun.create!(%{type: :cron_update, started_at: DateTime.utc_now()})
 
       # Completed pipeline for first release
@@ -106,6 +106,130 @@ defmodule Tracker.Ingestion.PipelineStarterTest do
 
       # Only the third release should be created
       assert count == 1
+    end
+  end
+
+  describe "sync_channel/2 with a failed chain head" do
+    setup %{channel: channel} do
+      run = IngestionRun.create!(%{type: :cron_update, started_at: DateTime.utc_now()})
+
+      completed =
+        Pipeline.create!(%{
+          channel_id: channel.id,
+          revision: "aaa1111" <> String.duplicate("0", 33),
+          base_url: "https://releases.nixos.org/nixos/unstable/nixos-25.05pre-aaa1111",
+          released_at: ~U[2025-06-01 00:00:00Z],
+          active_steps: [:create_revision, :load_packages, :detect_package_events, :finalize],
+          sequence: 0,
+          ingestion_run_id: run.id
+        })
+        |> Pipeline.start!()
+        |> Pipeline.mark_completed!()
+
+      failed =
+        Pipeline.create!(%{
+          channel_id: channel.id,
+          revision: "bbb2222" <> String.duplicate("0", 33),
+          base_url: "https://releases.nixos.org/nixos/unstable/nixos-25.05pre-bbb2222",
+          released_at: ~U[2025-06-10 00:00:00Z],
+          active_steps: [:create_revision, :load_packages, :detect_package_events, :finalize],
+          sequence: 1,
+          ingestion_run_id: run.id,
+          predecessor_id: completed.id
+        })
+        |> Pipeline.start!()
+        |> Pipeline.complete_step!(:create_revision)
+        |> Pipeline.mark_failed!(:load_packages, "boom")
+
+      {:ok, failed: failed}
+    end
+
+    test "does not re-create the failed revision's pipeline", %{channel: channel, failed: failed} do
+      {:ok, count} = PipelineStarter.sync_channel(channel)
+
+      # Only the third release is new; the failed one keeps its single row
+      assert count == 1
+
+      assert [_] =
+               Pipeline.for_channel!(channel.id)
+               |> Enum.filter(&(&1.revision == failed.revision))
+    end
+
+    test "retries the failed head from its failed step", %{channel: channel, failed: failed} do
+      {:ok, _count} = PipelineStarter.sync_channel(channel)
+
+      retried = Ash.get!(Pipeline, failed.id)
+
+      assert retried.status == :running
+      assert retried.failed_step == nil
+      assert retried.error == nil
+      assert retried.retry_count == 1
+
+      assert_enqueued(
+        worker: Tracker.Ingestion.StepWorker,
+        args: %{"pipeline_id" => failed.id, "step" => "load_packages"}
+      )
+    end
+
+    test "does not start pipelines behind the failed head", %{channel: channel} do
+      {:ok, _count} = PipelineStarter.sync_channel(channel)
+
+      third =
+        Pipeline.for_channel!(channel.id)
+        |> Enum.find(&(&1.revision == "ccc3333" <> String.duplicate("0", 33)))
+
+      assert third.status == :pending
+    end
+
+    test "advances a channel whose only pipeline has failed" do
+      channel =
+        Channel.create!(%{
+          name: "nixos-25.11",
+          display_name: "NixOS 25.11",
+          status: :active,
+          is_stable: true
+        })
+
+      release = %{
+        base_url: "https://releases.nixos.org/nixos/25.11/nixos-25.11.1-ddd4444",
+        released_at: ~U[2025-06-01 00:00:00Z],
+        revision: "ddd4444" <> String.duplicate("0", 33)
+      }
+
+      Release.upsert!(Map.put(release, :channel_id, channel.id))
+      run = IngestionRun.create!(%{type: :backfill, started_at: DateTime.utc_now()})
+
+      head =
+        Pipeline.create!(%{
+          channel_id: channel.id,
+          revision: release.revision,
+          base_url: release.base_url,
+          released_at: release.released_at,
+          active_steps: [:create_revision, :load_packages, :detect_package_events, :finalize],
+          sequence: 0,
+          ingestion_run_id: run.id
+        })
+        |> Pipeline.start!()
+        |> Pipeline.mark_failed!(:create_revision, "boom")
+
+      assert :noop = PipelineStarter.sync_channel(channel)
+
+      assert Ash.get!(Pipeline, head.id).status == :running
+    end
+
+    test "leaves a stuck head alone", %{channel: channel, failed: failed} do
+      Pipeline.mark_stuck!(failed, :load_packages, "boom")
+
+      {:ok, _count} = PipelineStarter.sync_channel(channel)
+
+      stuck = Ash.get!(Pipeline, failed.id)
+
+      assert stuck.status == :stuck
+
+      refute_enqueued(
+        worker: Tracker.Ingestion.StepWorker,
+        args: %{"pipeline_id" => failed.id, "step" => "load_packages"}
+      )
     end
   end
 

@@ -35,36 +35,35 @@ defmodule Tracker.Ingestion.PipelineStarter do
         [] -> nil
       end
 
-    # If not bootstrap and no completed pipeline, nothing to do
-    if !bootstrap and last_completed == nil do
-      :noop
-    else
-      # Determine cutoff
-      cutoff =
-        cond do
-          last_completed != nil -> last_completed.released_at
-          after_date != nil -> after_date
-          true -> nil
-        end
+    new_releases =
+      if !bootstrap and last_completed == nil do
+        []
+      else
+        # Determine cutoff
+        cutoff =
+          cond do
+            last_completed != nil -> last_completed.released_at
+            after_date != nil -> after_date
+            true -> nil
+          end
 
-      # Known releases (oldest first) without a non-failed pipeline, past cutoff
-      new_releases =
+        # Known releases (oldest first) without any pipeline, past cutoff
         Release.without_pipeline!(channel.id)
         |> Enum.filter(fn r -> cutoff == nil or DateTime.after?(r.released_at, cutoff) end)
-
-      if new_releases == [] do
-        :noop
-      else
-        run_type = if bootstrap, do: :backfill, else: :cron_update
-        run = IngestionRun.create!(%{type: run_type, started_at: DateTime.utc_now()})
-
-        create_pipelines_with_predecessors(run, channel, new_releases, resolver)
-
-        start_first_startable(channel.id)
-
-        {:ok, length(new_releases)}
       end
+
+    if new_releases != [] do
+      run_type = if bootstrap, do: :backfill, else: :cron_update
+      run = IngestionRun.create!(%{type: run_type, started_at: DateTime.utc_now()})
+
+      create_pipelines_with_predecessors(run, channel, new_releases, resolver)
     end
+
+    # Always advance: a channel wedged behind a failed head has nothing new to
+    # create but still needs its head re-driven.
+    advance_channel(channel.id)
+
+    if new_releases == [], do: :noop, else: {:ok, length(new_releases)}
   end
 
   @doc """
@@ -108,20 +107,19 @@ defmodule Tracker.Ingestion.PipelineStarter do
   end
 
   @doc """
-  Retries a failed pipeline from its failed step.
+  Retries a failed or stuck pipeline from its failed step.
+
+  Operator entry point: resets the auto-retry budget and lifts `:stuck`, on the
+  assumption the caller has fixed the cause.
   """
   def retry_pipeline(pipeline) do
-    unless pipeline.status == :failed do
-      raise ArgumentError, "Can only retry failed pipelines, got #{pipeline.status}"
+    unless pipeline.status in [:failed, :stuck] do
+      raise ArgumentError, "Can only retry failed or stuck pipelines, got #{pipeline.status}"
     end
 
-    failed_step = pipeline.failed_step
-
-    Pipeline.retry_from_step!(pipeline)
-
-    StepWorker.enqueue(pipeline, failed_step)
-
-    :ok
+    pipeline
+    |> Pipeline.clear_retries!()
+    |> restart_from_failed_step()
   end
 
   # -- Private --
@@ -186,17 +184,32 @@ defmodule Tracker.Ingestion.PipelineStarter do
     end
   end
 
-  defp start_first_startable(channel_id) do
-    case Pipeline.next_pending_for_channel!(channel_id) do
-      [next | _] ->
-        if startable?(next) do
-          Pipeline.start!(next)
-          StepWorker.enqueue(next, :create_revision)
+  # Drives the chain head forward. `:stuck` and `:running` heads are left alone —
+  # the first is terminal until an operator intervenes, the second is in flight.
+  defp advance_channel(channel_id) do
+    case Pipeline.oldest_incomplete_for_channel(channel_id) do
+      {:ok, %Pipeline{status: :pending} = head} ->
+        if startable?(head) do
+          Pipeline.start!(head)
+          StepWorker.enqueue(head, :create_revision)
         end
 
-      [] ->
+      {:ok, %Pipeline{status: :failed} = head} ->
+        restart_from_failed_step(head)
+
+      _ ->
         :ok
     end
+  end
+
+  defp restart_from_failed_step(pipeline) do
+    failed_step = pipeline.failed_step
+
+    Pipeline.retry_from_step!(pipeline)
+
+    StepWorker.enqueue(pipeline, failed_step)
+
+    :ok
   end
 
   defp startable?(pipeline) do

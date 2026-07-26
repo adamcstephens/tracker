@@ -127,6 +127,9 @@ defmodule Tracker.Ingestion.StepWorker do
   end
 
   defp handle_step_success(pipeline, step) do
+    pipeline =
+      if pipeline.retry_count > 0, do: Pipeline.clear_retries!(pipeline), else: pipeline
+
     updated_pipeline = Pipeline.complete_step!(pipeline, step)
 
     ready =
@@ -156,16 +159,18 @@ defmodule Tracker.Ingestion.StepWorker do
       if job.attempt >= job.max_attempts do
         error_msg = inspect(reason, limit: 500)
 
-        Pipeline.mark_failed!(pipeline, step, error_msg)
+        status = mark_terminal!(pipeline, step, error_msg)
 
         Logger.error(
           msg: "pipeline failed at step",
           pipeline_id: pipeline.id,
           step: step,
+          pipeline_status: status,
+          retry_count: pipeline.retry_count,
           error: error_msg
         )
 
-        {:failed, true}
+        {status, true}
       else
         {pipeline.status, false}
       end
@@ -178,6 +183,18 @@ defmodule Tracker.Ingestion.StepWorker do
     }
 
     {{:error, reason}, summary}
+  end
+
+  # Once the auto-retry budget is spent the pipeline stops being re-drivable by
+  # the cron; only an explicit `PipelineStarter.retry_pipeline/1` lifts it.
+  defp mark_terminal!(pipeline, step, error_msg) do
+    if pipeline.retry_count + 1 > Pipeline.max_auto_retries() do
+      Pipeline.mark_stuck!(pipeline, step, error_msg)
+      :stuck
+    else
+      Pipeline.mark_failed!(pipeline, step, error_msg)
+      :failed
+    end
   end
 
   defp all_complete?(pipeline) do
@@ -219,13 +236,13 @@ defmodule Tracker.Ingestion.StepWorker do
 
     all_done =
       Enum.all?(pipelines, fn p ->
-        p.status in [:completed, :failed]
+        p.status in [:completed, :failed, :stuck]
       end)
 
     if all_done do
       run = Ash.get!(Tracker.Ingestion.IngestionRun, pipeline.ingestion_run_id)
 
-      has_failures = Enum.any?(pipelines, &(&1.status == :failed))
+      has_failures = Enum.any?(pipelines, &(&1.status in [:failed, :stuck]))
 
       if has_failures do
         Tracker.Ingestion.IngestionRun.mark_failed!(run)

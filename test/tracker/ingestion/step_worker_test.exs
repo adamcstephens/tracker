@@ -92,5 +92,68 @@ defmodule Tracker.Ingestion.StepWorkerTest do
       reloaded = Ash.get!(Pipeline, pipeline.id)
       assert reloaded.status == :running
     end
+
+    test "marks the pipeline :stuck once the auto-retry budget is spent", %{pipeline: pipeline} do
+      exhausted =
+        Enum.reduce(1..Pipeline.max_auto_retries(), pipeline, fn _, p ->
+          p
+          |> Pipeline.mark_failed!(:finalize, "boom")
+          |> Pipeline.retry_from_step!()
+        end)
+
+      assert exhausted.retry_count == Pipeline.max_auto_retries()
+
+      assert {:error, _} = StepWorker.perform(job(exhausted, 5))
+
+      reloaded = Ash.get!(Pipeline, pipeline.id)
+      assert reloaded.status == :stuck
+      assert reloaded.failed_step == :finalize
+    end
+  end
+
+  describe "perform/1 with a succeeding step" do
+    setup do
+      channel =
+        Channel.create!(%{
+          name: "nixos-unstable",
+          display_name: "NixOS Unstable",
+          status: :active,
+          is_stable: false
+        })
+
+      run = IngestionRun.create!(%{type: :cron_update, started_at: DateTime.utc_now()})
+
+      pipeline =
+        Pipeline.create!(%{
+          channel_id: channel.id,
+          revision: "eee5555" <> String.duplicate("0", 33),
+          base_url: "https://example.invalid/x",
+          released_at: DateTime.utc_now(),
+          active_steps: [:create_revision, :load_packages],
+          sequence: 0,
+          ingestion_run_id: run.id
+        })
+        |> Pipeline.start!()
+
+      {:ok, pipeline: pipeline}
+    end
+
+    test "restores the auto-retry budget when a step completes", %{pipeline: pipeline} do
+      spent =
+        pipeline
+        |> Pipeline.mark_failed!(:create_revision, "boom")
+        |> Pipeline.retry_from_step!()
+
+      assert spent.retry_count == 1
+
+      StepWorker.perform(%Oban.Job{
+        args: %{"pipeline_id" => spent.id, "step" => "create_revision"},
+        attempt: 1,
+        max_attempts: 5,
+        meta: %{}
+      })
+
+      assert Ash.get!(Pipeline, pipeline.id).retry_count == 0
+    end
   end
 end

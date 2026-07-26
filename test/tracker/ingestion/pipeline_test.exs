@@ -195,6 +195,111 @@ defmodule Tracker.Ingestion.PipelineTest do
       assert updated.failed_step == :load_packages
       assert updated.error == "something broke"
     end
+
+    test "counts consecutive failures", %{channel: channel} do
+      run = create_run!()
+      pipeline = create_pipeline!(run, channel) |> Pipeline.start!()
+
+      assert pipeline.retry_count == 0
+
+      once = Pipeline.mark_failed!(pipeline, :load_packages, "boom")
+      assert once.retry_count == 1
+
+      twice =
+        once
+        |> Pipeline.retry_from_step!()
+        |> Pipeline.mark_failed!(:load_packages, "boom")
+
+      assert twice.retry_count == 2
+    end
+  end
+
+  describe "mark_stuck" do
+    test "records failure state under a terminal status", %{channel: channel} do
+      run = create_run!()
+      pipeline = create_pipeline!(run, channel) |> Pipeline.start!()
+
+      updated = Pipeline.mark_stuck!(pipeline, :load_packages, "boom")
+
+      assert updated.status == :stuck
+      assert updated.failed_step == :load_packages
+      assert updated.error == "boom"
+    end
+
+    test "blocks a successor from starting", %{channel: channel} do
+      run = create_run!()
+
+      predecessor =
+        create_pipeline!(run, channel, %{revision: "pred-stuck", sequence: 0})
+        |> Pipeline.start!()
+        |> Pipeline.mark_stuck!(:load_packages, "boom")
+
+      successor =
+        create_pipeline!(run, channel, %{
+          revision: "next-stuck",
+          sequence: 1,
+          predecessor_id: predecessor.id
+        })
+
+      assert_raise Ash.Error.Invalid, fn ->
+        Pipeline.start!(successor)
+      end
+    end
+  end
+
+  describe "clear_retries" do
+    test "resets the consecutive failure count", %{channel: channel} do
+      run = create_run!()
+
+      pipeline =
+        create_pipeline!(run, channel)
+        |> Pipeline.start!()
+        |> Pipeline.mark_failed!(:load_packages, "boom")
+
+      assert Pipeline.clear_retries!(pipeline).retry_count == 0
+    end
+  end
+
+  describe "oldest_incomplete_for_channel" do
+    test "returns the chain head, skipping completed pipelines", %{channel: channel} do
+      run = create_run!()
+
+      create_pipeline!(run, channel, %{
+        revision: "head-done",
+        sequence: 0,
+        released_at: ~U[2025-06-01 00:00:00Z]
+      })
+      |> Pipeline.start!()
+      |> Pipeline.mark_completed!()
+
+      failed =
+        create_pipeline!(run, channel, %{
+          revision: "head-failed",
+          sequence: 1,
+          released_at: ~U[2025-06-10 00:00:00Z]
+        })
+        |> Pipeline.start!()
+        |> Pipeline.mark_failed!(:load_packages, "boom")
+
+      create_pipeline!(run, channel, %{
+        revision: "head-pending",
+        sequence: 2,
+        released_at: ~U[2025-06-20 00:00:00Z]
+      })
+
+      assert {:ok, head} = Pipeline.oldest_incomplete_for_channel(channel.id)
+      assert head.id == failed.id
+    end
+
+    test "returns nil when every pipeline is completed", %{channel: channel} do
+      run = create_run!()
+
+      create_pipeline!(run, channel, %{revision: "all-done", sequence: 0})
+      |> Pipeline.start!()
+      |> Pipeline.mark_completed!()
+
+      assert {:ok, nil} = Pipeline.oldest_incomplete_for_channel(channel.id)
+    end
   end
 
   describe "retry_from_step" do

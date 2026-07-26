@@ -162,7 +162,9 @@ defmodule Tracker.Nixpkgs.ReleaseTest do
       assert {:ok, nil} = Release.newest(other.id)
     end
 
-    test "without_pipeline excludes releases with a non-failed pipeline", %{channel: channel} do
+    test "without_pipeline excludes releases with any pipeline, failed included", %{
+      channel: channel
+    } do
       run =
         Tracker.Ingestion.IngestionRun.create!(%{
           type: :cron_update,
@@ -194,7 +196,9 @@ defmodule Tracker.Nixpkgs.ReleaseTest do
       |> Tracker.Ingestion.Pipeline.start!()
       |> Tracker.Ingestion.Pipeline.mark_failed!(:create_revision, "boom")
 
-      assert [rev("bbb"), rev("ccc")] ==
+      # A failed pipeline still occupies its revision — retrying it is the
+      # starter's job, so it must never look like a release needing a new row.
+      assert [rev("ccc")] ==
                Release.without_pipeline!(channel.id) |> Enum.map(& &1.revision)
     end
   end
