@@ -10,7 +10,7 @@ import Config
 config :tracker, Oban,
   engine: Oban.Engines.Basic,
   notifier: Oban.Notifiers.Postgres,
-  queues: [changes: 10, ingestion: 3, revision_link: 3, branch_detection: 1],
+  queues: [changes: 10, ingestion: 1, revision_link: 3, branch_detection: 1],
   repo: Tracker.Repo,
   plugins: [
     Oban.Met,
