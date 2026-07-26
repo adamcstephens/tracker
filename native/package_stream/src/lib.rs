@@ -310,12 +310,20 @@ struct NamedPattern {
     members: Vec<Value>,
 }
 
+struct Member {
+    value: Value,
+    name: String,
+    /// Orders conjunction operands into system-tuple order (`64bit-bsd`,
+    /// `mips-linux`, `power64-littleendian`).
+    rank: u8,
+}
+
 struct PatternTable {
     /// Canonical (key-sorted) JSON of each pattern member -> display name.
     exact: HashMap<String, String>,
-    /// Sorted cpu-patterns-first so conjunction names lead with the cpu-ish
-    /// operand, matching system-tuple order (`64bit-bsd`, `mips-linux`).
-    named: Vec<NamedPattern>,
+    /// Every distinct member, named as the exact table names it so a member
+    /// shared by two patterns reads the same alone and in a conjunction.
+    members: Vec<Member>,
 }
 
 fn pattern_table() -> &'static PatternTable {
@@ -331,7 +339,7 @@ fn build_pattern_table() -> PatternTable {
         .into_iter()
         .map(|(key, value)| {
             let name = key.strip_prefix("is").unwrap_or(&key).to_lowercase();
-            let members = match value {
+            let members = match normalize_pattern(value) {
                 Value::Array(members) => members,
                 single => vec![single],
             };
@@ -373,7 +381,33 @@ fn build_pattern_table() -> PatternTable {
         }
     }
 
-    PatternTable { exact, named }
+    let mut members: Vec<Member> = named
+        .iter()
+        .flat_map(|pattern| &pattern.members)
+        .map(|value| Member {
+            name: exact
+                .get(&value.to_string())
+                .cloned()
+                .expect("member named"),
+            rank: operand_rank(value),
+            value: value.clone(),
+        })
+        .collect();
+
+    members.sort_by(|a, b| (a.rank, &a.name).cmp(&(b.rank, &b.name)));
+    members.dedup_by(|a, b| a.value == b.value);
+
+    PatternTable { exact, members }
+}
+
+/// Concrete cpu families lead a conjunction, then cpu modifiers (bit width,
+/// endianness), then everything kernel- or abi-shaped.
+fn operand_rank(member: &Value) -> u8 {
+    match member.get("cpu") {
+        Some(cpu) if cpu.get("family").is_some() => 0,
+        Some(_) => 1,
+        None => 2,
+    }
 }
 
 fn normalize_platform_fields(entry: &mut PackageEntry, unknowns: &mut BTreeSet<String>) {
@@ -399,8 +433,7 @@ fn normalize_platform_entry(value: Value, unknowns: &mut BTreeSet<String>) -> St
     match value {
         Value::String(system) => system,
         pattern => {
-            let pattern = strip_empty_parsed(pattern);
-            match_platform_pattern(&pattern).unwrap_or_else(|| {
+            match_platform_pattern(&normalize_pattern(pattern.clone())).unwrap_or_else(|| {
                 unknowns.insert(pattern.to_string());
                 "unknown-platform".to_string()
             })
@@ -408,19 +441,22 @@ fn normalize_platform_entry(value: Value, unknowns: &mut BTreeSet<String>) -> St
     }
 }
 
-/// The observed isStatic pattern serializes as `{"isStatic":true,"parsed":{}}`;
-/// an empty `parsed` carries no information, so drop it before matching.
-fn strip_empty_parsed(pattern: Value) -> Value {
+/// Reduce a pattern to what the table matches on: packages.json tags nixpkgs'
+/// typed attrsets with a `_type` discriminator the dumped patterns lack, and
+/// the observed isStatic pattern carries an empty `parsed` attrset that says
+/// nothing.
+fn normalize_pattern(pattern: Value) -> Value {
     match pattern {
-        Value::Object(mut map) => {
-            if map
-                .get("parsed")
-                .is_some_and(|p| p.as_object().is_some_and(|o| o.is_empty()))
-            {
-                map.remove("parsed");
-            }
-            Value::Object(map)
-        }
+        Value::Object(map) => Value::Object(
+            map.into_iter()
+                .filter(|(key, value)| {
+                    key != "_type"
+                        && !(key == "parsed" && value.as_object().is_some_and(|o| o.is_empty()))
+                })
+                .map(|(key, value)| (key, normalize_pattern(value)))
+                .collect(),
+        ),
+        Value::Array(members) => Value::Array(members.into_iter().map(normalize_pattern).collect()),
         other => other,
     }
 }
@@ -436,21 +472,23 @@ fn match_platform_pattern(pattern: &Value) -> Option<String> {
 }
 
 /// Match `patternLogicalAnd` conjunctions of two named patterns by trying
-/// pairwise deep-merges of their members. Iteration order of `named` makes the
-/// first match deterministic.
+/// pairwise deep-merges of their members. Both merge directions are tried, so
+/// operand rank — not iteration order — decides which name leads.
 fn conjunction_match(table: &PatternTable, target: &Value) -> Option<String> {
-    for first in &table.named {
-        for second in &table.named {
+    for first in &table.members {
+        for second in &table.members {
             if first.name == second.name {
                 continue;
             }
 
-            for a in &first.members {
-                for b in &second.members {
-                    if deep_merge(a, b) == *target {
-                        return Some(format!("{}-{}", first.name, second.name));
-                    }
-                }
+            if deep_merge(&first.value, &second.value) == *target {
+                let (lead, tail) = if (first.rank, &first.name) <= (second.rank, &second.name) {
+                    (first, second)
+                } else {
+                    (second, first)
+                };
+
+                return Some(format!("{}-{}", lead.name, tail.name));
             }
         }
     }
@@ -1302,6 +1340,106 @@ mod tests {
             r#"{"cpu":{"family":"mips"},"kernel":{"execFormat":{"name":"elf"},"families":{},"name":"linux"}}"#,
         );
         assert_eq!(name, "mips-linux");
+    }
+
+    // packages.json serializes nixpkgs' typed attrsets with their `_type`
+    // discriminator; the dumped pattern table carries none. These fixtures are
+    // verbatim from a nixos-unstable packages.json.
+    #[test]
+    fn test_platform_typed_attrsets() {
+        let (name, unknowns) =
+            normalize(r#"{"abi":{"_type":"abi","eabi":true,"float":"hard","name":"gnueabihf"}}"#);
+        assert_eq!(name, "gnu");
+        assert!(unknowns.is_empty());
+
+        assert_eq!(
+            normalize(r#"{"abi":{"_type":"abi","abi":"64","name":"muslabi64"}}"#).0,
+            "musl"
+        );
+        assert_eq!(
+            normalize(
+                r#"{"kernel":{"_type":"kernel","execFormat":{"_type":"exec-format","name":"elf"},"families":{},"name":"linux"}}"#
+            )
+            .0,
+            "linux"
+        );
+        assert_eq!(
+            normalize(r#"{"kernel":{"execFormat":{"_type":"exec-format","name":"elf"}}}"#).0,
+            "elf"
+        );
+        assert_eq!(
+            normalize(
+                r#"{"kernel":{"families":{"darwin":{"_type":"exec-format","name":"darwin"}}}}"#
+            )
+            .0,
+            "darwin"
+        );
+        assert_eq!(
+            normalize(
+                r#"{"abi":{"_type":"abi","name":"gnu"},"kernel":{"_type":"kernel","execFormat":{"_type":"exec-format","name":"pe"},"families":{},"name":"windows"}}"#
+            )
+            .0,
+            "mingw"
+        );
+    }
+
+    #[test]
+    fn test_platform_typed_conjunctions() {
+        assert_eq!(
+            normalize(
+                r#"{"cpu":{"bits":64,"family":"x86"},"kernel":{"_type":"kernel","execFormat":{"_type":"exec-format","name":"elf"},"families":{},"name":"linux"}}"#
+            )
+            .0,
+            "x86_64-linux"
+        );
+        assert_eq!(
+            normalize(
+                r#"{"cpu":{"bits":64,"family":"riscv"},"kernel":{"_type":"kernel","execFormat":{"_type":"exec-format","name":"elf"},"families":{},"name":"linux"}}"#
+            )
+            .0,
+            "riscv64-linux"
+        );
+    }
+
+    // The x86 cpu spec is both isx86 and a member of isEfi; the conjunction
+    // must be named after the specific pattern, like the exact-match case.
+    #[test]
+    fn test_platform_conjunction_prefers_specific_operand_name() {
+        assert_eq!(
+            normalize(
+                r#"{"cpu":{"family":"x86"},"kernel":{"_type":"kernel","execFormat":{"_type":"exec-format","name":"elf"},"families":{},"name":"linux"}}"#
+            )
+            .0,
+            "x86-linux"
+        );
+        assert_eq!(
+            normalize(
+                r#"{"cpu":{"family":"x86"},"kernel":{"families":{"darwin":{"_type":"exec-format","name":"darwin"}}}}"#
+            )
+            .0,
+            "x86-darwin"
+        );
+    }
+
+    // ppc64le: both operands are cpu patterns, so the cpu family leads and the
+    // endianness modifier follows.
+    #[test]
+    fn test_platform_conjunction_cpu_family_leads() {
+        assert_eq!(
+            normalize(
+                r#"{"cpu":{"bits":64,"family":"power","significantByte":{"_type":"significant-byte","name":"littleEndian"}}}"#
+            )
+            .0,
+            "power64-littleendian"
+        );
+    }
+
+    // The raw pattern is what a table extension needs, so log it untouched.
+    #[test]
+    fn test_platform_unknown_reports_raw_pattern() {
+        let (name, unknowns) = normalize(r#"{"cpu":{"_type":"cpu-type","family":"frobnitz"}}"#);
+        assert_eq!(name, "unknown-platform");
+        assert!(unknowns.first().unwrap().contains("_type"));
     }
 
     #[test]

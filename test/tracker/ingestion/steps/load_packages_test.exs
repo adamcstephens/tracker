@@ -122,7 +122,7 @@ defmodule Tracker.Ingestion.Steps.LoadPackagesTest do
     assert span.insecure == true
     assert span.unsupported == true
     assert span.known_vulnerabilities == ["CVE-2024-0001: buffer overflow"]
-    assert span.platforms == ["x86_64-linux", "mips64n32"]
+    assert span.platforms == ["x86_64-linux", "mips64n32", "x86-linux"]
     assert span.bad_platforms == ["darwin"]
     assert is_nil(span.outputs)
   end
@@ -157,7 +157,7 @@ defmodule Tracker.Ingestion.Steps.LoadPackagesTest do
     assert open.main_program == "hello-renamed"
   end
 
-  test "logs unknown platform patterns from the stream meta" do
+  test "logs unknown platform patterns from the stream meta in one warning" do
     stub_packages_body(Tracker.PackageStreamFixtures.unknown_platform_br())
 
     log =
@@ -165,8 +165,10 @@ defmodule Tracker.Ingestion.Steps.LoadPackagesTest do
         run_step!("nixos-24.11")
       end)
 
-    assert log =~ "unknown platform pattern"
+    assert length(String.split(log, "[warning]")) == 2
+    assert log =~ "2 unknown platform patterns"
     assert log =~ "frobnitz"
+    assert log =~ "quux"
   end
 
   test "does not load maintainers or teams for a non-metadata channel" do

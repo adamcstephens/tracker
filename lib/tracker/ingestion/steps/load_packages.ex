@@ -57,9 +57,7 @@ defmodule Tracker.Ingestion.Steps.LoadPackages do
     {packages, stream_meta} = collect_all_packages()
     :ok = Task.await(stream_task, @stream_timeout)
 
-    Enum.each(stream_meta[:unknown_platform_patterns] || [], fn pattern ->
-      Logger.warning("LoadPackages: unknown platform pattern in packages.json: #{pattern}")
-    end)
+    log_unknown_platform_patterns(stream_meta[:unknown_platform_patterns] || [])
 
     {extracted, maint_data, team_data, joins} = extract_packages(packages)
 
@@ -70,6 +68,15 @@ defmodule Tracker.Ingestion.Steps.LoadPackages do
     end
 
     :ok
+  end
+
+  defp log_unknown_platform_patterns([]), do: :ok
+
+  defp log_unknown_platform_patterns(patterns) do
+    Logger.warning(
+      "LoadPackages: #{length(patterns)} unknown platform patterns in packages.json: " <>
+        Enum.join(patterns, " ")
+    )
   end
 
   # -- Collect all packages from NIF stream --

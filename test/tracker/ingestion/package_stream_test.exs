@@ -163,7 +163,7 @@ defmodule Tracker.Ingestion.PackageStreamTest do
       packages = collect_packages()
       pkg = packages["platform_patterns"]
 
-      assert pkg[:platforms] == ["x86_64-linux", "mips64n32"]
+      assert pkg[:platforms] == ["x86_64-linux", "mips64n32", "x86-linux"]
       assert pkg[:bad_platforms] == ["darwin"]
     end
 
@@ -181,9 +181,11 @@ defmodule Tracker.Ingestion.PackageStreamTest do
 
       {packages, meta} = collect_stream()
 
-      assert packages["mystery"][:platforms] == ["unknown-platform"]
-      assert [pattern] = meta[:unknown_platform_patterns]
-      assert pattern =~ "frobnitz"
+      assert packages["mystery"][:platforms] == ["unknown-platform", "unknown-platform"]
+      assert [frobnitz, quux] = meta[:unknown_platform_patterns]
+      assert frobnitz =~ "frobnitz"
+      assert frobnitz =~ "_type"
+      assert quux =~ "quux"
     end
 
     test "includes maintainer data" do

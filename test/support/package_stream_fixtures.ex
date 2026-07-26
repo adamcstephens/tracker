@@ -52,10 +52,26 @@ defmodule Tracker.PackageStreamFixtures do
             "knownVulnerabilities" => ["CVE-2024-0001: buffer overflow"],
             "platforms" => [
               "x86_64-linux",
-              %{"cpu" => %{"bits" => 64, "family" => "mips"}, "abi" => %{"abi" => "n32"}}
+              %{
+                "cpu" => %{"bits" => 64, "family" => "mips"},
+                "abi" => %{"_type" => "abi", "abi" => "n32"}
+              },
+              %{
+                "cpu" => %{"family" => "x86"},
+                "kernel" => %{
+                  "_type" => "kernel",
+                  "execFormat" => %{"_type" => "exec-format", "name" => "elf"},
+                  "families" => %{},
+                  "name" => "linux"
+                }
+              }
             ],
             "badPlatforms" => [
-              %{"kernel" => %{"families" => %{"darwin" => %{"name" => "darwin"}}}}
+              %{
+                "kernel" => %{
+                  "families" => %{"darwin" => %{"_type" => "exec-format", "name" => "darwin"}}
+                }
+              }
             ]
           }
         },
@@ -158,7 +174,10 @@ defmodule Tracker.PackageStreamFixtures do
         "mystery" => %{
           "version" => "1.0",
           "meta" => %{
-            "platforms" => [%{"cpu" => %{"family" => "frobnitz"}}]
+            "platforms" => [
+              %{"cpu" => %{"_type" => "cpu-type", "family" => "frobnitz"}},
+              %{"kernel" => %{"_type" => "kernel", "name" => "quux"}}
+            ]
           }
         }
       }
