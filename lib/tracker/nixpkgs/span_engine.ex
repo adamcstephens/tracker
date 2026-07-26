@@ -13,6 +13,8 @@ defmodule Tracker.Nixpkgs.SpanEngine do
   Parameterised by `Tracker.Nixpkgs.SpanEngine.Spec` so packages, options, and
   option↔file membership all reuse it unchanged.
   """
+  import Ecto.Query, only: [from: 2]
+
   require Ash.Query
 
   alias Tracker.Nixpkgs.SpanEngine.Spec
@@ -29,6 +31,9 @@ defmodule Tracker.Nixpkgs.SpanEngine do
   # worst case rather than the common one: a fingerprint change closes *and*
   # reopens every span on the channel, ~288k row-writes at nixpkgs scale.
   @transaction_timeout :timer.minutes(5)
+
+  # Kept well under the pool so a backfill can't starve ingestion of connections.
+  @backfill_concurrency 5
 
   @doc """
   Applies one revision's `incoming` set to the channel's spans at `released_at`.
@@ -58,7 +63,9 @@ defmodule Tracker.Nixpkgs.SpanEngine do
             {[item | opens], closes, left}
 
           span ->
-            if spec.fingerprint_fn.(item) == spec.fingerprint_fn.(span) do
+            # A nil fingerprint (span written before the column existed) never
+            # matches, so it reopens rather than being mistaken for unchanged.
+            if span.fingerprint && spec.fingerprint_fn.(item) == span.fingerprint do
               {opens, closes, left + 1}
             else
               {[item | opens], [span.id | closes], left}
@@ -157,9 +164,76 @@ defmodule Tracker.Nixpkgs.SpanEngine do
     end
   end
 
+  @doc """
+  One-off: stores fingerprints on a channel's open spans that predate the
+  column. Reads their payloads — the expensive read this replaces — so a channel
+  pays it once here rather than reopening every span. Closed spans are never
+  diffed, so they keep their nil fingerprint.
+
+  Walks by keyset so memory stays flat over ~1M spans, and updates each chunk
+  concurrently. `max_concurrency: 1` updates sequentially, without spawning.
+
+  Returns `{:ok, count}`. Safe to re-run and to interrupt: already-fingerprinted
+  spans are skipped, so a partial run resumes where it stopped.
+  """
+  @spec backfill_fingerprints(Spec.t(), integer(), keyword()) :: {:ok, non_neg_integer()}
+  def backfill_fingerprints(%Spec{} = spec, channel_id, opts \\ []) do
+    state = %{
+      spec: spec,
+      table: AshPostgres.DataLayer.Info.table(spec.resource),
+      columns: [:id] ++ spec.payload_columns,
+      channel_id: channel_id,
+      batch_size: Keyword.get(opts, :batch_size, @default_batch_size),
+      concurrency: Keyword.get(opts, :max_concurrency, @backfill_concurrency)
+    }
+
+    {:ok, backfill_from(state, 0, 0)}
+  end
+
+  defp backfill_from(state, last_id, count) do
+    rows =
+      from(s in state.table,
+        where: s.channel_id == ^state.channel_id and s.id > ^last_id and is_nil(s.fingerprint),
+        where: fragment("upper_inf(?)", s.valid),
+        order_by: [asc: s.id],
+        limit: ^state.batch_size,
+        select: ^state.columns
+      )
+      |> Tracker.Repo.all()
+
+    if rows == [] do
+      count
+    else
+      write_fingerprints(state, rows)
+      backfill_from(state, List.last(rows).id, count + length(rows))
+    end
+  end
+
+  defp write_fingerprints(%{concurrency: 1} = state, rows) do
+    Enum.each(rows, &write_fingerprint(state, &1))
+  end
+
+  defp write_fingerprints(state, rows) do
+    rows
+    |> Task.async_stream(&write_fingerprint(state, &1),
+      max_concurrency: state.concurrency,
+      timeout: :timer.minutes(1)
+    )
+    |> Stream.run()
+  end
+
+  defp write_fingerprint(state, row) do
+    from(s in state.table, where: s.id == ^row.id)
+    |> Tracker.Repo.update_all(set: [fingerprint: state.spec.fingerprint_fn.(row)])
+  end
+
+  # Deliberately payload-free: the diff needs a key, an id to close, and a
+  # fingerprint to compare. Selecting the payload here means dragging the whole
+  # span table through the wire and into structs on every revision.
   defp load_open(spec, channel_id) do
     spec.resource
     |> Ash.Query.for_read(:open_for_channel, %{channel_id: channel_id})
+    |> Ash.Query.select([:id, :fingerprint] ++ spec.key_columns)
     |> Ash.read!(authorize?: false)
   end
 
@@ -200,8 +274,8 @@ defmodule Tracker.Nixpkgs.SpanEngine do
 
     take = spec.key_columns ++ spec.payload_columns
 
-    # channel_id, valid, inserted_at, updated_at ride along on every row.
-    columns_per_row = length(take) + 4
+    # channel_id, valid, fingerprint, inserted_at, updated_at ride along.
+    columns_per_row = length(take) + 5
     rows_per_insert = min(batch_size, div(@max_bind_params, columns_per_row))
 
     # Deterministic order avoids lock-ordering deadlocks.
@@ -212,6 +286,7 @@ defmodule Tracker.Nixpkgs.SpanEngine do
       |> Map.take(take)
       |> Map.put(:channel_id, channel_id)
       |> Map.put(:valid, range)
+      |> Map.put(:fingerprint, spec.fingerprint_fn.(item))
       |> Map.put(:inserted_at, now)
       |> Map.put(:updated_at, now)
     end)

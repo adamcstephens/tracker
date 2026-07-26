@@ -104,6 +104,10 @@ defmodule Tracker.Nixpkgs.OptionFileSpan do
       public? true
     end
 
+    # Derived from the payload columns, so never one of them. Nil on spans
+    # written before the column existed; the engine treats that as changed.
+    attribute :fingerprint, :binary
+
     timestamps()
   end
 

@@ -133,6 +133,89 @@ defmodule Tracker.Nixpkgs.SpanEngineTest do
     end
   end
 
+  describe "payload fingerprint" do
+    test "stores the incoming item's fingerprint on every opened span" do
+      channel = channel!()
+      pkg = package!()
+      item = item(pkg, "1.0", "a")
+
+      SpanEngine.diff_and_apply(spec(), channel.id, @t1, [item])
+
+      assert [span] = all_spans(channel.id, pkg.id)
+      assert span.fingerprint == spec().fingerprint_fn.(item)
+    end
+
+    test "a span with no stored fingerprint is treated as changed" do
+      channel = channel!()
+      pkg = package!()
+      item = item(pkg, "1.0", "a")
+
+      SpanEngine.diff_and_apply(spec(), channel.id, @t1, [item])
+      clear_fingerprints!(channel.id)
+
+      # Same payload, so without a fingerprint to compare this must fail safe by
+      # reopening rather than silently treating it as unchanged.
+      SpanEngine.diff_and_apply(spec(), channel.id, @t2, [item])
+
+      assert [closed, open] = all_spans(channel.id, pkg.id) |> Enum.sort_by(& &1.valid.lower)
+      assert bound?(closed.valid.upper, @t2)
+      assert open.valid.upper == :unbound
+      assert open.fingerprint == spec().fingerprint_fn.(item)
+    end
+
+    test "backfill_fingerprints/2 populates open spans and leaves closed ones alone" do
+      channel = channel!()
+      changed = package!()
+      still_open = package!()
+
+      SpanEngine.diff_and_apply(spec(), channel.id, @t1, [
+        item(changed, "1.0", "a"),
+        item(still_open, "1.0", "a")
+      ])
+
+      # Close one span by changing its payload, then wipe every fingerprint to
+      # simulate rows written before the column existed.
+      SpanEngine.diff_and_apply(spec(), channel.id, @t2, [
+        item(changed, "2.0", "a"),
+        item(still_open, "1.0", "a")
+      ])
+
+      clear_fingerprints!(channel.id)
+
+      assert {:ok, 2} = SpanEngine.backfill_fingerprints(spec(), channel.id, max_concurrency: 1)
+
+      [closed] =
+        all_spans(channel.id, changed.id)
+        |> Enum.filter(&match?(%Postgrex.Range{upper: %DateTime{}}, &1.valid))
+
+      assert is_nil(closed.fingerprint)
+
+      for {pkg, version} <- [{changed, "2.0"}, {still_open, "1.0"}] do
+        [open] =
+          all_spans(channel.id, pkg.id)
+          |> Enum.filter(&(&1.valid.upper == :unbound))
+
+        assert open.fingerprint == spec().fingerprint_fn.(item(pkg, version, "a"))
+      end
+    end
+
+    test "a backfilled fingerprint leaves an unchanged span in place" do
+      channel = channel!()
+      pkg = package!()
+      item = item(pkg, "1.0", "a")
+
+      SpanEngine.diff_and_apply(spec(), channel.id, @t1, [item])
+      clear_fingerprints!(channel.id)
+      assert {:ok, 1} = SpanEngine.backfill_fingerprints(spec(), channel.id, max_concurrency: 1)
+
+      SpanEngine.diff_and_apply(spec(), channel.id, @t2, [item])
+
+      assert [span] = all_spans(channel.id, pkg.id)
+      assert span.valid.upper == :unbound
+      assert bound?(span.valid.lower, @t1)
+    end
+  end
+
   describe "diff_and_apply/5 — batched writes" do
     test "opens every span when the open set spans multiple batches" do
       channel = channel!()
@@ -281,5 +364,13 @@ defmodule Tracker.Nixpkgs.SpanEngineTest do
     PackageSpan
     |> Ash.Query.filter(channel_id == ^channel_id and package_id == ^package_id)
     |> Ash.read!()
+  end
+
+  # Simulates spans written before the fingerprint column existed.
+  defp clear_fingerprints!(channel_id) do
+    Tracker.Repo.update_all(
+      from(s in "package_spans", where: s.channel_id == ^channel_id),
+      set: [fingerprint: nil]
+    )
   end
 end

@@ -225,6 +225,10 @@ defmodule Tracker.Nixpkgs.OptionSpan do
       public? true
     end
 
+    # Derived from the payload columns, so never one of them. Nil on spans
+    # written before the column existed; the engine treats that as changed.
+    attribute :fingerprint, :binary
+
     attribute :description, :string, public?: true
     attribute :type, :string, public?: true
     attribute :default, :string, public?: true
