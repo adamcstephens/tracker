@@ -2,7 +2,8 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-parts.url = "github:hercules-ci/flake-parts";
-    sower.url = "git+https://codeberg.org/adamcstephens/sower.git?ref=main";
+    sower.url = "git+https://tangled.org/adam.robins.wtf/sower";
+
   };
 
   outputs =
