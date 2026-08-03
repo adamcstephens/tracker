@@ -247,6 +247,7 @@ defmodule TrackerWeb.PackageLive.Show do
       rows={@revisions}
       table_params={@table_params}
       base_path={"/packages/#{@package.attribute}"}
+      extra_params={%{version: @version_filter, all_revisions: @all_revisions?}}
       total_pages={@total_pages}
       current_page={@current_page}
       has_prev_page?={@has_prev_page?}

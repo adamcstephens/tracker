@@ -151,6 +151,50 @@ defmodule TrackerWeb.ChangeLive.IndexTest do
     assert Floki.find(form, "button[type=submit]") != []
   end
 
+  test "pagination links keep the base_ref filter", %{conn: conn} do
+    Tracker.Nixpkgs.Change.bulk_upsert_all(
+      for n <- 6001..6020 do
+        %{
+          number: n,
+          title: "chore: filler #{n}",
+          state: :merged,
+          author: "eve",
+          base_ref: "release-25.11",
+          url: "https://github.com/NixOS/nixpkgs/pull/#{n}"
+        }
+      end
+    )
+
+    {:ok, _view, html} = live(conn, ~p"/changes?base_ref=release-25.11")
+
+    [next] =
+      html
+      |> Floki.parse_document!()
+      |> Floki.find("nav a.pagination-button:last-of-type")
+
+    assert query_params(next) == %{"base_ref" => "release-25.11", "page" => "2"}
+  end
+
+  test "sort links keep the base_ref filter", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/changes?base_ref=release-25.11")
+
+    [title_link] =
+      html
+      |> Floki.parse_document!()
+      |> Floki.find("th[phx-value-field=title] a")
+
+    assert query_params(title_link) == %{
+             "base_ref" => "release-25.11",
+             "sort_by" => "title",
+             "sort_dir" => "asc"
+           }
+  end
+
+  defp query_params(link) do
+    [href] = Floki.attribute(link, "href")
+    href |> URI.parse() |> Map.fetch!(:query) |> URI.decode_query()
+  end
+
   test "sorting by title ascending", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/changes")
 

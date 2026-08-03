@@ -653,6 +653,26 @@ defmodule TrackerWeb.PackageLive.ShowTest do
       assert url =~ "sort_by=version"
       assert url =~ "sort_dir=asc"
     end
+
+    test "sort link href keeps the revision filters", %{conn: conn, package: package} do
+      {:ok, _view, html} =
+        live(conn, ~p"/packages/#{package.attribute}?all_revisions=true&version=2.12")
+
+      [link] =
+        html
+        |> Floki.parse_document!()
+        |> Floki.find("th[phx-value-field=version] a")
+
+      [href] = Floki.attribute(link, "href")
+      params = href |> URI.parse() |> Map.fetch!(:query) |> URI.decode_query()
+
+      assert params == %{
+               "all_revisions" => "true",
+               "version" => "2.12",
+               "sort_by" => "version",
+               "sort_dir" => "asc"
+             }
+    end
   end
 
   describe "recent changes lens filtering" do

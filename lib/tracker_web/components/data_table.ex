@@ -40,6 +40,10 @@ defmodule TrackerWeb.DataTable do
     default: nil,
     doc: "base URL path for sort link hrefs (no-JS fallback)"
 
+  attr :extra_params, :map,
+    default: %{},
+    doc: "page-specific filter params to preserve in sort and pagination hrefs"
+
   slot :col, required: true do
     attr :field, :atom
     attr :label, :string
@@ -67,7 +71,7 @@ defmodule TrackerWeb.DataTable do
             >
               <a
                 :if={col[:sortable] && @base_path}
-                href={sort_href(@table_params, col[:field], @base_path)}
+                href={sort_href(@table_params, col[:field], @base_path, @extra_params)}
               >
                 {col[:label]} {TableParams.sort_indicator(@table_params, col[:field])}
               </a>
@@ -111,8 +115,8 @@ defmodule TrackerWeb.DataTable do
       current_page={@current_page}
       has_prev_page?={@has_prev_page?}
       has_next_page?={@has_next_page?}
-      prev_path={@base_path && page_href(@table_params, @current_page - 1, @base_path)}
-      next_path={@base_path && page_href(@table_params, @current_page + 1, @base_path)}
+      prev_path={@base_path && page_href(@table_params, @current_page - 1, @base_path, @extra_params)}
+      next_path={@base_path && page_href(@table_params, @current_page + 1, @base_path, @extra_params)}
     />
     """
   end
@@ -215,13 +219,13 @@ defmodule TrackerWeb.DataTable do
   defp show_pagination?(nil, has_prev_page?, has_next_page?), do: has_prev_page? or has_next_page?
   defp show_pagination?(total_pages, _has_prev_page?, _has_next_page?), do: total_pages > 1
 
-  defp sort_href(%TableParams{} = tp, field, base_path) do
+  defp sort_href(%TableParams{} = tp, field, base_path, extra_params) do
     dir = if tp.sort_by == field, do: TableParams.toggle_dir(tp.sort_dir), else: :asc
     new_tp = %{tp | sort_by: field, sort_dir: dir, page: 1, offset: 0}
-    TableParams.to_path(new_tp, base_path)
+    TableParams.to_path(new_tp, base_path, extra_params)
   end
 
-  defp page_href(%TableParams{} = tp, page, base_path) do
-    TableParams.to_path(%{tp | page: page}, base_path)
+  defp page_href(%TableParams{} = tp, page, base_path, extra_params) do
+    TableParams.to_path(%{tp | page: page}, base_path, extra_params)
   end
 end

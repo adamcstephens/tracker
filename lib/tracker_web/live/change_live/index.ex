@@ -38,6 +38,7 @@ defmodule TrackerWeb.ChangeLive.Index do
       rows={@streams.changes}
       table_params={@table_params}
       base_path="/changes"
+      extra_params={%{base_ref: @base_ref_filter}}
       total_pages={@total_pages}
       current_page={@current_page}
       has_prev_page?={@has_prev_page?}
