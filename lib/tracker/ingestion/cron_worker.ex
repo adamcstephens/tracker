@@ -29,22 +29,30 @@ defmodule Tracker.Ingestion.CronWorker do
     started_at = System.monotonic_time()
 
     counts =
-      Enum.reduce(channels, %{unchanged: 0, changed: 0, synced: 0, created: 0}, fn channel, acc ->
-        poll_channel(channel, acc)
-      end)
+      Enum.reduce(
+        channels,
+        %{unchanged: 0, changed: 0, synced: 0, created: 0, failed: 0},
+        fn channel, acc -> poll_channel(channel, acc) end
+      )
+
+    outcome = if counts.failed == 0, do: :ok, else: :error
 
     Logger.info(
       msg: "channel poll finished",
-      outcome: :ok,
+      outcome: outcome,
       active_channels: length(channels),
       unchanged: counts.unchanged,
       changed: counts.changed,
       synced: counts.synced,
       created: counts.created,
+      failed: counts.failed,
       duration_ms: duration_ms(started_at)
     )
 
-    :ok
+    case counts.failed do
+      0 -> :ok
+      failed -> {:error, {:failed_channels, failed}}
+    end
   end
 
   defp poll_channel(channel, acc) do
@@ -60,6 +68,15 @@ defmodule Tracker.Ingestion.CronWorker do
         Logger.warning(msg: "channel poll error", channel: channel.name, reason: inspect(reason))
         acc
     end
+  rescue
+    error ->
+      Logger.error(
+        msg: "channel poll failed",
+        channel: channel.name,
+        error: Exception.format(:error, error, __STACKTRACE__)
+      )
+
+      %{acc | failed: acc.failed + 1}
   end
 
   defp maybe_sync(channel, revision, unchanged_reason, acc) do

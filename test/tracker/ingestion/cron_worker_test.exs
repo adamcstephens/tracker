@@ -229,6 +229,49 @@ defmodule Tracker.Ingestion.CronWorkerTest do
                |> Enum.filter(&(&1.revision == failed_release.revision))
     end
 
+    test "a channel that raises during sync does not stop later channels", %{channel: channel} do
+      Channel.create!(%{
+        name: "nixos-26.05",
+        display_name: "NixOS 26.05",
+        status: :active,
+        is_stable: true
+      })
+
+      new_release = %{
+        base_url: "https://releases.nixos.org/nixos/unstable/nixos-25.05pre-ccc2222",
+        released_at: ~U[2025-06-20 00:00:00Z],
+        revision: @new_revision
+      }
+
+      Application.put_env(:tracker, :releases_fetcher, fn
+        "nixos-26.05" -> raise "release ledger unavailable"
+        "nixos-unstable" -> [new_release]
+      end)
+
+      Req.Test.stub(@stub, fn conn ->
+        Plug.Conn.send_resp(conn, 200, @new_revision <> "\n")
+      end)
+
+      Logger.put_module_level(CronWorker, :info)
+      on_exit(fn -> Logger.delete_module_level(CronWorker) end)
+
+      before = length(Pipeline.for_channel!(channel.id))
+
+      log =
+        capture_log(fn ->
+          assert {:error, {:failed_channels, 1}} =
+                   perform_job(CronWorker, %{}, queue: :ingestion)
+        end)
+
+      assert length(Pipeline.for_channel!(channel.id)) == before + 1
+
+      assert log =~ ~s(msg: "channel poll failed")
+      assert log =~ "nixos-26.05"
+      assert log =~ "release ledger unavailable"
+      assert log =~ "outcome: :error"
+      assert log =~ "failed: 1"
+    end
+
     test "sends If-None-Match and If-Modified-Since from stored pointer", %{channel: channel} do
       Channel.put_pointer!(channel, %{
         pointer_etag: ~s("prev-etag"),
