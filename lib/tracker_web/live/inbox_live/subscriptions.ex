@@ -40,6 +40,7 @@ defmodule TrackerWeb.InboxLive.Subscriptions do
     ~H"""
     <div class="ibx">
       <div class="ibx-toolbar">
+        <h1 class="ibx-page-title">Subscriptions</h1>
         <div class="ibx-actions">
           <.link navigate={~p"/inbox"} class="ibx-btn">Back to inbox</.link>
         </div>
@@ -57,6 +58,7 @@ defmodule TrackerWeb.InboxLive.Subscriptions do
         <.sub_row
           :for={sub <- @package_subs}
           id={"package-subscription-#{sub.id}"}
+          kind="package"
           path={~p"/packages/#{sub.package.attribute}"}
           label={sub.package.attribute}
           scope={(sub.channel && sub.channel.name) || "All channels"}
@@ -69,6 +71,7 @@ defmodule TrackerWeb.InboxLive.Subscriptions do
         <.sub_row
           :for={sub <- @channel_subs}
           id={"channel-subscription-#{sub.id}"}
+          kind="channel"
           path={~p"/channels/#{sub.channel.name}"}
           label={sub.channel.name}
           at={sub.inserted_at}
@@ -80,6 +83,7 @@ defmodule TrackerWeb.InboxLive.Subscriptions do
         <.sub_row
           :for={sub <- @change_subs}
           id={"change-subscription-#{sub.id}"}
+          kind="change"
           path={~p"/changes/#{sub.change.number}"}
           label={"##{sub.change.number} #{sub.change.title}"}
           scope={(sub.channel && sub.channel.name) || "Any branch"}
@@ -110,7 +114,10 @@ defmodule TrackerWeb.InboxLive.Subscriptions do
     """
   end
 
+  @type_colors %{"package" => "update", "channel" => "revision", "change" => "propagate"}
+
   attr :id, :string, required: true
+  attr :kind, :string, required: true, values: ~w(package channel change)
   attr :path, :string, required: true
   attr :label, :string, required: true
   attr :scope, :string, default: nil
@@ -118,8 +125,11 @@ defmodule TrackerWeb.InboxLive.Subscriptions do
   attr :now, :any, required: true
 
   defp sub_row(assigns) do
+    assigns = assign(assigns, :type_color, Map.fetch!(@type_colors, assigns.kind))
+
     ~H"""
-    <li id={@id} class="ibx-row is-read">
+    <li id={@id} class="ibx-row" style={"--type-color: var(--t-#{@type_color})"}>
+      <span class="ibx-glyph"><.icon name={@kind} /></span>
       <div class="ibx-body">
         <div class="ibx-line1">
           <span class="ibx-attr"><.link navigate={@path}>{@label}</.link></span>
@@ -133,6 +143,36 @@ defmodule TrackerWeb.InboxLive.Subscriptions do
         </div>
       </div>
     </li>
+    """
+  end
+
+  attr :name, :string, required: true
+
+  defp icon(assigns) do
+    ~H"""
+    <svg
+      class="ibx-icon"
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.7"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <%= case @name do %>
+        <% "package" -> %>
+          <path d="M21 8 12 3 3 8v8l9 5 9-5V8Z" /><path d="m3 8 9 5 9-5" /><path d="M12 13v8" />
+        <% "channel" -> %>
+          <path d="M3 12h4l3 7 4-14 3 7h4" />
+        <% "change" -> %>
+          <circle cx="6" cy="6" r="2.5" /><circle cx="6" cy="18" r="2.5" /><circle
+            cx="18"
+            cy="18"
+            r="2.5"
+          /><path d="M6 8.5v3a4 4 0 0 0 4 4h5.5" />
+      <% end %>
+    </svg>
     """
   end
 end

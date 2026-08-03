@@ -2978,6 +2978,13 @@ a.revision-link {
 	border-bottom: 1px solid var(--ibx-line-soft);
 }
 
+.ibx-page-title {
+	margin: 0;
+	font-size: 1rem;
+	font-weight: 600;
+	color: var(--text);
+}
+
 .ibx-seg {
 	display: inline-flex;
 	background: var(--ibx-surface);
