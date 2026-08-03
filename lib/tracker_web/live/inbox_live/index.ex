@@ -33,6 +33,8 @@ defmodule TrackerWeb.InboxLive.Index do
      |> assign(:page_title, "Inbox")
      |> assign(:unread_filter, :unread)
      |> assign(:active_types, MapSet.new())
+     |> assign(:version_changes, %{})
+     |> assign(:version_checked, MapSet.new())
      |> assign(:feed_path, FeedLink.path(user))}
   end
 
@@ -156,28 +158,25 @@ defmodule TrackerWeb.InboxLive.Index do
 
     socket
     |> assign(:notifications, notifications)
-    |> assign(:version_changes, NotificationPresenter.version_changes(notifications))
     |> assign(:unread_count, unread_count)
     |> assign(:unread_notification_count, unread_count)
     |> apply_filters()
   end
 
   defp apply_filters(socket) do
-    %{
-      notifications: notifications,
-      unread_filter: unread_filter,
-      active_types: active_types,
-      search: search,
-      version_changes: version_changes
-    } = socket.assigns
+    %{notifications: notifications, unread_filter: unread_filter} = socket.assigns
+
+    segment =
+      Enum.filter(notifications, fn n -> unread_filter == :all or is_nil(n.read_at) end)
+
+    socket = ensure_versions(socket, segment)
+
+    %{active_types: active_types, search: search, version_changes: version_changes} =
+      socket.assigns
 
     query = search |> String.trim() |> String.downcase()
 
-    in_segment =
-      Enum.filter(notifications, fn n ->
-        (unread_filter == :all or is_nil(n.read_at)) and
-          search_match?(n, version_changes, query)
-      end)
+    in_segment = Enum.filter(segment, &search_match?(&1, version_changes, query))
 
     visible =
       Enum.filter(in_segment, fn n ->
@@ -190,6 +189,23 @@ defmodule TrackerWeb.InboxLive.Index do
     |> assign(:now, now)
     |> assign(:type_counts, Enum.frequencies_by(in_segment, & &1.type))
     |> assign(:groups, NotificationPresenter.group_by_day(visible, now))
+  end
+
+  # Version bumps are looked up on demand for the notifications the current
+  # segment can show, so an unread-only mount never pays for the full history.
+  defp ensure_versions(socket, segment) do
+    case Enum.reject(segment, &MapSet.member?(socket.assigns.version_checked, &1.id)) do
+      [] ->
+        socket
+
+      missing ->
+        socket
+        |> update(
+          :version_changes,
+          &Map.merge(&1, NotificationPresenter.version_changes(missing))
+        )
+        |> update(:version_checked, &Enum.into(missing, &1, fn n -> n.id end))
+    end
   end
 
   defp search_match?(_n, _version_changes, ""), do: true

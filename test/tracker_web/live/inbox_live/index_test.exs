@@ -200,6 +200,40 @@ defmodule TrackerWeb.InboxLive.IndexTest do
     assert view |> element("#notification-#{n.id}") |> render() =~ "vim 9.0 → 9.1"
   end
 
+  test "shows the version bump for a read notification after widening to All", %{conn: conn} do
+    user = register_user!()
+    pkg = package!("htop")
+    chan = channel!("nixos-unstable")
+    prev = channel_revision!(chan, %{released_at: ~U[2026-02-01 00:00:00Z]})
+
+    rev =
+      channel_revision!(chan, %{
+        previous_channel_revision_id: prev.id,
+        released_at: ~U[2026-02-02 00:00:00Z]
+      })
+
+    apply_package_revision!(prev, [{pkg, "3.2"}])
+    apply_package_revision!(rev, [{pkg, "3.3"}])
+
+    n =
+      notification!(user, %{
+        type: :package_version_changed,
+        package_id: pkg.id,
+        channel_id: chan.id,
+        channel_revision_id: rev.id
+      })
+
+    {:ok, _} = Notification.mark_read(n, actor: user)
+    conn = log_in(conn, user)
+
+    {:ok, view, _html} = live(conn, ~p"/inbox")
+    refute has_element?(view, "#notification-#{n.id}")
+
+    view |> element("#filter-all") |> render_click()
+
+    assert view |> element("#notification-#{n.id}") |> render() =~ "htop 3.2 → 3.3"
+  end
+
   test "type chip counts reflect the unread/all selection", %{conn: conn} do
     user = register_user!()
     read = published_notification!(user)
