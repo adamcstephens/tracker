@@ -262,6 +262,44 @@ defmodule Tracker.Nixpkgs.PackageHistoryTest do
     end
   end
 
+  describe "versions_at_revisions/2" do
+    test "maps package versions per revision across channels" do
+      chan_a = Fixtures.channel!()
+      chan_b = Fixtures.channel!()
+      r1 = revision!(chan_a, "aaaa0001", ~U[2026-06-01 10:00:00Z])
+      r2 = revision!(chan_a, "aaaa0002", ~U[2026-06-15 10:00:00Z], r1)
+      rb = revision!(chan_b, "bbbb0001", ~U[2026-06-10 10:00:00Z])
+
+      pkg = Fixtures.package!()
+      other = Fixtures.package!()
+
+      Fixtures.apply_package_revision!(r1, [{pkg, "1.0"}, {other, "5.0"}])
+      Fixtures.apply_package_revision!(r2, [{pkg, "2.0"}])
+      Fixtures.apply_package_revision!(rb, [{pkg, "1.5"}])
+
+      versions = PackageHistory.versions_at_revisions([r1.id, r2.id, rb.id], [pkg.id])
+
+      assert versions == %{
+               {pkg.id, r1.id} => "1.0",
+               {pkg.id, r2.id} => "2.0",
+               {pkg.id, rb.id} => "1.5"
+             }
+    end
+
+    test "omits revisions where the package has no covering span" do
+      chan = Fixtures.channel!()
+      before_pkg = revision!(chan, "aaaa0001", ~U[2026-06-01 10:00:00Z])
+      with_pkg = revision!(chan, "aaaa0002", ~U[2026-06-15 10:00:00Z], before_pkg)
+
+      pkg = Fixtures.package!()
+      Fixtures.apply_package_revision!(with_pkg, [{pkg, "1.0"}])
+
+      versions = PackageHistory.versions_at_revisions([before_pkg.id, with_pkg.id], [pkg.id])
+
+      assert versions == %{{pkg.id, with_pkg.id} => "1.0"}
+    end
+  end
+
   describe "revisions_by_package/3" do
     test "reconstructs versions across channels when channel_id is nil" do
       unstable = Fixtures.channel!("rbp-unstable")

@@ -314,8 +314,15 @@ defmodule Tracker.Nixpkgs.PackageHistory do
   def versions_at_revisions(revision_ids, package_ids) do
     revisions = ChannelRevision.by_ids!(Enum.uniq(revision_ids))
 
+    spans_by_channel =
+      revisions
+      |> Enum.map(& &1.channel_id)
+      |> Enum.uniq()
+      |> Map.new(&{&1, PackageSpan.for_packages!(&1, package_ids)})
+
     for rev <- revisions,
-        span <- PackageSpan.at_for_packages!(rev.channel_id, rev.released_at, package_ids),
+        span <- spans_by_channel[rev.channel_id],
+        range_contains?(span.valid, rev.released_at),
         into: %{} do
       {{span.package_id, rev.id}, span.version}
     end

@@ -38,6 +38,7 @@ defmodule Tracker.Nixpkgs.PackageSpan do
     define :read
     define :at, args: [:channel_id, :at]
     define :at_for_packages, args: [:channel_id, :at, :package_ids]
+    define :for_packages, args: [:channel_id, :package_ids]
     define :by_package, args: [:package_id, {:optional, :channel_id}]
     define :current_for_packages, args: [:channel_id, :package_ids]
   end
@@ -115,6 +116,14 @@ defmodule Tracker.Nixpkgs.PackageSpan do
                  package_id in ^arg(:package_ids) and
                  fragment("? @> ?::timestamptz", valid, ^arg(:at))
              )
+    end
+
+    read :for_packages do
+      description "All spans for a set of packages in a channel, regardless of validity."
+      argument :channel_id, :integer, allow_nil?: false
+      argument :package_ids, {:array, :integer}, allow_nil?: false
+
+      filter expr(channel_id == ^arg(:channel_id) and package_id in ^arg(:package_ids))
     end
 
     read :by_package do
