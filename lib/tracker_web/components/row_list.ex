@@ -21,17 +21,25 @@ defmodule TrackerWeb.RowList do
       </.row_list>
   """
   attr :id, :string, required: true
+
+  attr :stacked, :boolean,
+    default: false,
+    doc: "drop meta and actions onto their own line on narrow screens"
+
   attr :rest, :global
 
   slot :inner_block, required: true
 
   def row_list(assigns) do
     ~H"""
-    <ul id={@id} class="row-list" {@rest}>
+    <ul id={@id} class={row_list_class(@stacked)} {@rest}>
       {render_slot(@inner_block)}
     </ul>
     """
   end
+
+  defp row_list_class(true), do: "row-list row-list--stacked"
+  defp row_list_class(false), do: "row-list"
 
   @doc """
   Renders one row.

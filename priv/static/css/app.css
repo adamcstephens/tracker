@@ -1111,6 +1111,9 @@ a.revision-link {
 }
 
 .row-meta {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 12px;
 	font-family: var(--mono);
 	font-size: 0.8125rem;
 	color: var(--text-2);
@@ -1366,6 +1369,22 @@ a.revision-link {
 	.row-list summary .row-action {
 		/* always visible on touch — no hover to reveal it */
 		opacity: 1;
+	}
+
+	/* Stacked lists: the label owns the first line, meta and actions share
+	   the second — a wide multi-part meta would otherwise crush the label
+	   to a couple of characters per line. */
+	.row-list--stacked .row-line {
+		grid-template-columns: minmax(0, 1fr) auto;
+		row-gap: 6px;
+	}
+
+	.row-list--stacked .row-label {
+		grid-column: 1 / -1;
+	}
+
+	.row-list--stacked .row-actions {
+		justify-content: flex-end;
 	}
 
 	/* The type tag is clutter at this width, and the detail body has it. */

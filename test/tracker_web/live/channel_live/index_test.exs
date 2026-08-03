@@ -64,11 +64,26 @@ defmodule TrackerWeb.ChannelLive.IndexTest do
     assert html =~ "nixos-24.11"
   end
 
-  test "clicking sort header changes order", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/channels")
+  test "renders channels as shared row-list link rows", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/channels")
 
-    view |> element("th[phx-value-field=name]") |> render_click()
-    assert_patched(view, ~p"/channels?sort_by=name&sort_dir=asc")
+    assert html =~ ~s(class="row-list row-list--stacked")
+    assert html =~ ~s(class="row-line row-link")
+    assert html =~ ~s(href="/channels/nixos-unstable")
+  end
+
+  test "rows carry the revision count and latest release as meta", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/channels")
+
+    assert html =~ "2 revisions"
+    assert html =~ "2026-03-15 10:00"
+  end
+
+  test "column sorting is gone", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/channels")
+
+    refute html =~ "phx-value-field"
+    refute html =~ "<table"
   end
 
   test "renders a Build problem badge for channels whose hydra job failed", %{conn: conn} do
@@ -85,7 +100,8 @@ defmodule TrackerWeb.ChannelLive.IndexTest do
     {:ok, _view, html} = live(conn, ~p"/channels")
 
     assert html =~ "Build problem"
-    assert html =~ "https://hydra.nixos.org/jobset/nixos/unstable"
+    # The whole row is the channel link, so the badge can't link out to Hydra
+    refute html =~ "hydra.nixos.org"
   end
 
   test "does not render Build problem for healthy channels", %{conn: conn} do
@@ -109,7 +125,6 @@ defmodule TrackerWeb.ChannelLive.IndexTest do
 
     html = render(view)
     assert html =~ "Build problem"
-    assert html =~ "https://hydra.nixos.org/jobset/nixos/unstable"
   end
 
   test "revision count and latest release update live when a revision is created", %{conn: conn} do
@@ -128,7 +143,7 @@ defmodule TrackerWeb.ChannelLive.IndexTest do
     assert html =~ "2026-04-02"
   end
 
-  test "sorts Latest Release chronologically", %{conn: conn} do
+  test "orders channels by latest release, most recent first", %{conn: conn} do
     channel = Channel.by_name!("nixos-24.11")
 
     Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
@@ -144,7 +159,7 @@ defmodule TrackerWeb.ChannelLive.IndexTest do
       is_stable: true
     })
 
-    {:ok, _view, html} = live(conn, ~p"/channels?sort_by=latest_release&sort_dir=desc")
+    {:ok, _view, html} = live(conn, ~p"/channels")
 
     positions =
       for name <- ~w(nixos-24.11 nixos-unstable nixos-26.05 nixos-25.05) do

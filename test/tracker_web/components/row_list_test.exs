@@ -24,6 +24,21 @@ defmodule TrackerWeb.RowListTest do
       assert html =~ ~s(phx-hook="AnchorExpand")
       assert html =~ "alpha"
     end
+
+    test "stacked lists opt into the narrow-screen two-line layout" do
+      assigns = %{}
+
+      html =
+        rendered_to_string(~H"""
+        <RowList.row_list id="things" stacked>
+          <RowList.row mode={:plain}>
+            <:label>alpha</:label>
+          </RowList.row>
+        </RowList.row_list>
+        """)
+
+      assert html =~ ~s(class="row-list row-list--stacked")
+    end
   end
 
   describe "row/1 expandable mode" do
