@@ -38,6 +38,14 @@ defmodule TrackerWeb.FeedControllerTest do
       assert body =~ "nixos-feed-test"
     end
 
+    test "builds links from the request host", %{conn: conn} do
+      conn = %{conn | host: "tracker.example.com"} |> get("/feeds/channels/nixos-feed-test")
+
+      body = response(conn, 200)
+      refute body =~ "tracker-dev.junco.dev"
+      assert body =~ "http://tracker.example.com/channels/nixos-feed-test"
+    end
+
     test "includes channel revisions as entries", %{conn: conn} do
       conn = get(conn, "/feeds/channels/nixos-feed-test")
 

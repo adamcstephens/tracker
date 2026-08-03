@@ -5,7 +5,9 @@ defmodule TrackerWeb.FeedController do
   alias Tracker.Notifications.Notification
   alias TrackerWeb.NotificationPresenter
 
-  @base_url "https://tracker-dev.junco.dev"
+  defp base_url(conn) do
+    URI.to_string(%URI{scheme: to_string(conn.scheme), host: conn.host, port: conn.port})
+  end
 
   def notifications(conn, %{"token" => token}) do
     case User.by_feed_token(token, authorize?: false) do
@@ -29,11 +31,15 @@ defmodule TrackerWeb.FeedController do
         [] -> DateTime.utc_now()
       end
 
+    base_url = base_url(conn)
+
     feed =
-      Atomex.Feed.new("#{@base_url}/inbox", latest_updated, "Your notifications - Tracker")
-      |> Atomex.Feed.link("#{@base_url}/feeds/notifications/#{token}", rel: "self")
-      |> Atomex.Feed.link("#{@base_url}/inbox", rel: "alternate")
-      |> Atomex.Feed.entries(Enum.map(notifications, &notification_entry(&1, version_changes)))
+      Atomex.Feed.new("#{base_url}/inbox", latest_updated, "Your notifications - Tracker")
+      |> Atomex.Feed.link("#{base_url}/feeds/notifications/#{token}", rel: "self")
+      |> Atomex.Feed.link("#{base_url}/inbox", rel: "alternate")
+      |> Atomex.Feed.entries(
+        Enum.map(notifications, &notification_entry(base_url, &1, version_changes))
+      )
       |> Atomex.Feed.build()
       |> Atomex.generate_document()
 
@@ -42,17 +48,17 @@ defmodule TrackerWeb.FeedController do
     |> send_resp(200, feed)
   end
 
-  defp notification_entry(notification, version_changes) do
+  defp notification_entry(base_url, notification, version_changes) do
     text = NotificationPresenter.describe(notification, version_changes)
 
     url =
       case NotificationPresenter.path(notification) do
-        nil -> "#{@base_url}/inbox"
-        path -> "#{@base_url}#{path}"
+        nil -> "#{base_url}/inbox"
+        path -> "#{base_url}#{path}"
       end
 
     Atomex.Entry.new(
-      "#{@base_url}/inbox#notification-#{notification.id}",
+      "#{base_url}/inbox#notification-#{notification.id}",
       notification.occurred_at,
       text
     )
@@ -76,15 +82,17 @@ defmodule TrackerWeb.FeedController do
         [] -> DateTime.utc_now()
       end
 
+    base_url = base_url(conn)
+
     feed =
       Atomex.Feed.new(
-        "#{@base_url}/channels/#{channel_name}",
+        "#{base_url}/channels/#{channel_name}",
         latest_updated,
         "#{channel_name} - Tracker"
       )
-      |> Atomex.Feed.link("#{@base_url}/feeds/channels/#{channel_name}", rel: "self")
-      |> Atomex.Feed.link("#{@base_url}/channels/#{channel_name}", rel: "alternate")
-      |> Atomex.Feed.entries(Enum.map(revisions, &channel_entry(channel_name, &1)))
+      |> Atomex.Feed.link("#{base_url}/feeds/channels/#{channel_name}", rel: "self")
+      |> Atomex.Feed.link("#{base_url}/channels/#{channel_name}", rel: "alternate")
+      |> Atomex.Feed.entries(Enum.map(revisions, &channel_entry(base_url, channel_name, &1)))
       |> Atomex.Feed.build()
       |> Atomex.generate_document()
 
@@ -105,6 +113,8 @@ defmodule TrackerWeb.FeedController do
         [] -> DateTime.utc_now()
       end
 
+    base_url = base_url(conn)
+
     title =
       if channel_filter != "" do
         "#{name} on #{channel_filter} - Tracker"
@@ -114,20 +124,20 @@ defmodule TrackerWeb.FeedController do
 
     self_url =
       if channel_filter != "" do
-        "#{@base_url}/feeds/packages/#{name}?channel=#{channel_filter}"
+        "#{base_url}/feeds/packages/#{name}?channel=#{channel_filter}"
       else
-        "#{@base_url}/feeds/packages/#{name}"
+        "#{base_url}/feeds/packages/#{name}"
       end
 
     feed =
       Atomex.Feed.new(
-        "#{@base_url}/packages/#{name}",
+        "#{base_url}/packages/#{name}",
         latest_updated,
         title
       )
       |> Atomex.Feed.link(self_url, rel: "self")
-      |> Atomex.Feed.link("#{@base_url}/packages/#{name}", rel: "alternate")
-      |> Atomex.Feed.entries(Enum.map(revisions, &package_entry(name, &1)))
+      |> Atomex.Feed.link("#{base_url}/packages/#{name}", rel: "alternate")
+      |> Atomex.Feed.entries(Enum.map(revisions, &package_entry(base_url, name, &1)))
       |> Atomex.Feed.build()
       |> Atomex.generate_document()
 
@@ -136,8 +146,8 @@ defmodule TrackerWeb.FeedController do
     |> send_resp(200, feed)
   end
 
-  defp channel_entry(channel, rev) do
-    url = "#{@base_url}/channels/#{channel}/revisions/#{rev.revision}"
+  defp channel_entry(base_url, channel, rev) do
+    url = "#{base_url}/channels/#{channel}/revisions/#{rev.revision}"
     short_hash = String.slice(rev.revision, 0, 7)
 
     Atomex.Entry.new(
@@ -150,8 +160,8 @@ defmodule TrackerWeb.FeedController do
     |> Atomex.Entry.build()
   end
 
-  defp package_entry(name, rev) do
-    url = "#{@base_url}/channels/#{rev.channel_name}/revisions/#{rev.revision}"
+  defp package_entry(base_url, name, rev) do
+    url = "#{base_url}/channels/#{rev.channel_name}/revisions/#{rev.revision}"
 
     Atomex.Entry.new(
       "#{url}##{name}",
