@@ -180,7 +180,7 @@ defmodule TrackerWeb.OptionLive.RootTest do
   test "search at the root shows no group cards", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/options?search=nginx")
 
-    refute html =~ "child-card"
+    refute html =~ "row-link"
   end
 
   test "fuzzy search tolerates typos", %{conn: conn} do

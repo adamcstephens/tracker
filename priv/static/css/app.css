@@ -1008,63 +1008,18 @@ a.revision-link {
 	display: none;
 }
 
-.option-show :is(.opt-copy, .opt-share).copied .opt-share-icon {
+.option-show :is(.opt-copy, .row-action).copied .opt-share-icon {
 	display: none;
 }
 
-.option-show :is(.opt-copy, .opt-share).copied .opt-check-icon {
+.option-show :is(.opt-copy, .row-action).copied .opt-check-icon {
 	display: block;
 	color: var(--good);
 }
 
-/* Children — one card per sub-group, stacked. */
-.option-show .opt-children {
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-}
-
-.option-show .child-card {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	padding: 9px 12px;
-	border: 1px solid var(--line);
-	border-radius: var(--radius-sm);
-	background: var(--bg);
-	text-decoration: none;
-	transition:
-		border-color 120ms,
-		background 120ms;
-}
-
-.option-show .child-card:hover {
-	border-color: var(--accent);
-	background: var(--accent-soft);
-}
-
-.option-show .child-card .name {
-	font-family: var(--mono);
-	font-size: 0.9375rem;
-	font-weight: 500;
-	color: var(--text);
-}
-
-.option-show .child-card .name .leading {
-	color: var(--text-2);
-	font-weight: 400;
-}
-
-.option-show .child-card .right {
-	display: inline-flex;
-	align-items: center;
-	gap: 8px;
-	color: var(--text-2);
-	font-size: 0.8125rem;
-}
-
-/* Options at this prefix — accordion rows sharing one card surface. */
-.option-show .opt-list {
+/* Row list — the app-wide list idiom: rows sharing one card surface,
+   separated by dividers. */
+.row-list {
 	list-style: none;
 	padding: 0;
 	margin: 0;
@@ -1073,39 +1028,43 @@ a.revision-link {
 	overflow: hidden;
 }
 
-.option-show .opt-list > li {
+.row-list > li {
 	border-bottom: 1px solid var(--line);
 }
 
-.option-show .opt-list > li:last-child {
+.row-list > li:last-child {
 	border-bottom: 0;
 }
 
-.option-show .opt-list details {
+.row-list details {
 	/* cancel the base details bottom margin — it shows as a page-background
 	   gap between the row and the li border */
 	margin: 0;
 	scroll-margin-top: 8rem;
 }
 
-.option-show .opt-list summary {
-	list-style: none;
-	cursor: pointer;
+.row-line {
 	padding: 10px 14px;
 	display: grid;
-	/* name, type, copy-path button, share button */
-	grid-template-columns: 1fr auto auto auto;
+	/* label, meta, actions */
+	grid-template-columns: 1fr auto auto;
 	gap: 10px;
 	align-items: baseline;
 	transition: background 120ms;
 }
 
-.option-show .opt-list summary::-webkit-details-marker {
+.row-list summary.row-line {
+	list-style: none;
+	cursor: pointer;
+}
+
+.row-list summary::-webkit-details-marker {
 	display: none;
 }
 
-/* Custom marker on the name so the summary keeps its 3-column grid. */
-.option-show .opt-name::before {
+/* Custom marker on the label so the row keeps its grid. Expandable rows
+   only — link and plain rows have nothing to disclose. */
+.row-list details .row-label::before {
 	content: "▸";
 	display: inline-block;
 	color: var(--text-2);
@@ -1114,47 +1073,69 @@ a.revision-link {
 	transition: transform 120ms;
 }
 
-.option-show .opt-list details[open] .opt-name::before {
+.row-list details[open] .row-label::before {
 	transform: rotate(90deg);
 }
 
-.option-show .opt-list summary:hover {
+.row-list summary:hover {
 	background: var(--surface);
 }
 
-.option-show .opt-list details[open] > summary {
+.row-list details[open] > summary {
 	border-bottom: 1px solid var(--line);
 }
 
-.option-show .opt-name {
+.row-link {
+	text-decoration: none;
+}
+
+.row-link:hover {
+	background: var(--accent-soft);
+	text-decoration: none;
+}
+
+.row-label {
 	font-family: var(--mono);
 	font-weight: 500;
 	font-size: 0.9375rem;
 	color: var(--text);
 }
 
-.option-show .opt-name .leading {
+.row-label .leading {
 	color: var(--text-2);
 	font-weight: 400;
 }
 
-.option-show .opt-name .tail {
+.row-label .tail {
 	color: var(--accent);
 }
 
-.option-show .opt-type {
+.row-meta {
 	font-family: var(--mono);
 	font-size: 0.8125rem;
 	color: var(--text-2);
+}
+
+.row-actions {
+	display: inline-flex;
+	align-items: center;
+	gap: 10px;
+	color: var(--text-2);
+	font-size: 0.8125rem;
+}
+
+.option-show .opt-type {
 	/* long types stay on one line; the full type is in the detail body */
+	display: inline-block;
 	max-width: 40ch;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+	vertical-align: bottom;
 }
 
-/* Share button — replaces the old `#` anchor; hidden until hover/open. */
-.option-show .opt-share {
+/* Row actions on expandable rows stay hidden until hover/open. */
+.row-action {
 	display: inline-flex;
 	align-items: center;
 	gap: 5px;
@@ -1167,7 +1148,6 @@ a.revision-link {
 	text-decoration: none;
 	align-self: center;
 	cursor: pointer;
-	opacity: 0;
 	transition:
 		background 120ms,
 		border-color 120ms,
@@ -1175,13 +1155,17 @@ a.revision-link {
 		opacity 120ms;
 }
 
-.option-show summary:hover .opt-share,
-.option-show summary:focus-within .opt-share,
-.option-show details[open] > summary .opt-share {
+.row-list summary .row-action {
+	opacity: 0;
+}
+
+.row-list summary:hover .row-action,
+.row-list summary:focus-within .row-action,
+.row-list details[open] > summary .row-action {
 	opacity: 1;
 }
 
-.option-show .opt-share:hover {
+.row-action:hover {
 	background: var(--surface);
 	border-color: var(--line);
 	color: var(--text);
@@ -1193,7 +1177,7 @@ a.revision-link {
 }
 
 /* Keep a just-clicked button visible even if the pointer leaves. */
-.option-show .opt-share.copied {
+.row-list summary .row-action.copied {
 	opacity: 1;
 }
 
@@ -1356,52 +1340,37 @@ a.revision-link {
 		row-gap: 2px;
 	}
 
-	/* Children cards: let a long path wrap; keep count/arrow pinned. */
-	.option-show .child-card {
+	/* Rows: let a long label wrap; keep meta and actions pinned. */
+	.row-line {
 		gap: 8px;
+		align-items: center;
 	}
 
-	.option-show .child-card .name {
+	.row-label {
 		min-width: 0;
 		word-break: break-all;
 	}
 
-	.option-show .child-card .right {
-		flex: none;
-	}
-
-	/* Option rows: name + copy/share only — the type tag is clutter at
-	   this width, and the detail body has it. */
-	.option-show .opt-list summary {
-		grid-template-columns: 1fr auto auto;
-		align-items: center;
-	}
-
-	.option-show .opt-name {
-		word-break: break-all;
-	}
-
-	/* Collapse the page-prefix part of option and child names to an
-	   ellipsis — the path bar already says where we are. font-size: 0
-	   keeps the full text selectable and readable to screen readers. */
-	.option-show .opt-name .leading,
-	.option-show .child-card .name .leading {
+	/* Collapse the page-prefix part of a row label to an ellipsis — the
+	   path bar already says where we are. font-size: 0 keeps the full text
+	   selectable and readable to screen readers. */
+	.row-label .leading {
 		font-size: 0;
 	}
 
-	.option-show .opt-name .leading::before,
-	.option-show .child-card .name .leading::before {
+	.row-label .leading::before {
 		content: "…";
 		font-size: 0.9375rem;
 	}
 
-	.option-show .opt-type {
-		display: none;
-	}
-
-	.option-show .opt-share {
+	.row-list summary .row-action {
 		/* always visible on touch — no hover to reveal it */
 		opacity: 1;
+	}
+
+	/* The type tag is clutter at this width, and the detail body has it. */
+	.option-show summary .row-meta {
+		display: none;
 	}
 
 	/* Option detail: stack dt above dd in one column. */

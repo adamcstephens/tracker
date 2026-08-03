@@ -130,7 +130,7 @@ defmodule TrackerWeb.OptionLive.ShowTest do
 
     # A real link to the option's own page, hooked for copy-to-clipboard
     assert html =~ ~s(href="/options/services.nginx.enable")
-    assert html =~ "opt-share"
+    assert html =~ "row-action"
     refute html =~ "option-anchor"
   end
 
@@ -138,6 +138,58 @@ defmodule TrackerWeb.OptionLive.ShowTest do
     {:ok, _view, html} = live(conn, ~p"/options/services.nginx")
 
     assert html =~ ~s(data-copy="services.nginx.enable")
+  end
+
+  describe "both list sections render through the shared RowList (TRK-367)" do
+    test "children and leaf options share the row-list container", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/options/services.nginx")
+
+      # One grouped card per section, no detached child cards
+      assert html =~ ~s(class="row-list")
+      refute html =~ "opt-children"
+      refute html =~ "child-card"
+    end
+
+    test "children are link rows that navigate to the sub-group", %{conn: conn} do
+      {:ok, view, html} = live(conn, ~p"/options/services.nginx")
+
+      assert html =~ ~s(class="row-line row-link")
+
+      view
+      |> element(~s(a[href="/options/services.nginx.virtualHosts"]))
+      |> render_click()
+
+      assert_redirect(view, ~p"/options/services.nginx.virtualHosts")
+    end
+
+    test "children rows carry their option count as trailing meta", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/options/services.nginx")
+
+      assert html =~ ~s(class="row-meta")
+      assert html =~ "options"
+    end
+
+    test "leaf options stay expandable rows with deep-link anchors", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/options/services.nginx")
+
+      # The hook and per-option ids are what make #opt-… deep links expand
+      assert html =~ ~s(phx-hook="AnchorExpand")
+      assert html =~ ~s(id="opt-services.nginx.enable")
+      assert html =~ "<details"
+    end
+
+    test "a lone leaf option renders already expanded", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/options/services.nginx.enable")
+
+      assert html =~ ~s(id="opt-services.nginx.enable" open)
+    end
+
+    test "a childless section never emits an empty details panel", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/options/services.nginx")
+
+      # Children rows are links, so the disclosure chrome must not appear there
+      refute html =~ ~s(<details id="row-)
+    end
   end
 
   test "pure group prefix lists a top-level Defined-in section", %{conn: conn} do
@@ -395,7 +447,7 @@ defmodule TrackerWeb.OptionLive.ShowTest do
     assert html =~ "Select a channel"
     assert html =~ "lens-attention"
     refute html =~ "Options at this prefix"
-    refute html =~ "child-card"
+    refute html =~ "row-link"
   end
 
   test "an explicit ?channel= override trumps the all-channels prompt", %{conn: conn} do
@@ -432,7 +484,7 @@ defmodule TrackerWeb.OptionLive.ShowTest do
   test "search shows only the match list, not children cards", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/options/services.nginx?search=serverName")
 
-    refute html =~ "child-card"
+    refute html =~ "row-link"
   end
 
   test "search hides leaf details, files, and PR sections", %{conn: conn} do

@@ -5,6 +5,7 @@ defmodule TrackerWeb.OptionLive.Show do
 
   alias TrackerWeb.DataTable
   alias TrackerWeb.PageSearch
+  alias TrackerWeb.RowList
 
   # Inline so it works on dead renders too — anonymous visitors don't load
   # app.js (see TrackerWeb.Plug.InteractiveUI), so a phx-hook would never run.
@@ -59,24 +60,22 @@ defmodule TrackerWeb.OptionLive.Show do
 
       <section :if={@subgroups != []}>
         <h2>Children</h2>
-        <div class="opt-children">
-          <.link
+        <RowList.row_list id="option-children">
+          <RowList.row
             :for={{group, count} <- @subgroups}
+            mode={:link}
             navigate={~p"/options/#{group}"}
-            class="child-card"
           >
-            <span class="name">
+            <:label>
               <span :if={@prefix != ""} class="leading">{@prefix}.</span><span class="tail">{tail(
                 group,
                 @prefix
               )}</span>
-            </span>
-            <span class="right">
-              <span>{count} options</span>
-              <span class="arrow" aria-hidden="true">→</span>
-            </span>
-          </.link>
-        </div>
+            </:label>
+            <:meta>{count} options</:meta>
+            <:actions><span class="arrow" aria-hidden="true">→</span></:actions>
+          </RowList.row>
+        </RowList.row_list>
       </section>
 
       <section :if={@matches != []}>
@@ -107,46 +106,52 @@ defmodule TrackerWeb.OptionLive.Show do
 
       <section :if={@leaf_options != []}>
         <h2>Options at this prefix</h2>
-        <ul id="options-list" class="opt-list" phx-hook="AnchorExpand">
-          <li :for={rev <- @leaf_options}>
-            <details id={"opt-#{rev.option.name}"} open={length(@leaf_options) == 1}>
-              <summary>
-                <span class="opt-name">
-                  <%= if rev.option.name == @prefix do %>
-                    <em class="tail">self</em>
-                  <% else %>
-                    <span :if={@prefix != ""} class="leading">{@prefix}.</span><span class="tail">{tail(
-                      rev.option.name,
-                      @prefix
-                    )}</span>
-                  <% end %>
-                </span>
-                <span class="opt-type">
-                  {rev.type}<span :if={rev.read_only}> (read-only)</span>
-                </span>
-                <button
-                  type="button"
-                  class="opt-share"
-                  data-copy={rev.option.name}
-                  onclick={copy_onclick()}
-                  title="Copy attribute path"
-                  aria-label={"Copy attribute path #{rev.option.name}"}
-                >
-                  <.copy_icon />
-                  <.check_icon />
-                </button>
-                <a
-                  href={~p"/options/#{rev.option.name}"}
-                  class="opt-share"
-                  onclick={copy_onclick()}
-                  title="Copy share link"
-                  aria-label={"Copy link to #{rev.option.name}"}
-                >
-                  <.share_icon />
-                  <.check_icon />
-                </a>
-              </summary>
-
+        <RowList.row_list id="options-list" phx-hook="AnchorExpand">
+          <RowList.row
+            :for={rev <- @leaf_options}
+            id={"opt-#{rev.option.name}"}
+            mode={:expandable}
+            open={length(@leaf_options) == 1}
+          >
+            <:label>
+              <%= if rev.option.name == @prefix do %>
+                <em class="tail">self</em>
+              <% else %>
+                <span :if={@prefix != ""} class="leading">{@prefix}.</span><span class="tail">{tail(
+                  rev.option.name,
+                  @prefix
+                )}</span>
+              <% end %>
+            </:label>
+            <:meta>
+              <span class="opt-type">
+                {rev.type}<span :if={rev.read_only}> (read-only)</span>
+              </span>
+            </:meta>
+            <:actions>
+              <button
+                type="button"
+                class="row-action"
+                data-copy={rev.option.name}
+                onclick={copy_onclick()}
+                title="Copy attribute path"
+                aria-label={"Copy attribute path #{rev.option.name}"}
+              >
+                <.copy_icon />
+                <.check_icon />
+              </button>
+              <a
+                href={~p"/options/#{rev.option.name}"}
+                class="row-action"
+                onclick={copy_onclick()}
+                title="Copy share link"
+                aria-label={"Copy link to #{rev.option.name}"}
+              >
+                <.share_icon />
+                <.check_icon />
+              </a>
+            </:actions>
+            <:body>
               <dl class="opt-detail">
                 <dt :if={rev.type}>Type</dt>
                 <dd :if={rev.type}>
@@ -176,9 +181,9 @@ defmodule TrackerWeb.OptionLive.Show do
                   </span>
                 </dd>
               </dl>
-            </details>
-          </li>
-        </ul>
+            </:body>
+          </RowList.row>
+        </RowList.row_list>
       </section>
 
       <section :if={@files != [] and @leaf_options == []}>
