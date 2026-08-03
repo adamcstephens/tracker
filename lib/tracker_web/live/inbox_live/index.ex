@@ -243,6 +243,9 @@ defmodule TrackerWeb.InboxLive.Index do
         </div>
 
         <div class="ibx-actions">
+          <.link id="subscriptions-link" class="ibx-btn" navigate={~p"/inbox/subscriptions"}>
+            Subscriptions
+          </.link>
           <button
             id="mark-all-read"
             type="button"

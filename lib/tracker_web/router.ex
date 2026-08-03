@@ -101,6 +101,7 @@ defmodule TrackerWeb.Router do
         pipe_through :force_interactive
 
         live "/", InboxLive.Index, :index
+        live "/subscriptions", InboxLive.Subscriptions, :index
       end
     end
   end
