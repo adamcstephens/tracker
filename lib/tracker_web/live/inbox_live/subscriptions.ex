@@ -12,6 +12,7 @@ defmodule TrackerWeb.InboxLive.Subscriptions do
   alias Tracker.Notifications.ChannelSubscription
   alias Tracker.Notifications.PackageSubscription
   alias TrackerWeb.NotificationPresenter
+  alias TrackerWeb.PageSearch
 
   @impl true
   def mount(_params, _session, socket) do
@@ -30,9 +31,75 @@ defmodule TrackerWeb.InboxLive.Subscriptions do
   end
 
   @impl true
-  def handle_params(_params, _url, socket) do
+  def handle_params(params, _url, socket) do
+    search = params["search"] || ""
     lens = socket.assigns.lens && %{socket.assigns.lens | disabled?: true}
-    {:noreply, assign(socket, :lens, lens)}
+
+    {:noreply,
+     socket
+     |> assign(:lens, lens)
+     |> assign(:search, search)
+     |> assign(:page_search, %PageSearch{
+       action: "/inbox/subscriptions",
+       value: search,
+       placeholder: "Search subscriptions…"
+     })
+     |> apply_search()}
+  end
+
+  @impl true
+  def handle_event("search", %{"search" => search}, socket) do
+    {:noreply,
+     socket
+     |> assign(:search, search)
+     |> update(:page_search, &%{&1 | value: search})
+     |> apply_search()
+     |> push_event("update-url", %{path: subscriptions_path(search)})}
+  end
+
+  defp apply_search(socket) do
+    %{package_subs: packages, channel_subs: channels, change_subs: changes, search: search} =
+      socket.assigns
+
+    query = search |> String.trim() |> String.downcase()
+
+    visible_packages =
+      Enum.filter(packages, &search_match?(query, [&1.package.attribute, scope_name(&1)]))
+
+    visible_channels = Enum.filter(channels, &search_match?(query, [&1.channel.name]))
+
+    visible_changes =
+      Enum.filter(
+        changes,
+        &search_match?(query, ["##{&1.change.number}", &1.change.title, scope_name(&1)])
+      )
+
+    socket
+    |> assign(:visible_package_subs, visible_packages)
+    |> assign(:visible_channel_subs, visible_channels)
+    |> assign(:visible_change_subs, visible_changes)
+    |> assign(:any_subs?, packages != [] or channels != [] or changes != [])
+    |> assign(
+      :any_visible?,
+      visible_packages != [] or visible_channels != [] or visible_changes != []
+    )
+  end
+
+  defp scope_name(sub), do: sub.channel && sub.channel.name
+
+  defp search_match?("", _texts), do: true
+
+  defp search_match?(query, texts) do
+    Enum.any?(texts, fn text ->
+      is_binary(text) and String.contains?(String.downcase(text), query)
+    end)
+  end
+
+  defp subscriptions_path(search) do
+    case String.trim(search) do
+      "" -> ~p"/inbox/subscriptions"
+      search -> ~p"/inbox/subscriptions?search=#{search}"
+    end
   end
 
   @impl true
@@ -46,17 +113,21 @@ defmodule TrackerWeb.InboxLive.Subscriptions do
         </div>
       </div>
 
-      <p
-        :if={@package_subs == [] and @channel_subs == [] and @change_subs == []}
-        id="subscriptions-empty"
-        class="ibx-empty"
-      >
+      <p :if={!@any_subs?} id="subscriptions-empty" class="ibx-empty">
         No subscriptions yet. Subscribe from a package, channel, or change page.
       </p>
 
-      <.section :if={@package_subs != []} title="Packages" count={length(@package_subs)}>
+      <div :if={@any_subs? && !@any_visible?} class="ibx-empty">
+        Nothing matches this search.
+      </div>
+
+      <.section
+        :if={@visible_package_subs != []}
+        title="Packages"
+        count={length(@visible_package_subs)}
+      >
         <.sub_row
-          :for={sub <- @package_subs}
+          :for={sub <- @visible_package_subs}
           id={"package-subscription-#{sub.id}"}
           kind="package"
           path={~p"/packages/#{sub.package.attribute}"}
@@ -67,9 +138,13 @@ defmodule TrackerWeb.InboxLive.Subscriptions do
         />
       </.section>
 
-      <.section :if={@channel_subs != []} title="Channels" count={length(@channel_subs)}>
+      <.section
+        :if={@visible_channel_subs != []}
+        title="Channels"
+        count={length(@visible_channel_subs)}
+      >
         <.sub_row
-          :for={sub <- @channel_subs}
+          :for={sub <- @visible_channel_subs}
           id={"channel-subscription-#{sub.id}"}
           kind="channel"
           path={~p"/channels/#{sub.channel.name}"}
@@ -79,9 +154,13 @@ defmodule TrackerWeb.InboxLive.Subscriptions do
         />
       </.section>
 
-      <.section :if={@change_subs != []} title="Changes" count={length(@change_subs)}>
+      <.section
+        :if={@visible_change_subs != []}
+        title="Changes"
+        count={length(@visible_change_subs)}
+      >
         <.sub_row
-          :for={sub <- @change_subs}
+          :for={sub <- @visible_change_subs}
           id={"change-subscription-#{sub.id}"}
           kind="change"
           path={~p"/changes/#{sub.change.number}"}

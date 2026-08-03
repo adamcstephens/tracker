@@ -100,6 +100,68 @@ defmodule TrackerWeb.InboxLive.SubscriptionsTest do
     assert has_element?(view, "#subscriptions-empty")
   end
 
+  describe "search" do
+    test "renders an active search box", %{conn: conn} do
+      user = register_user!()
+      conn = log_in(conn, user)
+
+      {:ok, view, _html} = live(conn, ~p"/inbox/subscriptions")
+
+      assert has_element?(view, "#page-search-input")
+      refute has_element?(view, "#page-search-input[disabled]")
+    end
+
+    test "filters subscriptions across kinds", %{conn: conn} do
+      user = register_user!()
+      firefox = PackageSubscription.subscribe!(package!("firefox").id, nil, actor: user)
+      chan = ChannelSubscription.subscribe!(channel!("nixos-unstable").id, actor: user)
+      change = ChangeSubscription.subscribe!(change!().id, nil, actor: user)
+      conn = log_in(conn, user)
+
+      {:ok, view, _html} = live(conn, ~p"/inbox/subscriptions")
+
+      view |> element("#page-search") |> render_change(%{"search" => "FIRE"})
+
+      assert has_element?(view, "#package-subscription-#{firefox.id}")
+      refute has_element?(view, "#channel-subscription-#{chan.id}")
+      refute has_element?(view, "#change-subscription-#{change.id}")
+
+      view |> element("#page-search") |> render_change(%{"search" => "unstable"})
+
+      refute has_element?(view, "#package-subscription-#{firefox.id}")
+      assert has_element?(view, "#channel-subscription-#{chan.id}")
+    end
+
+    test "matches a change by title and number", %{conn: conn} do
+      user = register_user!()
+      change = change!()
+      sub = ChangeSubscription.subscribe!(change.id, nil, actor: user)
+      conn = log_in(conn, user)
+
+      {:ok, view, _html} = live(conn, ~p"/inbox/subscriptions")
+
+      view |> element("#page-search") |> render_change(%{"search" => "#{change.number}"})
+      assert has_element?(view, "#change-subscription-#{sub.id}")
+
+      view |> element("#page-search") |> render_change(%{"search" => "nomatch"})
+      refute has_element?(view, "#change-subscription-#{sub.id}")
+      assert render(view) =~ "Nothing matches"
+    end
+
+    test "applies the search param from the URL", %{conn: conn} do
+      user = register_user!()
+      firefox = PackageSubscription.subscribe!(package!("firefox").id, nil, actor: user)
+      vim = PackageSubscription.subscribe!(package!("vim").id, nil, actor: user)
+      conn = log_in(conn, user)
+
+      {:ok, view, _html} = live(conn, ~p"/inbox/subscriptions?search=firefox")
+
+      assert has_element?(view, "#package-subscription-#{firefox.id}")
+      refute has_element?(view, "#package-subscription-#{vim.id}")
+      assert has_element?(view, "#page-search-input[value='firefox']")
+    end
+  end
+
   test "links back to the inbox", %{conn: conn} do
     user = register_user!()
     conn = log_in(conn, user)
