@@ -6,6 +6,8 @@ defmodule TrackerWeb.InboxLive.Subscriptions do
   """
   use TrackerWeb, :live_view
 
+  import TrackerWeb.InboxLive.Index, only: [view_nav: 1]
+
   on_mount {TrackerWeb.LiveUserAuth, :live_user_required}
 
   alias Tracker.Notifications.ChangeSubscription
@@ -107,10 +109,7 @@ defmodule TrackerWeb.InboxLive.Subscriptions do
     ~H"""
     <div class="ibx">
       <div class="ibx-toolbar">
-        <h1 class="ibx-page-title">Subscriptions</h1>
-        <div class="ibx-actions">
-          <.link navigate={~p"/inbox"} class="ibx-btn">Back to inbox</.link>
-        </div>
+        <.view_nav active={:subscriptions} />
       </div>
 
       <p :if={!@any_subs?} id="subscriptions-empty" class="ibx-empty">

@@ -162,12 +162,14 @@ defmodule TrackerWeb.InboxLive.SubscriptionsTest do
     end
   end
 
-  test "links back to the inbox", %{conn: conn} do
+  test "shows the view toggle with Subscriptions active", %{conn: conn} do
     user = register_user!()
     conn = log_in(conn, user)
 
     {:ok, view, _html} = live(conn, ~p"/inbox/subscriptions")
 
-    assert has_element?(view, ~s{a[href="/inbox"]})
+    assert has_element?(view, ~s{#view-nav-inbox[href="/inbox"]})
+    assert has_element?(view, ~s{#view-nav-subscriptions.is-active[aria-current="page"]})
+    refute has_element?(view, "#view-nav-inbox.is-active")
   end
 end

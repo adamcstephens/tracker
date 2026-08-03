@@ -221,6 +221,7 @@ defmodule TrackerWeb.InboxLive.Index do
     ~H"""
     <div class="ibx">
       <div class="ibx-toolbar">
+        <.view_nav active={:inbox} />
         <div class="ibx-seg" role="group" aria-label="Read state filter">
           <button
             id="filter-unread"
@@ -243,9 +244,6 @@ defmodule TrackerWeb.InboxLive.Index do
         </div>
 
         <div class="ibx-actions">
-          <.link id="subscriptions-link" class="ibx-btn" navigate={~p"/inbox/subscriptions"}>
-            Subscriptions
-          </.link>
           <button
             id="mark-all-read"
             type="button"
@@ -305,6 +303,31 @@ defmodule TrackerWeb.InboxLive.Index do
         </ul>
       </section>
     </div>
+    """
+  end
+
+  attr :active, :atom, required: true, values: [:inbox, :subscriptions]
+
+  def view_nav(assigns) do
+    ~H"""
+    <nav class="ibx-seg" aria-label="Inbox views">
+      <.link
+        id="view-nav-inbox"
+        navigate={~p"/inbox"}
+        class={@active == :inbox && "is-active"}
+        aria-current={@active == :inbox && "page"}
+      >
+        Inbox
+      </.link>
+      <.link
+        id="view-nav-subscriptions"
+        navigate={~p"/inbox/subscriptions"}
+        class={@active == :subscriptions && "is-active"}
+        aria-current={@active == :subscriptions && "page"}
+      >
+        Subscriptions
+      </.link>
+    </nav>
     """
   end
 

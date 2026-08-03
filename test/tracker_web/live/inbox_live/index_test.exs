@@ -78,13 +78,15 @@ defmodule TrackerWeb.InboxLive.IndexTest do
     assert html =~ "Yesterday"
   end
 
-  test "links to the subscriptions view", %{conn: conn} do
+  test "shows the view toggle with Inbox active", %{conn: conn} do
     user = register_user!()
     conn = log_in(conn, user)
 
     {:ok, view, _html} = live(conn, ~p"/inbox")
 
-    assert has_element?(view, ~s{a[href="/inbox/subscriptions"]})
+    assert has_element?(view, ~s{#view-nav-subscriptions[href="/inbox/subscriptions"]})
+    assert has_element?(view, ~s{#view-nav-inbox.is-active[aria-current="page"]})
+    refute has_element?(view, "#view-nav-subscriptions.is-active")
   end
 
   test "toggles a notification between read and unread", %{conn: conn} do
