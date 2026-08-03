@@ -176,6 +176,8 @@ h6 {
 
 html {
 	color-scheme: light dark;
+	/* Keep centered content from shifting when the scrollbar comes and goes. */
+	scrollbar-gutter: stable;
 }
 
 body {
