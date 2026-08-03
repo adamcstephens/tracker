@@ -15,6 +15,7 @@ defmodule TrackerWeb.ChannelLive.Index do
       >
         <:label>
           {channel.name}
+          <.badge :if={channel.build_problem?} variant={:danger}>Build problem</.badge>
           <.badge :if={channel.status == :pre_release} variant={:warn}>Pre-release</.badge>
           <.badge :if={channel.status == :deprecated} variant={:warn}>Deprecated</.badge>
           <.badge :if={channel.status == :retired} variant={:neutral}>Retired</.badge>
@@ -24,7 +25,6 @@ defmodule TrackerWeb.ChannelLive.Index do
           <span>{format_date(channel.latest_release)}</span>
         </:meta>
         <:actions>
-          <.badge :if={channel.build_problem?} variant={:danger}>Build problem</.badge>
           <span class="arrow" aria-hidden="true">→</span>
         </:actions>
       </RowList.row>
