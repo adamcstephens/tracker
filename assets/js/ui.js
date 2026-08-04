@@ -1,11 +1,14 @@
 // Behaviour that needs no LiveView socket. Bundled into app.js for interactive
 // pages and served on its own to everyone else, so it lives in one place.
 
-function isEditable(target) {
+function isTextEntry(target) {
   return !!target && (target.isContentEditable ||
     target.tagName === "INPUT" ||
-    target.tagName === "TEXTAREA" ||
-    target.tagName === "SELECT")
+    target.tagName === "TEXTAREA")
+}
+
+function isEditable(target) {
+  return isTextEntry(target) || (!!target && target.tagName === "SELECT")
 }
 
 // Close the user menu <details> when clicking outside of it.
@@ -73,7 +76,7 @@ function clearPendingJump() {
 
 document.addEventListener("keydown", (event) => {
   if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return
-  if (isEditable(event.target)) return
+  if (isTextEntry(event.target)) return
 
   // A pending "g" owns the next key outright, so "g" then "k" jumps rather
   // than moving the cursor.
@@ -93,7 +96,13 @@ document.addEventListener("keydown", (event) => {
   }
 
   let step = ROW_STEPS[event.key]
-  if (step && moveRow(step)) event.preventDefault()
+  if (!step) return
+
+  // A focused <select> owns its arrow keys — they pick an option, and on the
+  // lens that submits. The letter shortcuts are still ours.
+  if (event.key.startsWith("Arrow") && event.target.tagName === "SELECT") return
+
+  if (moveRow(step)) event.preventDefault()
 })
 
 // Auto-submit the lens form on dropdown change so the channel applies without
