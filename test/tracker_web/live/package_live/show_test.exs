@@ -319,8 +319,18 @@ defmodule TrackerWeb.PackageLive.ShowTest do
   test "list sections use the shared section header", %{conn: conn, package: package} do
     {:ok, view, _html} = live(conn, ~p"/packages/#{package.attribute}")
 
-    assert has_element?(view, ".revisions-header .section-header h2", "Revisions")
-    assert has_element?(view, ".revisions-header .section-header .n", "1")
+    assert has_element?(view, ".section-header:has(#revision-filters) h2", "Revisions")
+    assert has_element?(view, ".section-header:has(#revision-filters) .n", "1")
+  end
+
+  test "the feed link sits with the page actions, not in the revision filters", %{
+    conn: conn,
+    package: package
+  } do
+    {:ok, view, _html} = live(conn, ~p"/packages/#{package.attribute}")
+
+    assert has_element?(view, "hgroup #feed-link")
+    refute has_element?(view, "#revision-filters #feed-link")
   end
 
   test "loads with the lens set to all channels", %{conn: conn, package: package} do

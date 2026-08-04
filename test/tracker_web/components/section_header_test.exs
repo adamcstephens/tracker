@@ -20,5 +20,29 @@ defmodule TrackerWeb.SectionHeaderTest do
       assert html =~ ~s(<span class="rule">)
       assert html =~ ~s(<span class="n">3</span>)
     end
+
+    test "renders controls between the rule and the count" do
+      assigns = %{}
+
+      html =
+        rendered_to_string(~H"""
+        <SectionHeader.section_header title="Revisions" count={3}>
+          <:controls><button>Filter</button></:controls>
+        </SectionHeader.section_header>
+        """)
+
+      assert html =~ ~s(<span class="section-controls"><button>Filter</button></span>)
+    end
+
+    test "omits the controls wrapper when no controls are given" do
+      assigns = %{}
+
+      html =
+        rendered_to_string(~H"""
+        <SectionHeader.section_header title="Revisions" count={3} />
+        """)
+
+      refute html =~ "section-controls"
+    end
   end
 end

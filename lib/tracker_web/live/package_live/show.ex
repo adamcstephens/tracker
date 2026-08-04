@@ -14,6 +14,15 @@ defmodule TrackerWeb.PackageLive.Show do
     <.header>
       {@package.attribute}
       <:actions>
+        <a
+          id="feed-link"
+          href={"/feeds/packages/#{@package.attribute}"}
+          phx-hook="CopyLink"
+          title="Copy the Atom feed URL"
+          style="display: flex; align-items: center;"
+        >
+          <img src="/images/feed.svg" alt="Atom feed" width="20" height="20" />
+        </a>
         <button
           :if={@current_user}
           id="subscribe-toggle"
@@ -174,45 +183,36 @@ defmodule TrackerWeb.PackageLive.Show do
       </RowList.row_list>
     </section>
 
-    <div class="revisions-header">
-      <SectionHeader.section_header title="Revisions" count={@revision_count} />
-
-      <form
-        id="revision-filters"
-        method="get"
-        action={~p"/packages/#{@package.attribute}"}
-        phx-change="filter"
-        phx-submit="filter"
-        class="revision-filters"
-      >
-        <input
-          type="text"
-          name="version"
-          value={@version_filter}
-          placeholder="Filter by version..."
-          phx-debounce="300"
-        />
-        <label>
-          <input type="hidden" name="all_revisions" value="false" />
-          <input
-            type="checkbox"
-            name="all_revisions"
-            value="true"
-            checked={@all_revisions?}
-          /> All revisions
-        </label>
-        <button type="submit">Filter</button>
-        <a
-          id="feed-link"
-          href={"/feeds/packages/#{@package.attribute}"}
-          phx-hook="CopyLink"
-          title="Copy the Atom feed URL"
-          style="display: flex; align-items: center;"
+    <SectionHeader.section_header title="Revisions" count={@revision_count}>
+      <:controls>
+        <form
+          id="revision-filters"
+          method="get"
+          action={~p"/packages/#{@package.attribute}"}
+          phx-change="filter"
+          phx-submit="filter"
+          class="revision-filters"
         >
-          <img src="/images/feed.svg" alt="Atom feed" width="20" height="20" />
-        </a>
-      </form>
-    </div>
+          <input
+            type="text"
+            name="version"
+            value={@version_filter}
+            placeholder="Filter by version..."
+            phx-debounce="300"
+          />
+          <label>
+            <input type="hidden" name="all_revisions" value="false" />
+            <input
+              type="checkbox"
+              name="all_revisions"
+              value="true"
+              checked={@all_revisions?}
+            /> All revisions
+          </label>
+          <button type="submit">Filter</button>
+        </form>
+      </:controls>
+    </SectionHeader.section_header>
 
     <RowList.row_list :if={@revisions != []} id="revisions" stacked>
       <RowList.row :for={rev <- @revisions}>

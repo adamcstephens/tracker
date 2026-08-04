@@ -826,14 +826,6 @@ a.revision-link {
 }
 
 /* Package revision filters */
-.revisions-header {
-	margin-bottom: 1rem;
-}
-
-.revisions-header h2 {
-	margin-bottom: 0.5rem;
-}
-
 .revision-filters {
 	display: flex;
 	gap: 0.5rem;
@@ -1022,8 +1014,24 @@ a.revision-link {
 	display: flex;
 	align-items: center;
 	gap: 0.625rem;
+	flex-wrap: wrap;
 	margin-top: 1.375rem;
 	margin-bottom: 0.5rem;
+}
+
+.section-controls {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+/* Too narrow to share the title's line: the controls take one of their own,
+   below the title and count. */
+@media (max-width: 48rem) {
+	.section-controls {
+		order: 1;
+		flex-basis: 100%;
+	}
 }
 
 .section-header h2 {
