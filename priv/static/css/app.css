@@ -1077,9 +1077,25 @@ a.revision-link {
 	display: flex;
 	align-items: center;
 	gap: 0.5rem;
-	flex-wrap: wrap;
+	/* one line always, so a long sublabel can't make its row taller than its
+	   peers and drift the page's pagination controls */
+	flex-wrap: nowrap;
+	white-space: nowrap;
+	overflow: hidden;
+	mask-image: linear-gradient(to right, #000 calc(100% - 2rem), transparent);
 	font-size: 0.75rem;
 	color: var(--text-3);
+}
+
+/* The other half of that: a row with no sublabel reserves the line anyway, so
+   it matches the rows around it. Only in lists that carry sublabels — rows
+   with one nest their label in .row-body, so a bare .row-label is a row
+   without. */
+.row-list:has(.row-sublabel) .row-line > .row-label::after {
+	content: "";
+	display: block;
+	font-size: 0.75rem;
+	height: calc(1lh + 0.375rem);
 }
 
 .row-list summary.row-line {

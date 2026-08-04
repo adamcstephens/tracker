@@ -21,6 +21,17 @@ defmodule TrackerWeb.RowList do
 
   Rows whose meta is wide enough to crowd the label on a phone should pass
   `stacked` to `row_list/1`.
+
+  ## Uniform row height
+
+  Every row in a list is the same height, so paging a list doesn't move the
+  controls underneath it. The CSS does this in two parts: a `:sublabel` is
+  held to a single line and fades out where it overflows, and a row without
+  one still reserves the line, in any list where some row has a sublabel.
+
+  A `:label` is exempt — it can wrap, and a wrapped label does make its row
+  taller. It names the row, so truncating it would cost more than the drift
+  it saves.
   """
   use Phoenix.Component
 
