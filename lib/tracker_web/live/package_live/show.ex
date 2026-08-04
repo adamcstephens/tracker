@@ -5,6 +5,7 @@ defmodule TrackerWeb.PackageLive.Show do
   alias TrackerWeb.PageSearch
   alias TrackerWeb.Pagination
   alias TrackerWeb.RowList
+  alias TrackerWeb.SectionHeader
   alias TrackerWeb.TableParams
 
   @impl true
@@ -135,7 +136,7 @@ defmodule TrackerWeb.PackageLive.Show do
     </section>
 
     <section :if={@recent_changes != []}>
-      <h2>Recent Changes</h2>
+      <SectionHeader.section_header title="Recent Changes" count={length(@recent_changes)} />
       <RowList.row_list id="recent-changes" stacked>
         <RowList.row
           :for={change <- @recent_changes}
@@ -154,7 +155,7 @@ defmodule TrackerWeb.PackageLive.Show do
     </section>
 
     <section :if={@package_events != []}>
-      <h2>Lifecycle Events</h2>
+      <SectionHeader.section_header title="Lifecycle Events" count={length(@package_events)} />
       <RowList.row_list id="lifecycle-events" stacked>
         <RowList.row :for={event <- @package_events}>
           <:leading>
@@ -174,7 +175,7 @@ defmodule TrackerWeb.PackageLive.Show do
     </section>
 
     <div class="revisions-header">
-      <h2>Revisions</h2>
+      <SectionHeader.section_header title="Revisions" count={@revision_count} />
 
       <form
         id="revision-filters"
@@ -483,6 +484,7 @@ defmodule TrackerWeb.PackageLive.Show do
     |> assign(:recent_changes, recent_changes)
     |> assign(:package_events, package_events)
     |> assign(:revisions, revisions)
+    |> assign(:revision_count, total_count)
     |> assign(:has_prev_page?, tp.offset > 0)
     |> assign(:has_next_page?, has_more?)
     |> assign(:total_pages, total_pages)

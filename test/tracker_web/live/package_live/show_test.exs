@@ -316,6 +316,13 @@ defmodule TrackerWeb.PackageLive.ShowTest do
     assert html =~ "pkgshow-hello"
   end
 
+  test "list sections use the shared section header", %{conn: conn, package: package} do
+    {:ok, view, _html} = live(conn, ~p"/packages/#{package.attribute}")
+
+    assert has_element?(view, ".revisions-header .section-header h2", "Revisions")
+    assert has_element?(view, ".revisions-header .section-header .n", "1")
+  end
+
   test "loads with the lens set to all channels", %{conn: conn, package: package} do
     {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}?lens_channel=all")
 

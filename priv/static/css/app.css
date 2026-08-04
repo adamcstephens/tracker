@@ -1022,7 +1022,13 @@ a.revision-link {
 	display: flex;
 	align-items: center;
 	gap: 0.625rem;
+	margin-top: 1.375rem;
 	margin-bottom: 0.5rem;
+}
+
+/* The inbox's day groups already carry the gap on their wrapper. */
+.ibx-day > .section-header {
+	margin-top: 0;
 }
 
 .section-header h2 {
