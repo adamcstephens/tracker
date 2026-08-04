@@ -3,6 +3,7 @@ defmodule TrackerWeb.MaintainerLive.Show do
 
   alias TrackerWeb.DataTable
   alias TrackerWeb.PageSearch
+  alias TrackerWeb.RowList
   alias TrackerWeb.TableParams
 
   @impl true
@@ -27,42 +28,36 @@ defmodule TrackerWeb.MaintainerLive.Show do
 
     <div :if={@maintainer.teams != []} style="margin-top: 1rem;">
       <h2>Teams</h2>
-      <ul>
-        <li :for={t <- @maintainer.teams}>
-          <.link navigate={~p"/teams/#{t.short_name}"}>{t.short_name}</.link>
-          <span :if={t.scope}>{t.scope}</span>
-        </li>
-      </ul>
+      <RowList.row_list id="maintainer-teams">
+        <RowList.row
+          :for={t <- @maintainer.teams}
+          mode={:link}
+          navigate={~p"/teams/#{t.short_name}"}
+        >
+          <:label>{t.short_name}</:label>
+          <:sublabel :if={t.scope}>{t.scope}</:sublabel>
+          <:actions><span class="arrow" aria-hidden="true">→</span></:actions>
+        </RowList.row>
+      </RowList.row_list>
     </div>
 
     <section :if={@recent_changes != []}>
       <h2>Recent Changes</h2>
-      <figure>
-        <table role="grid">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Title</th>
-              <th>Role</th>
-              <th>Merged</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr :for={change <- @recent_changes}>
-              <td>
-                <.link navigate={~p"/changes/#{change.number}"}>{change.number}</.link>
-              </td>
-              <td>
-                <span style="display: block; max-width: 40ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                  {change.title}
-                </span>
-              </td>
-              <td>{change_role(change, @maintainer.github_id)}</td>
-              <td>{format_datetime(change.merged_at)}</td>
-            </tr>
-          </tbody>
-        </table>
-      </figure>
+      <RowList.row_list id="maintainer-recent-changes" stacked>
+        <RowList.row
+          :for={change <- @recent_changes}
+          mode={:link}
+          navigate={~p"/changes/#{change.number}"}
+        >
+          <:label>
+            <span class="row-num">#{change.number}</span> {change.title}
+          </:label>
+          <:meta>
+            <span>{change_role(change, @maintainer.github_id)}</span>
+            <span>{format_datetime(change.merged_at)}</span>
+          </:meta>
+        </RowList.row>
+      </RowList.row_list>
     </section>
 
     <h2>Packages ({@package_count})</h2>
@@ -83,13 +78,17 @@ defmodule TrackerWeb.MaintainerLive.Show do
       />
     </form>
 
-    <.table
-      id="maintainer-packages"
-      rows={@streams.packages}
-      row_click={fn {_id, package} -> JS.navigate(~p"/packages/#{package.attribute}") end}
-    >
-      <:col :let={{_id, package}} label="Package">{package.attribute}</:col>
-    </.table>
+    <RowList.row_list id="maintainer-packages" phx-update="stream">
+      <RowList.row
+        :for={{dom_id, package} <- @streams.packages}
+        id={dom_id}
+        mode={:link}
+        navigate={~p"/packages/#{package.attribute}"}
+      >
+        <:label>{package.attribute}</:label>
+        <:actions><span class="arrow" aria-hidden="true">→</span></:actions>
+      </RowList.row>
+    </RowList.row_list>
 
     <DataTable.pagination
       total_pages={@total_pages}

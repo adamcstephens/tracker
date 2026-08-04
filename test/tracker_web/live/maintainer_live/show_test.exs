@@ -57,6 +57,68 @@ defmodule TrackerWeb.MaintainerLive.ShowTest do
     assert html =~ "maint-pkg-two"
   end
 
+  test "packages render as shared row-list link rows", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/maintainers/testmaint")
+
+    document = Floki.parse_document!(html)
+    [list] = Floki.find(document, "#maintainer-packages")
+
+    assert Floki.attribute(list, "class") == ["row-list"]
+    assert Floki.find(list, ~s(a.row-link[href="/packages/maint-pkg-one"])) != []
+    assert Floki.find(document, "table") == []
+  end
+
+  test "teams render as shared row-list link rows", %{conn: conn} do
+    team =
+      Tracker.Nixpkgs.Team
+      |> Ash.Changeset.for_create(:bulk_upsert, %{
+        short_name: "python",
+        scope: "Python ecosystem"
+      })
+      |> Ash.create!()
+
+    maintainer = Tracker.Nixpkgs.Maintainer.get_by_github!("testmaint")
+
+    Tracker.Nixpkgs.TeamMember
+    |> Ash.Changeset.for_create(:load, %{team_id: team.id, maintainer_id: maintainer.id})
+    |> Ash.create!()
+
+    {:ok, _view, html} = live(conn, ~p"/maintainers/testmaint")
+
+    document = Floki.parse_document!(html)
+    [list] = Floki.find(document, "#maintainer-teams")
+
+    assert Floki.find(list, ~s(a.row-link[href="/teams/python"])) != []
+    assert Floki.text(list) =~ "Python ecosystem"
+  end
+
+  test "recent changes render as shared row-list rows instead of a raw table", %{conn: conn} do
+    Tracker.Nixpkgs.Change
+    |> Ash.Changeset.for_create(:bulk_upsert, %{
+      number: 4242,
+      title: "python3Packages.numpy: 2.0.0 -> 2.1.0",
+      state: :merged,
+      url: "https://github.com/NixOS/nixpkgs/pull/4242",
+      base_ref: "master",
+      author_github_id: 2001,
+      merged_at: ~U[2026-04-01 10:00:00Z],
+      gh_updated_at: ~U[2026-04-01 10:00:00Z]
+    })
+    |> Ash.create!()
+
+    {:ok, _view, html} = live(conn, ~p"/maintainers/testmaint")
+
+    document = Floki.parse_document!(html)
+    [list] = Floki.find(document, "#maintainer-recent-changes")
+
+    assert Floki.find(list, ~s(a.row-link[href="/changes/4242"])) != []
+    assert Floki.text(list) =~ "python3Packages.numpy"
+    assert Floki.text(list) =~ "author"
+    assert Floki.text(list) =~ "2026-04-01"
+    # The inline-styled truncation went with the table
+    refute html =~ "text-overflow: ellipsis"
+  end
+
   test "package search form submits via GET for no-JS fallback", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/maintainers/testmaint")
 

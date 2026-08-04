@@ -1046,8 +1046,9 @@ a.revision-link {
 .row-line {
 	padding: 10px 14px;
 	display: grid;
-	/* label, meta, actions */
-	grid-template-columns: 1fr auto auto;
+	/* label, meta, actions — the label shrinks rather than pushing the
+	   trailing columns out of the row */
+	grid-template-columns: minmax(0, 1fr) auto auto;
 	gap: 10px;
 	align-items: baseline;
 	transition: background 120ms;
@@ -1136,6 +1137,13 @@ a.revision-link {
 
 .row-label .tail {
 	color: var(--accent);
+}
+
+/* Leading identifier inside a label — a PR number, a revision hash. Unlike
+   .leading it is never collapsed on narrow screens; it's the row's name. */
+.row-num {
+	color: var(--text-2);
+	font-variant-numeric: tabular-nums;
 }
 
 .row-meta {
@@ -1379,7 +1387,9 @@ a.revision-link {
 
 	.row-label {
 		min-width: 0;
-		word-break: break-all;
+		/* break inside a word only when it can't fit — attribute paths still
+		   wrap, but prose titles break at spaces */
+		overflow-wrap: anywhere;
 	}
 
 	/* Collapse the page-prefix part of a row label to an ellipsis — the

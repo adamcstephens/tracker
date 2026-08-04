@@ -3,19 +3,23 @@ defmodule TrackerWeb.MaintainerLive.Index do
 
   alias TrackerWeb.DataTable
   alias TrackerWeb.PageSearch
+  alias TrackerWeb.RowList
   alias TrackerWeb.TableParams
 
   @impl true
   def render(assigns) do
     ~H"""
-    <.table
-      id="maintainers"
-      rows={@streams.maintainers}
-    >
-      <:col :let={{_id, m}} label="GitHub">
-        <.link navigate={~p"/maintainers/#{m.github}"}>{m.github}</.link>
-      </:col>
-    </.table>
+    <RowList.row_list id="maintainers" phx-update="stream">
+      <RowList.row
+        :for={{dom_id, m} <- @streams.maintainers}
+        id={dom_id}
+        mode={:link}
+        navigate={~p"/maintainers/#{m.github}"}
+      >
+        <:label>{m.github}</:label>
+        <:actions><span class="arrow" aria-hidden="true">→</span></:actions>
+      </RowList.row>
+    </RowList.row_list>
 
     <DataTable.pagination
       total_pages={@total_pages}
