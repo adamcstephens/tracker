@@ -1,6 +1,6 @@
 defmodule TrackerWeb.TableParams do
   @moduledoc """
-  Centralizes URL parameter parsing, pagination, and sort handling for LiveView tables.
+  Centralizes URL parameter parsing and pagination for LiveView lists.
   """
 
   use TypedStruct
@@ -11,10 +11,6 @@ defmodule TrackerWeb.TableParams do
     field :page, pos_integer(), default: 1
     field :offset, non_neg_integer(), default: 0
     field :page_size, pos_integer(), default: 15
-    field :sort_by, atom(), default: nil
-    field :sort_dir, :asc | :desc, default: :asc
-    field :default_sort, atom(), default: nil
-    field :default_sort_dir, :asc | :desc, default: :asc
   end
 
   @doc """
@@ -22,9 +18,6 @@ defmodule TrackerWeb.TableParams do
 
   ## Options
 
-    * `:allowed_sorts` - list of atoms for valid sort fields
-    * `:default_sort` - default sort field atom (default: nil)
-    * `:default_sort_dir` - default sort direction, :asc or :desc (default: :asc)
     * `:page_size` - number of items per page (default: 15)
     * `:search_key` - atom URL key the search input writes to (default: `:search`).
       Set to e.g. `:package_search` when an inner table shares a page with the
@@ -33,27 +26,17 @@ defmodule TrackerWeb.TableParams do
   @spec from_params(map(), keyword()) :: t()
   def from_params(params, opts \\ []) do
     page_size = Keyword.get(opts, :page_size, 15)
-    allowed_sorts = Keyword.get(opts, :allowed_sorts, [])
-    default_sort = Keyword.get(opts, :default_sort, nil)
-    default_sort_dir = Keyword.get(opts, :default_sort_dir, :asc)
     search_key = Keyword.get(opts, :search_key, :search)
 
     search = Map.get(params, Atom.to_string(search_key), "")
     page = parse_page(params["page"])
-    offset = (page - 1) * page_size
-    sort_by = parse_sort_by(params["sort_by"], allowed_sorts, default_sort)
-    sort_dir = parse_sort_dir(params["sort_dir"], default_sort_dir)
 
     %__MODULE__{
       search: search,
       search_key: search_key,
       page: page,
-      offset: offset,
-      page_size: page_size,
-      sort_by: sort_by,
-      sort_dir: sort_dir,
-      default_sort: default_sort,
-      default_sort_dir: default_sort_dir
+      offset: (page - 1) * page_size,
+      page_size: page_size
     }
   end
 
@@ -67,8 +50,6 @@ defmodule TrackerWeb.TableParams do
       %{}
       |> maybe_put(tp.search_key, tp.search, "")
       |> maybe_put(:page, tp.page, 1)
-      |> maybe_put(:sort_by, tp.sort_by, tp.default_sort)
-      |> maybe_put(:sort_dir, tp.sort_dir, tp.default_sort_dir)
 
     extras
     |> Enum.reject(fn {_k, v} -> v in ["", nil, false] end)
@@ -119,21 +100,6 @@ defmodule TrackerWeb.TableParams do
   def changed?(%__MODULE__{} = old, %__MODULE__{} = new), do: old != new
 
   @doc """
-  Toggle sort direction.
-  """
-  @spec toggle_dir(:asc | :desc) :: :asc | :desc
-  def toggle_dir(:asc), do: :desc
-  def toggle_dir(:desc), do: :asc
-
-  @doc """
-  Returns a sort indicator string for the given field.
-  """
-  @spec sort_indicator(t(), atom()) :: String.t()
-  def sort_indicator(%__MODULE__{sort_by: field, sort_dir: :asc}, field), do: "↑"
-  def sort_indicator(%__MODULE__{sort_by: field, sort_dir: :desc}, field), do: "↓"
-  def sort_indicator(%__MODULE__{}, _field), do: ""
-
-  @doc """
   Compute pagination assigns from an Ash page result.
 
   Returns a map with:
@@ -173,19 +139,6 @@ defmodule TrackerWeb.TableParams do
       :error -> 1
     end
   end
-
-  defp parse_sort_by(nil, _allowed, default), do: default
-
-  defp parse_sort_by(field, allowed, default) when is_binary(field) do
-    atom = String.to_existing_atom(field)
-    if atom in allowed, do: atom, else: default
-  rescue
-    ArgumentError -> default
-  end
-
-  defp parse_sort_dir("asc", _default), do: :asc
-  defp parse_sort_dir("desc", _default), do: :desc
-  defp parse_sort_dir(_, default), do: default
 
   defp maybe_put(map, _key, value, value), do: map
   defp maybe_put(map, _key, nil, _default), do: map

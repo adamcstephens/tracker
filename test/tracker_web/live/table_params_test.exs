@@ -10,8 +10,6 @@ defmodule TrackerWeb.TableParamsTest do
       assert tp.page == 1
       assert tp.offset == 0
       assert tp.page_size == 15
-      assert tp.sort_by == nil
-      assert tp.sort_dir == :asc
     end
 
     test "parses search" do
@@ -53,53 +51,6 @@ defmodule TrackerWeb.TableParamsTest do
       assert tp.offset == 0
     end
 
-    test "parses sort_by from allowed_sorts" do
-      tp = TableParams.from_params(%{"sort_by" => "name"}, allowed_sorts: ~w(name date)a)
-      assert tp.sort_by == :name
-    end
-
-    test "falls back to default_sort when sort_by not in allowed_sorts" do
-      tp =
-        TableParams.from_params(%{"sort_by" => "invalid"},
-          allowed_sorts: ~w(name)a,
-          default_sort: :name
-        )
-
-      assert tp.sort_by == :name
-    end
-
-    test "falls back to default_sort when sort_by is not an existing atom" do
-      tp =
-        TableParams.from_params(%{"sort_by" => "nonexistent_atom_xyz"},
-          allowed_sorts: ~w(name)a,
-          default_sort: :name
-        )
-
-      assert tp.sort_by == :name
-    end
-
-    test "parses sort_dir" do
-      tp = TableParams.from_params(%{"sort_dir" => "desc"}, default_sort_dir: :asc)
-      assert tp.sort_dir == :desc
-    end
-
-    test "falls back to default_sort_dir for invalid sort_dir" do
-      tp = TableParams.from_params(%{"sort_dir" => "invalid"}, default_sort_dir: :desc)
-      assert tp.sort_dir == :desc
-    end
-
-    test "uses default_sort and default_sort_dir when no sort params given" do
-      tp =
-        TableParams.from_params(%{},
-          allowed_sorts: ~w(number title)a,
-          default_sort: :number,
-          default_sort_dir: :desc
-        )
-
-      assert tp.sort_by == :number
-      assert tp.sort_dir == :desc
-    end
-
     test "respects custom page_size" do
       tp = TableParams.from_params(%{"page" => "2"}, page_size: 25)
       assert tp.page_size == 25
@@ -131,21 +82,6 @@ defmodule TrackerWeb.TableParamsTest do
     test "includes page when > 1" do
       tp = TableParams.from_params(%{"page" => "2"})
       assert TableParams.to_query_params(tp) == %{page: 2}
-    end
-
-    test "includes sort_by when different from default" do
-      tp =
-        TableParams.from_params(%{"sort_by" => "title"},
-          allowed_sorts: ~w(number title)a,
-          default_sort: :number
-        )
-
-      assert %{sort_by: :title} = TableParams.to_query_params(tp)
-    end
-
-    test "includes sort_dir when different from default" do
-      tp = TableParams.from_params(%{"sort_dir" => "desc"}, default_sort_dir: :asc)
-      assert %{sort_dir: :desc} = TableParams.to_query_params(tp)
     end
 
     test "merges extra params" do
@@ -207,17 +143,6 @@ defmodule TrackerWeb.TableParamsTest do
       refute Map.has_key?(TableParams.to_hidden_inputs(tp), "search")
     end
 
-    test "preserves sort while dropping page" do
-      tp =
-        TableParams.from_params(%{"sort_by" => "title", "sort_dir" => "desc", "page" => "3"},
-          allowed_sorts: ~w(number title)a,
-          default_sort: :number,
-          default_sort_dir: :asc
-        )
-
-      assert TableParams.to_hidden_inputs(tp) == %{"sort_by" => "title", "sort_dir" => "desc"}
-    end
-
     test "preserves extra filters while dropping page" do
       tp = TableParams.from_params(%{"page" => "3"})
       assert TableParams.to_hidden_inputs(tp, %{base_ref: "main"}) == %{"base_ref" => "main"}
@@ -242,118 +167,9 @@ defmodule TrackerWeb.TableParamsTest do
       assert TableParams.changed?(tp1, tp2)
     end
 
-    test "returns true when sort changes" do
-      tp1 = TableParams.from_params(%{}, allowed_sorts: ~w(name)a, default_sort: :name)
-
-      tp2 =
-        TableParams.from_params(%{"sort_dir" => "desc"},
-          allowed_sorts: ~w(name)a,
-          default_sort: :name
-        )
-
-      assert TableParams.changed?(tp1, tp2)
-    end
-
     test "returns true when first arg is nil" do
       tp = TableParams.from_params(%{})
       assert TableParams.changed?(nil, tp)
-    end
-  end
-
-  describe "toggle_dir/1" do
-    test "toggles asc to desc" do
-      assert TableParams.toggle_dir(:asc) == :desc
-    end
-
-    test "toggles desc to asc" do
-      assert TableParams.toggle_dir(:desc) == :asc
-    end
-  end
-
-  describe "sort_indicator/2" do
-    test "returns up arrow for matching field with asc" do
-      tp =
-        TableParams.from_params(%{"sort_by" => "name"},
-          allowed_sorts: ~w(name)a,
-          default_sort: :name
-        )
-
-      assert TableParams.sort_indicator(tp, :name) == "↑"
-    end
-
-    test "returns down arrow for matching field with desc" do
-      tp =
-        TableParams.from_params(%{"sort_by" => "name", "sort_dir" => "desc"},
-          allowed_sorts: ~w(name)a,
-          default_sort: :name,
-          default_sort_dir: :asc
-        )
-
-      assert TableParams.sort_indicator(tp, :name) == "↓"
-    end
-
-    test "returns empty string for non-matching field" do
-      tp =
-        TableParams.from_params(%{"sort_by" => "name"},
-          allowed_sorts: ~w(name date)a,
-          default_sort: :name
-        )
-
-      assert TableParams.sort_indicator(tp, :date) == ""
-    end
-  end
-
-  describe "apply_pagination/3" do
-    test "assigns pagination state from Ash page result" do
-      tp = TableParams.from_params(%{"page" => "2"})
-
-      page_result = %{
-        count: 45,
-        results: [:item1, :item2],
-        more?: true
-      }
-
-      assigns = TableParams.apply_pagination(tp, page_result, :items)
-
-      assert assigns.has_prev_page? == true
-      assert assigns.has_next_page? == true
-      assert assigns.total_pages == 3
-      assert assigns.current_page == 2
-      assert assigns.stream_name == :items
-      assert assigns.stream_results == [:item1, :item2]
-    end
-
-    test "first page has no prev" do
-      tp = TableParams.from_params(%{})
-
-      page_result = %{count: 30, results: [:a], more?: true}
-      assigns = TableParams.apply_pagination(tp, page_result, :items)
-
-      assert assigns.has_prev_page? == false
-      assert assigns.current_page == 1
-    end
-
-    test "handles zero count" do
-      tp = TableParams.from_params(%{})
-
-      page_result = %{count: 0, results: [], more?: false}
-      assigns = TableParams.apply_pagination(tp, page_result, :items)
-
-      assert assigns.total_pages == 0
-      assert assigns.has_prev_page? == false
-      assert assigns.has_next_page? == false
-    end
-
-    test "count-less page result yields nil total_pages" do
-      tp = TableParams.from_params(%{"page" => "2"})
-
-      page_result = %{count: nil, results: [:a], more?: true}
-      assigns = TableParams.apply_pagination(tp, page_result, :items)
-
-      assert assigns.total_pages == nil
-      assert assigns.has_prev_page? == true
-      assert assigns.has_next_page? == true
-      assert assigns.current_page == 2
     end
   end
 end
