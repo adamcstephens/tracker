@@ -2,8 +2,25 @@ defmodule TrackerWeb.RowList do
   @moduledoc """
   The app's list idiom: one card with internal dividers, one row per item.
 
-  A row is a label, optional trailing meta and actions, and — in expandable
+  A row is an optional leading affordance, a label with an optional second
+  line under it, optional trailing meta and actions, and — in expandable
   mode — a body that opens beneath it.
+
+  ## Where content goes
+
+  Each row is its own grid, so columns don't align across rows: a wide
+  trailing column shifts that row's meta leftward while its neighbours stay
+  put, and on a narrow screen it takes the width the label needed, wrapping
+  the label to a character per line.
+
+  So `:meta` and `:actions` are for near-constant-width content — a count, a
+  timestamp, a status, an icon button. Anything variable-width (a
+  description, an attribute path, a scope sentence, a badge that only some
+  rows carry) belongs in `:label` or `:sublabel`, which share the row's one
+  flexible column.
+
+  Rows whose meta is wide enough to crowd the label on a phone should pass
+  `stacked` to `row_list/1`.
   """
   use Phoenix.Component
 
