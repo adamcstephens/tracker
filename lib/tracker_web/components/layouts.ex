@@ -86,6 +86,7 @@ defmodule TrackerWeb.Layouts do
         title: "General",
         shortcuts: [
           %Shortcut{keys: ["/"], label: "Focus search"},
+          %Shortcut{keys: ["Esc"], label: "Leave search"},
           %Shortcut{keys: ["?"], label: "This list"}
         ]
       }

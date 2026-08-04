@@ -33,6 +33,21 @@ document.addEventListener("keydown", (event) => {
   input.select()
 })
 
+// Escape hands focus back to the page so row navigation works again. The input
+// is type="search", which Chromium and WebKit clear on Escape while keeping
+// focus and Firefox ignores entirely, so take the key outright: one press
+// always exits, on every engine. Clearing stays with the × link, which
+// navigates and so keeps the input and the server's results in step.
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return
+  if (event.target.id !== "page-search-input") return
+  // An open dialog owns Escape; closing it must not also blur the box.
+  if (document.querySelector("dialog[open]")) return
+
+  event.preventDefault()
+  event.target.blur()
+})
+
 // A row's focus target differs per mode: an anchor for :link, a summary for
 // :expandable, and the line itself for :plain.
 //

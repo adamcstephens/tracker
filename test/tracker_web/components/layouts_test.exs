@@ -536,6 +536,13 @@ defmodule TrackerWeb.LayoutsTest do
       end
     end
 
+    test "it documents Escape as the way back out of the search box" do
+      general = Enum.find(Layouts.shortcut_groups(), &(&1.title == "General"))
+
+      assert %{keys: ["Esc"], label: "Leave search"} =
+               Enum.find(general.shortcuts, &("Esc" in &1.keys))
+    end
+
     test "it renders on a dead page too, where there is no socket", %{conn: conn} do
       html = conn |> get(~p"/changes") |> html_response(200)
 
