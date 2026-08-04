@@ -185,7 +185,7 @@ defmodule TrackerWeb.InboxLive.Subscriptions do
 
   defp section(assigns) do
     ~H"""
-    <section class="ibx-day">
+    <section>
       <SectionHeader.section_header title={@title} count={@count} />
       <RowList.row_list id={@id}>
         {render_slot(@inner_block)}

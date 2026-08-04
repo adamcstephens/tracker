@@ -1026,11 +1026,6 @@ a.revision-link {
 	margin-bottom: 0.5rem;
 }
 
-/* The inbox's day groups already carry the gap on their wrapper. */
-.ibx-day > .section-header {
-	margin-top: 0;
-}
-
 .section-header h2 {
 	margin: 0;
 	font-size: 0.75rem;
@@ -3296,15 +3291,6 @@ a.revision-link {
 }
 .ibx-t-propagate {
 	background: var(--t-propagate);
-}
-
-/* Day groups */
-.ibx-day {
-	margin-top: 1.375rem;
-}
-
-.ibx-day:first-of-type {
-	margin-top: 0.625rem;
 }
 
 /* Notification rows */

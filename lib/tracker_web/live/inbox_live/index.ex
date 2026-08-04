@@ -310,7 +310,7 @@ defmodule TrackerWeb.InboxLive.Index do
         Nothing matches these filters.
       </div>
 
-      <section :for={{{day, rows}, index} <- Enum.with_index(@groups)} class="ibx-day">
+      <section :for={{{day, rows}, index} <- Enum.with_index(@groups)}>
         <SectionHeader.section_header title={day} count={length(rows)} />
         <RowList.row_list id={"inbox-day-#{index}"}>
           <.row :for={n <- rows} n={n} now={@now} version_changes={@version_changes} />
