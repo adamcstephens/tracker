@@ -4,13 +4,8 @@ defmodule TrackerWeb.PackageLive.Show do
   alias Tracker.Notifications.PackageSubscription
   alias TrackerWeb.DataTable
   alias TrackerWeb.PageSearch
+  alias TrackerWeb.RowList
   alias TrackerWeb.TableParams
-
-  @table_opts [
-    allowed_sorts: ~w(version channel_name revision_hash released_at)a,
-    default_sort: :released_at,
-    default_sort_dir: :desc
-  ]
 
   @impl true
   def render(assigns) do
@@ -141,64 +136,41 @@ defmodule TrackerWeb.PackageLive.Show do
 
     <section :if={@recent_changes != []}>
       <h2>Recent Changes</h2>
-      <figure>
-        <table role="grid">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Title</th>
-              <th>Author</th>
-              <th>Merged</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr :for={change <- @recent_changes}>
-              <td>
-                <.link navigate={~p"/changes/#{change.number}"}>{change.number}</.link>
-              </td>
-              <td>
-                <span style="display: block; max-width: 40ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                  {change.title}
-                </span>
-              </td>
-              <td>{change.author}</td>
-              <td>{format_released_at(change.merged_at)}</td>
-            </tr>
-          </tbody>
-        </table>
-      </figure>
+      <RowList.row_list id="recent-changes" stacked>
+        <RowList.row
+          :for={change <- @recent_changes}
+          mode={:link}
+          navigate={~p"/changes/#{change.number}"}
+        >
+          <:label>
+            <span class="row-num">#{change.number}</span> {change.title}
+          </:label>
+          <:meta>
+            <span>{change.author}</span>
+            <span>{format_released_at(change.merged_at)}</span>
+          </:meta>
+        </RowList.row>
+      </RowList.row_list>
     </section>
 
     <section :if={@package_events != []}>
       <h2>Lifecycle Events</h2>
-      <figure>
-        <table role="grid">
-          <thead>
-            <tr>
-              <th>Event</th>
-              <th>Channel</th>
-              <th>Revision</th>
-              <th>Date</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr :for={event <- @package_events}>
-              <td>
-                <mark :if={event.type == :added}>added</mark>
-                <del :if={event.type == :removed}>removed</del>
-              </td>
-              <td>{event.channel_revision.channel.name}</td>
-              <td>
-                <.revision_link
-                  revision={event.channel_revision.revision}
-                  channel={event.channel_revision.channel.name}
-                />
-              </td>
-              <td>{format_released_at(event.channel_revision.released_at)}</td>
-            </tr>
-          </tbody>
-        </table>
-      </figure>
+      <RowList.row_list id="lifecycle-events" stacked>
+        <RowList.row :for={event <- @package_events}>
+          <:leading>
+            <mark :if={event.type == :added}>added</mark>
+            <del :if={event.type == :removed}>removed</del>
+          </:leading>
+          <:label>{event.channel_revision.channel.name}</:label>
+          <:meta>
+            <.revision_link
+              revision={event.channel_revision.revision}
+              channel={event.channel_revision.channel.name}
+            />
+            <span>{format_released_at(event.channel_revision.released_at)}</span>
+          </:meta>
+        </RowList.row>
+      </RowList.row_list>
     </section>
 
     <div class="revisions-header">
@@ -241,38 +213,43 @@ defmodule TrackerWeb.PackageLive.Show do
       </form>
     </div>
 
-    <DataTable.data_table
-      :if={@revisions != []}
-      id="revisions"
-      rows={@revisions}
-      table_params={@table_params}
-      base_path={"/packages/#{@package.attribute}"}
-      extra_params={%{version: @version_filter, all_revisions: @all_revisions?}}
+    <RowList.row_list :if={@revisions != []} id="revisions" stacked>
+      <RowList.row :for={rev <- @revisions}>
+        <:label>
+          <.github_version_link
+            version={rev.version}
+            position={@package_meta.position}
+            revision={rev_revision(rev)}
+          />
+        </:label>
+        <:sublabel>{rev_channel(rev)}</:sublabel>
+        <:meta>
+          <.revision_link revision={rev_revision(rev)} channel={rev_channel(rev)} />
+          <span>{format_released_at(rev_released_at(rev))}</span>
+        </:meta>
+      </RowList.row>
+    </RowList.row_list>
+
+    <DataTable.pagination
       total_pages={@total_pages}
       current_page={@current_page}
       has_prev_page?={@has_prev_page?}
       has_next_page?={@has_next_page?}
-    >
-      <:col :let={rev} field={:version} label="Version" sortable>
-        <.github_version_link
-          version={rev.version}
-          position={@package_meta.position}
-          revision={rev_revision(rev)}
-        />
-      </:col>
-      <:col :let={rev} field={:channel_name} label="Channel" sortable>
-        {rev_channel(rev)}
-      </:col>
-      <:col :let={rev} field={:revision_hash} label="Revision" sortable>
-        <.revision_link
-          revision={rev_revision(rev)}
-          channel={rev_channel(rev)}
-        />
-      </:col>
-      <:col :let={rev} field={:released_at} label="Released" sortable>
-        {format_released_at(rev_released_at(rev))}
-      </:col>
-    </DataTable.data_table>
+      prev_path={
+        revisions_path(
+          @package.attribute,
+          %{@table_params | page: @current_page - 1},
+          %{version: @version_filter, all_revisions: @all_revisions?}
+        )
+      }
+      next_path={
+        revisions_path(
+          @package.attribute,
+          %{@table_params | page: @current_page + 1},
+          %{version: @version_filter, all_revisions: @all_revisions?}
+        )
+      }
+    />
 
     <p :if={@revisions == []}>
       No revisions found.
@@ -378,7 +355,7 @@ defmodule TrackerWeb.PackageLive.Show do
       |> Enum.map(& &1.id)
       |> Tracker.Nixpkgs.OptionHistory.current_metadata()
 
-    tp = TableParams.from_params(params, @table_opts)
+    tp = TableParams.from_params(params)
     version_filter = params["version"] || ""
     all_revisions? = params["all_revisions"] == "true"
 
@@ -478,8 +455,6 @@ defmodule TrackerWeb.PackageLive.Show do
         result =
           load_revisions(
             package_id,
-            tp.sort_by,
-            tp.sort_dir,
             channel_id,
             version_filter,
             tp.offset,
@@ -492,8 +467,8 @@ defmodule TrackerWeb.PackageLive.Show do
           Tracker.Nixpkgs.PackageHistory.version_changes_by_package(package_id,
             channel_id: channel_id,
             version: version_filter,
-            sort_by: tp.sort_by,
-            sort_dir: tp.sort_dir,
+            sort_by: :released_at,
+            sort_dir: :desc,
             limit: tp.page_size,
             offset: tp.offset
           )
@@ -530,22 +505,6 @@ defmodule TrackerWeb.PackageLive.Show do
       end
 
     {:noreply, assign(socket, :subscribed?, subscribed?)}
-  end
-
-  @impl true
-  def handle_event("sort", %{"field" => field}, socket) do
-    tp = socket.assigns.table_params
-    new_sort_by = TableParams.from_params(%{"sort_by" => field}, @table_opts).sort_by
-
-    new_sort_dir =
-      if tp.sort_by == new_sort_by, do: TableParams.toggle_dir(tp.sort_dir), else: :asc
-
-    new_tp = %{tp | sort_by: new_sort_by, sort_dir: new_sort_dir, page: 1, offset: 0}
-
-    {:noreply,
-     push_patch(socket,
-       to: revisions_path(socket.assigns.package.attribute, new_tp, extra_params(socket))
-     )}
   end
 
   @impl true
@@ -594,19 +553,11 @@ defmodule TrackerWeb.PackageLive.Show do
      )}
   end
 
-  defp load_revisions(
-         package_id,
-         sort_by,
-         sort_dir,
-         channel_id,
-         version_filter,
-         offset,
-         page_size
-       ) do
+  defp load_revisions(package_id, channel_id, version_filter, offset, page_size) do
     Tracker.Nixpkgs.PackageHistory.revisions_by_package(package_id, channel_id,
       version: version_filter,
-      sort_by: sort_by,
-      sort_dir: sort_dir,
+      sort_by: :released_at,
+      sort_dir: :desc,
       limit: page_size,
       offset: offset
     )

@@ -1424,6 +1424,19 @@ a.revision-link {
 		grid-column: 1 / -1;
 	}
 
+	/* A leading affordance keeps its own column and the label sits beside it,
+	   so the trailing content drops to a second line aligned under the label
+	   rather than under the glyph. */
+	.row-list--stacked .row-line--leading {
+		grid-template-columns: auto minmax(0, 1fr);
+	}
+
+	.row-list--stacked > li .row-line--leading .row-label,
+	.row-list--stacked > li .row-line--leading .row-body,
+	.row-list--stacked > li .row-line--leading .row-meta {
+		grid-column: 2 / -1;
+	}
+
 	.row-list--stacked .row-actions {
 		justify-content: flex-end;
 	}

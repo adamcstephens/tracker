@@ -362,21 +362,20 @@ defmodule TrackerWeb.PackageLive.ShowTest do
     assert html =~ "No revisions found"
   end
 
-  test "displays released_at column", %{conn: conn, package: package} do
+  test "displays when each revision was released", %{conn: conn, package: package} do
     {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}")
 
-    assert html =~ "Released"
     assert html =~ "2026-03-01 10:00"
   end
 
-  test "default sort is released_at descending", %{conn: conn, package: package} do
+  test "revisions are listed most recently released first", %{conn: conn, package: package} do
     {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}")
 
     # Only nixos-unstable revision is shown (lens default)
     assert version_order(html) == ["2.12.1"]
   end
 
-  test "released_at descending sorts by temporal order across months", %{
+  test "revision order follows temporal order across months", %{
     conn: conn,
     channel_unstable: channel_unstable
   } do
@@ -408,21 +407,11 @@ defmodule TrackerWeb.PackageLive.ShowTest do
     assert version_order(html) == ["6.17.0", "6.16.0"]
   end
 
-  test "sort by version ascending via URL param", %{conn: conn, package: package} do
+  test "sort params no longer reorder the revisions", %{conn: conn, package: package} do
     {:ok, _view, html} =
       live(conn, ~p"/packages/#{package.attribute}?sort_by=version&sort_dir=asc")
 
     # Only one revision in the lens channel (nixos-unstable)
-    assert version_order(html) == ["2.12.1"]
-  end
-
-  test "clicking sort header updates URL", %{conn: conn, package: package} do
-    {:ok, view, _html} = live(conn, ~p"/packages/#{package.attribute}")
-
-    # Click version header to sort asc
-    html = view |> element("th[phx-value-field=version]") |> render_click()
-
-    assert_patched(view, ~p"/packages/#{package.attribute}?sort_by=version&sort_dir=asc")
     assert version_order(html) == ["2.12.1"]
   end
 
@@ -641,37 +630,20 @@ defmodule TrackerWeb.PackageLive.ShowTest do
       assert Floki.attribute(form, "action") == ["/packages/#{package.attribute}"]
     end
 
-    test "all_revisions is preserved in URL after sort", %{conn: conn, package: package} do
+    test "filtering by version keeps the all_revisions toggle in the URL", %{
+      conn: conn,
+      package: package
+    } do
       {:ok, view, _html} =
         live(conn, ~p"/packages/#{package.attribute}?all_revisions=true")
 
-      # Click sort to verify all_revisions survives navigation
-      view |> element("th[phx-value-field=version]") |> render_click()
+      view
+      |> element("form.revision-filters")
+      |> render_change(%{"version" => "2.12", "all_revisions" => "true"})
 
       url = assert_patch(view)
       assert url =~ "all_revisions=true"
-      assert url =~ "sort_by=version"
-      assert url =~ "sort_dir=asc"
-    end
-
-    test "sort link href keeps the revision filters", %{conn: conn, package: package} do
-      {:ok, _view, html} =
-        live(conn, ~p"/packages/#{package.attribute}?all_revisions=true&version=2.12")
-
-      [link] =
-        html
-        |> Floki.parse_document!()
-        |> Floki.find("th[phx-value-field=version] a")
-
-      [href] = Floki.attribute(link, "href")
-      params = href |> URI.parse() |> Map.fetch!(:query) |> URI.decode_query()
-
-      assert params == %{
-               "all_revisions" => "true",
-               "version" => "2.12",
-               "sort_by" => "version",
-               "sort_dir" => "asc"
-             }
+      assert url =~ "version=2.12"
     end
   end
 
@@ -796,8 +768,9 @@ defmodule TrackerWeb.PackageLive.ShowTest do
   end
 
   defp version_order(html) do
-    ~r/<td[^>]*>\s*(\d+\.\d+\.\d+)\s*<\/td>/
-    |> Regex.scan(html)
-    |> Enum.map(fn [_, version] -> version end)
+    html
+    |> Floki.parse_document!()
+    |> Floki.find("#revisions .row-label")
+    |> Enum.map(&(&1 |> Floki.text() |> String.trim()))
   end
 end
