@@ -2028,6 +2028,13 @@ a.revision-link {
 	cursor: pointer;
 }
 
+/* The select is an invisible overlay, so a ring on it would never show. Put it
+   on the pill instead, or focusing the lens looks like nothing happened. */
+.lens__form:has(.lens__select:focus-visible) {
+	outline: 2px solid var(--accent-edge);
+	outline-offset: 2px;
+}
+
 /* Disabled lens (channel pages): the disabled attribute sits on the
    invisible overlay select, so grey the whole pill explicitly. */
 .lens__form.lens--disabled {
