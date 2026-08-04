@@ -1417,7 +1417,10 @@ a.revision-link {
 		row-gap: 6px;
 	}
 
-	.row-list--stacked .row-label {
+	/* .row-body is the grid item when a row has a sublabel; .row-label is
+	   the item when it doesn't. */
+	.row-list--stacked > li .row-label,
+	.row-list--stacked > li .row-body {
 		grid-column: 1 / -1;
 	}
 

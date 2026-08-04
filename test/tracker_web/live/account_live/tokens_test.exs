@@ -33,6 +33,43 @@ defmodule TrackerWeb.AccountLive.TokensTest do
       refute html =~ "revoked"
     end
 
+    test "renders tokens as shared row-list rows", %{conn: conn} do
+      user = register_via_github!()
+      {:ok, %{jti: jti}} = ApiToken.issue(user.id, %{label: "my-ci"}, actor: user)
+      conn = log_in(conn, user)
+
+      {:ok, _view, html} = live(conn, ~p"/account/tokens")
+
+      document = Floki.parse_document!(html)
+      [list] = Floki.find(document, "#tokens")
+
+      assert Floki.attribute(list, "class") == ["row-list row-list--stacked"]
+      assert Floki.find(document, "table") == []
+
+      [row] = Floki.find(list, "li")
+      # Rows aren't links — the only interactive thing is the revoke button
+      assert Floki.find(row, "a") == []
+      assert Floki.text(Floki.find(row, ".row-label")) =~ "my-ci"
+      assert Floki.text(Floki.find(row, ".row-sublabel")) =~ jti
+      assert Floki.text(Floki.find(row, ".row-meta")) =~ "active"
+      assert Floki.find(row, ~s(.row-actions button[phx-value-jti="#{jti}"])) != []
+    end
+
+    test "a revoked token keeps its row but loses the revoke button", %{conn: conn} do
+      user = register_via_github!()
+      {:ok, %{jti: jti}} = ApiToken.issue(user.id, %{label: "gone"}, actor: user)
+      {:ok, _} = ApiToken.revoke(jti, actor: user)
+      conn = log_in(conn, user)
+
+      {:ok, _view, html} = live(conn, ~p"/account/tokens")
+
+      document = Floki.parse_document!(html)
+      [row] = Floki.find(document, "#tokens li")
+
+      assert Floki.text(Floki.find(row, ".row-meta")) =~ "revoked"
+      assert Floki.find(row, "button") == []
+    end
+
     test "issues a token and shows the JWT once", %{conn: conn} do
       user = register_via_github!()
       conn = log_in(conn, user)

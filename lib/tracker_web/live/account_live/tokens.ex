@@ -2,6 +2,7 @@ defmodule TrackerWeb.AccountLive.Tokens do
   use TrackerWeb, :live_view
 
   alias Tracker.Accounts.ApiToken
+  alias TrackerWeb.RowList
 
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
@@ -45,24 +46,28 @@ defmodule TrackerWeb.AccountLive.Tokens do
 
     <p :if={@tokens == []}>No tokens.</p>
 
-    <.table :if={@tokens != []} id="tokens" rows={@tokens}>
-      <:col :let={t} label="Label">{label_for(t)}</:col>
-      <:col :let={t} label="Status">{status_for(t)}</:col>
-      <:col :let={t} label="Created">{Calendar.strftime(t.inserted_at, "%Y-%m-%d %H:%M UTC")}</:col>
-      <:col :let={t} label="Expires">{Calendar.strftime(t.expires_at, "%Y-%m-%d %H:%M UTC")}</:col>
-      <:col :let={t} label="JTI"><code>{t.jti}</code></:col>
-      <:action :let={t}>
-        <button
-          :if={is_nil(t.revoked_at)}
-          type="button"
-          phx-click="revoke"
-          phx-value-jti={t.jti}
-          data-confirm="Revoke this token?"
-        >
-          Revoke
-        </button>
-      </:action>
-    </.table>
+    <RowList.row_list :if={@tokens != []} id="tokens" stacked>
+      <RowList.row :for={t <- @tokens} id={"token-#{t.jti}"} mode={:plain}>
+        <:label>{label_for(t)}</:label>
+        <:sublabel>
+          <code>{t.jti}</code>
+          <span>issued {format_datetime(t.inserted_at)}</span>
+          <span>expires {format_datetime(t.expires_at)}</span>
+        </:sublabel>
+        <:meta>{status_for(t)}</:meta>
+        <:actions>
+          <button
+            :if={is_nil(t.revoked_at)}
+            type="button"
+            phx-click="revoke"
+            phx-value-jti={t.jti}
+            data-confirm="Revoke this token?"
+          >
+            Revoke
+          </button>
+        </:actions>
+      </RowList.row>
+    </RowList.row_list>
     """
   end
 
@@ -138,4 +143,6 @@ defmodule TrackerWeb.AccountLive.Tokens do
 
   defp status_for(%{revoked_at: nil}), do: "active"
   defp status_for(%{revoked_at: %DateTime{}}), do: "revoked"
+
+  defp format_datetime(dt), do: Calendar.strftime(dt, "%Y-%m-%d %H:%M UTC")
 end
