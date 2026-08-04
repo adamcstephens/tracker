@@ -21,6 +21,8 @@ import "phoenix_html"
 import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
 import topbar from "../vendor/topbar"
+// Socket-free behaviour, shared with the non-interactive ui.js bundle.
+import "./ui.js"
 
 let Hooks = {}
 
@@ -117,35 +119,6 @@ let liveSocket = new LiveSocket("/live", Socket, {
     return params
   },
   hooks: Hooks
-})
-
-// Close the user menu <details> when clicking outside of it.
-document.addEventListener("click", (event) => {
-  let menu = document.getElementById("app-user-menu")
-  if (!menu || !menu.open) return
-  if (menu.contains(event.target)) return
-  menu.open = false
-})
-
-// Focus the header search input when "/" is pressed outside of an editable element.
-document.addEventListener("keydown", (event) => {
-  if (event.key !== "/") return
-  if (event.ctrlKey || event.metaKey || event.altKey) return
-
-  let target = event.target
-  if (target && (target.isContentEditable ||
-      target.tagName === "INPUT" ||
-      target.tagName === "TEXTAREA" ||
-      target.tagName === "SELECT")) {
-    return
-  }
-
-  let input = document.getElementById("page-search-input")
-  if (!input) return
-
-  event.preventDefault()
-  input.focus()
-  input.select()
 })
 
 // Show progress bar on live navigation and form submits

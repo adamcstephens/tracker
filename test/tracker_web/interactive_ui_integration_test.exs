@@ -42,46 +42,48 @@ defmodule TrackerWeb.InteractiveUIIntegrationTest do
     end
   end
 
-  describe "lens auto-submit fallback script in the root layout" do
-    test "is present for anonymous users (dead view) so the dropdown auto-applies", %{conn: conn} do
+  describe "ui.js script tag in the root layout" do
+    test "is present for anonymous users, who get no app.js bundle", %{conn: conn} do
       conn = get(conn, ~p"/packages")
       html = html_response(conn, 200)
 
-      assert html =~ "requestSubmit()"
-      assert html =~ ~s|matches(".lens__select")|
+      assert html =~ "/assets/ui.js"
+      refute html =~ "/assets/app.js"
     end
 
-    test "is omitted for an authenticated user with live_ui: true (phx-change drives it)",
+    test "is omitted for an authenticated user with live_ui: true (app.js bundles it)",
          %{conn: conn} do
       user = register_via_github!()
       conn = log_in(conn, user) |> get(~p"/packages")
+      html = html_response(conn, 200)
 
-      refute html_response(conn, 200) =~ "requestSubmit()"
+      refute html =~ "/assets/ui.js"
+      assert html =~ "/assets/app.js"
     end
 
     test "is present for an authenticated user with live_ui: false", %{conn: conn} do
       user = register_via_github!() |> opt_out!()
       conn = log_in(conn, user) |> get(~p"/packages")
 
-      assert html_response(conn, 200) =~ "requestSubmit()"
+      assert html_response(conn, 200) =~ "/assets/ui.js"
     end
   end
 
-  describe "slash focus-search fallback script in the root layout" do
-    test "is present for anonymous users (dead view) so \"/\" focuses search", %{conn: conn} do
+  describe "inline fallback scripts are gone from the root layout" do
+    test "the lens auto-submit handler is no longer inlined", %{conn: conn} do
       conn = get(conn, ~p"/packages")
       html = html_response(conn, 200)
 
-      assert html =~ ~s|getElementById("page-search-input")|
-      assert html =~ "input.select()"
+      refute html =~ "requestSubmit()"
+      refute html =~ ~s|matches(".lens__select")|
     end
 
-    test "is omitted for an authenticated user with live_ui: true (app.js drives it)",
-         %{conn: conn} do
-      user = register_via_github!()
-      conn = log_in(conn, user) |> get(~p"/packages")
+    test "the slash focus-search handler is no longer inlined", %{conn: conn} do
+      conn = get(conn, ~p"/packages")
+      html = html_response(conn, 200)
 
-      refute html_response(conn, 200) =~ ~s|getElementById("page-search-input")|
+      refute html =~ ~s|getElementById("page-search-input")|
+      refute html =~ "input.select()"
     end
   end
 
