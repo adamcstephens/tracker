@@ -180,7 +180,7 @@ defmodule TrackerWeb.OptionLive.RootTest do
   test "search at the root shows no group cards", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/options?search=nginx")
 
-    refute html =~ "row-link"
+    refute html =~ ~s(id="option-children")
   end
 
   test "fuzzy search tolerates typos", %{conn: conn} do
@@ -247,9 +247,11 @@ defmodule TrackerWeb.OptionLive.RootTest do
   end
 
   defp option_order(html) do
-    ~r{<a[^>]*href="/options/([^"#?]+)"[^>]*>[^<]*</a>}
-    |> Regex.scan(html)
-    |> Enum.map(fn [_, name] -> name end)
+    html
+    |> Floki.parse_document!()
+    |> Floki.find("#matching-options a[href]")
+    |> Enum.flat_map(&Floki.attribute(&1, "href"))
+    |> Enum.map(&String.replace_prefix(&1, "/options/", ""))
   end
 
   test "shows message when channel has no options data", %{conn: conn} do

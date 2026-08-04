@@ -448,7 +448,7 @@ defmodule TrackerWeb.OptionLive.ShowTest do
     assert html =~ "Select a channel"
     assert html =~ "lens-attention"
     refute html =~ "Options at this prefix"
-    refute html =~ "row-link"
+    refute html =~ ~s(id="option-children")
   end
 
   test "an explicit ?channel= override trumps the all-channels prompt", %{conn: conn} do
@@ -476,6 +476,56 @@ defmodule TrackerWeb.OptionLive.ShowTest do
     assert html =~ ~s(href="/options/services.nginx.virtualHosts.example.serverName")
   end
 
+  test "matching options render as shared row-list link rows", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/options/services.nginx?search=serverName")
+
+    document = Floki.parse_document!(html)
+    [list] = Floki.find(document, "#matching-options")
+
+    assert Floki.attribute(list, "class") == ["row-list"]
+    assert Floki.find(document, "table") == []
+
+    [row] = Floki.find(list, "li")
+    name = "services.nginx.virtualHosts.example.serverName"
+
+    assert Floki.find(row, ~s(a.row-link[href="/options/#{name}"])) != []
+    # The parent group is context, not a second link inside the row link. It
+    # rides in the body column: it's a full attribute path, so a trailing
+    # column would crush the label on narrow screens.
+    assert Floki.text(Floki.find(row, ".row-sublabel")) =~ "services.nginx.virtualHosts.example"
+    assert Floki.find(row, ".row-meta") == []
+  end
+
+  test "matching options paginate through page links", %{conn: conn, channel_revision: cr} do
+    bulk =
+      for n <- 1..20, into: @nginx_options do
+        name = "services.nginx.pageOption#{n}"
+
+        {name,
+         %{
+           "declarations" => ["nixos/modules/services/web-servers/nginx/default.nix"],
+           "description" => "",
+           "loc" => ["services", "nginx", "pageOption#{n}"],
+           "readOnly" => false,
+           "type" => "string"
+         }}
+      end
+
+    Fixtures.load_options(bulk, cr)
+
+    {:ok, view, html} = live(conn, ~p"/options/services.nginx?search=pageOption")
+
+    assert html =~ "Page 1 of 2"
+
+    html =
+      view
+      |> element(~s(a[href="/options/services.nginx?search=pageOption&page=2"]))
+      |> render_click()
+
+    assert html =~ "Page 2 of 2"
+    assert html =~ ~s(id="matching-options")
+  end
+
   test "search scopes matches to the prefix", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/options/services.nginx.virtualHosts?search=enable")
 
@@ -485,7 +535,7 @@ defmodule TrackerWeb.OptionLive.ShowTest do
   test "search shows only the match list, not children cards", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/options/services.nginx?search=serverName")
 
-    refute html =~ "row-link"
+    refute html =~ ~s(id="option-children")
   end
 
   test "search hides leaf details, files, and PR sections", %{conn: conn} do

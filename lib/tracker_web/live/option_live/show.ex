@@ -6,6 +6,7 @@ defmodule TrackerWeb.OptionLive.Show do
   alias TrackerWeb.DataTable
   alias TrackerWeb.PageSearch
   alias TrackerWeb.RowList
+  alias TrackerWeb.TableParams
 
   # Inline so it works on dead renders too — anonymous visitors don't load
   # app.js (see TrackerWeb.Plug.InteractiveUI), so a phx-hook would never run.
@@ -80,27 +81,27 @@ defmodule TrackerWeb.OptionLive.Show do
 
       <section :if={@matches != []}>
         <h2>Matching options</h2>
-        <.table id="matching-options" rows={@matches}>
-          <:col :let={rev} label="Option">
-            <.link navigate={~p"/options/#{rev.option.name}"}>{rev.option.name}</.link>
-          </:col>
-          <:col :let={rev} label="Group">
-            <.link
-              :if={parent_prefix(rev.option.name)}
-              navigate={~p"/options/#{parent_prefix(rev.option.name)}"}
-            >
-              {parent_prefix(rev.option.name)}
-            </.link>
-          </:col>
-        </.table>
+        <RowList.row_list id="matching-options">
+          <RowList.row
+            :for={rev <- @matches}
+            mode={:link}
+            navigate={~p"/options/#{rev.option.name}"}
+          >
+            <:label>{rev.option.name}</:label>
+            <:sublabel :if={parent_prefix(rev.option.name)}>
+              in {parent_prefix(rev.option.name)}
+            </:sublabel>
+            <:actions><span class="arrow" aria-hidden="true">→</span></:actions>
+          </RowList.row>
+        </RowList.row_list>
 
         <DataTable.pagination
           total_pages={@total_pages}
           current_page={@current_page}
           has_prev_page?={@has_prev_page?}
           has_next_page?={@has_next_page?}
-          prev_path={options_path(@prefix, @search, @current_page - 1)}
-          next_path={options_path(@prefix, @search, @current_page + 1)}
+          prev_path={TableParams.page_path(@table_params, @current_page - 1, show_path(@prefix))}
+          next_path={TableParams.page_path(@table_params, @current_page + 1, show_path(@prefix))}
         />
       </section>
 
@@ -393,8 +394,8 @@ defmodule TrackerWeb.OptionLive.Show do
   @impl true
   def handle_params(params, _url, socket) do
     prefix = Map.get(params, "prefix", "")
-    search = Map.get(params, "search", "")
-    page = params |> Map.get("page", "1") |> String.to_integer() |> max(1)
+    tp = TableParams.from_params(params)
+    search = tp.search
     lens = socket.assigns.lens
     default_channel = if lens, do: lens.channel.name, else: ""
     default_rev = if lens && lens.revision, do: lens.revision.revision, else: ""
@@ -425,7 +426,7 @@ defmodule TrackerWeb.OptionLive.Show do
      |> assign(:highlight_lens?, select_channel?)
      |> assign(:channel_unavailable?, is_nil(channel_revision) and not select_channel?)
      |> assign(:search, search)
-     |> assign(:offset, (page - 1) * 15)
+     |> assign(:table_params, tp)
      |> assign(:page_search, %PageSearch{
        action: show_path(prefix),
        value: search,
@@ -495,7 +496,7 @@ defmodule TrackerWeb.OptionLive.Show do
 
   # The fuzzy-ranked flat list of matches under the prefix, paginated.
   defp load_matches(socket) do
-    %{channel_revision: channel_revision, prefix: prefix, search: search, offset: offset} =
+    %{channel_revision: channel_revision, prefix: prefix, search: search, table_params: tp} =
       socket.assigns
 
     if channel_revision && search != "" do
@@ -505,15 +506,17 @@ defmodule TrackerWeb.OptionLive.Show do
           channel_revision.released_at,
           search,
           prefix,
-          page: [offset: offset, count: true]
+          page: [offset: tp.offset, count: true]
         )
 
+      pagination = TableParams.apply_pagination(tp, page, :matches)
+
       socket
-      |> assign(:matches, page.results)
-      |> assign(:total_pages, ceil(page.count / 15))
-      |> assign(:current_page, div(offset, 15) + 1)
-      |> assign(:has_prev_page?, offset > 0)
-      |> assign(:has_next_page?, page.more?)
+      |> assign(:matches, pagination.stream_results)
+      |> assign(:total_pages, pagination.total_pages)
+      |> assign(:current_page, pagination.current_page)
+      |> assign(:has_prev_page?, pagination.has_prev_page?)
+      |> assign(:has_next_page?, pagination.has_next_page?)
     else
       socket
       |> assign(:matches, [])
@@ -545,35 +548,14 @@ defmodule TrackerWeb.OptionLive.Show do
     {:noreply,
      socket
      |> assign(:search_origin, origin)
-     |> push_patch(to: options_path(target_prefix, search, 1))}
+     |> push_patch(to: options_path(socket, target_prefix, search))}
   end
 
-  @impl true
-  def handle_event("next-page", _params, socket) do
-    %{prefix: prefix, search: search, current_page: current_page} = socket.assigns
+  # A search always lands on page 1; pagination links carry the page itself.
+  defp options_path(socket, prefix, search) do
+    tp = %{socket.assigns.table_params | search: search, page: 1, offset: 0}
 
-    {:noreply, push_patch(socket, to: options_path(prefix, search, current_page + 1))}
-  end
-
-  @impl true
-  def handle_event("prev-page", _params, socket) do
-    %{prefix: prefix, search: search, current_page: current_page} = socket.assigns
-
-    {:noreply, push_patch(socket, to: options_path(prefix, search, max(current_page - 1, 1)))}
-  end
-
-  defp options_path(prefix, search, page) do
-    params =
-      %{}
-      |> then(fn p -> if search != "", do: Map.put(p, :search, search), else: p end)
-      |> then(fn p -> if page > 1, do: Map.put(p, :page, page), else: p end)
-
-    base = show_path(prefix)
-
-    case URI.encode_query(params) do
-      "" -> base
-      qs -> "#{base}?#{qs}"
-    end
+    TableParams.to_path(tp, show_path(prefix))
   end
 
   # Both tree views are assembled from three narrow queries — subgroup counts
@@ -671,7 +653,9 @@ defmodule TrackerWeb.OptionLive.Show do
     socket = TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)
 
     {:noreply,
-     push_patch(socket, to: options_path(socket.assigns.prefix, socket.assigns.search, 1))}
+     push_patch(socket,
+       to: options_path(socket, socket.assigns.prefix, socket.assigns.search)
+     )}
   end
 
   defp show_path(""), do: ~p"/options"
