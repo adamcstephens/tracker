@@ -16,6 +16,7 @@ defmodule TrackerWeb.InboxLive.Subscriptions do
   alias TrackerWeb.NotificationPresenter
   alias TrackerWeb.PageSearch
   alias TrackerWeb.RowList
+  alias TrackerWeb.SectionHeader
 
   @impl true
   def mount(_params, _session, socket) do
@@ -185,11 +186,7 @@ defmodule TrackerWeb.InboxLive.Subscriptions do
   defp section(assigns) do
     ~H"""
     <section class="ibx-day">
-      <div class="ibx-day-head">
-        <h2>{@title}</h2>
-        <span class="rule"></span>
-        <span class="n">{@count}</span>
-      </div>
+      <SectionHeader.section_header title={@title} count={@count} />
       <RowList.row_list id={@id}>
         {render_slot(@inner_block)}
       </RowList.row_list>

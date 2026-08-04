@@ -1017,6 +1017,35 @@ a.revision-link {
 	color: var(--good);
 }
 
+/* Section header — the heading above a row list. */
+.section-header {
+	display: flex;
+	align-items: center;
+	gap: 0.625rem;
+	margin-bottom: 0.5rem;
+}
+
+.section-header h2 {
+	margin: 0;
+	font-size: 0.75rem;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--text-3);
+}
+
+.section-header .rule {
+	flex: 1;
+	height: 1px;
+	background: var(--ibx-line-soft);
+}
+
+.section-header .n {
+	font-family: var(--mono);
+	font-size: 0.6875rem;
+	color: var(--text-3);
+}
+
 /* Row list — the app-wide list idiom: rows sharing one card surface,
    separated by dividers. */
 .row-list {
@@ -3270,34 +3299,6 @@ a.revision-link {
 
 .ibx-day:first-of-type {
 	margin-top: 0.625rem;
-}
-
-.ibx-day-head {
-	display: flex;
-	align-items: center;
-	gap: 0.625rem;
-	margin-bottom: 0.5rem;
-}
-
-.ibx-day-head h2 {
-	margin: 0;
-	font-size: 0.75rem;
-	font-weight: 600;
-	letter-spacing: 0.06em;
-	text-transform: uppercase;
-	color: var(--text-3);
-}
-
-.ibx-day-head .rule {
-	flex: 1;
-	height: 1px;
-	background: var(--ibx-line-soft);
-}
-
-.ibx-day-head .n {
-	font-family: var(--mono);
-	font-size: 0.6875rem;
-	color: var(--text-3);
 }
 
 /* Notification rows */

@@ -19,6 +19,7 @@ defmodule TrackerWeb.InboxLive.Index do
   alias TrackerWeb.NotificationPresenter
   alias TrackerWeb.PageSearch
   alias TrackerWeb.RowList
+  alias TrackerWeb.SectionHeader
 
   @impl true
   def mount(_params, _session, socket) do
@@ -310,11 +311,7 @@ defmodule TrackerWeb.InboxLive.Index do
       </div>
 
       <section :for={{{day, rows}, index} <- Enum.with_index(@groups)} class="ibx-day">
-        <div class="ibx-day-head">
-          <h2>{day}</h2>
-          <span class="rule"></span>
-          <span class="n">{length(rows)}</span>
-        </div>
+        <SectionHeader.section_header title={day} count={length(rows)} />
         <RowList.row_list id={"inbox-day-#{index}"}>
           <.row :for={n <- rows} n={n} now={@now} version_changes={@version_changes} />
         </RowList.row_list>
