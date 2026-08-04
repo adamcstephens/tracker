@@ -54,6 +54,19 @@ defmodule TrackerWeb.TeamLive.ShowTest do
     assert html =~ "team-pkg"
   end
 
+  test "members and packages render as shared row-list link rows", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/teams/teamshow")
+
+    document = Floki.parse_document!(html)
+    [members] = Floki.find(document, "#team-members")
+    [packages] = Floki.find(document, "#team-packages")
+
+    assert Floki.find(members, ~s(a.row-link[href="/maintainers/teammember"])) != []
+    assert Floki.find(packages, ~s(a.row-link[href="/packages/team-pkg"])) != []
+    assert Floki.attribute(packages, "phx-update") == ["stream"]
+    assert Floki.find(document, "table") == []
+  end
+
   test "package search form submits via GET for no-JS fallback", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/teams/teamshow")
 

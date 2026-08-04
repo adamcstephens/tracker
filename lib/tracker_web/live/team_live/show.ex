@@ -3,6 +3,7 @@ defmodule TrackerWeb.TeamLive.Show do
 
   alias TrackerWeb.DataTable
   alias TrackerWeb.PageSearch
+  alias TrackerWeb.RowList
   alias TrackerWeb.TableParams
 
   @impl true
@@ -27,11 +28,16 @@ defmodule TrackerWeb.TeamLive.Show do
 
     <div :if={@team.members != []} style="margin-top: 1rem;">
       <h2>Members</h2>
-      <ul>
-        <li :for={m <- @team.members}>
-          <.link navigate={~p"/maintainers/#{m.github}"}>{m.github}</.link>
-        </li>
-      </ul>
+      <RowList.row_list id="team-members">
+        <RowList.row
+          :for={m <- @team.members}
+          mode={:link}
+          navigate={~p"/maintainers/#{m.github}"}
+        >
+          <:label>{m.github}</:label>
+          <:actions><span class="arrow" aria-hidden="true">→</span></:actions>
+        </RowList.row>
+      </RowList.row_list>
     </div>
 
     <h2>Packages</h2>
@@ -52,13 +58,17 @@ defmodule TrackerWeb.TeamLive.Show do
       />
     </form>
 
-    <.table
-      id="team-packages"
-      rows={@streams.packages}
-      row_click={fn {_id, package} -> JS.navigate(~p"/packages/#{package.attribute}") end}
-    >
-      <:col :let={{_id, package}} label="Package">{package.attribute}</:col>
-    </.table>
+    <RowList.row_list id="team-packages" phx-update="stream">
+      <RowList.row
+        :for={{dom_id, package} <- @streams.packages}
+        id={dom_id}
+        mode={:link}
+        navigate={~p"/packages/#{package.attribute}"}
+      >
+        <:label>{package.attribute}</:label>
+        <:actions><span class="arrow" aria-hidden="true">→</span></:actions>
+      </RowList.row>
+    </RowList.row_list>
 
     <DataTable.pagination
       total_pages={@total_pages}

@@ -3,20 +3,24 @@ defmodule TrackerWeb.TeamLive.Index do
 
   alias TrackerWeb.DataTable
   alias TrackerWeb.PageSearch
+  alias TrackerWeb.RowList
   alias TrackerWeb.TableParams
 
   @impl true
   def render(assigns) do
     ~H"""
-    <.table
-      id="teams"
-      rows={@streams.teams}
-    >
-      <:col :let={{_id, t}} label="Name">
-        <.link navigate={~p"/teams/#{t.short_name}"}>{t.short_name}</.link>
-      </:col>
-      <:col :let={{_id, t}} label="Scope">{t.scope}</:col>
-    </.table>
+    <RowList.row_list id="teams" phx-update="stream">
+      <RowList.row
+        :for={{dom_id, t} <- @streams.teams}
+        id={dom_id}
+        mode={:link}
+        navigate={~p"/teams/#{t.short_name}"}
+      >
+        <:label>{t.short_name}</:label>
+        <:sublabel :if={t.scope}>{t.scope}</:sublabel>
+        <:actions><span class="arrow" aria-hidden="true">→</span></:actions>
+      </RowList.row>
+    </RowList.row_list>
 
     <DataTable.pagination
       total_pages={@total_pages}

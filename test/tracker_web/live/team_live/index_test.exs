@@ -26,6 +26,26 @@ defmodule TrackerWeb.TeamLive.IndexTest do
     assert html =~ "gnome"
   end
 
+  test "renders teams as shared row-list link rows with the scope as a sublabel", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/teams")
+
+    document = Floki.parse_document!(html)
+    [list] = Floki.find(document, "#teams")
+
+    assert Floki.attribute(list, "class") == ["row-list"]
+    assert Floki.attribute(list, "phx-update") == ["stream"]
+    assert Floki.find(document, "table") == []
+
+    row =
+      list
+      |> Floki.find("li")
+      |> Enum.find(&(Floki.find(&1, ~s(a[href="/teams/python"])) != []))
+
+    assert Floki.find(row, "a.row-link") != []
+    assert Floki.text(Floki.find(row, ".row-sublabel")) =~ "Python ecosystem"
+    assert Floki.attribute(row, "id") != []
+  end
+
   test "search filters teams", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/teams?search=python")
 
