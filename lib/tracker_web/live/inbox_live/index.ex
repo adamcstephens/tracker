@@ -315,7 +315,7 @@ defmodule TrackerWeb.InboxLive.Index do
           <span class="rule"></span>
           <span class="n">{length(rows)}</span>
         </div>
-        <RowList.row_list id={"inbox-day-#{index}"} keynav>
+        <RowList.row_list id={"inbox-day-#{index}"}>
           <.row :for={n <- rows} n={n} now={@now} version_changes={@version_changes} />
         </RowList.row_list>
       </section>

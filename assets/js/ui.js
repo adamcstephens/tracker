@@ -34,16 +34,15 @@ document.addEventListener("keydown", (event) => {
 })
 
 // A row's focus target differs per mode: an anchor for :link, a summary for
-// :expandable, and the line itself for :plain. Matching only direct children
-// keeps a nested list inside an expanded row out of the parent's cursor.
-const ROW_SELECTOR = ":scope > li > .row-line, :scope > li > details > summary"
-const LIST_SELECTOR = "ul.row-list[data-keynav]"
+// :expandable, and the line itself for :plain.
+//
+// Every list on the page is one cursor. Selecting rows in a single pass gives
+// document order for free, so a page's several lists chain together and a list
+// nested in an expanded row falls in at the row it belongs to.
+const ROW_SELECTOR = "ul.row-list > li > .row-line, ul.row-list > li > details > summary"
 
-// Every marked list on the page is one cursor, in document order — the inbox
-// renders a separate list per day, and the cursor should cross them.
 function keynavRows() {
-  return [...document.querySelectorAll(LIST_SELECTOR)]
-    .flatMap((list) => [...list.querySelectorAll(ROW_SELECTOR)])
+  return [...document.querySelectorAll(ROW_SELECTOR)]
 }
 
 function moveRow(step) {

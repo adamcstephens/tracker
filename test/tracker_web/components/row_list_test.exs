@@ -25,36 +25,6 @@ defmodule TrackerWeb.RowListTest do
       assert html =~ "alpha"
     end
 
-    test "keynav lists carry the marker the key handler looks for" do
-      assigns = %{}
-
-      html =
-        rendered_to_string(~H"""
-        <RowList.row_list id="things" keynav>
-          <RowList.row mode={:plain}>
-            <:label>alpha</:label>
-          </RowList.row>
-        </RowList.row_list>
-        """)
-
-      assert html =~ ~s(data-keynav)
-    end
-
-    test "lists are not keynav by default" do
-      assigns = %{}
-
-      html =
-        rendered_to_string(~H"""
-        <RowList.row_list id="things">
-          <RowList.row mode={:plain}>
-            <:label>alpha</:label>
-          </RowList.row>
-        </RowList.row_list>
-        """)
-
-      refute html =~ ~s(data-keynav)
-    end
-
     test "stacked lists opt into the narrow-screen two-line layout" do
       assigns = %{}
 
@@ -68,6 +38,67 @@ defmodule TrackerWeb.RowListTest do
         """)
 
       assert html =~ ~s(class="row-list row-list--stacked")
+    end
+  end
+
+  # ui.js walks rows with this selector. Asserting it here keeps the markup and
+  # the key handler from drifting apart.
+  describe "keyboard row navigation reaches every row (TRK-376)" do
+    @row_selector "ul.row-list > li > .row-line, ul.row-list > li > details > summary"
+
+    test "all three modes expose exactly one focusable line" do
+      assigns = %{}
+
+      rows =
+        rendered_to_string(~H"""
+        <RowList.row_list id="things">
+          <RowList.row mode={:plain}>
+            <:label>plain</:label>
+          </RowList.row>
+          <RowList.row mode={:link} navigate="/alpha">
+            <:label>link</:label>
+          </RowList.row>
+          <RowList.row mode={:expandable}>
+            <:label>expandable</:label>
+            <:body>detail</:body>
+          </RowList.row>
+        </RowList.row_list>
+        """)
+        |> Floki.parse_document!()
+        |> Floki.find(@row_selector)
+
+      assert length(rows) == 3
+      assert Floki.text(rows) =~ "plain"
+      assert Floki.text(rows) =~ "link"
+      assert Floki.text(rows) =~ "expandable"
+    end
+
+    test "a list nested in a row body contributes its rows after that row" do
+      assigns = %{}
+
+      labels =
+        rendered_to_string(~H"""
+        <RowList.row_list id="outer">
+          <RowList.row mode={:expandable}>
+            <:label>outer-first</:label>
+            <:body>
+              <RowList.row_list id="inner">
+                <RowList.row mode={:plain}>
+                  <:label>inner</:label>
+                </RowList.row>
+              </RowList.row_list>
+            </:body>
+          </RowList.row>
+          <RowList.row mode={:plain}>
+            <:label>outer-second</:label>
+          </RowList.row>
+        </RowList.row_list>
+        """)
+        |> Floki.parse_document!()
+        |> Floki.find(@row_selector)
+        |> Enum.map(&(Floki.find(&1, ".row-label") |> Floki.text()))
+
+      assert labels == ["outer-first", "inner", "outer-second"]
     end
   end
 

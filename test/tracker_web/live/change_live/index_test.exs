@@ -65,14 +65,6 @@ defmodule TrackerWeb.ChangeLive.IndexTest do
     assert Floki.find(doc, "#changes .pill-merged") != []
   end
 
-  test "the list opts into keyboard row navigation", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/changes")
-
-    assert html
-           |> Floki.parse_document!()
-           |> Floki.find("ul#changes[data-keynav]") != []
-  end
-
   test "lists the highest-numbered changes first", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/changes")
 

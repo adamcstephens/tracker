@@ -28,7 +28,7 @@ defmodule TrackerWeb.ChangeLive.Index do
       <button type="submit">Apply</button>
     </form>
 
-    <RowList.row_list id="changes" phx-update="stream" stacked keynav>
+    <RowList.row_list id="changes" phx-update="stream" stacked>
       <RowList.row
         :for={{dom_id, change} <- @streams.changes}
         id={dom_id}
