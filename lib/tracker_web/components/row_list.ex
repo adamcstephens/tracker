@@ -56,17 +56,19 @@ defmodule TrackerWeb.RowList do
   attr :navigate, :string, default: nil, doc: "destination for :link mode"
   attr :open, :boolean, default: false, doc: "expanded on first render, :expandable mode"
 
+  slot :leading, doc: "affordance ahead of the label — a glyph, a checkbox, nothing"
   slot :label, required: true
+  slot :sublabel, doc: "secondary line under the label"
   slot :meta
   slot :actions
   slot :body
 
   def row(%{mode: :expandable, body: [_ | _]} = assigns) do
     ~H"""
-    <li>
-      <details id={@id} open={@open}>
-        <summary class="row-line">
-          <.row_content label={@label} meta={@meta} actions={@actions} />
+    <li id={@id}>
+      <details open={@open}>
+        <summary class={line_class(@leading)}>
+          <.row_content row={assigns} />
         </summary>
         {render_slot(@body)}
       </details>
@@ -76,9 +78,9 @@ defmodule TrackerWeb.RowList do
 
   def row(%{mode: :link} = assigns) do
     ~H"""
-    <li>
-      <.link id={@id} navigate={@navigate} class="row-line row-link">
-        <.row_content label={@label} meta={@meta} actions={@actions} />
+    <li id={@id}>
+      <.link navigate={@navigate} class={[line_class(@leading), "row-link"]}>
+        <.row_content row={assigns} />
       </.link>
     </li>
     """
@@ -86,23 +88,29 @@ defmodule TrackerWeb.RowList do
 
   def row(assigns) do
     ~H"""
-    <li>
-      <div id={@id} class="row-line">
-        <.row_content label={@label} meta={@meta} actions={@actions} />
+    <li id={@id}>
+      <div class={line_class(@leading)}>
+        <.row_content row={assigns} />
       </div>
     </li>
     """
   end
 
-  attr :label, :list, required: true
-  attr :meta, :list, required: true
-  attr :actions, :list, required: true
+  defp line_class([]), do: "row-line"
+  defp line_class([_ | _]), do: "row-line row-line--leading"
+
+  attr :row, :map, required: true
 
   defp row_content(assigns) do
     ~H"""
-    <span class="row-label">{render_slot(@label)}</span>
-    <span :if={@meta != []} class="row-meta">{render_slot(@meta)}</span>
-    <span :if={@actions != []} class="row-actions">{render_slot(@actions)}</span>
+    <span :if={@row.leading != []} class="row-leading">{render_slot(@row.leading)}</span>
+    <div :if={@row.sublabel != []} class="row-body">
+      <span class="row-label">{render_slot(@row.label)}</span>
+      <span class="row-sublabel">{render_slot(@row.sublabel)}</span>
+    </div>
+    <span :if={@row.sublabel == []} class="row-label">{render_slot(@row.label)}</span>
+    <span :if={@row.meta != []} class="row-meta">{render_slot(@row.meta)}</span>
+    <span :if={@row.actions != []} class="row-actions">{render_slot(@row.actions)}</span>
     """
   end
 end

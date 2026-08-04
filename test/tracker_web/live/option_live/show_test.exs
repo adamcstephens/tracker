@@ -181,7 +181,8 @@ defmodule TrackerWeb.OptionLive.ShowTest do
     test "a lone leaf option renders already expanded", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/options/services.nginx.enable")
 
-      assert html =~ ~s(id="opt-services.nginx.enable" open)
+      assert html =~ ~s(<li id="opt-services.nginx.enable">)
+      assert html =~ "<details open"
     end
 
     test "a childless section never emits an empty details panel", %{conn: conn} do

@@ -15,6 +15,7 @@ defmodule TrackerWeb.InboxLive.Subscriptions do
   alias Tracker.Notifications.PackageSubscription
   alias TrackerWeb.NotificationPresenter
   alias TrackerWeb.PageSearch
+  alias TrackerWeb.RowList
 
   @impl true
   def mount(_params, _session, socket) do
@@ -122,6 +123,7 @@ defmodule TrackerWeb.InboxLive.Subscriptions do
 
       <.section
         :if={@visible_package_subs != []}
+        id="package-subscriptions"
         title="Packages"
         count={length(@visible_package_subs)}
       >
@@ -139,6 +141,7 @@ defmodule TrackerWeb.InboxLive.Subscriptions do
 
       <.section
         :if={@visible_channel_subs != []}
+        id="channel-subscriptions"
         title="Channels"
         count={length(@visible_channel_subs)}
       >
@@ -155,6 +158,7 @@ defmodule TrackerWeb.InboxLive.Subscriptions do
 
       <.section
         :if={@visible_change_subs != []}
+        id="change-subscriptions"
         title="Changes"
         count={length(@visible_change_subs)}
       >
@@ -173,6 +177,7 @@ defmodule TrackerWeb.InboxLive.Subscriptions do
     """
   end
 
+  attr :id, :string, required: true
   attr :title, :string, required: true
   attr :count, :integer, required: true
   slot :inner_block, required: true
@@ -185,9 +190,9 @@ defmodule TrackerWeb.InboxLive.Subscriptions do
         <span class="rule"></span>
         <span class="n">{@count}</span>
       </div>
-      <ul class="ibx-list">
+      <RowList.row_list id={@id}>
         {render_slot(@inner_block)}
-      </ul>
+      </RowList.row_list>
     </section>
     """
   end
@@ -206,21 +211,21 @@ defmodule TrackerWeb.InboxLive.Subscriptions do
     assigns = assign(assigns, :type_color, Map.fetch!(@type_colors, assigns.kind))
 
     ~H"""
-    <li id={@id} class="ibx-row" style={"--type-color: var(--t-#{@type_color})"}>
-      <span class="ibx-glyph"><.icon name={@kind} /></span>
-      <div class="ibx-body">
-        <div class="ibx-line1">
-          <span class="ibx-attr"><.link navigate={@path}>{@label}</.link></span>
-        </div>
-        <div class="ibx-line2">
-          <span :if={@scope} class="ibx-tag"><span class="dot"></span>{@scope}</span>
-          <span :if={@scope} class="ibx-dot-sep">·</span>
-          <time class="ibx-time" title={NotificationPresenter.clock_utc(@at)}>
-            subscribed {NotificationPresenter.relative_time(@at, @now)}
-          </time>
-        </div>
-      </div>
-    </li>
+    <RowList.row id={@id} mode={:link} navigate={@path}>
+      <:leading>
+        <span class="ibx-glyph" style={"--type-color: var(--t-#{@type_color})"}>
+          <.icon name={@kind} />
+        </span>
+      </:leading>
+      <:label>{@label}</:label>
+      <:sublabel>
+        <span :if={@scope} class="ibx-tag"><span class="dot"></span>{@scope}</span>
+        <span :if={@scope} class="ibx-dot-sep">·</span>
+        <time class="ibx-time" title={NotificationPresenter.clock_utc(@at)}>
+          subscribed {NotificationPresenter.relative_time(@at, @now)}
+        </time>
+      </:sublabel>
+    </RowList.row>
     """
   end
 

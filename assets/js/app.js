@@ -52,8 +52,10 @@ Hooks.AnchorExpand = {
       let hash = window.location.hash
       if (!hash) return
       let target = document.getElementById(decodeURIComponent(hash.slice(1)))
-      if (target && target.tagName === "DETAILS") {
-        target.open = true
+      if (!target) return
+      let details = target.tagName === "DETAILS" ? target : target.querySelector("details")
+      if (details) {
+        details.open = true
         target.scrollIntoView({behavior: "smooth", block: "start"})
       }
     })

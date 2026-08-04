@@ -41,6 +41,94 @@ defmodule TrackerWeb.RowListTest do
     end
   end
 
+  describe "row/1 leading and sublabel slots" do
+    test "renders a leading affordance ahead of the label" do
+      assigns = %{}
+
+      html =
+        rendered_to_string(~H"""
+        <RowList.row_list id="things">
+          <RowList.row mode={:plain}>
+            <:leading><span class="glyph">*</span></:leading>
+            <:label>alpha</:label>
+          </RowList.row>
+        </RowList.row_list>
+        """)
+
+      assert html =~ ~s(class="row-line row-line--leading")
+      assert html =~ ~s(class="row-leading")
+      assert html =~ ~s(<span class="glyph">*</span>)
+    end
+
+    test "renders a sublabel beneath the label" do
+      assigns = %{}
+
+      html =
+        rendered_to_string(~H"""
+        <RowList.row_list id="things">
+          <RowList.row mode={:plain}>
+            <:label>alpha</:label>
+            <:sublabel>subscribed 3 days ago</:sublabel>
+          </RowList.row>
+        </RowList.row_list>
+        """)
+
+      assert html =~ ~s(class="row-body")
+      assert html =~ ~s(class="row-sublabel")
+      assert html =~ "subscribed 3 days ago"
+    end
+
+    test "omits the body wrapper and leading modifier when neither slot is given" do
+      assigns = %{}
+
+      html =
+        rendered_to_string(~H"""
+        <RowList.row_list id="things">
+          <RowList.row mode={:plain}>
+            <:label>alpha</:label>
+          </RowList.row>
+        </RowList.row_list>
+        """)
+
+      refute html =~ "row-body"
+      refute html =~ "row-line--leading"
+    end
+  end
+
+  describe "row ids" do
+    test "the id lands on the li so streams and tests can address the whole row" do
+      assigns = %{}
+
+      html =
+        rendered_to_string(~H"""
+        <RowList.row_list id="things">
+          <RowList.row id="row-alpha" mode={:link} navigate="/alpha">
+            <:label>alpha</:label>
+          </RowList.row>
+        </RowList.row_list>
+        """)
+
+      assert html =~ ~s(<li id="row-alpha">)
+    end
+
+    test "expandable rows keep the id on the li too" do
+      assigns = %{}
+
+      html =
+        rendered_to_string(~H"""
+        <RowList.row_list id="things">
+          <RowList.row id="row-alpha" mode={:expandable}>
+            <:label>alpha</:label>
+            <:body>detail</:body>
+          </RowList.row>
+        </RowList.row_list>
+        """)
+
+      assert html =~ ~s(<li id="row-alpha">)
+      refute html =~ ~s(<details id=)
+    end
+  end
+
   describe "row/1 expandable mode" do
     test "renders a details row with the body in the panel" do
       assigns = %{}

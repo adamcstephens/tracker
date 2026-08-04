@@ -46,6 +46,30 @@ defmodule TrackerWeb.InboxLive.SubscriptionsTest do
            )
   end
 
+  test "renders subscriptions through the shared RowList", %{conn: conn} do
+    user = register_user!()
+    package = package!()
+    channel = channel!()
+    sub = PackageSubscription.subscribe!(package.id, channel.id, actor: user)
+    conn = log_in(conn, user)
+
+    {:ok, _view, html} = live(conn, ~p"/inbox/subscriptions")
+
+    assert html =~ ~s(id="package-subscriptions" class="row-list")
+    refute html =~ "ibx-list"
+    refute html =~ "ibx-row"
+
+    document = Floki.parse_document!(html)
+    [row] = Floki.find(document, "#package-subscription-#{sub.id}")
+
+    # Whole row navigates; the scope and subscribed-time sit on a second line
+    assert [link] = Floki.find(row, "a.row-line.row-link")
+    assert Floki.attribute(link, "href") == ["/packages/#{package.attribute}"]
+    assert Floki.find(row, ".row-leading .ibx-glyph") != []
+    assert Floki.find(row, ".row-sublabel time") != []
+    assert Floki.text(Floki.find(row, ".row-label")) =~ package.attribute
+  end
+
   test "lists a package subscription for all channels", %{conn: conn} do
     user = register_user!()
     package = package!()
