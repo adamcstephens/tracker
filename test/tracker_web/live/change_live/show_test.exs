@@ -89,6 +89,23 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
     assert html =~ "show-change-pkg"
   end
 
+  test "affected packages render as shared row-list link rows", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/changes/6001")
+
+    document = Floki.parse_document!(html)
+    [list] = Floki.find(document, "#affected-packages")
+
+    assert Floki.attribute(list, "class") == ["row-list"]
+    assert Floki.attribute(list, "phx-update") == ["stream"]
+    assert Floki.find(document, "table") == []
+
+    [row] = Floki.find(list, "li")
+
+    assert Floki.find(row, ~s(a.row-link[href="/packages/show-change-pkg"])) != []
+    assert Floki.text(Floki.find(row, ".row-label")) =~ "show-change-pkg"
+    assert Floki.attribute(row, "id") != []
+  end
+
   test "hides the affected options section when there is no resolvable lens revision", %{
     conn: conn
   } do

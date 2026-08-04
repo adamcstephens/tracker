@@ -32,6 +32,7 @@ defmodule TrackerWeb.ChangeLive.Show do
   alias TrackerWeb.PageSearch
   alias TrackerWeb.PropagationDag
   alias TrackerWeb.PropagationTree
+  alias TrackerWeb.RowList
   alias TrackerWeb.TableParams
   alias Tracker.Nixpkgs.Propagation
   alias Tracker.Notifications.ChangeSubscription
@@ -183,16 +184,17 @@ defmodule TrackerWeb.ChangeLive.Show do
                 {processing_status_explanation(@change.processing_status, @change)}
               </p>
 
-              <.table id="affected-packages" rows={@streams.packages}>
-                <:col :let={{_id, pkg}} label="Package">
-                  <.link navigate={~p"/packages/#{pkg.attribute}"} class="mono">
-                    {pkg.attribute}
-                  </.link>
-                </:col>
-                <:col :let={{_id, pkg}} label="Description">
-                  <span class="change-desc">{pkg.description}</span>
-                </:col>
-              </.table>
+              <RowList.row_list id="affected-packages" phx-update="stream">
+                <RowList.row
+                  :for={{dom_id, pkg} <- @streams.packages}
+                  id={dom_id}
+                  mode={:link}
+                  navigate={~p"/packages/#{pkg.attribute}"}
+                >
+                  <:label>{pkg.attribute}</:label>
+                  <:actions><span class="arrow" aria-hidden="true">→</span></:actions>
+                </RowList.row>
+              </RowList.row_list>
 
               <DataTable.pagination
                 total_pages={@pkg_total_pages}
@@ -232,11 +234,16 @@ defmodule TrackerWeb.ChangeLive.Show do
               </h2>
             </div>
 
-            <.table id="affected-options" rows={@option_prefixes_top}>
-              <:col :let={{prefix, _count}} label="Namespace">
-                <.link navigate={~p"/options/#{prefix}"} class="mono">{prefix}</.link>
-              </:col>
-            </.table>
+            <RowList.row_list id="affected-options">
+              <RowList.row
+                :for={{prefix, _count} <- @option_prefixes_top}
+                mode={:link}
+                navigate={~p"/options/#{prefix}"}
+              >
+                <:label>{prefix}</:label>
+                <:actions><span class="arrow" aria-hidden="true">→</span></:actions>
+              </RowList.row>
+            </RowList.row_list>
 
             <p :if={@option_prefix_more > 0} class="muted">
               …and {@option_prefix_more} more {pluralize_namespaces(@option_prefix_more)}
@@ -534,14 +541,7 @@ defmodule TrackerWeb.ChangeLive.Show do
     total_pages = if package_count > 0, do: ceil(package_count / tp.page_size), else: 0
 
     socket
-    |> stream(
-      :packages,
-      TrackerWeb.PackageRows.with_current_descriptions(
-        page.results,
-        TrackerWeb.Lens.channel_id(socket.assigns[:lens])
-      ),
-      reset: true
-    )
+    |> stream(:packages, page.results, reset: true)
     |> assign(:package_count, package_count)
     |> assign(
       :packages_enabled?,

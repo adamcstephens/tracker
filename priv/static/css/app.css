@@ -2526,15 +2526,6 @@ a.revision-link {
 	margin: 0;
 }
 
-.change-show .change-desc {
-	display: block;
-	max-width: 48ch;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	color: var(--text-2);
-}
-
 .change-show .muted {
 	color: var(--text-2);
 }
