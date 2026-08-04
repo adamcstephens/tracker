@@ -144,17 +144,6 @@ defmodule TrackerWeb.LayoutsTest do
                ~r{app-header__row--bottom.*?<form[^>]*phx-hook="UpdateURL"[^>]*action="/packages"}s
     end
 
-    test "Changes search form preserves sort via hidden inputs", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/changes?sort_by=title&sort_dir=asc")
-
-      [_top, bottom] = String.split(html, "app-header__row--bottom", parts: 2)
-      [chrome_form, _rest] = String.split(bottom, "</form>", parts: 2)
-
-      assert chrome_form =~ ~s(type="hidden")
-      assert chrome_form =~ ~r{<input[^>]*name="sort_by"[^>]*value="title"}
-      assert chrome_form =~ ~r{<input[^>]*name="sort_dir"[^>]*value="asc"}
-    end
-
     test "Options search form drops page so a fresh search resets to page 1 (trk-278)", %{
       conn: conn
     } do

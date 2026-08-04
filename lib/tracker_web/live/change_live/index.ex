@@ -3,13 +3,8 @@ defmodule TrackerWeb.ChangeLive.Index do
 
   alias TrackerWeb.DataTable
   alias TrackerWeb.PageSearch
+  alias TrackerWeb.RowList
   alias TrackerWeb.TableParams
-
-  @table_opts [
-    allowed_sorts: ~w(number title state base_ref merged_at)a,
-    default_sort: :number,
-    default_sort_dir: :desc
-  ]
 
   @impl true
   def render(assigns) do
@@ -33,40 +28,43 @@ defmodule TrackerWeb.ChangeLive.Index do
       <button type="submit">Apply</button>
     </form>
 
-    <DataTable.data_table
-      id="changes"
-      rows={@streams.changes}
-      table_params={@table_params}
-      base_path="/changes"
-      extra_params={%{base_ref: @base_ref_filter}}
+    <RowList.row_list id="changes" phx-update="stream" stacked>
+      <RowList.row
+        :for={{dom_id, change} <- @streams.changes}
+        id={dom_id}
+        mode={:link}
+        navigate={~p"/changes/#{change.number}"}
+      >
+        <:label>
+          <span class="row-num">#{change.number}</span> {change.title}
+        </:label>
+        <:sublabel>
+          <span class={"pill pill-#{change.state}"}>
+            <span class="dot" aria-hidden="true"></span>
+            {change.state}
+          </span>
+          <span>{change.base_ref}</span>
+        </:sublabel>
+        <:meta>{format_datetime(change.merged_at)}</:meta>
+      </RowList.row>
+    </RowList.row_list>
+
+    <DataTable.pagination
       total_pages={@total_pages}
       current_page={@current_page}
       has_prev_page?={@has_prev_page?}
       has_next_page?={@has_next_page?}
-    >
-      <:col :let={{_id, change}} field={:number} label="#" sortable>
-        <.link navigate={~p"/changes/#{change.number}"}>{change.number}</.link>
-      </:col>
-      <:col :let={{_id, change}} field={:title} label="Title" sortable>
-        <.link navigate={~p"/changes/#{change.number}"}>
-          <span style="display: block; max-width: 50ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-            {change.title}
-          </span>
-        </.link>
-      </:col>
-      <:col :let={{_id, change}} field={:state} label="Status" sortable>
-        <span class={"pill pill-#{change.state}"}>
-          <span class="dot" aria-hidden="true"></span>
-          {change.state}
-        </span>
-      </:col>
-      <:col :let={{_id, change}} field={:base_ref} label="Base" sortable>
-        {change.base_ref}
-      </:col>
-      <:col :let={{_id, change}} field={:merged_at} label="Merged" sortable>
-        {format_datetime(change.merged_at)}
-      </:col>
-    </DataTable.data_table>
+      prev_path={
+        TableParams.page_path(@table_params, @current_page - 1, "/changes", %{
+          base_ref: @base_ref_filter
+        })
+      }
+      next_path={
+        TableParams.page_path(@table_params, @current_page + 1, "/changes", %{
+          base_ref: @base_ref_filter
+        })
+      }
+    />
     """
   end
 
@@ -95,7 +93,7 @@ defmodule TrackerWeb.ChangeLive.Index do
 
   @impl true
   def handle_params(params, _url, socket) do
-    tp = TableParams.from_params(params, @table_opts)
+    tp = TableParams.from_params(params)
     base_ref_filter = Map.get(params, "base_ref", "")
 
     socket =
@@ -138,22 +136,6 @@ defmodule TrackerWeb.ChangeLive.Index do
   end
 
   @impl true
-  def handle_event("sort", %{"field" => field}, socket) do
-    tp = socket.assigns.table_params
-    new_sort_by = TableParams.from_params(%{"sort_by" => field}, @table_opts).sort_by
-
-    new_sort_dir =
-      if tp.sort_by == new_sort_by, do: TableParams.toggle_dir(tp.sort_dir), else: :asc
-
-    new_tp = %{tp | sort_by: new_sort_by, sort_dir: new_sort_dir, page: 1, offset: 0}
-
-    {:noreply,
-     push_patch(socket,
-       to: TableParams.to_path(new_tp, "/changes", %{base_ref: socket.assigns.base_ref_filter})
-     )}
-  end
-
-  @impl true
   def handle_event("next-page", _params, socket) do
     tp = socket.assigns.table_params
 
@@ -186,7 +168,7 @@ defmodule TrackerWeb.ChangeLive.Index do
     page =
       Tracker.Nixpkgs.Change.list!(tp.search, socket.assigns.base_ref_filter, channel_name,
         actor: socket.assigns[:current_user],
-        query: [sort: [{tp.sort_by, tp.sort_dir}]],
+        query: [sort: [number: :desc]],
         page: [offset: tp.offset, count: true]
       )
 

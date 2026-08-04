@@ -61,15 +61,20 @@ defmodule TrackerWeb.ChangeLive.IndexTest do
     {:ok, _view, html} = live(conn, ~p"/changes")
     doc = Floki.parse_document!(html)
 
-    assert Floki.find(doc, "td .pill-closed") != []
-    assert Floki.find(doc, "td .pill-merged") != []
+    assert Floki.find(doc, "#changes .pill-closed") != []
+    assert Floki.find(doc, "#changes .pill-merged") != []
   end
 
-  test "sorting by status", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/changes")
+  test "lists the highest-numbered changes first", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/changes")
 
-    view |> element("th[phx-value-field=state]") |> render_click()
-    assert_patched(view, ~p"/changes?sort_by=state&sort_dir=asc")
+    assert change_order(html) == ["#5002", "#5001"]
+  end
+
+  test "sort params no longer reorder the list", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/changes?sort_by=title&sort_dir=asc")
+
+    assert change_order(html) == ["#5002", "#5001"]
   end
 
   test "search filters by title", %{conn: conn} do
@@ -175,31 +180,16 @@ defmodule TrackerWeb.ChangeLive.IndexTest do
     assert query_params(next) == %{"base_ref" => "release-25.11", "page" => "2"}
   end
 
-  test "sort links keep the base_ref filter", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/changes?base_ref=release-25.11")
-
-    [title_link] =
-      html
-      |> Floki.parse_document!()
-      |> Floki.find("th[phx-value-field=title] a")
-
-    assert query_params(title_link) == %{
-             "base_ref" => "release-25.11",
-             "sort_by" => "title",
-             "sort_dir" => "asc"
-           }
-  end
-
   defp query_params(link) do
     [href] = Floki.attribute(link, "href")
     href |> URI.parse() |> Map.fetch!(:query) |> URI.decode_query()
   end
 
-  test "sorting by title ascending", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/changes")
-
-    view |> element("th[phx-value-field=title]") |> render_click()
-    assert_patched(view, ~p"/changes?sort_by=title&sort_dir=asc")
+  defp change_order(html) do
+    html
+    |> Floki.parse_document!()
+    |> Floki.find("#changes .row-num")
+    |> Enum.map(&(&1 |> Floki.text() |> String.trim()))
   end
 
   test "updates when a Change is updated via notifier", %{conn: conn} do
