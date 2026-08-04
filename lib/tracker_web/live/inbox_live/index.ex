@@ -18,6 +18,7 @@ defmodule TrackerWeb.InboxLive.Index do
   alias TrackerWeb.FeedLink
   alias TrackerWeb.NotificationPresenter
   alias TrackerWeb.PageSearch
+  alias TrackerWeb.RowList
 
   @impl true
   def mount(_params, _session, socket) do
@@ -308,15 +309,15 @@ defmodule TrackerWeb.InboxLive.Index do
         Nothing matches these filters.
       </div>
 
-      <section :for={{day, rows} <- @groups} class="ibx-day">
+      <section :for={{{day, rows}, index} <- Enum.with_index(@groups)} class="ibx-day">
         <div class="ibx-day-head">
           <h2>{day}</h2>
           <span class="rule"></span>
           <span class="n">{length(rows)}</span>
         </div>
-        <ul class="ibx-list">
+        <RowList.row_list id={"inbox-day-#{index}"}>
           <.row :for={n <- rows} n={n} now={@now} version_changes={@version_changes} />
-        </ul>
+        </RowList.row_list>
       </section>
     </div>
     """
@@ -359,45 +360,44 @@ defmodule TrackerWeb.InboxLive.Index do
       |> assign(:hero, NotificationPresenter.hero(assigns.n, assigns.version_changes))
 
     ~H"""
-    <li
+    <RowList.row
       id={"notification-#{@n.id}"}
-      class={["ibx-row", if(is_nil(@n.read_at), do: "is-unread", else: "is-read")]}
+      mode={:plain}
+      class={if is_nil(@n.read_at), do: "is-unread", else: "is-read"}
       style={"--type-color: var(--t-#{@type_class})"}
     >
-      <span class="ibx-glyph"><.icon name={@type_class} /></span>
-      <div class="ibx-body">
-        <div class="ibx-line1">
-          <span class={hero_class(@n.type)}>
-            <%= if @path do %>
-              <.link navigate={@path}>{@hero}</.link>
-            <% else %>
-              {@hero}
-            <% end %>
-          </span>
-        </div>
-        <div class="ibx-line2">
-          <span class="pill ibx-typechip">
-            <span class="dot"></span>{NotificationPresenter.type_label(@n.type)}
-          </span>
-          <%= if @n.type == :change_propagated do %>
-            <.link :if={@path} navigate={@path} class="ibx-tag ibx-tag--pr">
-              PR <span class="hash">#{@n.change && @n.change.number}</span>
-            </.link>
-            <span :if={@n.change_branch} class="ibx-tag ibx-tag--reached">
-              reached {@n.change_branch.branch_name}
-            </span>
+      <:leading><span class="ibx-glyph"><.icon name={@type_class} /></span></:leading>
+      <:label>
+        <span class={hero_class(@n.type)}>
+          <%= if @path do %>
+            <.link navigate={@path}>{@hero}</.link>
           <% else %>
-            <span :if={@n.channel} class="ibx-tag">
-              <span class="dot"></span>{@n.channel.name}
-            </span>
+            {@hero}
           <% end %>
-          <span class="ibx-dot-sep">·</span>
-          <time class="ibx-time" title={NotificationPresenter.clock_utc(@n.occurred_at)}>
-            {NotificationPresenter.relative_time(@n.occurred_at, @now)}
-          </time>
-        </div>
-      </div>
-      <div class="ibx-right">
+        </span>
+      </:label>
+      <:sublabel>
+        <span class="pill ibx-typechip">
+          <span class="dot"></span>{NotificationPresenter.type_label(@n.type)}
+        </span>
+        <%= if @n.type == :change_propagated do %>
+          <.link :if={@path} navigate={@path} class="ibx-tag ibx-tag--pr">
+            PR <span class="hash">#{@n.change && @n.change.number}</span>
+          </.link>
+          <span :if={@n.change_branch} class="ibx-tag ibx-tag--reached">
+            reached {@n.change_branch.branch_name}
+          </span>
+        <% else %>
+          <span :if={@n.channel} class="ibx-tag">
+            <span class="dot"></span>{@n.channel.name}
+          </span>
+        <% end %>
+        <span class="ibx-dot-sep">·</span>
+        <time class="ibx-time" title={NotificationPresenter.clock_utc(@n.occurred_at)}>
+          {NotificationPresenter.relative_time(@n.occurred_at, @now)}
+        </time>
+      </:sublabel>
+      <:actions>
         <span :if={is_nil(@n.read_at)} class="ibx-unread-dot" title="Unread"></span>
         <div class="ibx-row-acts">
           <button
@@ -414,8 +414,8 @@ defmodule TrackerWeb.InboxLive.Index do
             <.icon name="external" />
           </.link>
         </div>
-      </div>
-    </li>
+      </:actions>
+    </RowList.row>
     """
   end
 

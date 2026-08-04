@@ -50,6 +50,43 @@ defmodule TrackerWeb.InboxLive.IndexTest do
     assert render(view) =~ "New revision"
   end
 
+  test "renders notifications through the shared RowList", %{conn: conn} do
+    user = register_user!()
+    n = published_notification!(user)
+    conn = log_in(conn, user)
+
+    {:ok, _view, html} = live(conn, ~p"/inbox")
+
+    assert html =~ ~s(class="row-list")
+
+    document = Floki.parse_document!(html)
+    assert Floki.find(document, ".ibx-list") == []
+    assert Floki.find(document, ".ibx-row") == []
+
+    [row] = Floki.find(document, "#notification-#{n.id}")
+
+    assert Floki.find(row, ".row-leading .ibx-glyph") != []
+    assert Floki.find(row, ".row-label") != []
+    assert Floki.find(row, ".row-sublabel time") != []
+    # Read state and the per-type colour still ride on the row itself
+    assert Floki.attribute(row, "class") == ["is-unread"]
+    assert Floki.attribute(row, "style") == ["--type-color: var(--t-revision)"]
+  end
+
+  test "row actions stay in the trailing actions slot", %{conn: conn} do
+    user = register_user!()
+    n = published_notification!(user)
+    conn = log_in(conn, user)
+
+    {:ok, _view, html} = live(conn, ~p"/inbox")
+
+    document = Floki.parse_document!(html)
+    [actions] = Floki.find(document, "#notification-#{n.id} .row-actions")
+
+    assert Floki.find(actions, ".ibx-unread-dot") != []
+    assert Floki.find(actions, "[aria-label='Mark as read']") != []
+  end
+
   test "does not show another user's notifications", %{conn: conn} do
     user = register_user!()
     other = register_user!()
