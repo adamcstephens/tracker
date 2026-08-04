@@ -43,13 +43,17 @@ defmodule TrackerWeb.RowList do
     default: false,
     doc: "drop meta and actions onto their own line on narrow screens"
 
+  attr :keynav, :boolean,
+    default: false,
+    doc: "let j/k and the arrow keys walk this list's rows"
+
   attr :rest, :global
 
   slot :inner_block, required: true
 
   def row_list(assigns) do
     ~H"""
-    <ul id={@id} class={row_list_class(@stacked)} {@rest}>
+    <ul id={@id} class={row_list_class(@stacked)} data-keynav={@keynav} {@rest}>
       {render_slot(@inner_block)}
     </ul>
     """
@@ -119,7 +123,7 @@ defmodule TrackerWeb.RowList do
   def row(assigns) do
     ~H"""
     <li id={@id} {@rest}>
-      <div class={line_class(@leading)}>
+      <div class={line_class(@leading)} tabindex="-1">
         <.row_content
           leading={@leading}
           label={@label}

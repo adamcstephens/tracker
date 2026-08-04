@@ -61,7 +61,7 @@ defmodule TrackerWeb.OptionLive.Show do
 
       <section :if={@subgroups != []}>
         <h2>Children</h2>
-        <RowList.row_list id="option-children">
+        <RowList.row_list id="option-children" keynav>
           <RowList.row
             :for={{group, count} <- @subgroups}
             mode={:link}
@@ -81,7 +81,7 @@ defmodule TrackerWeb.OptionLive.Show do
 
       <section :if={@matches != []}>
         <h2>Matching options</h2>
-        <RowList.row_list id="matching-options">
+        <RowList.row_list id="matching-options" keynav>
           <RowList.row
             :for={rev <- @matches}
             mode={:link}
@@ -107,7 +107,7 @@ defmodule TrackerWeb.OptionLive.Show do
 
       <section :if={@leaf_options != []}>
         <h2>Options at this prefix</h2>
-        <RowList.row_list id="options-list" phx-hook="AnchorExpand">
+        <RowList.row_list id="options-list" phx-hook="AnchorExpand" keynav>
           <RowList.row
             :for={rev <- @leaf_options}
             id={"opt-#{rev.option.name}"}

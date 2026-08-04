@@ -9,7 +9,7 @@ defmodule TrackerWeb.PackageLive.Index do
   @impl true
   def render(assigns) do
     ~H"""
-    <RowList.row_list id="packages" phx-update="stream" stacked>
+    <RowList.row_list id="packages" phx-update="stream" stacked keynav>
       <RowList.row
         :for={{dom_id, package} <- @streams.packages}
         id={dom_id}

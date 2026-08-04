@@ -1123,6 +1123,14 @@ a.revision-link {
 	text-decoration: none;
 }
 
+/* Keyboard cursor, all three row modes. Inset because the list clips its
+   overflow — an outset outline is cut off on the first and last rows. */
+.row-line:focus-visible {
+	outline: 2px solid var(--accent-edge);
+	outline-offset: -2px;
+	background: var(--surface);
+}
+
 .row-label {
 	font-family: var(--mono);
 	font-weight: 500;

@@ -25,6 +25,36 @@ defmodule TrackerWeb.RowListTest do
       assert html =~ "alpha"
     end
 
+    test "keynav lists carry the marker the key handler looks for" do
+      assigns = %{}
+
+      html =
+        rendered_to_string(~H"""
+        <RowList.row_list id="things" keynav>
+          <RowList.row mode={:plain}>
+            <:label>alpha</:label>
+          </RowList.row>
+        </RowList.row_list>
+        """)
+
+      assert html =~ ~s(data-keynav)
+    end
+
+    test "lists are not keynav by default" do
+      assigns = %{}
+
+      html =
+        rendered_to_string(~H"""
+        <RowList.row_list id="things">
+          <RowList.row mode={:plain}>
+            <:label>alpha</:label>
+          </RowList.row>
+        </RowList.row_list>
+        """)
+
+      refute html =~ ~s(data-keynav)
+    end
+
     test "stacked lists opt into the narrow-screen two-line layout" do
       assigns = %{}
 
@@ -224,6 +254,40 @@ defmodule TrackerWeb.RowListTest do
       refute html =~ "<details"
       refute html =~ "<a"
       assert html =~ ~s(class="row-line")
+    end
+
+    test "the line takes a programmatic focus target, since it has no native one" do
+      assigns = %{}
+
+      html =
+        rendered_to_string(~H"""
+        <RowList.row_list id="things">
+          <RowList.row mode={:plain}>
+            <:label>alpha</:label>
+          </RowList.row>
+        </RowList.row_list>
+        """)
+
+      assert html =~ ~s(tabindex="-1")
+    end
+
+    test "link and expandable rows are left to their native focusables" do
+      assigns = %{}
+
+      html =
+        rendered_to_string(~H"""
+        <RowList.row_list id="things">
+          <RowList.row mode={:link} navigate="/alpha">
+            <:label>alpha</:label>
+          </RowList.row>
+          <RowList.row mode={:expandable}>
+            <:label>beta</:label>
+            <:body>detail</:body>
+          </RowList.row>
+        </RowList.row_list>
+        """)
+
+      refute html =~ ~s(tabindex)
     end
   end
 end

@@ -351,6 +351,14 @@ defmodule TrackerWeb.PackageLive.IndexTest do
 
       assert meta =~ ~r/\d{4}-\d{2}-\d{2} \d{2}:\d{2}/
     end
+
+    test "the list opts into keyboard row navigation", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/packages")
+
+      assert html
+             |> Floki.parse_document!()
+             |> Floki.find("ul#packages[data-keynav]") != []
+    end
   end
 
   describe "ordering" do

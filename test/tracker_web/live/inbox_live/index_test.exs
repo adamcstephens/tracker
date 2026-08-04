@@ -60,6 +60,7 @@ defmodule TrackerWeb.InboxLive.IndexTest do
     assert html =~ ~s(class="row-list")
 
     document = Floki.parse_document!(html)
+    assert Floki.find(document, "ul.row-list[data-keynav]") != []
     assert Floki.find(document, ".ibx-list") == []
     assert Floki.find(document, ".ibx-row") == []
 

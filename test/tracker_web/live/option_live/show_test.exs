@@ -162,6 +162,14 @@ defmodule TrackerWeb.OptionLive.ShowTest do
       assert_redirect(view, ~p"/options/services.nginx.virtualHosts")
     end
 
+    test "both lists opt into keyboard row navigation", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/options/services.nginx")
+      doc = Floki.parse_document!(html)
+
+      assert Floki.find(doc, "ul#option-children[data-keynav]") != []
+      assert Floki.find(doc, "ul#options-list[data-keynav]") != []
+    end
+
     test "children rows carry their option count as trailing meta", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/options/services.nginx")
 
