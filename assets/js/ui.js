@@ -48,6 +48,24 @@ document.addEventListener("keydown", (event) => {
   event.target.blur()
 })
 
+// "#" is Shift+3 on most layouts, so match the character rather than the key
+// position, and keep it out of the row-navigation listener below, whose
+// shiftKey guard would reject it. Focus only: .focus() cannot pop a native
+// select open, and showPicker() is missing from an engine. Arrow keys then
+// pick a channel, which the listener below leaves to the select.
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "#") return
+  if (event.ctrlKey || event.metaKey || event.altKey) return
+  if (isEditable(event.target)) return
+  if (document.querySelector("dialog[open]")) return
+
+  let select = document.getElementById("lens-channel")
+  if (!select || select.disabled) return
+
+  event.preventDefault()
+  select.focus()
+})
+
 // A row's focus target differs per mode: an anchor for :link, a summary for
 // :expandable, and the line itself for :plain.
 //

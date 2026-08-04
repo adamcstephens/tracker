@@ -57,6 +57,7 @@ defmodule TrackerWeb.LensComponent do
                the cell to the selected channel, while a native select sized
                to its widest option would leave dead space after it. --%>
           <select
+            id="lens-channel"
             name="channel"
             aria-label="Channel"
             class="lens__select"

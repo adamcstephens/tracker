@@ -39,6 +39,15 @@ defmodule TrackerWeb.LensComponentTest do
     assert html =~ ~s(id="lens")
   end
 
+  test "the channel select carries the id the \"#\" shortcut focuses", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/packages")
+
+    assert [_] =
+             html
+             |> Floki.parse_document!()
+             |> Floki.find("select#lens-channel.lens__select")
+  end
+
   test "current lens channel is selected", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/packages")
 

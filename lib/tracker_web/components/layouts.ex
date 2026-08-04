@@ -85,6 +85,7 @@ defmodule TrackerWeb.Layouts do
       %ShortcutGroup{
         title: "General",
         shortcuts: [
+          %Shortcut{keys: ["#"], label: "Focus the channel lens"},
           %Shortcut{keys: ["/"], label: "Focus search"},
           %Shortcut{keys: ["Esc"], label: "Leave search"},
           %Shortcut{keys: ["?"], label: "This list"}
