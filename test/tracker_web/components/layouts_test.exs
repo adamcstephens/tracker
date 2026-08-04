@@ -493,6 +493,56 @@ defmodule TrackerWeb.LayoutsTest do
     end
   end
 
+  describe "keyboard shortcut overlay (TRK-372)" do
+    test "the dialog renders on every page, so \"?\" always has something to open",
+         %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/changes")
+      doc = Floki.parse_document!(html)
+
+      assert [dialog] = Floki.find(doc, "dialog#shortcuts")
+      assert Floki.find(dialog, "kbd") != []
+    end
+
+    test "every shortcut in the source list reaches the markup", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/changes")
+
+      keys =
+        html
+        |> Floki.parse_document!()
+        |> Floki.find("dialog#shortcuts kbd")
+        |> Enum.map(&Floki.text/1)
+
+      for group <- Layouts.shortcut_groups(),
+          shortcut <- group.shortcuts,
+          key <- shortcut.keys do
+        assert key in keys, ~s(shortcut "#{key}" is missing from the overlay)
+      end
+    end
+
+    test "the groups cover navigation, lists, and the general keys" do
+      titles = Enum.map(Layouts.shortcut_groups(), & &1.title)
+
+      assert titles == ["Site navigation", "Lists", "General"]
+    end
+
+    test "it documents the jump chords, the row keys, and its own key" do
+      keys =
+        Layouts.shortcut_groups()
+        |> Enum.flat_map(& &1.shortcuts)
+        |> Enum.flat_map(& &1.keys)
+
+      for key <- ["g p", "g o", "g c", "g n", "j", "k", "Enter", "/", "?"] do
+        assert key in keys
+      end
+    end
+
+    test "it renders on a dead page too, where there is no socket", %{conn: conn} do
+      html = conn |> get(~p"/changes") |> html_response(200)
+
+      assert html =~ ~s(<dialog id="shortcuts")
+    end
+  end
+
   describe "list page titles" do
     test "Changes index does not render a redundant page title", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/changes")

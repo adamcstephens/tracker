@@ -3490,3 +3490,76 @@ a.revision-link {
 		opacity: 1;
 	}
 }
+
+/* ========================================================================
+   Keyboard shortcut overlay (?)
+   ======================================================================== */
+
+.shortcuts > header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+}
+
+.shortcuts > header h2 {
+	margin: 0;
+	font-size: 1rem;
+}
+
+.shortcuts__close {
+	padding: 0.25rem 0.5rem;
+	border: 0;
+	background: none;
+	color: var(--text-2);
+	font-size: 1.25rem;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.shortcuts__close:hover {
+	color: var(--text);
+}
+
+.shortcuts__groups {
+	display: grid;
+	gap: 1.25rem;
+}
+
+.shortcuts__groups h3 {
+	margin: 0 0 0.5rem;
+	color: var(--text-2);
+	font-size: 0.75rem;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+.shortcuts__row {
+	display: grid;
+	grid-template-columns: 7rem minmax(0, 1fr);
+	gap: 0.75rem;
+	align-items: baseline;
+	padding: 0.25rem 0;
+}
+
+.shortcuts__row dd {
+	margin: 0;
+}
+
+kbd {
+	display: inline-block;
+	padding: 0.125rem 0.4rem;
+	border: 1px solid var(--line);
+	border-bottom-width: 2px;
+	border-radius: 5px;
+	background: var(--surface);
+	color: var(--text);
+	font-family: inherit;
+	font-size: 0.8125rem;
+	line-height: 1.4;
+	white-space: nowrap;
+}
+
+kbd + kbd {
+	margin-left: 0.25rem;
+}

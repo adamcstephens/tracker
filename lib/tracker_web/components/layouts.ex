@@ -32,6 +32,102 @@ defmodule TrackerWeb.Layouts do
     end
   end
 
+  defmodule Shortcut do
+    @moduledoc """
+    One keyboard shortcut row in the `?` overlay.
+
+    `keys` renders one `<kbd>` each — a chord like `g p` is a single entry,
+    since the two keys are pressed in sequence rather than together.
+    """
+    use TypedStruct
+
+    typedstruct enforce: true do
+      field :keys, [String.t()]
+      field :label, String.t()
+    end
+  end
+
+  defmodule ShortcutGroup do
+    @moduledoc "A titled section of the `?` overlay."
+    use TypedStruct
+
+    typedstruct enforce: true do
+      field :title, String.t()
+      field :shortcuts, [Shortcut.t()]
+    end
+  end
+
+  @doc """
+  The single ordered source for the `?` overlay.
+
+  The handlers themselves live in `assets/js/ui.js`; this is the list the
+  overlay renders, so adding a shortcut means touching both.
+  """
+  def shortcut_groups do
+    [
+      %ShortcutGroup{
+        title: "Site navigation",
+        shortcuts: [
+          %Shortcut{keys: ["g p"], label: "Packages"},
+          %Shortcut{keys: ["g o"], label: "Options"},
+          %Shortcut{keys: ["g c"], label: "Changes"},
+          %Shortcut{keys: ["g n"], label: "Inbox"}
+        ]
+      },
+      %ShortcutGroup{
+        title: "Lists",
+        shortcuts: [
+          %Shortcut{keys: ["j", "↓"], label: "Next row"},
+          %Shortcut{keys: ["k", "↑"], label: "Previous row"},
+          %Shortcut{keys: ["Enter"], label: "Open the focused row"}
+        ]
+      },
+      %ShortcutGroup{
+        title: "General",
+        shortcuts: [
+          %Shortcut{keys: ["/"], label: "Focus search"},
+          %Shortcut{keys: ["?"], label: "This list"}
+        ]
+      }
+    ]
+  end
+
+  @doc """
+  The `?` overlay. Rendered once in the app layout so it exists on every page.
+
+  A native `<dialog>`: `showModal()` brings the backdrop, focus trap, and
+  Escape-to-close with it, and makes the rest of the page inert.
+  """
+  def shortcuts_dialog(assigns) do
+    assigns = assign(assigns, :groups, shortcut_groups())
+
+    ~H"""
+    <dialog id="shortcuts" aria-labelledby="shortcuts-title">
+      <div class="card shortcuts">
+        <header>
+          <h2 id="shortcuts-title">Keyboard shortcuts</h2>
+          <form method="dialog">
+            <button class="shortcuts__close" aria-label="Close">×</button>
+          </form>
+        </header>
+        <div class="shortcuts__groups">
+          <section :for={group <- @groups}>
+            <h3>{group.title}</h3>
+            <dl>
+              <div :for={shortcut <- group.shortcuts} class="shortcuts__row">
+                <dt>
+                  <kbd :for={key <- shortcut.keys}>{key}</kbd>
+                </dt>
+                <dd>{shortcut.label}</dd>
+              </div>
+            </dl>
+          </section>
+        </div>
+      </div>
+    </dialog>
+    """
+  end
+
   @doc """
   The single ordered source for the chrome section navigation.
 

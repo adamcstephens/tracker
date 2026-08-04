@@ -73,9 +73,34 @@ function clearPendingJump() {
   pendingJump = null
 }
 
+// "?" is Shift+/ on most layouts, so match the character rather than the key
+// position — and check it before the shiftKey guard below rejects it.
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "?") return
+  if (event.ctrlKey || event.metaKey || event.altKey) return
+  if (isEditable(event.target)) return
+
+  let dialog = document.getElementById("shortcuts")
+  if (!dialog) return
+
+  event.preventDefault()
+  if (dialog.open) dialog.close()
+  else dialog.showModal()
+})
+
+// The house dialog pattern makes the <dialog> itself the full-viewport
+// backdrop with a .card inside, so a backdrop click lands on the dialog
+// element and anything inside the card lands on a child.
+document.addEventListener("click", (event) => {
+  let dialog = document.getElementById("shortcuts")
+  if (dialog && dialog.open && event.target === dialog) dialog.close()
+})
+
 document.addEventListener("keydown", (event) => {
   if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return
   if (isTextEntry(event.target)) return
+  // A modal dialog makes the page behind it inert; the cursor stays put.
+  if (document.querySelector("dialog[open]")) return
 
   // A pending "g" owns the next key outright, so "g" then "k" jumps rather
   // than moving the cursor.
