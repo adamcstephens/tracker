@@ -4,13 +4,8 @@ defmodule TrackerWeb.ChannelLive.Show do
   alias Tracker.Notifications.ChannelSubscription
   alias TrackerWeb.DataTable
   alias TrackerWeb.PageSearch
+  alias TrackerWeb.RowList
   alias TrackerWeb.TableParams
-
-  @table_opts [
-    allowed_sorts: ~w(released_at revision result)a,
-    default_sort: :released_at,
-    default_sort_dir: :desc
-  ]
 
   @impl true
   def render(assigns) do
@@ -52,29 +47,24 @@ defmodule TrackerWeb.ChannelLive.Show do
       method="get"
       action={~p"/channels/#{@channel}/diff"}
     >
-      <DataTable.data_table
-        id="revisions"
-        rows={@revisions}
-        table_params={@table_params}
-        base_path={"/channels/#{@channel}"}
+      <RowList.row_list id="revisions">
+        <RowList.row :for={rev <- @revisions} mode={:plain}>
+          <:label>
+            <input type="checkbox" name="compare[]" value={rev.revision} />
+            <.revision_link revision={rev.revision} channel={@channel} />
+          </:label>
+          <:meta>{format_date(rev.released_at)}</:meta>
+        </RowList.row>
+      </RowList.row_list>
+
+      <DataTable.pagination
         total_pages={@total_pages}
         current_page={@current_page}
         has_prev_page?={@has_prev_page?}
         has_next_page?={@has_next_page?}
-      >
-        <:col :let={rev} label="">
-          <input type="checkbox" name="compare[]" value={rev.revision} />
-        </:col>
-        <:col :let={rev} field={:revision} label="Revision" sortable>
-          <.revision_link revision={rev.revision} channel={@channel} />
-        </:col>
-        <:col :let={rev} field={:result} label="Result" sortable>
-          {format_result(rev.result)}
-        </:col>
-        <:col :let={rev} field={:released_at} label="Released" sortable>
-          {format_date(rev.released_at)}
-        </:col>
-      </DataTable.data_table>
+        prev_path={TableParams.page_path(@table_params, @current_page - 1, "/channels/#{@channel}")}
+        next_path={TableParams.page_path(@table_params, @current_page + 1, "/channels/#{@channel}")}
+      />
 
       <button type="submit" style="margin-top: 1rem;">Compare selected</button>
     </form>
@@ -99,11 +89,6 @@ defmodule TrackerWeb.ChannelLive.Show do
 
   defp format_date(nil), do: "-"
   defp format_date(dt), do: Calendar.strftime(dt, "%Y-%m-%d %H:%M")
-
-  defp format_result(nil), do: "-"
-  defp format_result(:success), do: "Success"
-  defp format_result(:partial_success), do: "Partial"
-  defp format_result(:error), do: "Error"
 
   @impl true
   def mount(_params, _session, socket) do
@@ -135,7 +120,7 @@ defmodule TrackerWeb.ChannelLive.Show do
       Phoenix.PubSub.subscribe(Tracker.PubSub, "channel_revisions:#{channel.id}:completed")
     end
 
-    tp = TableParams.from_params(params, @table_opts)
+    tp = TableParams.from_params(params)
 
     lens = socket.assigns.lens && %{socket.assigns.lens | disabled?: true}
 
@@ -181,7 +166,7 @@ defmodule TrackerWeb.ChannelLive.Show do
 
     page =
       Tracker.Nixpkgs.ChannelRevision.list_by_channel!(channel_id,
-        query: [sort: [{tp.sort_by, tp.sort_dir}]],
+        query: [sort: [released_at: :desc]],
         page: [offset: tp.offset, count: true]
       )
 
@@ -212,43 +197,5 @@ defmodule TrackerWeb.ChannelLive.Show do
       end
 
     {:noreply, assign(socket, :subscribed?, subscribed?)}
-  end
-
-  @impl true
-  def handle_event("sort", %{"field" => field}, socket) do
-    tp = socket.assigns.table_params
-    new_sort_by = TableParams.from_params(%{"sort_by" => field}, @table_opts).sort_by
-
-    new_sort_dir =
-      if tp.sort_by == new_sort_by, do: TableParams.toggle_dir(tp.sort_dir), else: :asc
-
-    new_tp = %{tp | sort_by: new_sort_by, sort_dir: new_sort_dir, page: 1, offset: 0}
-
-    {:noreply,
-     push_patch(socket, to: TableParams.to_path(new_tp, "/channels/#{socket.assigns.channel}"))}
-  end
-
-  @impl true
-  def handle_event("next-page", _params, socket) do
-    tp = socket.assigns.table_params
-
-    {:noreply,
-     push_patch(socket,
-       to: TableParams.to_path(%{tp | page: tp.page + 1}, "/channels/#{socket.assigns.channel}")
-     )}
-  end
-
-  @impl true
-  def handle_event("prev-page", _params, socket) do
-    tp = socket.assigns.table_params
-
-    {:noreply,
-     push_patch(socket,
-       to:
-         TableParams.to_path(
-           %{tp | page: max(tp.page - 1, 1)},
-           "/channels/#{socket.assigns.channel}"
-         )
-     )}
   end
 end

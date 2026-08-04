@@ -71,6 +71,53 @@ defmodule TrackerWeb.ChannelLive.ShowTest do
     assert html =~ ~s|type="checkbox"|
   end
 
+  test "renders revisions as shared row-list rows", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/channels/nixos-unstable")
+
+    assert html =~ ~s(class="row-list)
+    assert html =~ ~s(class="row-line")
+    assert html =~ ~s(href="/channels/nixos-unstable/revisions/shw222bbb444555")
+    assert html =~ "2026-03-15 10:00"
+  end
+
+  test "rows are not whole-row links, so the compare checkbox stays clickable", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/channels/nixos-unstable")
+
+    refute html =~ "row-link"
+  end
+
+  test "the result column is gone", %{conn: conn, channel: channel} do
+    cr =
+      Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
+        channel_id: channel.id,
+        revision: "res111aaa222333",
+        released_at: ~U[2026-03-25 10:00:00Z]
+      })
+
+    Tracker.Nixpkgs.ChannelRevision.record_result!(cr, %{result: :success})
+
+    {:ok, _view, html} = live(conn, ~p"/channels/nixos-unstable")
+
+    assert html =~ "res111a"
+    refute html =~ "Success"
+  end
+
+  test "column sorting is gone", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/channels/nixos-unstable")
+
+    refute html =~ "phx-value-field"
+    refute html =~ "<table"
+  end
+
+  test "revisions are listed newest first", %{conn: conn, cr1: cr1, cr2: cr2} do
+    {:ok, _view, html} = live(conn, ~p"/channels/nixos-unstable")
+
+    {newest, _} = :binary.match(html, String.slice(cr2.revision, 0, 7))
+    {oldest, _} = :binary.match(html, String.slice(cr1.revision, 0, 7))
+
+    assert newest < oldest
+  end
+
   test "revisions form submits via GET to the diff endpoint", %{conn: conn, cr1: cr1} do
     {:ok, _view, html} = live(conn, ~p"/channels/nixos-unstable")
 
@@ -84,6 +131,26 @@ defmodule TrackerWeb.ChannelLive.ShowTest do
     assert Enum.any?(checkboxes, &(Floki.attribute(&1, "value") == [cr1.revision]))
 
     assert Floki.find(form, "button[type=submit]") != []
+  end
+
+  test "pagination links page through the revisions", %{conn: conn, channel: channel} do
+    for n <- 1..20 do
+      Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
+        channel_id: channel.id,
+        revision: "pag#{String.pad_leading("#{n}", 3, "0")}aaa222333",
+        released_at: DateTime.add(~U[2026-04-01 10:00:00Z], n, :day)
+      })
+    end
+
+    {:ok, view, html} = live(conn, ~p"/channels/nixos-unstable")
+
+    assert html =~ "Page 1 of 2"
+    # Newest first, so the oldest seeded revision can only be on page 2
+    refute html =~ "shw111a"
+
+    html = view |> element(~s(a[href="/channels/nixos-unstable?page=2"])) |> render_click()
+
+    assert html =~ "shw111a"
   end
 
   test "renders a Build problem badge in the header when hydra reports failure",
