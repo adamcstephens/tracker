@@ -28,8 +28,8 @@ defmodule TrackerWeb.ChangeLive.Show do
 
   use TrackerWeb, :live_view
 
-  alias TrackerWeb.DataTable
   alias TrackerWeb.PageSearch
+  alias TrackerWeb.Pagination
   alias TrackerWeb.PropagationDag
   alias TrackerWeb.PropagationTree
   alias TrackerWeb.RowList
@@ -196,7 +196,7 @@ defmodule TrackerWeb.ChangeLive.Show do
                 </RowList.row>
               </RowList.row_list>
 
-              <DataTable.pagination
+              <Pagination.controls
                 total_pages={@pkg_total_pages}
                 current_page={@pkg_current_page}
                 has_prev_page?={@pkg_has_prev?}

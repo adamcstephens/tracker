@@ -1,4 +1,4 @@
-defmodule TrackerWeb.DataTable do
+defmodule TrackerWeb.Pagination do
   @moduledoc """
   Pagination controls for paged lists.
 
@@ -14,7 +14,7 @@ defmodule TrackerWeb.DataTable do
 
   ## Examples
 
-      <DataTable.pagination
+      <Pagination.controls
         total_pages={@total_pages}
         current_page={@current_page}
         has_prev_page?={@has_prev_page?}
@@ -38,7 +38,7 @@ defmodule TrackerWeb.DataTable do
     default: nil,
     doc: "URL for the next page (no-JS fallback). When set, renders an <a> instead of a button."
 
-  def pagination(assigns) do
+  def controls(assigns) do
     ~H"""
     <nav
       :if={show_pagination?(@total_pages, @has_prev_page?, @has_next_page?)}

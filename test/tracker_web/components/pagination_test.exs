@@ -1,18 +1,18 @@
-defmodule TrackerWeb.DataTableTest do
+defmodule TrackerWeb.PaginationTest do
   use TrackerWeb.ConnCase, async: true
 
   import Phoenix.LiveViewTest
   import Phoenix.Component, only: [sigil_H: 2]
 
-  alias TrackerWeb.DataTable
+  alias TrackerWeb.Pagination
 
-  describe "pagination/1" do
+  describe "controls/1" do
     test "renders page info and buttons when total_pages > 1" do
       assigns = %{}
 
       html =
         rendered_to_string(~H"""
-        <DataTable.pagination
+        <Pagination.controls
           total_pages={3}
           current_page={2}
           has_prev_page?={true}
@@ -30,7 +30,7 @@ defmodule TrackerWeb.DataTableTest do
 
       html =
         rendered_to_string(~H"""
-        <DataTable.pagination
+        <Pagination.controls
           total_pages={1}
           current_page={1}
         />
@@ -45,7 +45,7 @@ defmodule TrackerWeb.DataTableTest do
 
       html =
         rendered_to_string(~H"""
-        <DataTable.pagination
+        <Pagination.controls
           total_pages={2}
           current_page={1}
           has_prev_page?={false}
@@ -61,7 +61,7 @@ defmodule TrackerWeb.DataTableTest do
 
       html =
         rendered_to_string(~H"""
-        <DataTable.pagination
+        <Pagination.controls
           total_pages={2}
           current_page={2}
           has_prev_page?={true}
@@ -79,7 +79,7 @@ defmodule TrackerWeb.DataTableTest do
 
       html =
         rendered_to_string(~H"""
-        <DataTable.pagination
+        <Pagination.controls
           total_pages={@total_pages}
           current_page={2}
           has_prev_page?={true}
@@ -98,7 +98,7 @@ defmodule TrackerWeb.DataTableTest do
 
       html =
         rendered_to_string(~H"""
-        <DataTable.pagination
+        <Pagination.controls
           total_pages={@total_pages}
           current_page={1}
           has_prev_page?={false}
@@ -115,7 +115,7 @@ defmodule TrackerWeb.DataTableTest do
 
       html =
         rendered_to_string(~H"""
-        <DataTable.pagination
+        <Pagination.controls
           total_pages={3}
           current_page={2}
           has_prev_page?={true}
@@ -134,7 +134,7 @@ defmodule TrackerWeb.DataTableTest do
 
       html =
         rendered_to_string(~H"""
-        <DataTable.pagination
+        <Pagination.controls
           total_pages={2}
           current_page={1}
           has_prev_page?={false}
