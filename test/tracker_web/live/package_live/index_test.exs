@@ -327,24 +327,45 @@ defmodule TrackerWeb.PackageLive.IndexTest do
     end
   end
 
-  describe "discovered column" do
-    test "renders 'Discovered' column header", %{conn: conn} do
+  describe "row list" do
+    test "each row links to the package", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/packages")
-      assert html =~ "Discovered"
+
+      hrefs =
+        html
+        |> Floki.parse_document!()
+        |> Floki.find("#packages a.row-link")
+        |> Enum.flat_map(&Floki.attribute(&1, "href"))
+
+      assert "/packages/firefox" in hrefs
     end
 
-    test "default sort lists most recently discovered packages first", %{conn: conn} do
+    test "shows when each package was discovered", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/packages")
+
+      meta =
+        html
+        |> Floki.parse_document!()
+        |> Floki.find("#packages .row-meta")
+        |> Floki.text()
+
+      assert meta =~ ~r/\d{4}-\d{2}-\d{2} \d{2}:\d{2}/
+    end
+  end
+
+  describe "ordering" do
+    test "lists most recently discovered packages first", %{conn: conn} do
       # Setup creates 6 packages in order; the last one inserted should appear first.
       {:ok, _view, html} = live(conn, ~p"/packages")
 
       assert attribute_order(html) |> hd() == "emacs.firefox-tools"
     end
 
-    test "sort_by=inserted_at&sort_dir=asc reverses default order", %{conn: conn} do
+    test "sort params no longer reorder the list", %{conn: conn} do
       {:ok, _view, html} =
         live(conn, ~p"/packages?sort_by=inserted_at&sort_dir=asc")
 
-      assert attribute_order(html) |> hd() == "firefox"
+      assert attribute_order(html) |> hd() == "emacs.firefox-tools"
     end
   end
 
@@ -392,8 +413,9 @@ defmodule TrackerWeb.PackageLive.IndexTest do
   end
 
   defp attribute_order(html) do
-    ~r/<td[^>]*>\s*(?:<a[^>]*>)?\s*([a-z][\w.-]*)\s*(?:<\/a>)?\s*<\/td>/
-    |> Regex.scan(html)
-    |> Enum.map(fn [_, attr] -> attr end)
+    html
+    |> Floki.parse_document!()
+    |> Floki.find("#packages .row-label")
+    |> Enum.map(&(&1 |> Floki.text() |> String.trim()))
   end
 end

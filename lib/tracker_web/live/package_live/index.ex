@@ -3,39 +3,33 @@ defmodule TrackerWeb.PackageLive.Index do
 
   alias TrackerWeb.DataTable
   alias TrackerWeb.PageSearch
+  alias TrackerWeb.RowList
   alias TrackerWeb.TableParams
-
-  @table_opts [
-    allowed_sorts: ~w(attribute inserted_at)a,
-    default_sort: :inserted_at,
-    default_sort_dir: :desc
-  ]
 
   @impl true
   def render(assigns) do
     ~H"""
-    <DataTable.data_table
-      id="packages"
-      rows={@streams.packages}
-      table_params={@table_params}
-      base_path="/packages"
+    <RowList.row_list id="packages" phx-update="stream" stacked>
+      <RowList.row
+        :for={{dom_id, package} <- @streams.packages}
+        id={dom_id}
+        mode={:link}
+        navigate={~p"/packages/#{package.attribute}"}
+      >
+        <:label>{package.attribute}</:label>
+        <:sublabel :if={package.description}>{package.description}</:sublabel>
+        <:meta>{format_datetime(package.inserted_at)}</:meta>
+      </RowList.row>
+    </RowList.row_list>
+
+    <DataTable.pagination
       total_pages={@total_pages}
       current_page={@current_page}
       has_prev_page?={@has_prev_page?}
       has_next_page?={@has_next_page?}
-    >
-      <:col :let={{_id, package}} field={:attribute} label="Attribute" sortable>
-        <.link navigate={~p"/packages/#{package.attribute}"}>{package.attribute}</.link>
-      </:col>
-      <:col :let={{_id, package}} label="Description">
-        <span style="display: block; max-width: 30ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-          {package.description}
-        </span>
-      </:col>
-      <:col :let={{_id, package}} field={:inserted_at} label="Discovered" sortable>
-        {format_datetime(package.inserted_at)}
-      </:col>
-    </DataTable.data_table>
+      prev_path={TableParams.page_path(@table_params, @current_page - 1, "/packages")}
+      next_path={TableParams.page_path(@table_params, @current_page + 1, "/packages")}
+    />
     """
   end
 
@@ -49,7 +43,7 @@ defmodule TrackerWeb.PackageLive.Index do
 
   @impl true
   def handle_params(params, _url, socket) do
-    tp = TableParams.from_params(params, @table_opts)
+    tp = TableParams.from_params(params)
 
     socket =
       socket
@@ -82,19 +76,6 @@ defmodule TrackerWeb.PackageLive.Index do
   end
 
   @impl true
-  def handle_event("sort", %{"field" => field}, socket) do
-    tp = socket.assigns.table_params
-    new_sort_by = TableParams.from_params(%{"sort_by" => field}, @table_opts).sort_by
-
-    new_sort_dir =
-      if tp.sort_by == new_sort_by, do: TableParams.toggle_dir(tp.sort_dir), else: :asc
-
-    new_tp = %{tp | sort_by: new_sort_by, sort_dir: new_sort_dir, page: 1, offset: 0}
-
-    {:noreply, push_patch(socket, to: TableParams.to_path(new_tp, "/packages"))}
-  end
-
-  @impl true
   def handle_event("next-page", _params, socket) do
     tp = socket.assigns.table_params
 
@@ -117,7 +98,7 @@ defmodule TrackerWeb.PackageLive.Index do
     page =
       Tracker.Nixpkgs.Package.list!(tp.search, channel_id,
         actor: socket.assigns[:current_user],
-        query: [sort: [{tp.sort_by, tp.sort_dir}]],
+        query: [sort: [inserted_at: :desc]],
         page: [offset: tp.offset]
       )
 
