@@ -1036,11 +1036,11 @@ a.revision-link {
 
 .section-header h2 {
 	margin: 0;
-	font-size: 0.75rem;
+	font-size: 0.875rem;
 	font-weight: 600;
 	letter-spacing: 0.06em;
 	text-transform: uppercase;
-	color: var(--text-3);
+	color: var(--text);
 }
 
 .section-header .rule {
