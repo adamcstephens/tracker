@@ -6,6 +6,7 @@ defmodule TrackerWeb.OptionLive.Show do
   alias TrackerWeb.PageSearch
   alias TrackerWeb.Pagination
   alias TrackerWeb.RowList
+  alias TrackerWeb.SectionHeader
   alias TrackerWeb.TableParams
 
   # Inline so it works on dead renders too — anonymous visitors don't load
@@ -60,7 +61,7 @@ defmodule TrackerWeb.OptionLive.Show do
       </p>
 
       <section :if={@subgroups != []}>
-        <h2>Children</h2>
+        <SectionHeader.section_header title="Children" count={length(@subgroups)} />
         <RowList.row_list id="option-children">
           <RowList.row
             :for={{group, count} <- @subgroups}
@@ -80,7 +81,7 @@ defmodule TrackerWeb.OptionLive.Show do
       </section>
 
       <section :if={@matches != []}>
-        <h2>Matching options</h2>
+        <SectionHeader.section_header title="Matching options" count={@match_count} />
         <RowList.row_list id="matching-options">
           <RowList.row
             :for={rev <- @matches}
@@ -106,7 +107,10 @@ defmodule TrackerWeb.OptionLive.Show do
       </section>
 
       <section :if={@leaf_options != []}>
-        <h2>Options at this prefix</h2>
+        <SectionHeader.section_header
+          title="Options at this prefix"
+          count={length(@leaf_options)}
+        />
         <RowList.row_list id="options-list" phx-hook="AnchorExpand">
           <RowList.row
             :for={rev <- @leaf_options}
@@ -513,6 +517,7 @@ defmodule TrackerWeb.OptionLive.Show do
 
       socket
       |> assign(:matches, pagination.stream_results)
+      |> assign(:match_count, page.count)
       |> assign(:total_pages, pagination.total_pages)
       |> assign(:current_page, pagination.current_page)
       |> assign(:has_prev_page?, pagination.has_prev_page?)
@@ -520,6 +525,7 @@ defmodule TrackerWeb.OptionLive.Show do
     else
       socket
       |> assign(:matches, [])
+      |> assign(:match_count, 0)
       |> assign(:total_pages, 0)
       |> assign(:current_page, 1)
       |> assign(:has_prev_page?, false)

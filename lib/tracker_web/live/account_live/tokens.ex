@@ -3,6 +3,7 @@ defmodule TrackerWeb.AccountLive.Tokens do
 
   alias Tracker.Accounts.ApiToken
   alias TrackerWeb.RowList
+  alias TrackerWeb.SectionHeader
 
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
@@ -42,7 +43,7 @@ defmodule TrackerWeb.AccountLive.Tokens do
       </:actions>
     </.simple_form>
 
-    <h2>Existing tokens</h2>
+    <SectionHeader.section_header title="Existing tokens" count={length(@tokens)} />
 
     <p :if={@tokens == []}>No tokens.</p>
 

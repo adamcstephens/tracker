@@ -43,6 +43,14 @@ defmodule TrackerWeb.MaintainerLive.ShowTest do
     assert html =~ "maint-pkg-two"
   end
 
+  test "the packages section uses the shared section header", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/maintainers/testmaint")
+
+    assert has_element?(view, ".section-header h2", "Packages")
+    assert has_element?(view, ".section-header .n", "2")
+    assert has_element?(view, ".section-controls #maintainer-package-search")
+  end
+
   test "package_search filters packages", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/maintainers/testmaint?package_search=one")
 

@@ -4,6 +4,7 @@ defmodule TrackerWeb.MaintainerLive.Show do
   alias TrackerWeb.PageSearch
   alias TrackerWeb.Pagination
   alias TrackerWeb.RowList
+  alias TrackerWeb.SectionHeader
   alias TrackerWeb.TableParams
 
   @impl true
@@ -26,8 +27,8 @@ defmodule TrackerWeb.MaintainerLive.Show do
       </:item>
     </.list>
 
-    <div :if={@maintainer.teams != []} style="margin-top: 1rem;">
-      <h2>Teams</h2>
+    <div :if={@maintainer.teams != []}>
+      <SectionHeader.section_header title="Teams" count={length(@maintainer.teams)} />
       <RowList.row_list id="maintainer-teams">
         <RowList.row
           :for={t <- @maintainer.teams}
@@ -42,7 +43,7 @@ defmodule TrackerWeb.MaintainerLive.Show do
     </div>
 
     <section :if={@recent_changes != []}>
-      <h2>Recent Changes</h2>
+      <SectionHeader.section_header title="Recent Changes" count={length(@recent_changes)} />
       <RowList.row_list id="maintainer-recent-changes" stacked>
         <RowList.row
           :for={change <- @recent_changes}
@@ -60,23 +61,25 @@ defmodule TrackerWeb.MaintainerLive.Show do
       </RowList.row_list>
     </section>
 
-    <h2>Packages ({@package_count})</h2>
-
-    <form
-      id="maintainer-package-search"
-      method="get"
-      action={~p"/maintainers/#{@maintainer.github}"}
-      phx-change="search-packages"
-      phx-submit="search-packages"
-    >
-      <input
-        type="search"
-        name="package_search"
-        value={@table_params.search}
-        placeholder="Filter packages..."
-        phx-debounce="300"
-      />
-    </form>
+    <SectionHeader.section_header title="Packages" count={@package_count}>
+      <:controls>
+        <form
+          id="maintainer-package-search"
+          method="get"
+          action={~p"/maintainers/#{@maintainer.github}"}
+          phx-change="search-packages"
+          phx-submit="search-packages"
+        >
+          <input
+            type="search"
+            name="package_search"
+            value={@table_params.search}
+            placeholder="Filter packages..."
+            phx-debounce="300"
+          />
+        </form>
+      </:controls>
+    </SectionHeader.section_header>
 
     <RowList.row_list id="maintainer-packages" phx-update="stream">
       <RowList.row

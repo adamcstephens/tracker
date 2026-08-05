@@ -125,6 +125,14 @@ defmodule TrackerWeb.OptionLive.ShowTest do
     assert html =~ ~s(href="/options/services.nginx.virtualHosts")
   end
 
+  test "children and leaf sections use the shared section header", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/options/services.nginx")
+
+    assert has_element?(view, ".section-header h2", "Children")
+    assert has_element?(view, ".section-header h2", "Options at this prefix")
+    assert has_element?(view, ".section-header .n", "2")
+  end
+
   test "leaf option rows carry a share link instead of the # anchor", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/options/services.nginx")
 

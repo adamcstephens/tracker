@@ -42,6 +42,14 @@ defmodule TrackerWeb.TeamLive.ShowTest do
     assert html =~ "Test team scope"
   end
 
+  test "member and package sections use the shared section header", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/teams/teamshow")
+
+    assert has_element?(view, ".section-header:has(#team-package-search) h2", "Packages")
+    assert has_element?(view, ".section-header:has(#team-package-search) .n", "1")
+    assert has_element?(view, ".section-header h2", "Members")
+  end
+
   test "shows team members", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/teams/teamshow")
 

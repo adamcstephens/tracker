@@ -22,6 +22,17 @@ defmodule TrackerWeb.AccountLive.TokensTest do
       assert html =~ "active"
     end
 
+    test "the token list uses the shared section header", %{conn: conn} do
+      user = register_via_github!()
+      {:ok, _} = ApiToken.issue(user.id, %{label: "my-ci"}, actor: user)
+      conn = log_in(conn, user)
+
+      {:ok, view, _html} = live(conn, ~p"/account/tokens")
+
+      assert has_element?(view, ".section-header h2", "Existing tokens")
+      assert has_element?(view, ".section-header .n", "1")
+    end
+
     test "does not list revoked user-session tokens from prior logouts", %{conn: conn} do
       user = register_via_github!()
       _ = simulate_logged_out_session(user)

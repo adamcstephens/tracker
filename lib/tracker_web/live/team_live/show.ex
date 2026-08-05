@@ -4,6 +4,7 @@ defmodule TrackerWeb.TeamLive.Show do
   alias TrackerWeb.PageSearch
   alias TrackerWeb.Pagination
   alias TrackerWeb.RowList
+  alias TrackerWeb.SectionHeader
   alias TrackerWeb.TableParams
 
   @impl true
@@ -26,8 +27,8 @@ defmodule TrackerWeb.TeamLive.Show do
       </:item>
     </.list>
 
-    <div :if={@team.members != []} style="margin-top: 1rem;">
-      <h2>Members</h2>
+    <div :if={@team.members != []}>
+      <SectionHeader.section_header title="Members" count={length(@team.members)} />
       <RowList.row_list id="team-members">
         <RowList.row
           :for={m <- @team.members}
@@ -40,23 +41,25 @@ defmodule TrackerWeb.TeamLive.Show do
       </RowList.row_list>
     </div>
 
-    <h2>Packages</h2>
-
-    <form
-      id="team-package-search"
-      method="get"
-      action={~p"/teams/#{@team.short_name}"}
-      phx-change="search-packages"
-      phx-submit="search-packages"
-    >
-      <input
-        type="search"
-        name="package_search"
-        value={@table_params.search}
-        placeholder="Filter packages..."
-        phx-debounce="300"
-      />
-    </form>
+    <SectionHeader.section_header title="Packages" count={@package_count}>
+      <:controls>
+        <form
+          id="team-package-search"
+          method="get"
+          action={~p"/teams/#{@team.short_name}"}
+          phx-change="search-packages"
+          phx-submit="search-packages"
+        >
+          <input
+            type="search"
+            name="package_search"
+            value={@table_params.search}
+            placeholder="Filter packages..."
+            phx-debounce="300"
+          />
+        </form>
+      </:controls>
+    </SectionHeader.section_header>
 
     <RowList.row_list id="team-packages" phx-update="stream">
       <RowList.row
@@ -164,6 +167,7 @@ defmodule TrackerWeb.TeamLive.Show do
     |> assign(:has_next_page?, pagination.has_next_page?)
     |> assign(:total_pages, pagination.total_pages)
     |> assign(:current_page, pagination.current_page)
+    |> assign(:package_count, packages.count)
   end
 
   @impl true
