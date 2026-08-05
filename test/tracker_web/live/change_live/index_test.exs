@@ -191,6 +191,104 @@ defmodule TrackerWeb.ChangeLive.IndexTest do
     assert query_params(next) == %{"base_ref" => "release-25.11", "page" => "2"}
   end
 
+  test "renders no in-channel toggle when there is no lens channel", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/changes")
+
+    refute has_element?(view, "input[name=in_channel]")
+  end
+
+  describe "lens channel filter" do
+    setup do
+      channel = Tracker.Fixtures.channel!("nixos-97.97")
+      cr = Tracker.Fixtures.channel_revision!(channel)
+
+      5001
+      |> Tracker.Nixpkgs.Change.get_by_number!()
+      |> Tracker.Fixtures.change_branch!("nixos-97.97", cr)
+
+      %{channel: channel, cr: cr}
+    end
+
+    test "lists changes that have not reached the lens channel", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/changes?lens_channel=nixos-97.97")
+
+      assert html =~ "5001"
+      assert html =~ "5002"
+    end
+
+    test "the in-channel toggle filters to changes that reached the lens channel", %{conn: conn} do
+      {:ok, view, html} = live(conn, ~p"/changes?lens_channel=nixos-97.97&in_channel=1")
+
+      assert html =~ "5001"
+      refute html =~ "5002"
+      refute has_element?(view, "#changes li .pill-landed")
+    end
+
+    test "toggling the filter on narrows the list", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/changes?lens_channel=nixos-97.97")
+
+      html =
+        view
+        |> element("form#change-base-ref-filter")
+        |> render_change(%{"in_channel" => "1"})
+
+      assert html =~ "5001"
+      refute html =~ "5002"
+    end
+
+    test "the toggle is labelled with the lens channel and reflects the filter state", %{
+      conn: conn
+    } do
+      {:ok, view, _html} = live(conn, ~p"/changes?lens_channel=nixos-97.97")
+
+      assert has_element?(view, "form#change-base-ref-filter label", "nixos-97.97")
+      refute has_element?(view, "input[name=in_channel][checked]")
+
+      {:ok, view, _html} = live(conn, ~p"/changes?lens_channel=nixos-97.97&in_channel=1")
+
+      assert has_element?(view, "input[name=in_channel][checked]")
+    end
+
+    test "rows that reached the lens channel carry a badge", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/changes?lens_channel=nixos-97.97")
+      doc = Floki.parse_document!(html)
+
+      assert [badge] = Floki.find(doc, "#changes li .pill-landed")
+      assert Floki.text(badge) =~ "nixos-97.97"
+      assert length(Floki.find(doc, "#changes li")) == 2
+    end
+
+    test "pagination links keep the in-channel filter", %{conn: conn, cr: cr} do
+      Tracker.Nixpkgs.Change.bulk_upsert_all(
+        for n <- 7001..7020 do
+          %{
+            number: n,
+            title: "chore: filler #{n}",
+            state: :merged,
+            author: "eve",
+            base_ref: "master",
+            url: "https://github.com/NixOS/nixpkgs/pull/#{n}"
+          }
+        end
+      )
+
+      for n <- 7001..7020 do
+        n
+        |> Tracker.Nixpkgs.Change.get_by_number!()
+        |> Tracker.Fixtures.change_branch!("nixos-97.97", cr)
+      end
+
+      {:ok, _view, html} = live(conn, ~p"/changes?lens_channel=nixos-97.97&in_channel=1")
+
+      [next] =
+        html
+        |> Floki.parse_document!()
+        |> Floki.find("nav a.pagination-button:last-of-type")
+
+      assert query_params(next) == %{"in_channel" => "1", "page" => "2"}
+    end
+  end
+
   defp query_params(link) do
     [href] = Floki.attribute(link, "href")
     href |> URI.parse() |> Map.fetch!(:query) |> URI.decode_query()

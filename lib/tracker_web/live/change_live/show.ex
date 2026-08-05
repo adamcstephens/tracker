@@ -20,10 +20,12 @@ defmodule TrackerWeb.ChangeLive.Show do
   Affected options are folded to two-segment prefixes
   (e.g. `services.nginx.virtualHosts` → `services.nginx`) with a count,
   so large PRs don't drown the page in individual option names. The set
-  is scoped to the current lens's channel revision (defaulting to the
-  channel's latest revision when the lens has no explicit revision) —
-  without that scope the join fans out across every channel revision an
-  option has ever appeared in.
+  needs a channel revision to scope to — without one the join fans out
+  across every channel revision an option has ever appeared in — and that
+  scope follows the change's own `base_ref` (the nearest channel downstream
+  of it) rather than the lens, since which options a PR touches is a
+  property of the PR. The lens takes over once the change has landed in the
+  lens channel, where a per-channel answer is meaningful.
   """
 
   use TrackerWeb, :live_view
@@ -572,7 +574,7 @@ defmodule TrackerWeb.ChangeLive.Show do
 
   defp load_options(socket, change_id) do
     prefixes =
-      case lens_channel_revision_id(socket.assigns[:lens]) do
+      case option_scope_revision_id(socket.assigns.change, socket.assigns[:lens]) do
         nil ->
           []
 
@@ -600,12 +602,36 @@ defmodule TrackerWeb.ChangeLive.Show do
     |> assign(:options_enabled?, options_enabled?)
   end
 
-  defp lens_channel_revision_id(nil), do: nil
-  defp lens_channel_revision_id(%{revision: %{id: id}}), do: id
+  defp option_scope_revision_id(change, lens) do
+    lens_channel = TrackerWeb.Lens.channel_name(lens)
 
-  defp lens_channel_revision_id(%{channel: %{id: channel_id}}) do
-    case Tracker.Nixpkgs.ChannelRevision.latest_by_channel(channel_id) do
-      {:ok, cr} -> cr.id
+    if lens_channel && landed_in_branch?(change, lens_channel) do
+      lens_revision_id(lens) || latest_revision_id(lens_channel)
+    else
+      base_ref_revision_id(change.base_ref)
+    end
+  end
+
+  defp landed_in_branch?(change, branch_name) do
+    Enum.any?(change.change_branches, &(&1.branch_name == branch_name))
+  end
+
+  defp lens_revision_id(%{revision: %{id: id}}), do: id
+  defp lens_revision_id(_lens), do: nil
+
+  defp base_ref_revision_id(base_ref) do
+    base_ref
+    |> Propagation.lifecycle([])
+    |> Map.fetch!(:nodes)
+    |> Enum.filter(&(&1.kind == :channel))
+    |> Enum.find_value(&latest_revision_id(&1.name))
+  end
+
+  defp latest_revision_id(channel_name) do
+    with {:ok, channel} <- Tracker.Nixpkgs.Channel.by_name(channel_name),
+         {:ok, revision} <- Tracker.Nixpkgs.ChannelRevision.latest_by_channel(channel.id) do
+      revision.id
+    else
       _ -> nil
     end
   end

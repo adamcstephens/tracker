@@ -2543,6 +2543,23 @@ a.revision-link {
 	--pill-color: var(--text-3);
 }
 
+.pill-landed {
+	--pill-color: var(--t-propagate);
+}
+
+.change-filters label {
+	display: flex;
+	align-items: center;
+	gap: 0.35rem;
+	margin-bottom: 0;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.change-filters label input[type="checkbox"] {
+	margin: 0;
+}
+
 .change-show .change-card {
 	border: 1px solid var(--line);
 	border-radius: 8px;

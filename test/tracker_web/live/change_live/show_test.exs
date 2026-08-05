@@ -126,12 +126,123 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
     assert Floki.attribute(row, "id") != []
   end
 
-  test "hides the affected options section when there is no resolvable lens revision", %{
+  test "hides the affected options section when no channel revision resolves", %{
     conn: conn
   } do
     {:ok, _view, html} = live(conn, ~p"/changes/6001")
 
     refute html =~ "Affected options"
+  end
+
+  # Names here (release line 99.99, `scoped.nix`, the `scoped*` option
+  # namespaces) are unique to this file: channels, files and options are all
+  # upserted on unique keys, so sharing a name with another async test
+  # deadlocks the two transactions.
+  describe "affected options scope" do
+    setup do
+      small = Tracker.Fixtures.channel!("nixos-99.99-small")
+
+      small_cr =
+        Tracker.Fixtures.channel_revision!(small, %{
+          revision: "scopedsmall01",
+          released_at: ~U[2026-04-01 10:00:00Z]
+        })
+
+      Tracker.Fixtures.load_options(
+        %{
+          "scopedsmall.opts.enable" => %{"declarations" => ["scoped.nix"]},
+          "scopedsmall.opts.user" => %{"declarations" => ["scoped.nix"]}
+        },
+        small_cr
+      )
+
+      Tracker.Nixpkgs.ChannelRevision.record_options_result!(small_cr, %{
+        options_result: :success
+      })
+
+      full = Tracker.Fixtures.channel!("nixos-99.99")
+
+      full_cr =
+        Tracker.Fixtures.channel_revision!(full, %{
+          revision: "scopedfull001",
+          released_at: ~U[2026-04-02 10:00:00Z]
+        })
+
+      Tracker.Fixtures.load_options(
+        %{"scopedfull.opts.enable" => %{"declarations" => ["scoped.nix"]}},
+        full_cr
+      )
+
+      Tracker.Nixpkgs.ChannelRevision.record_options_result!(full_cr, %{
+        options_result: :success
+      })
+
+      Tracker.Fixtures.channel!("nixos-98.98")
+
+      change =
+        Tracker.Fixtures.change!(6002, %{
+          base_ref: "release-99.99",
+          processing_status: :processed
+        })
+
+      Tracker.Nixpkgs.ChangeFile.bulk_insert_all([
+        %{change_id: change.id, file_id: Tracker.Nixpkgs.File.get_by_path!("scoped.nix").id}
+      ])
+
+      %{change: change, full: full, full_cr: full_cr}
+    end
+
+    test "scopes to the first channel downstream of base_ref when the change has not landed in the lens channel",
+         %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/changes/6002?lens_channel=nixos-98.98")
+
+      assert html =~ "Affected options"
+      assert html =~ "scopedsmall.opts"
+      refute html =~ "scopedfull.opts"
+    end
+
+    test "scopes to the lens channel once the change has landed there", %{
+      conn: conn,
+      change: change,
+      full_cr: full_cr
+    } do
+      Tracker.Fixtures.change_branch!(change, "nixos-99.99", full_cr)
+
+      {:ok, _view, html} = live(conn, ~p"/changes/6002?lens_channel=nixos-99.99")
+
+      assert html =~ "scopedfull.opts"
+      refute html =~ "scopedsmall.opts"
+    end
+
+    test "honours the lens revision pin on a channel the change has landed in", %{
+      conn: conn,
+      change: change,
+      full: full,
+      full_cr: full_cr
+    } do
+      Tracker.Fixtures.change_branch!(change, "nixos-99.99", full_cr)
+
+      later_cr =
+        Tracker.Fixtures.channel_revision!(full, %{
+          revision: "scopedfull002",
+          released_at: ~U[2026-04-03 10:00:00Z]
+        })
+
+      Tracker.Fixtures.load_options(%{}, later_cr)
+
+      Tracker.Nixpkgs.ChannelRevision.record_options_result!(later_cr, %{
+        options_result: :success
+      })
+
+      {:ok, _view, html} =
+        live(conn, ~p"/changes/6002?lens_channel=nixos-99.99&lens_rev=scopedfull001")
+
+      assert html =~ "scopedfull.opts"
+
+      {:ok, _view, html} = live(conn, ~p"/changes/6002?lens_channel=nixos-99.99")
+
+      refute html =~ "scopedfull.opts"
+    end
   end
 
   describe "files_over_limit notice" do
