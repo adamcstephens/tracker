@@ -246,14 +246,6 @@ defmodule Tracker.Nixpkgs.Package do
       destination_attribute_on_join_resource :team_id
     end
 
-    has_many :option_packages, Tracker.Nixpkgs.OptionPackage
-
-    many_to_many :options, Tracker.Nixpkgs.Option do
-      through Tracker.Nixpkgs.OptionPackage
-      source_attribute_on_join_resource :package_id
-      destination_attribute_on_join_resource :option_id
-    end
-
     has_many :change_packages, Tracker.Nixpkgs.ChangePackage
 
     many_to_many :changes, Tracker.Nixpkgs.Change do

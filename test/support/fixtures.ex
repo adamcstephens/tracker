@@ -231,6 +231,27 @@ defmodule Tracker.Fixtures do
   end
 
   @doc """
+  Folds a revision's option↔package links into link spans via the engine,
+  mirroring ingestion. `links` is a list of `{option, package}` pairs.
+
+  Applies as a *complete* revision: links absent from the list are closed.
+  """
+  def apply_option_packages!(channel_revision, links, opts \\ []) do
+    incoming =
+      Enum.map(links, fn {option, package} ->
+        %{option_id: option.id, package_id: package.id}
+      end)
+
+    Tracker.Nixpkgs.SpanEngine.diff_and_apply(
+      Tracker.Nixpkgs.OptionPackageSpan.spec(),
+      channel_revision.channel_id,
+      channel_revision.released_at,
+      incoming,
+      Keyword.put_new(opts, :complete?, true)
+    )
+  end
+
+  @doc """
   Opens/updates option metadata spans for a revision via the engine. `options`
   is a list of `{option, payload_map}`.
 

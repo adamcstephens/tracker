@@ -25,7 +25,7 @@ defmodule Tracker.Nixpkgs do
     resource Tracker.Nixpkgs.TeamMember
     resource Tracker.Nixpkgs.Option
     resource Tracker.Nixpkgs.OptionSpan
-    resource Tracker.Nixpkgs.OptionPackage
+    resource Tracker.Nixpkgs.OptionPackageSpan
     resource Tracker.Nixpkgs.File
     resource Tracker.Nixpkgs.OptionFileSpan
     resource Tracker.Nixpkgs.Change

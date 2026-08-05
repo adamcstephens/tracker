@@ -226,6 +226,67 @@ defmodule TrackerWeb.OptionLive.ShowTest do
     end
   end
 
+  describe "linked packages are scoped to the rendered revision (trk-387)" do
+    setup do
+      channel =
+        Channel.create!(%{
+          name: "nixos-25.11",
+          display_name: "NixOS 25.11",
+          status: :active,
+          is_stable: true
+        })
+
+      option_set = %{
+        "services.victorialogs.package" => %{
+          "declarations" => ["nixos/modules/services/databases/victorialogs.nix"],
+          "type" => "package"
+        }
+      }
+
+      cr1 = revision!(channel, "vlogsold123456", ~U[2026-03-10 10:00:00Z], option_set)
+      cr2 = revision!(channel, "vlogsnew123456", ~U[2026-03-16 10:00:00Z], option_set)
+
+      option = Fixtures.option!("services.victorialogs.package")
+
+      Fixtures.apply_option_packages!(cr1, [{option, Fixtures.package!("victoriametrics")}])
+      Fixtures.apply_option_packages!(cr2, [{option, Fixtures.package!("victorialogs")}])
+
+      %{channel: channel, cr1: cr1, cr2: cr2}
+    end
+
+    defp revision!(channel, hash, released_at, option_set) do
+      cr =
+        Tracker.Nixpkgs.ChannelRevision.create!(%{
+          channel_id: channel.id,
+          revision: hash,
+          released_at: released_at
+        })
+
+      Tracker.Nixpkgs.ChannelRevision.record_result!(cr, %{result: :success})
+      cr = Tracker.Nixpkgs.ChannelRevision.record_options_result!(cr, %{options_result: :success})
+
+      Fixtures.load_options(option_set, cr)
+
+      cr
+    end
+
+    test "shows only the package linked at the latest revision", %{conn: conn} do
+      {:ok, _view, html} =
+        live(conn, ~p"/options/services.victorialogs?channel=nixos-25.11")
+
+      assert html =~ ~s(href="/packages/victorialogs")
+      refute html =~ ~s(href="/packages/victoriametrics")
+    end
+
+    test "an earlier revision still shows the package it linked then", %{conn: conn, cr1: cr1} do
+      {:ok, _view, html} =
+        live(conn, ~p"/options/services.victorialogs?channel=nixos-25.11&rev=#{cr1.revision}")
+
+      assert html =~ ~s(href="/packages/victoriametrics")
+      refute html =~ ~s(href="/packages/victorialogs")
+    end
+  end
+
   test "an option matching the prefix renders as italic self", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/options/services.nginx.virtualHosts")
 

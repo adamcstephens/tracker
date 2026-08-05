@@ -130,10 +130,10 @@ defmodule TrackerWeb.PackageLive.Show do
       </dd>
     </dl>
 
-    <section :if={@package.options != []}>
+    <section :if={@linked_options != []}>
       <h2>NixOS Options</h2>
       <ul>
-        <li :for={opt <- @package.options}>
+        <li :for={opt <- @linked_options}>
           <.link navigate={~p"/options/#{opt.name}"}>{opt.name}</.link>
           <% rev = Map.get(@option_revisions, opt.id) %>
           <small :if={rev}>
@@ -340,19 +340,31 @@ defmodule TrackerWeb.PackageLive.Show do
      |> assign(:subscribed?, false)}
   end
 
+  # The page is not revision-scoped, so options come from link spans still open
+  # in any channel — one option can be linked in several, hence the dedup.
+  defp linked_options(package) do
+    package.id
+    |> List.wrap()
+    |> Tracker.Nixpkgs.OptionPackageSpan.open_for_packages!()
+    |> Enum.map(& &1.option)
+    |> Enum.uniq_by(& &1.id)
+    |> Enum.sort_by(& &1.name)
+  end
+
   @impl true
   def handle_params(%{"name" => name} = params, _url, socket) do
     package =
       Tracker.Nixpkgs.Package.get_by_attribute!(name,
-        load: [:maintainers, :teams, :options]
+        load: [:maintainers, :teams]
       )
 
     family_siblings = package |> load_family_siblings() |> decorate_siblings()
     variant_siblings = load_variant_siblings(package)
+    linked_options = linked_options(package)
     # The linked-options section shows each option's current metadata, served
     # from its open span (most-recent across channels).
     option_revisions =
-      package.options
+      linked_options
       |> Enum.map(& &1.id)
       |> Tracker.Nixpkgs.OptionHistory.current_metadata()
 
@@ -381,6 +393,7 @@ defmodule TrackerWeb.PackageLive.Show do
      |> assign(:subscribed?, package_subscribed?(socket.assigns.current_user, package.id))
      |> assign(:family_siblings, family_siblings)
      |> assign(:variant_siblings, variant_siblings)
+     |> assign(:linked_options, linked_options)
      |> assign(:option_revisions, option_revisions)
      |> assign(:table_params, tp)
      |> assign(:version_filter, version_filter)

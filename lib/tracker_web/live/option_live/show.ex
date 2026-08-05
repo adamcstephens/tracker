@@ -173,9 +173,9 @@ defmodule TrackerWeb.OptionLive.Show do
                 <dt :if={rev.example}>Example</dt>
                 <dd :if={rev.example}><.code_block code={rev.example} /></dd>
 
-                <dt :if={option_packages(rev) != []}>Packages</dt>
-                <dd :if={option_packages(rev) != []}>
-                  <span :for={pkg <- option_packages(rev)}>
+                <dt :if={packages_for(@packages_by_option, rev.option_id) != []}>Packages</dt>
+                <dd :if={packages_for(@packages_by_option, rev.option_id) != []}>
+                  <span :for={pkg <- packages_for(@packages_by_option, rev.option_id)}>
                     <.link navigate={~p"/packages/#{pkg.attribute}"}>{pkg.attribute}</.link>
                   </span>
                 </dd>
@@ -290,11 +290,6 @@ defmodule TrackerWeb.OptionLive.Show do
 
   defp tail(name, ""), do: name
   defp tail(name, prefix), do: String.slice(name, String.length(prefix) + 1, String.length(name))
-
-  defp option_packages(%{option: %{packages: packages}}),
-    do: packages
-
-  defp option_packages(_), do: []
 
   defp declaration_link(%{channel_revision: %{revision: revision}} = assigns) do
     assigns =
@@ -457,6 +452,7 @@ defmodule TrackerWeb.OptionLive.Show do
     # Per-option "Defined in" links (inside each leaf accordion) and the
     # recent-PRs-touching-the-subtree's-files list both ride option↔file spans.
     files_by_option = files_by_option(channel_revision, leaf_options)
+    packages_by_option = packages_by_option(channel_revision, leaf_options)
     recent_prs = recent_prs_for_files(files)
 
     socket = load_matches(socket)
@@ -470,6 +466,7 @@ defmodule TrackerWeb.OptionLive.Show do
     |> assign(:leaf_options, leaf_options)
     |> assign(:files, files)
     |> assign(:files_by_option, files_by_option)
+    |> assign(:packages_by_option, packages_by_option)
     |> assign(:recent_prs, recent_prs)
     |> assign(:nothing_here?, nothing_here?)
   end
@@ -491,6 +488,26 @@ defmodule TrackerWeb.OptionLive.Show do
   end
 
   defp files_for(files_by_option, option_id), do: Map.get(files_by_option, option_id, [])
+
+  # Per-leaf-option package links at the revision, as `%{option_id => [package]}`.
+  defp packages_by_option(_channel_revision, []), do: %{}
+
+  defp packages_by_option(channel_revision, leaf_options) do
+    option_ids = Enum.map(leaf_options, & &1.option_id)
+
+    channel_revision.channel_id
+    |> Tracker.Nixpkgs.OptionPackageSpan.packages_for_options_at!(
+      channel_revision.released_at,
+      option_ids
+    )
+    |> Enum.group_by(& &1.option_id, & &1.package)
+    |> Map.new(fn {option_id, packages} ->
+      {option_id, Enum.sort_by(packages, & &1.attribute)}
+    end)
+  end
+
+  defp packages_for(packages_by_option, option_id),
+    do: Map.get(packages_by_option, option_id, [])
 
   defp recent_prs_for_files([]), do: []
 

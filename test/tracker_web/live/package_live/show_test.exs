@@ -541,10 +541,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
     setup %{package: package, cr1: cr1} do
       option = Tracker.Fixtures.option!("services.hello.enable")
 
-      Tracker.Nixpkgs.OptionPackage.load!(%{
-        option_id: option.id,
-        package_id: package.id
-      })
+      Tracker.Fixtures.apply_option_packages!(cr1, [{option, package}])
 
       Tracker.Fixtures.apply_option_revision!(cr1, [
         {option, %{type: "boolean", description: "Whether to enable hello service."}}
@@ -571,6 +568,27 @@ defmodule TrackerWeb.PackageLive.ShowTest do
       {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}")
 
       assert html =~ ~s|/options/services.hello.enable|
+    end
+
+    test "drops an option that no longer links to the package (trk-387)", %{
+      conn: conn,
+      package: package,
+      channel_unstable: channel_unstable
+    } do
+      later =
+        Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
+          channel_id: channel_unstable.id,
+          revision: "abc123def456790",
+          released_at: ~U[2026-03-20 10:00:00Z]
+        })
+
+      # The revision declares no links at all, closing the open one.
+      Tracker.Fixtures.apply_option_packages!(later, [])
+
+      {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}")
+
+      refute html =~ "NixOS Options"
+      refute html =~ "services.hello.enable"
     end
   end
 

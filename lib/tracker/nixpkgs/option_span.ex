@@ -190,7 +190,7 @@ defmodule Tracker.Nixpkgs.OptionSpan do
       argument :at, :utc_datetime, allow_nil?: false
       argument :prefix, :string, default: ""
 
-      prepare build(sort: [option_name: :asc], load: [option: [:packages]])
+      prepare build(sort: [option_name: :asc], load: [:option])
 
       filter expr(
                channel_id == ^arg(:channel_id) and
