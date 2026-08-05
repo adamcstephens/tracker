@@ -13,6 +13,8 @@ defmodule TrackerWeb.AccountLive.Settings do
      |> assign(:current_user, user)
      |> assign(:page_title, "Account settings")
      |> assign(:live_ui, user.live_ui)
+     |> assign(:auto_subscribe_authored, user.auto_subscribe_authored_changes)
+     |> assign(:auto_subscribe_merged, user.auto_subscribe_merged_changes)
      |> assign(:feed_path, FeedLink.path(user))
      |> assign(:revealed_feed_url, nil)
      |> assign(:saved?, false)}
@@ -45,6 +47,36 @@ defmodule TrackerWeb.AccountLive.Settings do
           value="true"
           checked={@live_ui}
         /> Use LiveView
+      </label>
+
+      <h2>Change subscriptions</h2>
+      <p>
+        Subscribe you automatically as changes are discovered, so you get
+        notified as they propagate to the channels. These apply from the moment
+        you opt in — existing changes are not subscribed retroactively. You can
+        unsubscribe from any individual change at any time.
+      </p>
+
+      <label>
+        <input type="hidden" name="settings[auto_subscribe_authored_changes]" value="false" />
+        <input
+          id="auto-subscribe-authored"
+          type="checkbox"
+          name="settings[auto_subscribe_authored_changes]"
+          value="true"
+          checked={@auto_subscribe_authored}
+        /> Changes I submit
+      </label>
+
+      <label>
+        <input type="hidden" name="settings[auto_subscribe_merged_changes]" value="false" />
+        <input
+          id="auto-subscribe-merged"
+          type="checkbox"
+          name="settings[auto_subscribe_merged_changes]"
+          value="true"
+          checked={@auto_subscribe_merged}
+        /> Changes I merge
       </label>
 
       <div style="margin-top: 1rem;">
@@ -102,18 +134,25 @@ defmodule TrackerWeb.AccountLive.Settings do
   end
 
   @impl true
-  def handle_event("save", %{"settings" => %{"live_ui" => live_ui}}, socket) do
-    live_ui? = live_ui == "true"
+  def handle_event("save", %{"settings" => settings}, socket) do
     user = socket.assigns.current_user
 
-    case User.set_live_ui(user, %{live_ui: live_ui?}, actor: user) do
-      {:ok, updated} ->
-        {:noreply,
-         socket
-         |> assign(:current_user, updated)
-         |> assign(:live_ui, updated.live_ui)
-         |> assign(:saved?, true)}
+    auto_subscribe = %{
+      auto_subscribe_authored_changes: checked?(settings, "auto_subscribe_authored_changes"),
+      auto_subscribe_merged_changes: checked?(settings, "auto_subscribe_merged_changes")
+    }
 
+    with {:ok, user} <-
+           User.set_live_ui(user, %{live_ui: checked?(settings, "live_ui")}, actor: user),
+         {:ok, updated} <- User.set_auto_subscribe(user, auto_subscribe, actor: user) do
+      {:noreply,
+       socket
+       |> assign(:current_user, updated)
+       |> assign(:live_ui, updated.live_ui)
+       |> assign(:auto_subscribe_authored, updated.auto_subscribe_authored_changes)
+       |> assign(:auto_subscribe_merged, updated.auto_subscribe_merged_changes)
+       |> assign(:saved?, true)}
+    else
       {:error, error} ->
         {:noreply, put_flash(socket, :error, "Failed: #{inspect(error)}")}
     end
@@ -131,4 +170,6 @@ defmodule TrackerWeb.AccountLive.Settings do
      |> assign(:revealed_feed_url, new_path)
      |> put_flash(:info, "Feed URL regenerated. The previous URL no longer works.")}
   end
+
+  defp checked?(settings, key), do: Map.get(settings, key) == "true"
 end

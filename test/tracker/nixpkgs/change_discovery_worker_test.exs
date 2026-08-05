@@ -2,8 +2,11 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorkerTest do
   use Tracker.DataCase, async: false
 
   import ExUnit.CaptureLog
+  import Tracker.Fixtures
 
+  alias Tracker.Accounts.User
   alias Tracker.GitHub.GraphQL.PullRequest
+  alias Tracker.Notifications.ChangeSubscription
   alias Tracker.GitHub.RateLimitCache
   alias Tracker.Nixpkgs.Change
   alias Tracker.Nixpkgs.ChangeBranch
@@ -463,6 +466,95 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorkerTest do
 
       assert {:error, %GitHub.Error{reason: :server_error}} =
                ChangeDiscoveryWorker.discover_pages(fetcher, ~U[2026-01-01 00:00:00Z])
+    end
+  end
+
+  describe "auto-subscribe on discovery" do
+    test "subscribes an opted-in author to a newly discovered change" do
+      user = register_user!(%{"id" => 6001})
+      User.set_auto_subscribe!(user, %{auto_subscribe_authored_changes: true}, actor: user)
+
+      fetcher = fn _since, nil ->
+        {:ok,
+         %{
+           pulls: [pr_struct(number: 5901, state: :open, author_github_id: 6001)],
+           next_cursor: nil,
+           issue_count: 1
+         }}
+      end
+
+      assert {:ok, 1} = ChangeDiscoveryWorker.discover_pages(fetcher, ~U[2026-01-01 00:00:00Z])
+
+      {:ok, change} = Change.get_by_number(5901)
+
+      assert [%{change_id: change_id, channel_id: nil}] =
+               ChangeSubscription.for_user!(actor: user)
+
+      assert change_id == change.id
+    end
+
+    test "does not subscribe an author who has not opted in" do
+      user = register_user!(%{"id" => 6002})
+
+      fetcher = fn _since, nil ->
+        {:ok,
+         %{
+           pulls: [pr_struct(number: 5902, state: :open, author_github_id: 6002)],
+           next_cursor: nil,
+           issue_count: 1
+         }}
+      end
+
+      assert {:ok, 1} = ChangeDiscoveryWorker.discover_pages(fetcher, ~U[2026-01-01 00:00:00Z])
+
+      assert [] = ChangeSubscription.for_user!(actor: user)
+    end
+
+    test "subscribes the merger when a change is first seen already merged" do
+      user = register_user!(%{"id" => 6003})
+      User.set_auto_subscribe!(user, %{auto_subscribe_merged_changes: true}, actor: user)
+
+      fetcher = fn _since, nil ->
+        {:ok,
+         %{
+           pulls: [
+             pr_struct(
+               number: 5903,
+               state: :merged,
+               merged_at: ~U[2026-04-01 12:00:00Z],
+               merged_by_github_id: 6003
+             )
+           ],
+           next_cursor: nil,
+           issue_count: 1
+         }}
+      end
+
+      assert {:ok, 1} = ChangeDiscoveryWorker.discover_pages(fetcher, ~U[2026-01-01 00:00:00Z])
+
+      assert [%{channel_id: nil}] = ChangeSubscription.for_user!(actor: user)
+    end
+
+    test "does not re-subscribe on a later sighting of an existing change" do
+      user = register_user!(%{"id" => 6004})
+      User.set_auto_subscribe!(user, %{auto_subscribe_authored_changes: true}, actor: user)
+
+      fetcher = fn _since, nil ->
+        {:ok,
+         %{
+           pulls: [pr_struct(number: 5904, state: :open, author_github_id: 6004)],
+           next_cursor: nil,
+           issue_count: 1
+         }}
+      end
+
+      assert {:ok, 1} = ChangeDiscoveryWorker.discover_pages(fetcher, ~U[2026-01-01 00:00:00Z])
+      assert [sub] = ChangeSubscription.for_user!(actor: user)
+
+      ChangeSubscription.destroy!(sub, actor: user)
+
+      assert {:ok, 1} = ChangeDiscoveryWorker.discover_pages(fetcher, ~U[2026-01-01 00:00:00Z])
+      assert [] = ChangeSubscription.for_user!(actor: user)
     end
   end
 

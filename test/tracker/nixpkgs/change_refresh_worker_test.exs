@@ -2,6 +2,7 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorkerTest do
   use Tracker.DataCase, async: false
 
   import ExUnit.CaptureLog
+  import Tracker.Fixtures
 
   alias Tracker.GitHub.GraphQL.PullRequest
   alias Tracker.GitHub.RateLimitCache
@@ -110,6 +111,68 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorkerTest do
                Change.get_by_number(100)
 
       assert [{%Change{number: 100}, :merged}] = recorder.calls.()
+    end
+
+    test "records who merged the PR so the merged hook can see them" do
+      insert_change!(number: 105, state: :open, node_id: "pr_mby", head_sha: "sha_old")
+
+      ChangeRefreshWorker.run(
+        fetcher: fn _ ->
+          {:ok,
+           %{
+             "pr_mby" =>
+               pr(
+                 node_id: "pr_mby",
+                 number: 105,
+                 state: :merged,
+                 head_sha: "sha_old",
+                 merged_at: ~U[2026-04-23 10:00:00Z],
+                 merge_commit_sha: "mcsha",
+                 merged_by_github_id: 4242
+               )
+           }}
+        end,
+        on_transition: fn _change, _reason -> :ok end
+      )
+
+      assert {:ok, %Change{merged_by_github_id: 4242}} = Change.get_by_number(105)
+    end
+
+    test "auto-subscribes an opted-in merger when the PR merges" do
+      user = register_user!(%{"id" => 4343})
+
+      Tracker.Accounts.User.set_auto_subscribe!(
+        user,
+        %{auto_subscribe_merged_changes: true},
+        actor: user
+      )
+
+      insert_change!(number: 106, state: :open, node_id: "pr_msub", head_sha: "sha_old")
+
+      ChangeRefreshWorker.run(
+        fetcher: fn _ ->
+          {:ok,
+           %{
+             "pr_msub" =>
+               pr(
+                 node_id: "pr_msub",
+                 number: 106,
+                 state: :merged,
+                 head_sha: "sha_old",
+                 merged_at: ~U[2026-04-23 10:00:00Z],
+                 merge_commit_sha: "mcsha",
+                 merged_by_github_id: 4343
+               )
+           }}
+        end
+      )
+
+      {:ok, change} = Change.get_by_number(106)
+
+      assert [%{change_id: change_id, channel_id: nil}] =
+               Tracker.Notifications.ChangeSubscription.for_user!(actor: user)
+
+      assert change_id == change.id
     end
 
     test "head_sha change on open PR emits :head_sha_changed transition" do
@@ -601,6 +664,7 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorkerTest do
       closed_at: opts[:closed_at],
       merged_at: opts[:merged_at],
       merge_commit_sha: opts[:merge_commit_sha],
+      merged_by_github_id: opts[:merged_by_github_id],
       labels: opts[:labels] || []
     }
   end

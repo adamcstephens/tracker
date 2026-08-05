@@ -38,18 +38,21 @@ defmodule Tracker.Fixtures do
   end
 
   @doc "Creates a merged change with a unique PR number."
-  def change!(number \\ nil) do
+  def change!(number \\ nil, attrs \\ %{}) do
     number = number || System.unique_integer([:positive])
 
     Tracker.Nixpkgs.Change.bulk_upsert_all([
-      %{
-        number: number,
-        title: "change ##{number}",
-        state: :merged,
-        author: "tester",
-        base_ref: "master",
-        url: "https://github.com/NixOS/nixpkgs/pull/#{number}"
-      }
+      Map.merge(
+        %{
+          number: number,
+          title: "change ##{number}",
+          state: :merged,
+          author: "tester",
+          base_ref: "master",
+          url: "https://github.com/NixOS/nixpkgs/pull/#{number}"
+        },
+        attrs
+      )
     ])
 
     Tracker.Nixpkgs.Change.get_by_number!(number)

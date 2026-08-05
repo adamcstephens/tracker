@@ -184,7 +184,8 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorker do
       gh_updated_at: pr.updated_at,
       closed_at: pr.closed_at,
       merged_at: pr.merged_at,
-      merge_commit_sha: pr.merge_commit_sha
+      merge_commit_sha: pr.merge_commit_sha,
+      merged_by_github_id: pr.merged_by_github_id
     }
 
     updated = Change.refresh_from_graphql!(change, attrs)

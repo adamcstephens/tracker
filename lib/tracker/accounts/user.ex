@@ -55,8 +55,11 @@ defmodule Tracker.Accounts.User do
     define :grant_admin
     define :get_by_github_username, args: [:github_username]
     define :set_live_ui
+    define :set_auto_subscribe
     define :rotate_feed_token
     define :by_feed_token, args: [:feed_token], not_found_error?: false
+    define :authored_auto_subscriber, args: [:github_id], not_found_error?: false
+    define :merged_auto_subscriber, args: [:github_id], not_found_error?: false
   end
 
   actions do
@@ -122,6 +125,12 @@ defmodule Tracker.Accounts.User do
       accept [:live_ui]
     end
 
+    update :set_auto_subscribe do
+      description "Toggle either change auto-subscribe preference; omitted flags keep their value."
+      require_atomic? false
+      accept [:auto_subscribe_authored_changes, :auto_subscribe_merged_changes]
+    end
+
     update :rotate_feed_token do
       description "Generate a fresh feed token, invalidating any existing feed URL."
       require_atomic? false
@@ -149,6 +158,22 @@ defmodule Tracker.Accounts.User do
       argument :feed_token, :string, allow_nil?: false, sensitive?: true
       filter expr(feed_token == ^arg(:feed_token))
     end
+
+    read :authored_auto_subscriber do
+      description "The user behind a PR author's GitHub id, if they opted in to authored auto-subscribe."
+      get? true
+      argument :github_id, :integer, allow_nil?: false
+
+      filter expr(github_id == ^arg(:github_id) and auto_subscribe_authored_changes == true)
+    end
+
+    read :merged_auto_subscriber do
+      description "The user behind a PR merger's GitHub id, if they opted in to merged auto-subscribe."
+      get? true
+      argument :github_id, :integer, allow_nil?: false
+
+      filter expr(github_id == ^arg(:github_id) and auto_subscribe_merged_changes == true)
+    end
   end
 
   policies do
@@ -165,6 +190,10 @@ defmodule Tracker.Accounts.User do
     end
 
     bypass action(:set_live_ui) do
+      authorize_if expr(id == ^actor(:id))
+    end
+
+    bypass action(:set_auto_subscribe) do
       authorize_if expr(id == ^actor(:id))
     end
 
@@ -205,6 +234,18 @@ defmodule Tracker.Accounts.User do
 
     attribute :live_ui, :boolean do
       default true
+      allow_nil? false
+    end
+
+    attribute :auto_subscribe_authored_changes, :boolean do
+      description "Automatically subscribe this user to changes they authored, as they are discovered."
+      default false
+      allow_nil? false
+    end
+
+    attribute :auto_subscribe_merged_changes, :boolean do
+      description "Automatically subscribe this user to changes they merged, as the merge is observed."
+      default false
       allow_nil? false
     end
 

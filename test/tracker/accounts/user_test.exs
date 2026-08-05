@@ -102,6 +102,76 @@ defmodule Tracker.Accounts.UserTest do
     end
   end
 
+  describe "set_auto_subscribe" do
+    test "both preferences default to off" do
+      user = register_via_github!()
+
+      refute user.auto_subscribe_authored_changes
+      refute user.auto_subscribe_merged_changes
+    end
+
+    test "the two preferences are set independently" do
+      user = register_via_github!()
+
+      {:ok, authored_only} =
+        User.set_auto_subscribe(user, %{auto_subscribe_authored_changes: true}, actor: user)
+
+      assert authored_only.auto_subscribe_authored_changes
+      refute authored_only.auto_subscribe_merged_changes
+
+      {:ok, both} =
+        User.set_auto_subscribe(
+          authored_only,
+          %{auto_subscribe_merged_changes: true},
+          actor: user
+        )
+
+      assert both.auto_subscribe_authored_changes
+      assert both.auto_subscribe_merged_changes
+    end
+
+    test "another user cannot change your preferences" do
+      user = register_via_github!()
+      other = register_via_github!()
+
+      assert {:error, %Ash.Error.Forbidden{}} =
+               User.set_auto_subscribe(
+                 user,
+                 %{auto_subscribe_authored_changes: true},
+                 actor: other
+               )
+    end
+  end
+
+  describe "auto subscriber lookups" do
+    test "authored_auto_subscriber finds only an opted-in user with that github id" do
+      user = register_via_github!(%{"id" => 9001, "login" => "opted-in"})
+
+      refute User.authored_auto_subscriber!(9001, authorize?: false)
+
+      User.set_auto_subscribe!(user, %{auto_subscribe_authored_changes: true}, actor: user)
+
+      assert %User{id: id} = User.authored_auto_subscriber!(9001, authorize?: false)
+      assert id == user.id
+    end
+
+    test "merged_auto_subscriber is not satisfied by the authored preference" do
+      user = register_via_github!(%{"id" => 9002, "login" => "author-only"})
+      User.set_auto_subscribe!(user, %{auto_subscribe_authored_changes: true}, actor: user)
+
+      refute User.merged_auto_subscriber!(9002, authorize?: false)
+
+      User.set_auto_subscribe!(user, %{auto_subscribe_merged_changes: true}, actor: user)
+
+      assert %User{} = User.merged_auto_subscriber!(9002, authorize?: false)
+    end
+
+    test "returns nil for an unknown github id" do
+      refute User.authored_auto_subscriber!(404_404, authorize?: false)
+      refute User.merged_auto_subscriber!(404_404, authorize?: false)
+    end
+  end
+
   describe "get_by_github_username" do
     test "returns the user with the given github username" do
       user = register_via_github!(%{"login" => "octocat"})

@@ -103,4 +103,46 @@ defmodule Tracker.Notifications.ChangeSubscription do
       nils_distinct? false
     end
   end
+
+  @doc """
+  Subscribes the change's author to it at the any-branch scope, if a user with
+  that GitHub id has opted in to authored auto-subscribe.
+  """
+  @spec auto_subscribe_author(integer(), integer() | nil) :: :ok
+  def auto_subscribe_author(change_id, author_github_id) do
+    auto_subscribe(
+      change_id,
+      author_github_id,
+      &Tracker.Accounts.User.authored_auto_subscriber!/2
+    )
+  end
+
+  @doc """
+  Subscribes the change's merger to it at the any-branch scope, if a user with
+  that GitHub id has opted in to merged auto-subscribe.
+  """
+  @spec auto_subscribe_merger(integer(), integer() | nil) :: :ok
+  def auto_subscribe_merger(change_id, merged_by_github_id) do
+    auto_subscribe(
+      change_id,
+      merged_by_github_id,
+      &Tracker.Accounts.User.merged_auto_subscriber!/2
+    )
+  end
+
+  # The lookup runs unauthorized: the User read policy forbids everything
+  # outside AshAuthentication's bypass, and ingestion has no actor of its own.
+  # The subscribe itself is authorized as the user it belongs to.
+  defp auto_subscribe(_change_id, nil, _lookup), do: :ok
+
+  defp auto_subscribe(change_id, github_id, lookup) do
+    case lookup.(github_id, authorize?: false) do
+      nil ->
+        :ok
+
+      user ->
+        subscribe!(change_id, nil, actor: user)
+        :ok
+    end
+  end
 end

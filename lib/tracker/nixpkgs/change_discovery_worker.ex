@@ -19,6 +19,7 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorker do
 
   alias Tracker.GitHub.GraphQL
   alias Tracker.GitHub.GraphQL.PullRequest
+  alias Tracker.Notifications.ChangeSubscription
   alias Tracker.Nixpkgs.Change
   alias Tracker.Nixpkgs.ChangeArtifactRefreshWorker
   alias Tracker.Nixpkgs.ChangeBranch
@@ -246,6 +247,24 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorker do
     if record.state == :merged do
       seed_base_ref(record, number_to_id)
     end
+
+    auto_subscribe_participants(record, number_to_id)
+  end
+
+  defp auto_subscribe_participants(record, number_to_id) do
+    case Map.fetch(number_to_id, record.number) do
+      {:ok, change_id} ->
+        ChangeSubscription.auto_subscribe_author(change_id, record.author_github_id)
+
+        if record.state == :merged do
+          ChangeSubscription.auto_subscribe_merger(change_id, record.merged_by_github_id)
+        end
+
+        :ok
+
+      :error ->
+        :ok
+    end
   end
 
   defp handle_existing_record(record, prior, number_to_id) do
@@ -281,7 +300,8 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorker do
       number: record.number,
       node_id: record.node_id,
       base_ref: record.base_ref,
-      state: record.state
+      state: record.state,
+      merged_by_github_id: record.merged_by_github_id
     }
   end
 

@@ -3,6 +3,7 @@ defmodule Tracker.Notifications.ChangeSubscriptionTest do
 
   import Tracker.Fixtures
 
+  alias Tracker.Accounts.User
   alias Tracker.Notifications.ChangeSubscription
 
   describe "subscribe" do
@@ -117,6 +118,90 @@ defmodule Tracker.Notifications.ChangeSubscriptionTest do
 
       assert [_] = ChangeSubscription.for_user!(actor: alice)
       assert [] = ChangeSubscription.for_user!(actor: bob)
+    end
+  end
+
+  describe "auto_subscribe_author" do
+    test "subscribes an opted-in author at the any-branch scope" do
+      user = register_user!(%{"id" => 7001})
+      User.set_auto_subscribe!(user, %{auto_subscribe_authored_changes: true}, actor: user)
+      change = change!()
+
+      assert :ok = ChangeSubscription.auto_subscribe_author(change.id, 7001)
+
+      assert [%{change_id: change_id, channel_id: nil}] =
+               ChangeSubscription.for_user!(actor: user)
+
+      assert change_id == change.id
+    end
+
+    test "does nothing when the author has not opted in" do
+      user = register_user!(%{"id" => 7002})
+      change = change!()
+
+      assert :ok = ChangeSubscription.auto_subscribe_author(change.id, 7002)
+
+      assert [] = ChangeSubscription.for_user!(actor: user)
+    end
+
+    test "does nothing when the author github id is nil or unknown" do
+      change = change!()
+
+      assert :ok = ChangeSubscription.auto_subscribe_author(change.id, nil)
+      assert :ok = ChangeSubscription.auto_subscribe_author(change.id, 404_404)
+    end
+
+    test "leaves an existing manual subscription intact" do
+      user = register_user!(%{"id" => 7003})
+      User.set_auto_subscribe!(user, %{auto_subscribe_authored_changes: true}, actor: user)
+      change = change!()
+      chan = channel!()
+      {:ok, manual} = ChangeSubscription.subscribe(change.id, chan.id, actor: user)
+
+      assert :ok = ChangeSubscription.auto_subscribe_author(change.id, 7003)
+
+      subs = ChangeSubscription.for_user!(actor: user)
+      assert length(subs) == 2
+      assert manual.id in Enum.map(subs, & &1.id)
+    end
+  end
+
+  describe "auto_subscribe_merger" do
+    test "subscribes an opted-in merger at the any-branch scope" do
+      user = register_user!(%{"id" => 7101})
+      User.set_auto_subscribe!(user, %{auto_subscribe_merged_changes: true}, actor: user)
+      change = change!()
+
+      assert :ok = ChangeSubscription.auto_subscribe_merger(change.id, 7101)
+
+      assert [%{channel_id: nil}] = ChangeSubscription.for_user!(actor: user)
+    end
+
+    test "the authored preference alone does not subscribe the merger" do
+      user = register_user!(%{"id" => 7102})
+      User.set_auto_subscribe!(user, %{auto_subscribe_authored_changes: true}, actor: user)
+      change = change!()
+
+      assert :ok = ChangeSubscription.auto_subscribe_merger(change.id, 7102)
+
+      assert [] = ChangeSubscription.for_user!(actor: user)
+    end
+
+    test "authoring and merging the same change yields a single subscription" do
+      user = register_user!(%{"id" => 7103})
+
+      User.set_auto_subscribe!(
+        user,
+        %{auto_subscribe_authored_changes: true, auto_subscribe_merged_changes: true},
+        actor: user
+      )
+
+      change = change!()
+
+      assert :ok = ChangeSubscription.auto_subscribe_author(change.id, 7103)
+      assert :ok = ChangeSubscription.auto_subscribe_merger(change.id, 7103)
+
+      assert [_only] = ChangeSubscription.for_user!(actor: user)
     end
   end
 end

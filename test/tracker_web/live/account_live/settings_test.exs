@@ -53,6 +53,77 @@ defmodule TrackerWeb.AccountLive.SettingsTest do
     end
   end
 
+  describe "change auto-subscribe preferences" do
+    test "both checkboxes start unchecked", %{conn: conn} do
+      user = register_via_github!()
+      conn = log_in(conn, user)
+
+      {:ok, view, _html} = live(conn, ~p"/account/settings")
+
+      refute view |> element("#auto-subscribe-authored") |> render() =~ "checked"
+      refute view |> element("#auto-subscribe-merged") |> render() =~ "checked"
+    end
+
+    test "opting in to authored changes leaves merged off", %{conn: conn} do
+      user = register_via_github!()
+      conn = log_in(conn, user)
+
+      {:ok, view, _html} = live(conn, ~p"/account/settings")
+
+      view
+      |> form("#settings-form",
+        settings: %{
+          live_ui: "true",
+          auto_subscribe_authored_changes: "true",
+          auto_subscribe_merged_changes: "false"
+        }
+      )
+      |> render_submit()
+
+      reloaded = Ash.get!(User, user.id, authorize?: false)
+      assert reloaded.auto_subscribe_authored_changes
+      refute reloaded.auto_subscribe_merged_changes
+    end
+
+    test "opting in to merged changes leaves authored off", %{conn: conn} do
+      user = register_via_github!()
+      conn = log_in(conn, user)
+
+      {:ok, view, _html} = live(conn, ~p"/account/settings")
+
+      view
+      |> form("#settings-form",
+        settings: %{
+          live_ui: "true",
+          auto_subscribe_authored_changes: "false",
+          auto_subscribe_merged_changes: "true"
+        }
+      )
+      |> render_submit()
+
+      reloaded = Ash.get!(User, user.id, authorize?: false)
+      refute reloaded.auto_subscribe_authored_changes
+      assert reloaded.auto_subscribe_merged_changes
+    end
+
+    test "an opted-in preference renders as checked", %{conn: conn} do
+      user = register_via_github!()
+
+      User.set_auto_subscribe!(
+        user,
+        %{auto_subscribe_authored_changes: true},
+        actor: user
+      )
+
+      conn = log_in(conn, user)
+
+      {:ok, view, _html} = live(conn, ~p"/account/settings")
+
+      assert view |> element("#auto-subscribe-authored") |> render() =~ "checked"
+      refute view |> element("#auto-subscribe-merged") |> render() =~ "checked"
+    end
+  end
+
   describe "notifications feed" do
     test "exposes the feed as a copy-on-click icon with a host-relative href", %{conn: conn} do
       user = register_via_github!()

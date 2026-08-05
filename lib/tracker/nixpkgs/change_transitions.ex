@@ -12,6 +12,7 @@ defmodule Tracker.Nixpkgs.ChangeTransitions do
   require Logger
 
   alias Tracker.GitHub.GraphQL.PullRequest
+  alias Tracker.Notifications.ChangeSubscription
   alias Tracker.Nixpkgs.Change
   alias Tracker.Nixpkgs.ChangeArtifactRefreshWorker
   alias Tracker.Nixpkgs.ChangeBranch
@@ -60,7 +61,10 @@ defmodule Tracker.Nixpkgs.ChangeTransitions do
     |> ChangeArtifactRefreshWorker.new()
     |> Oban.insert!()
 
-    if reason == :merged, do: ChangeBranch.seed_for_base_ref(change.id, change.base_ref)
+    if reason == :merged do
+      ChangeBranch.seed_for_base_ref(change.id, change.base_ref)
+      ChangeSubscription.auto_subscribe_merger(change.id, change.merged_by_github_id)
+    end
 
     :ok
   end

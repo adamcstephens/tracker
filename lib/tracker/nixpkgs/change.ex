@@ -165,7 +165,8 @@ defmodule Tracker.Nixpkgs.Change do
         :gh_updated_at,
         :closed_at,
         :merged_at,
-        :merge_commit_sha
+        :merge_commit_sha,
+        :merged_by_github_id
       ]
 
       change set_attribute(:last_checked_at, &DateTime.utc_now/0)
