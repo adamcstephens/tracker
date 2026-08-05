@@ -1023,6 +1023,9 @@ a.revision-link {
 	display: flex;
 	align-items: center;
 	gap: 0.5rem;
+	/* Gecko will shrink this below an inflexible child's width and let the
+	   child spill out; Blink will not. Hold the intrinsic size either way. */
+	flex: none;
 }
 
 /* Too narrow to share the title's line: the controls take one of their own,
@@ -2592,7 +2595,8 @@ a.revision-link {
 }
 
 .change-show .section-controls form {
-	flex: 0 0 320px;
+	width: 320px;
+	max-width: 100%;
 	margin: 0;
 }
 
