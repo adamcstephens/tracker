@@ -65,6 +65,13 @@ defmodule TrackerWeb.ChannelLive.ShowTest do
     assert html =~ "ccc888d"
   end
 
+  test "the revisions list carries a section header with its count", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/channels/nixos-unstable")
+
+    assert has_element?(view, ".section-header h2", "Revisions")
+    assert has_element?(view, ".section-header .n", "2")
+  end
+
   test "renders checkboxes for revision selection", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/channels/nixos-unstable")
 

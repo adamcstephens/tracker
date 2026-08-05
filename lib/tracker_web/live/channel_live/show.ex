@@ -5,6 +5,7 @@ defmodule TrackerWeb.ChannelLive.Show do
   alias TrackerWeb.PageSearch
   alias TrackerWeb.Pagination
   alias TrackerWeb.RowList
+  alias TrackerWeb.SectionHeader
   alias TrackerWeb.TableParams
 
   @impl true
@@ -47,6 +48,7 @@ defmodule TrackerWeb.ChannelLive.Show do
       method="get"
       action={~p"/channels/#{@channel}/diff"}
     >
+      <SectionHeader.section_header title="Revisions" count={@revision_count} />
       <RowList.row_list id="revisions">
         <RowList.row :for={rev <- @revisions} mode={:plain}>
           <:label>
@@ -174,6 +176,7 @@ defmodule TrackerWeb.ChannelLive.Show do
 
     socket
     |> assign(:revisions, pagination.stream_results)
+    |> assign(:revision_count, page.count)
     |> assign(:has_revisions?, pagination.stream_results != [])
     |> assign(:has_prev_page?, pagination.has_prev_page?)
     |> assign(:has_next_page?, pagination.has_next_page?)
