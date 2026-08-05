@@ -33,6 +33,7 @@ defmodule TrackerWeb.ChangeLive.Show do
   alias TrackerWeb.PropagationDag
   alias TrackerWeb.PropagationTree
   alias TrackerWeb.RowList
+  alias TrackerWeb.SectionHeader
   alias TrackerWeb.TableParams
   alias Tracker.Nixpkgs.Propagation
   alias Tracker.Notifications.ChangeSubscription
@@ -156,29 +157,27 @@ defmodule TrackerWeb.ChangeLive.Show do
         <div class="m3-panel m3-panel-pkgs">
           <section class="change-section">
             <%= if @packages_enabled? do %>
-              <div class="change-section-head">
-                <h2>
-                  Affected packages <small class="muted">({@package_count})</small>
-                </h2>
-
-                <form
-                  :if={@package_count > 15 && @change.processing_status == :processed}
-                  phx-change="search-packages"
-                  phx-submit="search-packages"
-                  id="package-search"
-                  phx-hook="UpdateURL"
-                  method="get"
-                  action={~p"/changes/#{@change.number}"}
-                >
-                  <input
-                    type="search"
-                    name="package_search"
-                    value={@table_params.search}
-                    placeholder="Filter packages…"
-                    phx-debounce="300"
-                  />
-                </form>
-              </div>
+              <SectionHeader.section_header title="Affected packages" count={@package_count}>
+                <:controls>
+                  <form
+                    :if={@package_count > 15 && @change.processing_status == :processed}
+                    phx-change="search-packages"
+                    phx-submit="search-packages"
+                    id="package-search"
+                    phx-hook="UpdateURL"
+                    method="get"
+                    action={~p"/changes/#{@change.number}"}
+                  >
+                    <input
+                      type="search"
+                      name="package_search"
+                      value={@table_params.search}
+                      placeholder="Filter packages…"
+                      phx-debounce="300"
+                    />
+                  </form>
+                </:controls>
+              </SectionHeader.section_header>
 
               <p :if={@change.processing_status != :processed}>
                 {processing_status_explanation(@change.processing_status, @change)}
@@ -228,11 +227,7 @@ defmodule TrackerWeb.ChangeLive.Show do
           </p>
 
           <section :if={@options_enabled?} class="change-section">
-            <div class="change-section-head">
-              <h2>
-                Affected options <small class="muted">({@option_total})</small>
-              </h2>
-            </div>
+            <SectionHeader.section_header title="Affected options" count={@option_total} />
 
             <RowList.row_list id="affected-options">
               <RowList.row

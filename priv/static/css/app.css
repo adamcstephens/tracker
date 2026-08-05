@@ -2591,20 +2591,12 @@ a.revision-link {
 	margin-bottom: 1.5rem;
 }
 
-.change-show .change-section-head {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 1rem;
-	margin-bottom: 0.75rem;
-}
-
-.change-show .change-section-head form {
+.change-show .section-controls form {
 	flex: 0 0 320px;
 	margin: 0;
 }
 
-.change-show .change-section-head form input[type="search"] {
+.change-show .section-controls form input[type="search"] {
 	margin: 0;
 }
 

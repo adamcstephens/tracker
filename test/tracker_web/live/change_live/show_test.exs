@@ -89,6 +89,14 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
     assert html =~ "show-change-pkg"
   end
 
+  test "the affected packages section uses the shared section header", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/changes/6001")
+
+    assert has_element?(view, ".section-header h2", "Affected packages")
+    assert has_element?(view, ".section-header .n", "1")
+    refute has_element?(view, ".change-section-head")
+  end
+
   test "affected packages render as shared row-list link rows", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/changes/6001")
 
