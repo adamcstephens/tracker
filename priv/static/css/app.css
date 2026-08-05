@@ -1228,6 +1228,36 @@ a.revision-link {
 	font-size: 0.8125rem;
 }
 
+/* Link rows keep their actions outside the row link, so they float over its
+   trailing edge instead of taking a grid column. Only a real control catches
+   the pointer — a decorative glyph would otherwise punch a dead spot in the
+   row. */
+.row-actions--float {
+	position: absolute;
+	inset-block: 0;
+	right: 14px;
+	pointer-events: none;
+}
+
+.icon-external {
+	width: 1rem;
+	height: 1rem;
+	display: block;
+}
+
+.row-actions--float a,
+.row-actions--float button {
+	pointer-events: auto;
+}
+
+.row-list > li:has(> .row-actions--float) {
+	position: relative;
+}
+
+.row-list > li:has(> .row-actions--float) > .row-link {
+	padding-right: 3rem;
+}
+
 .option-show .opt-type {
 	/* long types stay on one line; the full type is in the detail body */
 	display: inline-block;

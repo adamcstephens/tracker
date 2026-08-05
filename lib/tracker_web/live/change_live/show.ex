@@ -48,7 +48,13 @@ defmodule TrackerWeb.ChangeLive.Show do
             <span class="dot" aria-hidden="true"></span>
             {@change.state}
           </span>
-          <a href={@change.url} target="_blank" rel="noopener noreferrer" class="change-prnum mono">
+          <a
+            href={@change.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="change-prnum mono"
+            data-external-link
+          >
             #{@change.number}
           </a>
           <span class="cm-arrow muted">→</span>

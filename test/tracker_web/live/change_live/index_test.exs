@@ -38,6 +38,17 @@ defmodule TrackerWeb.ChangeLive.IndexTest do
     assert html =~ "release-25.11"
   end
 
+  test "each row carries a link out to the PR on GitHub", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/changes")
+    doc = Floki.parse_document!(html)
+
+    assert [link] = Floki.find(doc, "#changes li:first-child a[data-external-link]")
+    assert Floki.attribute(link, "href") == ["https://github.com/NixOS/nixpkgs/pull/5002"]
+    assert Floki.attribute(link, "target") == ["_blank"]
+    assert Floki.attribute(link, "rel") == ["noopener noreferrer"]
+    assert Floki.find(doc, "#changes a.row-link a") == []
+  end
+
   test "does not render an author column", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/changes")
 

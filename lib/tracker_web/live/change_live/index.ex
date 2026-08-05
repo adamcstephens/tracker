@@ -46,6 +46,19 @@ defmodule TrackerWeb.ChangeLive.Index do
           <span>{change.base_ref}</span>
         </:sublabel>
         <:meta>{format_datetime(change.merged_at)}</:meta>
+        <:actions>
+          <a
+            href={change.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="row-action"
+            title="Open on GitHub"
+            aria-label={"Open ##{change.number} on GitHub"}
+            data-external-link
+          >
+            <.external_icon />
+          </a>
+        </:actions>
       </RowList.row>
     </RowList.row_list>
 
@@ -65,6 +78,25 @@ defmodule TrackerWeb.ChangeLive.Index do
         })
       }
     />
+    """
+  end
+
+  defp external_icon(assigns) do
+    ~H"""
+    <svg
+      class="icon-external"
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.7"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <path d="M14 4h6v6" />
+      <path d="M20 4 10 14" />
+      <path d="M19 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h6" />
+    </svg>
     """
   end
 

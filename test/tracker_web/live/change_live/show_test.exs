@@ -61,6 +61,18 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
     assert html =~ "2026-03-31"
   end
 
+  test "marks the PR anchor as the page's external link", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/changes/6001")
+
+    assert [link | _] =
+             html
+             |> Floki.parse_document!()
+             |> Floki.find("a[data-external-link]")
+
+    assert Floki.attribute(link, "href") == ["https://github.com/NixOS/nixpkgs/pull/6001"]
+    assert Floki.attribute(link, "target") == ["_blank"]
+  end
+
   test "shows labels", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/changes/6001")
 

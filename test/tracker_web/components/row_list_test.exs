@@ -267,6 +267,26 @@ defmodule TrackerWeb.RowListTest do
       assert html =~ ~s(class="row-line row-link")
       refute html =~ "<details"
     end
+
+    test "actions sit outside the row link, so they stay clickable on their own" do
+      assigns = %{}
+
+      doc =
+        rendered_to_string(~H"""
+        <RowList.row_list id="things">
+          <RowList.row mode={:link} navigate="/alpha">
+            <:label>alpha</:label>
+            <:actions><a href="https://example.com/alpha">out</a></:actions>
+          </RowList.row>
+        </RowList.row_list>
+        """)
+        |> Floki.parse_document!()
+
+      assert Floki.find(doc, "a.row-link a") == []
+      assert [actions] = Floki.find(doc, "ul.row-list > li > .row-actions")
+      assert Floki.attribute(actions, "class") == ["row-actions row-actions--float"]
+      assert Floki.text(actions) == "out"
+    end
   end
 
   describe "row/1 plain mode" do

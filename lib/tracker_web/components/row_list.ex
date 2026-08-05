@@ -76,7 +76,9 @@ defmodule TrackerWeb.RowList do
 
     * `:expandable` — a `<details>` row that opens its `:body`. With no
       `:body` it degrades to a plain row rather than an empty panel.
-    * `:link` — the whole row navigates to `navigate`.
+    * `:link` — the whole row navigates to `navigate`. Its `:actions` float at
+      the trailing edge outside that link, so an action of their own — an
+      outbound link, a button — is reachable without following the row.
     * `:plain` — a bare row.
   """
   attr :id, :string, default: nil
@@ -111,6 +113,8 @@ defmodule TrackerWeb.RowList do
     """
   end
 
+  # Actions float outside the row link: an anchor or button nested in an anchor
+  # is invalid, and the parser lifts a nested <a> out of the row entirely.
   def row(%{mode: :link} = assigns) do
     ~H"""
     <li id={@id} {@rest}>
@@ -120,9 +124,10 @@ defmodule TrackerWeb.RowList do
           label={@label}
           sublabel={@sublabel}
           meta={@meta}
-          actions={@actions}
+          actions={[]}
         />
       </.link>
+      <span :if={@actions != []} class="row-actions row-actions--float">{render_slot(@actions)}</span>
     </li>
     """
   end

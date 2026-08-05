@@ -66,6 +66,24 @@ document.addEventListener("keydown", (event) => {
   select.focus()
 })
 
+// "v" follows the page out to GitHub. A focused row's own link wins over the
+// page's, so the cursor decides which PR opens; a page with neither ignores the
+// key.
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "v") return
+  if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return
+  if (isEditable(event.target)) return
+  if (document.querySelector("dialog[open]")) return
+
+  let row = event.target.closest?.("ul.row-list > li")
+  let link = row?.querySelector("a[data-external-link]") ||
+    document.querySelector("a[data-external-link]")
+  if (!link) return
+
+  event.preventDefault()
+  window.open(link.href, "_blank", "noopener")
+})
+
 // A row's focus target differs per mode: an anchor for :link, a summary for
 // :expandable, and the line itself for :plain.
 //
