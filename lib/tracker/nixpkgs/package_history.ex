@@ -39,13 +39,15 @@ defmodule Tracker.Nixpkgs.PackageHistory do
       field :channel_name, String.t()
       field :revision, String.t()
       field :released_at, DateTime.t()
+      field :added?, boolean()
     end
   end
 
   @doc """
   A package's version-change history as `VersionChange` structs, one per span
   whose version differs from the previous span in the same channel (first
-  appearance included).
+  appearance included). `added?` marks the ones sitting on an `:added`
+  boundary.
 
   Options: `:channel_id` (scope to one channel), `:version` (substring filter),
   `:sort_by` (`:released_at` default | `:version`), `:sort_dir` (`:desc`
@@ -55,18 +57,18 @@ defmodule Tracker.Nixpkgs.PackageHistory do
   @spec version_changes_by_package(integer(), keyword()) ::
           {[VersionChange.t()], non_neg_integer()}
   def version_changes_by_package(package_id, opts \\ []) do
-    channel_id = Keyword.get(opts, :channel_id)
+    spans_by_channel =
+      spans_by_channel(package_id, Keyword.get(opts, :channel_id), load: [:channel])
+
+    added = Map.new(spans_by_channel, fn {cid, spans} -> {cid, added_ats(spans)} end)
 
     change_spans =
-      package_id
-      |> PackageSpan.by_package!(channel_id, load: [:channel])
-      |> Enum.group_by(& &1.channel_id)
-      |> Enum.flat_map(fn {_cid, spans} -> version_change_spans(spans) end)
+      Enum.flat_map(spans_by_channel, fn {_cid, spans} -> version_change_spans(spans) end)
 
     revisions = revision_map(change_spans)
 
     change_spans
-    |> Enum.map(&to_version_change(&1, package_id, revisions))
+    |> Enum.map(&to_version_change(&1, package_id, revisions, added))
     |> maybe_filter_version(Keyword.get(opts, :version))
     |> sort_changes(
       Keyword.get(opts, :sort_by, :released_at),
@@ -75,10 +77,24 @@ defmodule Tracker.Nixpkgs.PackageHistory do
     |> paginate(Keyword.get(opts, :limit), Keyword.get(opts, :offset, 0))
   end
 
-  # Spans (one channel) whose version differs from the chronological predecessor.
+  # A package's spans per channel, each group in chronological order — the shape
+  # the boundary folds below read.
+  defp spans_by_channel(package_id, channel_id, opts \\ []) do
+    package_id
+    |> PackageSpan.by_package!(channel_id, opts)
+    |> Enum.group_by(& &1.channel_id)
+    |> Map.new(fn {cid, spans} -> {cid, Enum.sort_by(spans, & &1.valid.lower, DateTime)} end)
+  end
+
+  # The instants a channel's sorted spans open an :added boundary at, truncated
+  # to match revision timestamps.
+  defp added_ats(spans) do
+    for {:added, at} <- boundary_events(spans), into: MapSet.new(), do: released_at_second(at)
+  end
+
+  # Spans (one channel, sorted) whose version differs from the predecessor.
   defp version_change_spans(spans) do
     spans
-    |> Enum.sort_by(& &1.valid.lower, DateTime)
     |> Enum.reduce({[], :none}, fn span, {acc, prev} ->
       if span.version == prev, do: {acc, prev}, else: {[span | acc], span.version}
     end)
@@ -98,8 +114,9 @@ defmodule Tracker.Nixpkgs.PackageHistory do
     |> Map.new()
   end
 
-  defp to_version_change(span, package_id, revisions) do
-    rev = Map.fetch!(revisions, {span.channel_id, released_at_second(released_at(span))})
+  defp to_version_change(span, package_id, revisions, added) do
+    at = released_at_second(released_at(span))
+    rev = Map.fetch!(revisions, {span.channel_id, at})
 
     %VersionChange{
       id: span.id,
@@ -109,30 +126,32 @@ defmodule Tracker.Nixpkgs.PackageHistory do
       channel_revision_id: rev.id,
       channel_name: span.channel.name,
       revision: rev.revision,
-      released_at: rev.released_at
+      released_at: rev.released_at,
+      added?: MapSet.member?(Map.fetch!(added, span.channel_id), at)
     }
   end
 
   @doc """
-  A package's lifecycle events (added/removed) in a channel, derived from span
-  boundaries: a span opening that is not contiguous with the previous span's
-  close is an `:added` (first appearance or re-addition); a span close not
-  continued by the next span — or a bounded final span — is a `:removed`. Each
-  event carries the `channel_revision` (with `:channel`) at its boundary, newest
-  first.
+  A package's removal history in a channel, derived from span boundaries: a
+  span close not continued by the next span — or a bounded final span — is a
+  `:removed`, and a later span opening is the `:added` that re-introduced it.
+  Each event carries the `channel_revision` (with `:channel`) at its boundary,
+  newest first.
+
+  Channels the package was never removed from are omitted entirely: their sole
+  boundary is the opening `:added`, which the revisions list carries inline.
   """
   @spec events_by_package(integer(), integer() | nil) :: [Event.t()]
   def events_by_package(package_id, channel_id) do
     boundaries =
       package_id
-      |> PackageSpan.by_package!(channel_id)
-      |> Enum.group_by(& &1.channel_id)
+      |> spans_by_channel(channel_id)
       |> Enum.flat_map(fn {cid, spans} ->
         spans
-        |> Enum.sort_by(& &1.valid.lower, DateTime)
         |> boundary_events()
         |> Enum.map(fn {type, at} -> {cid, type, at} end)
       end)
+      |> removed_channels_only()
 
     revisions = boundary_revision_map(boundaries)
 
@@ -166,6 +185,14 @@ defmodule Tracker.Nixpkgs.PackageHistory do
       nil -> events
       upper -> [{:removed, upper} | events]
     end
+  end
+
+  # Drops channels the package still lives in, before their boundaries cost a
+  # revision lookup they would only render as a duplicate of the revisions list.
+  defp removed_channels_only(boundaries) do
+    removed = for {cid, :removed, _at} <- boundaries, into: MapSet.new(), do: cid
+
+    Enum.filter(boundaries, fn {cid, _type, _at} -> MapSet.member?(removed, cid) end)
   end
 
   defp boundary_revision_map([]), do: %{}
@@ -249,8 +276,8 @@ defmodule Tracker.Nixpkgs.PackageHistory do
   The package's version at every revision of a channel (the "all revisions"
   view), reconstructed by range-containment. Returns
   `%{results, count, more?}` where each result is
-  `%{version:, position:, channel_revision:}` (the revision loaded with
-  `:channel`).
+  `%{version:, position:, channel_revision:, added?:}` (the revision loaded with
+  `:channel`; `added?` marks the revision the package appeared at).
 
   Options: `:version` (substring filter), `:sort_by`/`:sort_dir`, `:limit`,
   `:offset` (default 0).
@@ -266,15 +293,26 @@ defmodule Tracker.Nixpkgs.PackageHistory do
 
     rows =
       package_id
-      |> PackageSpan.by_package!(channel_id)
-      |> Enum.group_by(& &1.channel_id)
+      |> spans_by_channel(channel_id)
       |> Enum.flat_map(fn {cid, spans} ->
+        added = added_ats(spans)
+
         cid
         |> ChannelRevision.by_channel_asc!(load: [:channel])
         |> Enum.flat_map(fn rev ->
           case covering_span(spans, rev.released_at) do
-            nil -> []
-            span -> [%{version: span.version, position: span.position, channel_revision: rev}]
+            nil ->
+              []
+
+            span ->
+              [
+                %{
+                  version: span.version,
+                  position: span.position,
+                  channel_revision: rev,
+                  added?: MapSet.member?(added, released_at_second(rev.released_at))
+                }
+              ]
           end
         end)
       end)

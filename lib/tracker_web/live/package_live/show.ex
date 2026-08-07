@@ -222,6 +222,7 @@ defmodule TrackerWeb.PackageLive.Show do
             position={rev.position}
             revision={rev_revision(rev)}
           />
+          <mark :if={rev_added?(rev)}>added</mark>
         </:label>
         <:sublabel>{rev_channel(rev)}</:sublabel>
         <:meta>
@@ -328,6 +329,8 @@ defmodule TrackerWeb.PackageLive.Show do
 
   defp rev_released_at(%VersionChange{released_at: released_at}), do: released_at
   defp rev_released_at(%{channel_revision: %{released_at: released_at}}), do: released_at
+
+  defp rev_added?(%{added?: added?}), do: added?
 
   defp format_released_at(nil), do: "-"
   defp format_released_at(dt), do: Calendar.strftime(dt, "%Y-%m-%d %H:%M")

@@ -988,16 +988,14 @@ defmodule TrackerWeb.PackageLive.ShowTest do
       :ok
     end
 
-    test "default lens filters lifecycle events to the lens channel", %{
+    test "hides the section when the lens channel has no removal", %{
       conn: conn,
       package: package
     } do
       {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}")
 
-      # Unstable: package is still present → only an "added" boundary.
-      assert html =~ "Lifecycle Events"
-      assert html =~ "added"
-      refute html =~ "removed"
+      # Unstable: package is still present, so its addition is inline only.
+      refute html =~ "Lifecycle Events"
     end
 
     test "lens swap reloads lifecycle events for the new channel", %{
@@ -1010,15 +1008,87 @@ defmodule TrackerWeb.PackageLive.ShowTest do
       send(view.pid, {:set_lens, channel_stable.name, ""})
       html = render(view)
 
-      # Stable: the package was added then removed → a "removed" boundary.
-      assert html =~ "removed"
+      # Stable: the package was added then removed → both boundaries.
+      assert lifecycle_events(html) == [
+               {"removed", "nixos-24.11"},
+               {"added", "nixos-24.11"}
+             ]
     end
+
+    test "the all-channels lens shows only channels with a removal", %{
+      conn: conn,
+      package: package
+    } do
+      {:ok, view, _html} = live(conn, ~p"/packages/#{package.attribute}")
+
+      send(view.pid, {:set_lens, "all", ""})
+      html = render(view)
+
+      assert lifecycle_events(html) == [
+               {"removed", "nixos-24.11"},
+               {"added", "nixos-24.11"}
+             ]
+    end
+  end
+
+  describe "addition badge in the revisions list" do
+    setup %{package: package, channel_unstable: channel_unstable, cr1: cr1} do
+      cr3 =
+        Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
+          channel_id: channel_unstable.id,
+          revision: "abc123bump56789",
+          released_at: ~U[2026-03-20 10:00:00Z],
+          previous_channel_revision_id: cr1.id
+        })
+
+      Tracker.Fixtures.apply_package_revision!(cr3, [{package, "2.12.2"}])
+
+      :ok
+    end
+
+    test "badges the revision the package appeared at", %{conn: conn, package: package} do
+      {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}")
+
+      assert revision_badges(html) == [{"2.12.2", false}, {"2.12.1", true}]
+    end
+
+    test "badges the appearance in all-revisions mode too", %{conn: conn, package: package} do
+      {:ok, _view, html} =
+        live(conn, ~p"/packages/#{package.attribute}?all_revisions=true")
+
+      assert revision_badges(html) == [{"2.12.2", false}, {"2.12.1", true}]
+    end
+  end
+
+  defp lifecycle_events(html) do
+    html
+    |> Floki.parse_document!()
+    |> Floki.find("#lifecycle-events > li")
+    |> Enum.map(fn li ->
+      {li |> Floki.find(".row-leading") |> Floki.text() |> String.trim(),
+       li |> Floki.find(".row-label") |> Floki.text() |> String.trim()}
+    end)
+  end
+
+  defp revision_badges(html) do
+    html
+    |> Floki.parse_document!()
+    |> Floki.find("#revisions > li")
+    |> Enum.map(fn li ->
+      version =
+        li
+        |> Floki.find(".row-label")
+        |> Floki.filter_out("mark")
+        |> Floki.text()
+        |> String.trim()
+
+      {version, Floki.find(li, ".row-label mark") != []}
+    end)
   end
 
   defp version_order(html) do
     html
-    |> Floki.parse_document!()
-    |> Floki.find("#revisions .row-label")
-    |> Enum.map(&(&1 |> Floki.text() |> String.trim()))
+    |> revision_badges()
+    |> Enum.map(fn {version, _added?} -> version end)
   end
 end

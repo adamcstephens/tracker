@@ -64,7 +64,7 @@ defmodule Tracker.Nixpkgs.PackageHistoryTest do
       assert Enum.all?(events, &(&1.channel_revision.channel.name == "evt-chan"))
     end
 
-    test "merges boundaries across channels when channel_id is nil" do
+    test "omits channels the package was never removed from" do
       unstable = Fixtures.channel!("ebp-unstable")
       stable = Fixtures.channel!("ebp-stable")
       pkg = Fixtures.package!("ebp-multi")
@@ -82,9 +82,19 @@ defmodule Tracker.Nixpkgs.PackageHistoryTest do
       types_by_channel =
         Enum.map(events, &{&1.channel_revision.channel.name, &1.type})
 
-      assert {"ebp-unstable", :added} in types_by_channel
       assert {"ebp-stable", :added} in types_by_channel
       assert {"ebp-stable", :removed} in types_by_channel
+      refute {"ebp-unstable", :added} in types_by_channel
+    end
+
+    test "is empty for a package that is still present everywhere" do
+      channel = Fixtures.channel!("ebp-open")
+      cr = revision!(channel, "ebpo111", ~U[2026-04-01 10:00:00Z])
+
+      pkg = Fixtures.package!("ebp-open-pkg")
+      Fixtures.apply_package_revision!(cr, [{pkg, "1.0"}])
+
+      assert PackageHistory.events_by_package(pkg.id, nil) == []
     end
   end
 
@@ -133,6 +143,29 @@ defmodule Tracker.Nixpkgs.PackageHistoryTest do
       assert by_version["1.0"].revision == "aaa1111"
       assert by_version["1.1"].revision == "ccc3333"
       assert by_version["1.0"].channel_name == "unstable"
+    end
+
+    test "flags the first appearance as an addition", %{pkg: pkg} do
+      {results, _} = PackageHistory.version_changes_by_package(pkg.id)
+
+      assert Map.new(results, &{&1.version, &1.added?}) == %{"1.0" => true, "1.1" => false}
+    end
+
+    test "flags a re-addition after a removal" do
+      channel = Fixtures.channel!("readd-channel")
+      pkg = Fixtures.package!("readd-pkg")
+
+      cr1 = revision!(channel, "read111", ~U[2025-07-01 00:00:00Z])
+      cr2 = revision!(channel, "read222", ~U[2025-07-02 00:00:00Z], cr1)
+      cr3 = revision!(channel, "read333", ~U[2025-07-03 00:00:00Z], cr2)
+
+      Fixtures.apply_package_revision!(cr1, [{pkg, "1.0"}])
+      Fixtures.remove_package!(cr2, pkg)
+      Fixtures.apply_package_revision!(cr3, [{pkg, "2.0"}])
+
+      {results, _} = PackageHistory.version_changes_by_package(pkg.id)
+
+      assert Map.new(results, &{&1.version, &1.added?}) == %{"1.0" => true, "2.0" => true}
     end
 
     test "carries the position recorded on each span" do
@@ -365,6 +398,25 @@ defmodule Tracker.Nixpkgs.PackageHistoryTest do
       assert Map.new(results, &{&1.channel_revision.revision, &1.position}) == %{
                "rbpp111" => "pkgs/old/default.nix:10",
                "rbpp222" => "pkgs/new/default.nix:20"
+             }
+    end
+
+    test "flags the revision the package appeared at" do
+      channel = Fixtures.channel!("rbp-added")
+      pkg = Fixtures.package!("rbp-added-pkg")
+
+      cr1 = revision!(channel, "rbpa111", ~U[2026-06-01 10:00:00Z])
+      cr2 = revision!(channel, "rbpa222", ~U[2026-06-02 10:00:00Z], cr1)
+      cr3 = revision!(channel, "rbpa333", ~U[2026-06-03 10:00:00Z], cr2)
+
+      Fixtures.apply_package_revision!(cr2, [{pkg, "1.0"}])
+      Fixtures.apply_package_revision!(cr3, [{pkg, "1.0"}])
+
+      %{results: results} = PackageHistory.revisions_by_package(pkg.id, channel.id)
+
+      assert Map.new(results, &{&1.channel_revision.revision, &1.added?}) == %{
+               "rbpa222" => true,
+               "rbpa333" => false
              }
     end
   end
