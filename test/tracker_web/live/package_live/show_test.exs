@@ -71,7 +71,12 @@ defmodule TrackerWeb.PackageLive.ShowTest do
         })
 
       Tracker.Fixtures.apply_package_revision!(cr_meta, [
-        {package, %{version: "2.14.0", description: "Meta-channel description"}}
+        {package,
+         %{
+           version: "2.14.0",
+           description: "Meta-channel description",
+           position: "pkgs/meta/default.nix:10"
+         }}
       ])
 
       cr_stable_meta =
@@ -82,10 +87,36 @@ defmodule TrackerWeb.PackageLive.ShowTest do
         })
 
       Tracker.Fixtures.apply_package_revision!(cr_stable_meta, [
-        {package, %{version: "2.13.0", description: "Stable-channel description"}}
+        {package,
+         %{
+           version: "2.13.0",
+           description: "Stable-channel description",
+           position: "pkgs/stable/default.nix:20"
+         }}
       ])
 
       %{channel_meta: channel_meta}
+    end
+
+    test "the position link targets the lens channel span's revision", %{
+      conn: conn,
+      package: package
+    } do
+      {:ok, _view, html} =
+        live(conn, ~p"/packages/#{package.attribute}?lens_channel=nixos-24.11")
+
+      assert html =~ "blob/stab111ccc222333/pkgs/stable/default.nix#L20"
+      refute html =~ "blob/master/"
+    end
+
+    test "the all-channels lens position link targets the metadata channel revision", %{
+      conn: conn,
+      package: package
+    } do
+      {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}?lens_channel=all")
+
+      assert html =~ "blob/meta111bbb222333/pkgs/meta/default.nix#L10"
+      refute html =~ "blob/master/"
     end
 
     test "a specific channel lens shows that channel's metadata", %{
@@ -133,6 +164,62 @@ defmodule TrackerWeb.PackageLive.ShowTest do
 
       assert html =~ "Stable-channel description"
       refute html =~ "Meta-channel description"
+    end
+  end
+
+  describe "revision version links" do
+    setup %{channel_unstable: channel_unstable} do
+      moved = Tracker.Fixtures.package!("pkgshow-moved")
+
+      cr_old =
+        Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
+          channel_id: channel_unstable.id,
+          revision: "old111aaa222333",
+          released_at: ~U[2026-02-01 10:00:00Z]
+        })
+
+      cr_new =
+        Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
+          channel_id: channel_unstable.id,
+          revision: "new111aaa222333",
+          released_at: ~U[2026-02-02 10:00:00Z],
+          previous_channel_revision_id: cr_old.id
+        })
+
+      Tracker.Fixtures.apply_package_revision!(cr_old, [
+        {moved, %{version: "1.0", position: "pkgs/old/default.nix:10"}}
+      ])
+
+      Tracker.Fixtures.apply_package_revision!(cr_new, [
+        {moved, %{version: "2.0", position: "pkgs/new/default.nix:20"}}
+      ])
+
+      %{moved: moved}
+    end
+
+    test "version-change rows link the path recorded at their own revision", %{
+      conn: conn,
+      moved: moved
+    } do
+      {:ok, _view, html} =
+        live(conn, ~p"/packages/#{moved.attribute}?lens_channel=nixos-unstable")
+
+      assert html =~ "blob/old111aaa222333/pkgs/old/default.nix"
+      assert html =~ "blob/new111aaa222333/pkgs/new/default.nix"
+    end
+
+    test "all-revisions rows link the path recorded at their own revision", %{
+      conn: conn,
+      moved: moved
+    } do
+      {:ok, _view, html} =
+        live(
+          conn,
+          ~p"/packages/#{moved.attribute}?lens_channel=nixos-unstable&all_revisions=true"
+        )
+
+      assert html =~ "blob/old111aaa222333/pkgs/old/default.nix"
+      assert html =~ "blob/new111aaa222333/pkgs/new/default.nix"
     end
   end
 

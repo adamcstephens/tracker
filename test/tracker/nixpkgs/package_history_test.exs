@@ -135,6 +135,29 @@ defmodule Tracker.Nixpkgs.PackageHistoryTest do
       assert by_version["1.0"].channel_name == "unstable"
     end
 
+    test "carries the position recorded on each span" do
+      channel = Fixtures.channel!("vcp-channel")
+      pkg = Fixtures.package!("vcp-pkg")
+
+      cr1 = revision!(channel, "vcp1111", ~U[2025-05-01 00:00:00Z])
+      cr2 = revision!(channel, "vcp2222", ~U[2025-05-02 00:00:00Z], cr1)
+
+      Fixtures.apply_package_revision!(cr1, [
+        {pkg, %{version: "1.0", position: "pkgs/old/default.nix:10"}}
+      ])
+
+      Fixtures.apply_package_revision!(cr2, [
+        {pkg, %{version: "2.0", position: "pkgs/new/default.nix:20"}}
+      ])
+
+      {results, _} = PackageHistory.version_changes_by_package(pkg.id)
+
+      assert Map.new(results, &{&1.version, &1.position}) == %{
+               "1.0" => "pkgs/old/default.nix:10",
+               "2.0" => "pkgs/new/default.nix:20"
+             }
+    end
+
     test "filters by channel" do
       unstable_ch = Fixtures.channel!("unstable-multi")
       stable_ch = Fixtures.channel!("stable-multi")
@@ -320,6 +343,49 @@ defmodule Tracker.Nixpkgs.PackageHistoryTest do
         Map.new(results, &{&1.channel_revision.channel.name, &1.version})
 
       assert by_channel == %{"rbp-unstable" => "1.0", "rbp-stable" => "2.0"}
+    end
+
+    test "carries the covering span's position at each revision" do
+      channel = Fixtures.channel!("rbp-pos")
+      pkg = Fixtures.package!("rbp-pos-pkg")
+
+      cr1 = revision!(channel, "rbpp111", ~U[2026-05-01 10:00:00Z])
+      cr2 = revision!(channel, "rbpp222", ~U[2026-05-02 10:00:00Z], cr1)
+
+      Fixtures.apply_package_revision!(cr1, [
+        {pkg, %{version: "1.0", position: "pkgs/old/default.nix:10"}}
+      ])
+
+      Fixtures.apply_package_revision!(cr2, [
+        {pkg, %{version: "2.0", position: "pkgs/new/default.nix:20"}}
+      ])
+
+      %{results: results} = PackageHistory.revisions_by_package(pkg.id, channel.id)
+
+      assert Map.new(results, &{&1.channel_revision.revision, &1.position}) == %{
+               "rbpp111" => "pkgs/old/default.nix:10",
+               "rbpp222" => "pkgs/new/default.nix:20"
+             }
+    end
+  end
+
+  describe "span_revision/1" do
+    test "resolves a span to the revision it opened at" do
+      channel = Fixtures.channel!("sr-channel")
+      pkg = Fixtures.package!("sr-pkg")
+
+      cr1 = revision!(channel, "sr111111", ~U[2026-06-01 10:00:00Z])
+      cr2 = revision!(channel, "sr222222", ~U[2026-06-02 10:00:00Z], cr1)
+
+      Fixtures.apply_package_revision!(cr1, [{pkg, "1.0"}])
+      Fixtures.apply_package_revision!(cr2, [{pkg, "2.0"}])
+
+      spans = Tracker.Nixpkgs.PackageSpan.by_package!(pkg.id, channel.id)
+
+      assert Map.new(spans, &{&1.version, PackageHistory.span_revision(&1).revision}) == %{
+               "1.0" => "sr111111",
+               "2.0" => "sr222222"
+             }
     end
   end
 end

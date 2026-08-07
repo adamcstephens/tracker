@@ -33,6 +33,7 @@ defmodule Tracker.Nixpkgs.PackageHistory do
     typedstruct enforce: true do
       field :id, integer()
       field :version, String.t()
+      field :position, String.t() | nil, enforce: false
       field :package_id, integer()
       field :channel_revision_id, integer()
       field :channel_name, String.t()
@@ -103,6 +104,7 @@ defmodule Tracker.Nixpkgs.PackageHistory do
     %VersionChange{
       id: span.id,
       version: span.version,
+      position: span.position,
       package_id: package_id,
       channel_revision_id: rev.id,
       channel_name: span.channel.name,
@@ -192,6 +194,17 @@ defmodule Tracker.Nixpkgs.PackageHistory do
     |> Map.new(&{&1.package_id, &1})
   end
 
+  @doc """
+  The `ChannelRevision` a span opened at. A span's lower bound is always some
+  revision's `released_at`, so the lookup is total.
+  """
+  @spec span_revision(PackageSpan.t()) :: ChannelRevision.t()
+  def span_revision(span) do
+    span.channel_id
+    |> ChannelRevision.by_released_ats!([released_at(span)])
+    |> hd()
+  end
+
   # pname is stored on spans but doesn't count towards a span "having"
   # metadata — it duplicates the attribute for display purposes.
   @metadata_fields [
@@ -233,7 +246,8 @@ defmodule Tracker.Nixpkgs.PackageHistory do
   The package's version at every revision of a channel (the "all revisions"
   view), reconstructed by range-containment. Returns
   `%{results, count, more?}` where each result is
-  `%{version:, channel_revision:}` (the revision loaded with `:channel`).
+  `%{version:, position:, channel_revision:}` (the revision loaded with
+  `:channel`).
 
   Options: `:version` (substring filter), `:sort_by`/`:sort_dir`, `:limit`,
   `:offset` (default 0).
@@ -257,7 +271,7 @@ defmodule Tracker.Nixpkgs.PackageHistory do
         |> Enum.flat_map(fn rev ->
           case covering_span(spans, rev.released_at) do
             nil -> []
-            span -> [%{version: span.version, channel_revision: rev}]
+            span -> [%{version: span.version, position: span.position, channel_revision: rev}]
           end
         end)
       end)

@@ -58,7 +58,7 @@ defmodule TrackerWeb.PackageLive.Show do
         </span>
       </:item>
       <:item :if={@package_meta.position} title="Position">
-        <.nixpkgs_position position={@package_meta.position} />
+        <.nixpkgs_position position={@package_meta.position} revision={@meta_revision} />
       </:item>
       <:item :if={@package_meta.licenses} title="License">
         {Enum.join(@package_meta.licenses, ", ")}
@@ -219,7 +219,7 @@ defmodule TrackerWeb.PackageLive.Show do
         <:label>
           <.github_version_link
             version={rev.version}
-            position={@package_meta.position}
+            position={rev.position}
             revision={rev_revision(rev)}
           />
         </:label>
@@ -288,7 +288,7 @@ defmodule TrackerWeb.PackageLive.Show do
 
     ~H"""
     <a
-      href={"https://github.com/NixOS/nixpkgs/blob/master/#{@path}" <> if(@line, do: "#L#{@line}", else: "")}
+      href={"https://github.com/NixOS/nixpkgs/blob/#{@revision}/#{@path}" <> if(@line, do: "#L#{@line}", else: "")}
       target="_blank"
       rel="noopener noreferrer"
     >
@@ -493,7 +493,7 @@ defmodule TrackerWeb.PackageLive.Show do
     total_pages = ceil(total_count / tp.page_size)
 
     socket
-    |> assign(:package_meta, load_current_meta(package_id, channel_id))
+    |> assign_current_meta(package_id, channel_id)
     |> assign(:recent_changes, recent_changes)
     |> assign(:package_events, package_events)
     |> assign(:revisions, revisions)
@@ -612,13 +612,18 @@ defmodule TrackerWeb.PackageLive.Show do
   # the metadata channel is the fallback for the all-channels lens, packages
   # absent from the lens channel, and spans written before metadata was
   # ingested on every channel.
-  defp load_current_meta(package_id, lens_channel_id) do
+  defp assign_current_meta(socket, package_id, lens_channel_id) do
     span = lens_meta_span(package_id, lens_channel_id) || metadata_channel_span(package_id)
 
-    Map.new(
-      Tracker.Nixpkgs.PackageHistory.metadata_fields(),
-      &{&1, span && Map.get(span, &1)}
-    )
+    meta =
+      Map.new(
+        Tracker.Nixpkgs.PackageHistory.metadata_fields(),
+        &{&1, span && Map.get(span, &1)}
+      )
+
+    socket
+    |> assign(:package_meta, meta)
+    |> assign(:meta_revision, span && Tracker.Nixpkgs.PackageHistory.span_revision(span).revision)
   end
 
   defp lens_meta_span(_package_id, nil), do: nil
