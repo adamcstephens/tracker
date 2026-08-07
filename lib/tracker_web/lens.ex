@@ -118,6 +118,16 @@ defmodule TrackerWeb.Lens do
   def channel_name(%__MODULE__{channel: channel}), do: channel.name
 
   @doc """
+  The `released_at` of the pinned revision, or nil when the lens carries no pin.
+  Metadata reads resolve at this instant; historical lists stay channel-scoped.
+  """
+  @spec pinned_at(t() | nil) :: DateTime.t() | nil
+  def pinned_at(%__MODULE__{revision: %ChannelRevision{released_at: released_at}}),
+    do: released_at
+
+  def pinned_at(_lens), do: nil
+
+  @doc """
   The maximum age for the lens cookie, in seconds.
   """
   def cookie_max_age, do: @cookie_max_age

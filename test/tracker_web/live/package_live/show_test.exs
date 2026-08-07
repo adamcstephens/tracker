@@ -223,6 +223,112 @@ defmodule TrackerWeb.PackageLive.ShowTest do
     end
   end
 
+  describe "lens revision pin" do
+    setup %{channel_unstable: channel_unstable} do
+      pinned = Tracker.Fixtures.package!("pkgshow-pinned")
+
+      cr_a =
+        Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
+          channel_id: channel_unstable.id,
+          revision: "pina11aaa222333",
+          released_at: ~U[2026-01-01 10:00:00Z]
+        })
+
+      cr_b =
+        Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
+          channel_id: channel_unstable.id,
+          revision: "pinb11bbb222333",
+          released_at: ~U[2026-01-02 10:00:00Z],
+          previous_channel_revision_id: cr_a.id
+        })
+
+      cr_c =
+        Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
+          channel_id: channel_unstable.id,
+          revision: "pinc11ccc222333",
+          released_at: ~U[2026-01-03 10:00:00Z],
+          previous_channel_revision_id: cr_b.id
+        })
+
+      Tracker.Fixtures.apply_package_revision!(cr_a, [
+        {pinned,
+         %{
+           version: "1.0",
+           description: "Pinned-era description",
+           position: "pkgs/pinned/default.nix:10"
+         }}
+      ])
+
+      Tracker.Fixtures.apply_package_revision!(cr_b, [
+        {pinned,
+         %{
+           version: "2.0",
+           description: "Present-day description",
+           position: "pkgs/pinned/default.nix:20"
+         }}
+      ])
+
+      # Removal lives on its own package so `pinned` keeps an open span for the
+      # unpinned case.
+      removed_later = Tracker.Fixtures.package!("pkgshow-removed-later")
+      Tracker.Fixtures.apply_package_revision!(cr_a, [{removed_later, "1.0"}])
+      Tracker.Fixtures.remove_package!(cr_c, removed_later)
+
+      %{pinned: pinned, removed_later: removed_later}
+    end
+
+    defp pinned_view(conn, package, rev) do
+      {:ok, _view, html} =
+        live(conn, ~p"/packages/#{package.attribute}?lens_channel=nixos-unstable&lens_rev=#{rev}")
+
+      html
+    end
+
+    test "metadata resolves at the pin, not from the open span", %{conn: conn, pinned: pinned} do
+      html = pinned_view(conn, pinned, "pina11aaa222333")
+
+      assert html =~ "Pinned-era description"
+      refute html =~ "Present-day description"
+    end
+
+    test "the position link targets the revision the pinned span opened at", %{
+      conn: conn,
+      pinned: pinned
+    } do
+      html = pinned_view(conn, pinned, "pina11aaa222333")
+
+      assert html =~ "blob/pina11aaa222333/pkgs/pinned/default.nix#L10"
+      refute html =~ "blob/pinb11bbb222333/pkgs/pinned/default.nix#L20"
+    end
+
+    test "the revisions list stays channel-scoped, not truncated at the pin", %{
+      conn: conn,
+      pinned: pinned
+    } do
+      html = pinned_view(conn, pinned, "pina11aaa222333")
+
+      assert html =~ "pina11a"
+      assert html =~ "pinb11b"
+    end
+
+    test "a removal after the pin is still surfaced", %{
+      conn: conn,
+      removed_later: removed_later
+    } do
+      html = pinned_view(conn, removed_later, "pina11aaa222333")
+
+      assert html =~ "removed"
+    end
+
+    test "an unpinned lens resolves metadata from the open span", %{conn: conn, pinned: pinned} do
+      {:ok, _view, html} =
+        live(conn, ~p"/packages/#{pinned.attribute}?lens_channel=nixos-unstable")
+
+      assert html =~ "Present-day description"
+      refute html =~ "Pinned-era description"
+    end
+  end
+
   describe "extended metadata" do
     setup %{cr1: cr1} do
       rich =

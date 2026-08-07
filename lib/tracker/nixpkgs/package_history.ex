@@ -195,6 +195,20 @@ defmodule Tracker.Nixpkgs.PackageHistory do
   end
 
   @doc """
+  Point-in-time metadata for a set of packages in a channel as
+  `%{package_id => PackageSpan.t()}`. The pinned-lens counterpart of
+  `current_metadata/2`; packages with no span at `at` are absent.
+  """
+  @spec metadata_at(integer(), DateTime.t(), [integer()]) :: %{integer() => PackageSpan.t()}
+  def metadata_at(_channel_id, _at, []), do: %{}
+
+  def metadata_at(channel_id, at, package_ids) do
+    channel_id
+    |> PackageSpan.at_for_packages!(at, package_ids)
+    |> Map.new(&{&1.package_id, &1})
+  end
+
+  @doc """
   The `ChannelRevision` a span opened at. A span's lower bound is always some
   revision's `released_at`, so the lookup is total.
   """

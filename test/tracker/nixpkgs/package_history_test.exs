@@ -369,6 +369,42 @@ defmodule Tracker.Nixpkgs.PackageHistoryTest do
     end
   end
 
+  describe "metadata_at/3" do
+    test "resolves the span valid at a point in time, not the open one" do
+      channel = Fixtures.channel!("meta-at")
+      pkg = Fixtures.package!("meta-at-pkg")
+
+      cr1 = revision!(channel, "mat1111", ~U[2026-07-01 10:00:00Z])
+      cr2 = revision!(channel, "mat2222", ~U[2026-07-02 10:00:00Z], cr1)
+
+      Fixtures.apply_package_revision!(cr1, [
+        {pkg, %{version: "1.0", description: "old description"}}
+      ])
+
+      Fixtures.apply_package_revision!(cr2, [
+        {pkg, %{version: "2.0", description: "new description"}}
+      ])
+
+      pinned = PackageHistory.metadata_at(channel.id, cr1.released_at, [pkg.id])
+      current = PackageHistory.current_metadata(channel.id, [pkg.id])
+
+      assert pinned[pkg.id].description == "old description"
+      assert current[pkg.id].description == "new description"
+    end
+
+    test "is empty for a package with no span at that point" do
+      channel = Fixtures.channel!("meta-at-empty")
+      pkg = Fixtures.package!("meta-at-empty-pkg")
+
+      cr1 = revision!(channel, "mae1111", ~U[2026-07-01 10:00:00Z])
+      cr2 = revision!(channel, "mae2222", ~U[2026-07-02 10:00:00Z], cr1)
+
+      Fixtures.apply_package_revision!(cr2, [{pkg, "1.0"}])
+
+      assert PackageHistory.metadata_at(channel.id, cr1.released_at, [pkg.id]) == %{}
+    end
+  end
+
   describe "span_revision/1" do
     test "resolves a span to the revision it opened at" do
       channel = Fixtures.channel!("sr-channel")

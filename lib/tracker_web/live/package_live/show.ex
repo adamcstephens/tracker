@@ -493,7 +493,7 @@ defmodule TrackerWeb.PackageLive.Show do
     total_pages = ceil(total_count / tp.page_size)
 
     socket
-    |> assign_current_meta(package_id, channel_id)
+    |> assign_current_meta(package_id, channel_id, TrackerWeb.Lens.pinned_at(socket.assigns.lens))
     |> assign(:recent_changes, recent_changes)
     |> assign(:package_events, package_events)
     |> assign(:revisions, revisions)
@@ -608,12 +608,15 @@ defmodule TrackerWeb.PackageLive.Show do
     Enum.filter(@availability_flags, &(Map.get(package_meta, &1) == true))
   end
 
-  # Current package metadata is served from the open span in the lens channel;
-  # the metadata channel is the fallback for the all-channels lens, packages
-  # absent from the lens channel, and spans written before metadata was
-  # ingested on every channel.
-  defp assign_current_meta(socket, package_id, lens_channel_id) do
-    span = lens_meta_span(package_id, lens_channel_id) || metadata_channel_span(package_id)
+  # Package metadata is served from the span in the lens channel — the one valid
+  # at the lens's pinned revision, or the open one when unpinned. The metadata
+  # channel is the fallback for the all-channels lens, packages absent from the
+  # lens channel, and spans written before metadata was ingested on every
+  # channel; it is resolved at the same instant so the panel stays consistent.
+  defp assign_current_meta(socket, package_id, lens_channel_id, pinned_at) do
+    span =
+      lens_meta_span(package_id, lens_channel_id, pinned_at) ||
+        metadata_channel_span(package_id, pinned_at)
 
     meta =
       Map.new(
@@ -626,25 +629,31 @@ defmodule TrackerWeb.PackageLive.Show do
     |> assign(:meta_revision, span && Tracker.Nixpkgs.PackageHistory.span_revision(span).revision)
   end
 
-  defp lens_meta_span(_package_id, nil), do: nil
+  defp lens_meta_span(_package_id, nil, _pinned_at), do: nil
 
-  defp lens_meta_span(package_id, channel_id) do
-    case current_meta_span(package_id, channel_id) do
+  defp lens_meta_span(package_id, channel_id, pinned_at) do
+    case meta_span(package_id, channel_id, pinned_at) do
       nil -> nil
       span -> if Tracker.Nixpkgs.PackageHistory.metadata_missing?(span), do: nil, else: span
     end
   end
 
-  defp metadata_channel_span(package_id) do
+  defp metadata_channel_span(package_id, pinned_at) do
     case metadata_channel_id() do
       nil -> nil
-      channel_id -> current_meta_span(package_id, channel_id)
+      channel_id -> meta_span(package_id, channel_id, pinned_at)
     end
   end
 
-  defp current_meta_span(package_id, channel_id) do
+  defp meta_span(package_id, channel_id, nil) do
     channel_id
     |> Tracker.Nixpkgs.PackageHistory.current_metadata([package_id])
+    |> Map.get(package_id)
+  end
+
+  defp meta_span(package_id, channel_id, pinned_at) do
+    channel_id
+    |> Tracker.Nixpkgs.PackageHistory.metadata_at(pinned_at, [package_id])
     |> Map.get(package_id)
   end
 
