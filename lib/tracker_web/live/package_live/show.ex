@@ -163,13 +163,14 @@ defmodule TrackerWeb.PackageLive.Show do
       </RowList.row_list>
     </section>
 
-    <section :if={@package_events != []}>
-      <SectionHeader.section_header title="Lifecycle Events" count={length(@package_events)} />
+    <section :if={@package_removals != []}>
+      <SectionHeader.section_header title="Lifecycle Events" count={length(@package_removals)} />
       <RowList.row_list id="lifecycle-events" stacked>
-        <RowList.row :for={event <- @package_events}>
+        <RowList.row :for={event <- @package_removals}>
           <:leading>
-            <mark :if={event.type == :added}>added</mark>
-            <del :if={event.type == :removed}>removed</del>
+            <span class="pill pill-removed">
+              <span class="dot" aria-hidden="true"></span>removed
+            </span>
           </:leading>
           <:label>{event.channel_revision.channel.name}</:label>
           <:meta>
@@ -465,7 +466,7 @@ defmodule TrackerWeb.PackageLive.Show do
     channel_name = TrackerWeb.Lens.channel_name(socket.assigns.lens)
 
     recent_changes = load_recent_changes(package_id, channel_name)
-    package_events = load_package_events(package_id, channel_id)
+    package_removals = load_package_removals(package_id, channel_id)
 
     {revisions, total_count, has_more?} =
       if all_revisions? do
@@ -498,7 +499,7 @@ defmodule TrackerWeb.PackageLive.Show do
     socket
     |> assign_current_meta(package_id, channel_id, TrackerWeb.Lens.pinned_at(socket.assigns.lens))
     |> assign(:recent_changes, recent_changes)
-    |> assign(:package_events, package_events)
+    |> assign(:package_removals, package_removals)
     |> assign(:revisions, revisions)
     |> assign(:revision_count, total_count)
     |> assign(:has_prev_page?, tp.offset > 0)
@@ -684,7 +685,7 @@ defmodule TrackerWeb.PackageLive.Show do
     Tracker.Nixpkgs.Package.variant_siblings!(package.package_variant_group_id, package.id)
   end
 
-  defp load_package_events(package_id, channel_id) do
-    Tracker.Nixpkgs.PackageHistory.events_by_package(package_id, channel_id)
+  defp load_package_removals(package_id, channel_id) do
+    Tracker.Nixpkgs.PackageHistory.removals_by_package(package_id, channel_id)
   end
 end

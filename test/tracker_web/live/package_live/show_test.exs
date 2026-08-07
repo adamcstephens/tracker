@@ -972,9 +972,8 @@ defmodule TrackerWeb.PackageLive.ShowTest do
   end
 
   describe "lifecycle events lens filtering" do
-    # The top-level setup leaves the package open in unstable (an "added"
-    # boundary) and open in stable; here we close the stable span so stable
-    # also shows a "removed" boundary.
+    # The top-level setup leaves the package open in unstable and in stable;
+    # here we close the stable span so stable has a "removed" boundary.
     setup %{package: package, channel_stable: channel_stable} do
       cr_remove =
         Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
@@ -1008,11 +1007,13 @@ defmodule TrackerWeb.PackageLive.ShowTest do
       send(view.pid, {:set_lens, channel_stable.name, ""})
       html = render(view)
 
-      # Stable: the package was added then removed → both boundaries.
-      assert lifecycle_events(html) == [
-               {"removed", "nixos-24.11"},
-               {"added", "nixos-24.11"}
-             ]
+      # Stable: the package was added then removed → the removal only, its
+      # addition is inline on the revisions list.
+      assert lifecycle_events(html) == [{"removed", "nixos-24.11"}]
+
+      assert html
+             |> Floki.parse_document!()
+             |> Floki.find("#lifecycle-events .pill.pill-removed") != []
     end
 
     test "the all-channels lens shows only channels with a removal", %{
@@ -1024,10 +1025,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
       send(view.pid, {:set_lens, "all", ""})
       html = render(view)
 
-      assert lifecycle_events(html) == [
-               {"removed", "nixos-24.11"},
-               {"added", "nixos-24.11"}
-             ]
+      assert lifecycle_events(html) == [{"removed", "nixos-24.11"}]
     end
   end
 

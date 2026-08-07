@@ -2543,6 +2543,10 @@ a.revision-link {
 	--pill-color: var(--text-3);
 }
 
+.pill-removed {
+	--pill-color: var(--t-remove);
+}
+
 .pill-landed {
 	--pill-color: var(--t-propagate);
 }

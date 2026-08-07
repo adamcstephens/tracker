@@ -47,8 +47,8 @@ defmodule Tracker.Nixpkgs.PackageHistoryTest do
     end
   end
 
-  describe "events_by_package/2" do
-    test "derives added/removed boundaries for a single channel" do
+  describe "removals_by_package/2" do
+    test "derives the removal boundary for a single channel" do
       channel = Fixtures.channel!("evt-chan")
       cr1 = revision!(channel, "ebp1aaa", ~U[2026-04-01 10:00:00Z])
       cr2 = revision!(channel, "ebp2bbb", ~U[2026-04-15 10:00:00Z], cr1)
@@ -58,10 +58,28 @@ defmodule Tracker.Nixpkgs.PackageHistoryTest do
       Fixtures.apply_package_revision!(cr2, [{pkg, "1.0"}])
       Fixtures.remove_package!(cr2, pkg)
 
-      events = PackageHistory.events_by_package(pkg.id, channel.id)
+      assert [%{type: :removed, channel_revision: rev}] =
+               PackageHistory.removals_by_package(pkg.id, channel.id)
 
-      assert [%{type: :removed}, %{type: :added}] = events
-      assert Enum.all?(events, &(&1.channel_revision.channel.name == "evt-chan"))
+      assert rev.revision == "ebp2bbb"
+      assert rev.channel.name == "evt-chan"
+    end
+
+    test "omits the re-addition that follows a removal" do
+      channel = Fixtures.channel!("evt-readd")
+      cr1 = revision!(channel, "erd1aaa", ~U[2026-04-01 10:00:00Z])
+      cr2 = revision!(channel, "erd2bbb", ~U[2026-04-15 10:00:00Z], cr1)
+      cr3 = revision!(channel, "erd3ccc", ~U[2026-04-20 10:00:00Z], cr2)
+
+      pkg = Fixtures.package!("erd-pkg")
+      Fixtures.apply_package_revision!(cr1, [{pkg, "1.0"}])
+      Fixtures.remove_package!(cr2, pkg)
+      Fixtures.apply_package_revision!(cr3, [{pkg, "2.0"}])
+
+      assert [%{type: :removed, channel_revision: rev}] =
+               PackageHistory.removals_by_package(pkg.id, channel.id)
+
+      assert rev.revision == "erd2bbb"
     end
 
     test "omits channels the package was never removed from" do
@@ -77,14 +95,12 @@ defmodule Tracker.Nixpkgs.PackageHistoryTest do
       Fixtures.apply_package_revision!(cr_s1, [{pkg, "1.0"}])
       Fixtures.remove_package!(cr_s2, pkg)
 
-      events = PackageHistory.events_by_package(pkg.id, nil)
+      channels =
+        pkg.id
+        |> PackageHistory.removals_by_package(nil)
+        |> Enum.map(& &1.channel_revision.channel.name)
 
-      types_by_channel =
-        Enum.map(events, &{&1.channel_revision.channel.name, &1.type})
-
-      assert {"ebp-stable", :added} in types_by_channel
-      assert {"ebp-stable", :removed} in types_by_channel
-      refute {"ebp-unstable", :added} in types_by_channel
+      assert channels == ["ebp-stable"]
     end
 
     test "is empty for a package that is still present everywhere" do
@@ -94,7 +110,7 @@ defmodule Tracker.Nixpkgs.PackageHistoryTest do
       pkg = Fixtures.package!("ebp-open-pkg")
       Fixtures.apply_package_revision!(cr, [{pkg, "1.0"}])
 
-      assert PackageHistory.events_by_package(pkg.id, nil) == []
+      assert PackageHistory.removals_by_package(pkg.id, nil) == []
     end
   end
 

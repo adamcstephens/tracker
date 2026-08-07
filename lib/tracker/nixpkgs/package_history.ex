@@ -134,31 +134,27 @@ defmodule Tracker.Nixpkgs.PackageHistory do
   @doc """
   A package's removal history in a channel, derived from span boundaries: a
   span close not continued by the next span — or a bounded final span — is a
-  `:removed`, and a later span opening is the `:added` that re-introduced it.
-  Each event carries the `channel_revision` (with `:channel`) at its boundary,
-  newest first.
+  `:removed`. Each event carries the `channel_revision` (with `:channel`) at
+  its boundary, newest first.
 
-  Channels the package was never removed from are omitted entirely: their sole
-  boundary is the opening `:added`, which the revisions list carries inline.
+  Additions — a first appearance or a re-addition after a removal — are not
+  events here; the revisions list badges them on the row they already occupy.
   """
-  @spec events_by_package(integer(), integer() | nil) :: [Event.t()]
-  def events_by_package(package_id, channel_id) do
-    boundaries =
+  @spec removals_by_package(integer(), integer() | nil) :: [Event.t()]
+  def removals_by_package(package_id, channel_id) do
+    removals =
       package_id
       |> spans_by_channel(channel_id)
       |> Enum.flat_map(fn {cid, spans} ->
-        spans
-        |> boundary_events()
-        |> Enum.map(fn {type, at} -> {cid, type, at} end)
+        for {:removed, at} <- boundary_events(spans), do: {cid, at}
       end)
-      |> removed_channels_only()
 
-    revisions = boundary_revision_map(boundaries)
+    revisions = boundary_revision_map(removals)
 
-    boundaries
-    |> Enum.map(fn {cid, type, at} ->
+    removals
+    |> Enum.map(fn {cid, at} ->
       %Event{
-        type: type,
+        type: :removed,
         channel_revision: Map.fetch!(revisions, {cid, released_at_second(at)})
       }
     end)
@@ -187,19 +183,11 @@ defmodule Tracker.Nixpkgs.PackageHistory do
     end
   end
 
-  # Drops channels the package still lives in, before their boundaries cost a
-  # revision lookup they would only render as a duplicate of the revisions list.
-  defp removed_channels_only(boundaries) do
-    removed = for {cid, :removed, _at} <- boundaries, into: MapSet.new(), do: cid
-
-    Enum.filter(boundaries, fn {cid, _type, _at} -> MapSet.member?(removed, cid) end)
-  end
-
   defp boundary_revision_map([]), do: %{}
 
   defp boundary_revision_map(boundaries) do
     boundaries
-    |> Enum.group_by(fn {cid, _type, _at} -> cid end, fn {_cid, _type, at} -> at end)
+    |> Enum.group_by(fn {cid, _at} -> cid end, fn {_cid, at} -> at end)
     |> Enum.flat_map(fn {channel_id, ats} ->
       channel_id
       |> ChannelRevision.by_released_ats!(Enum.uniq(ats), load: [:channel])
