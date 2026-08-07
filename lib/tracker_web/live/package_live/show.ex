@@ -626,7 +626,18 @@ defmodule TrackerWeb.PackageLive.Show do
 
     socket
     |> assign(:package_meta, meta)
-    |> assign(:meta_revision, span && Tracker.Nixpkgs.PackageHistory.span_revision(span).revision)
+    |> assign(:meta_revision, meta_revision(span, pinned_at))
+  end
+
+  # The panel describes one channel at one instant, so its file link points at
+  # that channel's revision there — the pinned ref itself when the span came
+  # from the lens channel, otherwise the fallback channel's revision at the same
+  # instant. A span always sits at or after a revision of its own channel.
+  defp meta_revision(nil, _pinned_at), do: nil
+
+  defp meta_revision(span, pinned_at) do
+    {:ok, revision} = Tracker.Nixpkgs.ChannelRevision.latest_at(span.channel_id, pinned_at)
+    revision.revision
   end
 
   defp lens_meta_span(_package_id, nil, _pinned_at), do: nil

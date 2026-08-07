@@ -208,17 +208,6 @@ defmodule Tracker.Nixpkgs.PackageHistory do
     |> Map.new(&{&1.package_id, &1})
   end
 
-  @doc """
-  The `ChannelRevision` a span opened at. A span's lower bound is always some
-  revision's `released_at`, so the lookup is total.
-  """
-  @spec span_revision(PackageSpan.t()) :: ChannelRevision.t()
-  def span_revision(span) do
-    span.channel_id
-    |> ChannelRevision.by_released_ats!([released_at(span)])
-    |> hd()
-  end
-
   # pname is stored on spans but doesn't count towards a span "having"
   # metadata — it duplicates the attribute for display purposes.
   @metadata_fields [

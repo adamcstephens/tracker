@@ -291,13 +291,33 @@ defmodule TrackerWeb.PackageLive.ShowTest do
       refute html =~ "Present-day description"
     end
 
-    test "the position link targets the revision the pinned span opened at", %{
-      conn: conn,
-      pinned: pinned
-    } do
+    test "the position link targets the pinned ref", %{conn: conn, pinned: pinned} do
       html = pinned_view(conn, pinned, "pina11aaa222333")
 
       assert html =~ "blob/pina11aaa222333/pkgs/pinned/default.nix#L10"
+      refute html =~ "blob/pinb11bbb222333/pkgs/pinned/default.nix#L20"
+    end
+
+    # cr_c sits inside the span opened at cr_b, so the span's opening revision
+    # and the pinned ref differ — the link must follow the pin.
+    test "the position link targets the pinned ref, not the span's opening revision", %{
+      conn: conn,
+      pinned: pinned
+    } do
+      html = pinned_view(conn, pinned, "pinc11ccc222333")
+
+      assert html =~ "blob/pinc11ccc222333/pkgs/pinned/default.nix#L20"
+      refute html =~ "blob/pinb11bbb222333/pkgs/pinned/default.nix#L20"
+    end
+
+    test "an unpinned lens targets the channel's latest revision", %{
+      conn: conn,
+      pinned: pinned
+    } do
+      {:ok, _view, html} =
+        live(conn, ~p"/packages/#{pinned.attribute}?lens_channel=nixos-unstable")
+
+      assert html =~ "blob/abc123def456789/pkgs/pinned/default.nix#L20"
       refute html =~ "blob/pinb11bbb222333/pkgs/pinned/default.nix#L20"
     end
 

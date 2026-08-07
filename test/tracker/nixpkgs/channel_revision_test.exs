@@ -73,6 +73,48 @@ defmodule Tracker.Nixpkgs.ChannelRevisionTest do
     end
   end
 
+  describe "latest_at/2" do
+    setup do
+      channel = create_channel!("latest-at-chan")
+      other = create_channel!("latest-at-other")
+
+      for {hash, at} <- [
+            {"lat1111", ~U[2026-04-01 10:00:00Z]},
+            {"lat2222", ~U[2026-04-02 10:00:00Z]},
+            {"lat3333", ~U[2026-04-03 10:00:00Z]}
+          ] do
+        ChannelRevision.create!(%{channel_id: channel.id, revision: hash, released_at: at})
+      end
+
+      ChannelRevision.create!(%{
+        channel_id: other.id,
+        revision: "latother",
+        released_at: ~U[2026-04-09 10:00:00Z]
+      })
+
+      %{channel: channel}
+    end
+
+    test "returns the channel's newest revision when no instant is given", %{channel: channel} do
+      {:ok, rev} = ChannelRevision.latest_at(channel.id)
+      assert rev.revision == "lat3333"
+    end
+
+    test "returns the newest revision at or before the instant", %{channel: channel} do
+      {:ok, rev} = ChannelRevision.latest_at(channel.id, ~U[2026-04-02 18:00:00Z])
+      assert rev.revision == "lat2222"
+    end
+
+    test "includes a revision landing exactly on the instant", %{channel: channel} do
+      {:ok, rev} = ChannelRevision.latest_at(channel.id, ~U[2026-04-02 10:00:00Z])
+      assert rev.revision == "lat2222"
+    end
+
+    test "is nil when the channel has nothing that early", %{channel: channel} do
+      assert {:ok, nil} = ChannelRevision.latest_at(channel.id, ~U[2026-03-01 10:00:00Z])
+    end
+  end
+
   describe "find_by_channel_hash/2" do
     test "finds by channel_id and revision prefix" do
       channel = create_channel!("nixos-unstable")

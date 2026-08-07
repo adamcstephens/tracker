@@ -404,24 +404,4 @@ defmodule Tracker.Nixpkgs.PackageHistoryTest do
       assert PackageHistory.metadata_at(channel.id, cr1.released_at, [pkg.id]) == %{}
     end
   end
-
-  describe "span_revision/1" do
-    test "resolves a span to the revision it opened at" do
-      channel = Fixtures.channel!("sr-channel")
-      pkg = Fixtures.package!("sr-pkg")
-
-      cr1 = revision!(channel, "sr111111", ~U[2026-06-01 10:00:00Z])
-      cr2 = revision!(channel, "sr222222", ~U[2026-06-02 10:00:00Z], cr1)
-
-      Fixtures.apply_package_revision!(cr1, [{pkg, "1.0"}])
-      Fixtures.apply_package_revision!(cr2, [{pkg, "2.0"}])
-
-      spans = Tracker.Nixpkgs.PackageSpan.by_package!(pkg.id, channel.id)
-
-      assert Map.new(spans, &{&1.version, PackageHistory.span_revision(&1).revision}) == %{
-               "1.0" => "sr111111",
-               "2.0" => "sr222222"
-             }
-    end
-  end
 end

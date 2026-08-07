@@ -21,6 +21,7 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
     define :find_by_hash, args: [:hash]
     define :find_by_channel_hash, args: [:channel_id, :hash]
     define :latest_by_channel, args: [:channel_id]
+    define :latest_at, args: [:channel_id, {:optional, :at}], not_found_error?: false
     define :by_channel_asc, args: [:channel_id]
     define :by_released_ats, args: [:channel_id, :released_ats]
     define :by_ids, args: [:ids]
@@ -127,6 +128,25 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
 
       prepare build(sort: [{:released_at, :desc}], limit: 1)
       filter expr(channel_id == ^arg(:channel_id) and options_result == :success)
+    end
+
+    read :latest_at do
+      description "Newest revision on a channel, optionally capped at an instant."
+      get? true
+
+      argument :channel_id, :integer, allow_nil?: false
+      argument :at, :utc_datetime
+
+      prepare build(sort: [{:released_at, :desc}], limit: 1)
+
+      filter expr(
+               channel_id == ^arg(:channel_id) and
+                 if not is_nil(^arg(:at)) do
+                   released_at <= ^arg(:at)
+                 else
+                   true
+                 end
+             )
     end
 
     read :find_by_channel_hash do
