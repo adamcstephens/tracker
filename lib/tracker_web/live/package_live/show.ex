@@ -1,6 +1,8 @@
 defmodule TrackerWeb.PackageLive.Show do
   use TrackerWeb, :live_view
 
+  alias Tracker.Nixpkgs.PackageHistory.Removal
+  alias Tracker.Nixpkgs.PackageHistory.VersionChange
   alias Tracker.Notifications.PackageSubscription
   alias TrackerWeb.PageSearch
   alias TrackerWeb.Pagination
@@ -13,6 +15,16 @@ defmodule TrackerWeb.PackageLive.Show do
     ~H"""
     <.header>
       {@package.attribute}
+      <span :if={@removal} class="pill pill-removed" title={removal_title(@removal, @lens)}>
+        <span class="dot" aria-hidden="true"></span>{removal_label(@removal, @lens)}
+      </span>
+      <span
+        :if={@absent_from_live_channels?}
+        class="pill pill-removed"
+        title="Gone from every channel still taking revisions. It may still be present in a retired one."
+      >
+        <span class="dot" aria-hidden="true"></span>not in any current channel
+      </span>
       <:actions>
         <a
           id="feed-link"
@@ -163,27 +175,6 @@ defmodule TrackerWeb.PackageLive.Show do
       </RowList.row_list>
     </section>
 
-    <section :if={@package_removals != []}>
-      <SectionHeader.section_header title="Lifecycle Events" count={length(@package_removals)} />
-      <RowList.row_list id="lifecycle-events" stacked>
-        <RowList.row :for={event <- @package_removals}>
-          <:leading>
-            <span class="pill pill-removed">
-              <span class="dot" aria-hidden="true"></span>removed
-            </span>
-          </:leading>
-          <:label>{event.channel_revision.channel.name}</:label>
-          <:meta>
-            <.revision_link
-              revision={event.channel_revision.revision}
-              channel={event.channel_revision.channel.name}
-            />
-            <span>{format_released_at(event.channel_revision.released_at)}</span>
-          </:meta>
-        </RowList.row>
-      </RowList.row_list>
-    </section>
-
     <SectionHeader.section_header title="Revisions" count={@revision_count}>
       <:controls>
         <form
@@ -218,12 +209,7 @@ defmodule TrackerWeb.PackageLive.Show do
     <RowList.row_list :if={@revisions != []} id="revisions" stacked>
       <RowList.row :for={rev <- @revisions}>
         <:label>
-          <.github_version_link
-            version={rev.version}
-            position={rev.position}
-            revision={rev_revision(rev)}
-          />
-          <mark :if={rev_added?(rev)}>added</mark>
+          <.revision_row_label rev={rev} />
         </:label>
         <:sublabel>{rev_channel(rev)}</:sublabel>
         <:meta>
@@ -257,6 +243,27 @@ defmodule TrackerWeb.PackageLive.Show do
     <p :if={@revisions == []}>
       No revisions found.
     </p>
+    """
+  end
+
+  # A removal is the end of a version's run, not a version of its own — it links
+  # nowhere and carries no position.
+  defp revision_row_label(%{rev: %Removal{}} = assigns) do
+    ~H"""
+    <span class="pill pill-removed">
+      <span class="dot" aria-hidden="true"></span>removed
+    </span>
+    """
+  end
+
+  defp revision_row_label(assigns) do
+    ~H"""
+    <.github_version_link
+      version={@rev.version}
+      position={@rev.position}
+      revision={rev_revision(@rev)}
+    />
+    <mark :if={rev_added?(@rev)}>added</mark>
     """
   end
 
@@ -320,18 +327,42 @@ defmodule TrackerWeb.PackageLive.Show do
     """
   end
 
-  alias Tracker.Nixpkgs.PackageHistory.VersionChange
-
   defp rev_channel(%VersionChange{channel_name: channel_name}), do: channel_name
+  defp rev_channel(%Removal{channel_name: channel_name}), do: channel_name
   defp rev_channel(%{channel_revision: %{channel: %{name: name}}}), do: name
 
   defp rev_revision(%VersionChange{revision: revision}), do: revision
+  defp rev_revision(%Removal{revision: revision}), do: revision
   defp rev_revision(%{channel_revision: %{revision: revision}}), do: revision
 
   defp rev_released_at(%VersionChange{released_at: released_at}), do: released_at
+  defp rev_released_at(%Removal{released_at: released_at}), do: released_at
   defp rev_released_at(%{channel_revision: %{released_at: released_at}}), do: released_at
 
   defp rev_added?(%{added?: added?}), do: added?
+
+  # The badge sides with the lists, which are channel-scoped, while the metadata
+  # panel above resolves at the pin. Naming where the removal sits relative to
+  # the pinned view is what keeps the two readable together.
+  defp removal_label(removal, lens) do
+    if pinned_before?(removal, lens), do: "removed later", else: "removed"
+  end
+
+  defp removal_title(removal, lens) do
+    sentence =
+      "Removed from #{removal.channel_name} at #{String.slice(removal.revision, 0, 7)} on #{format_released_at(removal.released_at)}"
+
+    if pinned_before?(removal, lens),
+      do: sentence <> ", after the revision this page is pinned to.",
+      else: sentence <> "."
+  end
+
+  defp pinned_before?(removal, lens) do
+    case TrackerWeb.Lens.pinned_at(lens) do
+      nil -> false
+      at -> DateTime.compare(at, removal.released_at) == :lt
+    end
+  end
 
   defp format_released_at(nil), do: "-"
   defp format_released_at(dt), do: Calendar.strftime(dt, "%Y-%m-%d %H:%M")
@@ -466,7 +497,6 @@ defmodule TrackerWeb.PackageLive.Show do
     channel_name = TrackerWeb.Lens.channel_name(socket.assigns.lens)
 
     recent_changes = load_recent_changes(package_id, channel_name)
-    package_removals = load_package_removals(package_id, channel_id)
 
     {revisions, total_count, has_more?} =
       if all_revisions? do
@@ -487,6 +517,7 @@ defmodule TrackerWeb.PackageLive.Show do
             version: version_filter,
             sort_by: :released_at,
             sort_dir: :desc,
+            removals?: true,
             limit: tp.page_size,
             offset: tp.offset
           )
@@ -498,8 +529,8 @@ defmodule TrackerWeb.PackageLive.Show do
 
     socket
     |> assign_current_meta(package_id, channel_id, TrackerWeb.Lens.pinned_at(socket.assigns.lens))
+    |> assign_removal_status(package_id, channel_id)
     |> assign(:recent_changes, recent_changes)
-    |> assign(:package_removals, package_removals)
     |> assign(:revisions, revisions)
     |> assign(:revision_count, total_count)
     |> assign(:has_prev_page?, tp.offset > 0)
@@ -685,7 +716,22 @@ defmodule TrackerWeb.PackageLive.Show do
     Tracker.Nixpkgs.Package.variant_siblings!(package.package_variant_group_id, package.id)
   end
 
-  defp load_package_removals(package_id, channel_id) do
-    Tracker.Nixpkgs.PackageHistory.removals_by_package(package_id, channel_id)
+  # The status answers the question the lens is asking. Under one channel that
+  # is "has it left this one" — terminal removals only, since a package removed
+  # and re-added is present. With no lens channel there is none to describe, so
+  # it broadens to "does this package still exist anywhere".
+  defp assign_removal_status(socket, package_id, nil) do
+    socket
+    |> assign(:removal, nil)
+    |> assign(
+      :absent_from_live_channels?,
+      Tracker.Nixpkgs.PackageHistory.absent_from_live_channels?(package_id)
+    )
+  end
+
+  defp assign_removal_status(socket, package_id, channel_id) do
+    socket
+    |> assign(:removal, Tracker.Nixpkgs.PackageHistory.terminal_removal(package_id, channel_id))
+    |> assign(:absent_from_live_channels?, false)
   end
 end

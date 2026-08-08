@@ -971,7 +971,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
     end
   end
 
-  describe "lifecycle events lens filtering" do
+  describe "removed badge" do
     # The top-level setup leaves the package open in unstable and in stable;
     # here we close the stable span so stable has a "removed" boundary.
     setup %{package: package, channel_stable: channel_stable} do
@@ -984,48 +984,102 @@ defmodule TrackerWeb.PackageLive.ShowTest do
 
       Tracker.Fixtures.remove_package!(cr_remove, package)
 
-      :ok
+      %{cr_remove: cr_remove}
     end
 
-    test "hides the section when the lens channel has no removal", %{
+    test "badges a lens channel the package has left", %{conn: conn, package: package} do
+      {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}?lens_channel=nixos-24.11")
+
+      assert {"removed", title} = removed_badge(html)
+      assert title =~ "nixos-24.11"
+      assert title =~ "stabler"
+      assert title =~ "2026-04-01"
+    end
+
+    test "leaves a lens channel that still has the package unbadged", %{
       conn: conn,
       package: package
     } do
-      {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}")
+      {:ok, _view, html} =
+        live(conn, ~p"/packages/#{package.attribute}?lens_channel=nixos-unstable")
 
-      # Unstable: package is still present, so its addition is inline only.
-      refute html =~ "Lifecycle Events"
+      assert removed_badge(html) == nil
     end
 
-    test "lens swap reloads lifecycle events for the new channel", %{
+    test "reads removed later when pinned before the removal", %{conn: conn, package: package} do
+      {:ok, _view, html} =
+        live(
+          conn,
+          ~p"/packages/#{package.attribute}?lens_channel=nixos-24.11&lens_rev=def456abc789012"
+        )
+
+      assert {"removed later", _title} = removed_badge(html)
+    end
+
+    test "drops the badge once the package is re-added", %{
       conn: conn,
       package: package,
-      channel_stable: channel_stable
+      channel_stable: channel_stable,
+      cr_remove: cr_remove
     } do
-      {:ok, view, _html} = live(conn, ~p"/packages/#{package.attribute}")
+      cr_readd =
+        Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
+          channel_id: channel_stable.id,
+          revision: "stablereadd1234",
+          released_at: ~U[2026-04-10 10:00:00Z],
+          previous_channel_revision_id: cr_remove.id
+        })
 
-      send(view.pid, {:set_lens, channel_stable.name, ""})
-      html = render(view)
+      Tracker.Fixtures.apply_package_revision!(cr_readd, [{package, "2.14.0"}])
 
-      # Stable: the package was added then removed → the removal only, its
-      # addition is inline on the revisions list.
-      assert lifecycle_events(html) == [{"removed", "nixos-24.11"}]
+      {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}?lens_channel=nixos-24.11")
 
-      assert html
-             |> Floki.parse_document!()
-             |> Floki.find("#lifecycle-events .pill.pill-removed") != []
+      assert removed_badge(html) == nil
     end
 
-    test "the all-channels lens shows only channels with a removal", %{
+    test "the all-channels lens leaves it unbadged while a live channel holds it", %{
       conn: conn,
       package: package
     } do
-      {:ok, view, _html} = live(conn, ~p"/packages/#{package.attribute}")
+      {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}?lens_channel=all")
 
-      send(view.pid, {:set_lens, "all", ""})
-      html = render(view)
+      assert removed_badge(html) == nil
+    end
 
-      assert lifecycle_events(html) == [{"removed", "nixos-24.11"}]
+    test "the all-channels lens badges a package no live channel holds", %{
+      conn: conn,
+      package: package,
+      channel_unstable: channel_unstable
+    } do
+      cr_remove_unstable =
+        Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
+          channel_id: channel_unstable.id,
+          revision: "unstableremove12",
+          released_at: ~U[2026-04-05 10:00:00Z]
+        })
+
+      Tracker.Fixtures.remove_package!(cr_remove_unstable, package)
+
+      {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}?lens_channel=all")
+
+      assert {"not in any current channel", title} = removed_badge(html)
+      assert title =~ "retired"
+    end
+
+    test "the revisions list carries the removal as a row", %{conn: conn, package: package} do
+      {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}?lens_channel=nixos-24.11")
+
+      assert removal_rows(html) == [{"nixos-24.11", "stabler"}]
+    end
+
+    test "the removal row shows in all-revisions mode too", %{conn: conn, package: package} do
+      {:ok, _view, html} =
+        live(
+          conn,
+          ~p"/packages/#{package.attribute}?lens_channel=nixos-24.11&all_revisions=true"
+        )
+
+      assert removal_rows(html) == [{"nixos-24.11", "stabler"}]
     end
   end
 
@@ -1058,13 +1112,22 @@ defmodule TrackerWeb.PackageLive.ShowTest do
     end
   end
 
-  defp lifecycle_events(html) do
+  defp removed_badge(html) do
     html
     |> Floki.parse_document!()
-    |> Floki.find("#lifecycle-events > li")
+    |> Floki.find("hgroup .pill-removed")
+    |> Enum.map(&{&1 |> Floki.text() |> String.trim(), Floki.attribute(&1, "title") |> hd()})
+    |> List.first()
+  end
+
+  defp removal_rows(html) do
+    html
+    |> Floki.parse_document!()
+    |> Floki.find("#revisions > li")
+    |> Enum.filter(&(Floki.find(&1, ".pill-removed") != []))
     |> Enum.map(fn li ->
-      {li |> Floki.find(".row-leading") |> Floki.text() |> String.trim(),
-       li |> Floki.find(".row-label") |> Floki.text() |> String.trim()}
+      {li |> Floki.find(".row-sublabel") |> Floki.text() |> String.trim(),
+       li |> Floki.find(".row-meta .revision-link") |> Floki.text() |> String.trim()}
     end)
   end
 

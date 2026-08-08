@@ -13,6 +13,21 @@ defmodule Tracker.Nixpkgs.PackageHistoryTest do
     })
   end
 
+  # A package at 1.0 then 2.0 in a channel of its own, ready to be removed at a
+  # third revision.
+  defp versioned_package(name) do
+    channel = Fixtures.channel!(name)
+    pkg = Fixtures.package!("#{name}-pkg")
+
+    cr1 = revision!(channel, "#{name}1", ~U[2026-04-01 10:00:00Z])
+    cr2 = revision!(channel, "#{name}2", ~U[2026-04-02 10:00:00Z], cr1)
+
+    Fixtures.apply_package_revision!(cr1, [{pkg, "1.0"}])
+    Fixtures.apply_package_revision!(cr2, [{pkg, "2.0"}])
+
+    %{pkg: pkg, channel: channel, cr2: cr2}
+  end
+
   describe "events_between/2" do
     test "derives added and removed packages from span boundaries" do
       channel = Fixtures.channel!("nixos-unstable")
@@ -47,8 +62,8 @@ defmodule Tracker.Nixpkgs.PackageHistoryTest do
     end
   end
 
-  describe "removals_by_package/2" do
-    test "derives the removal boundary for a single channel" do
+  describe "terminal_removal/2" do
+    test "derives the removal boundary from the channel's closed latest span" do
       channel = Fixtures.channel!("evt-chan")
       cr1 = revision!(channel, "ebp1aaa", ~U[2026-04-01 10:00:00Z])
       cr2 = revision!(channel, "ebp2bbb", ~U[2026-04-15 10:00:00Z], cr1)
@@ -58,14 +73,16 @@ defmodule Tracker.Nixpkgs.PackageHistoryTest do
       Fixtures.apply_package_revision!(cr2, [{pkg, "1.0"}])
       Fixtures.remove_package!(cr2, pkg)
 
-      assert [%{type: :removed, channel_revision: rev}] =
-               PackageHistory.removals_by_package(pkg.id, channel.id)
+      assert %PackageHistory.Removal{} =
+               removal = PackageHistory.terminal_removal(pkg.id, channel.id)
 
-      assert rev.revision == "ebp2bbb"
-      assert rev.channel.name == "evt-chan"
+      assert removal.revision == "ebp2bbb"
+      assert removal.channel_name == "evt-chan"
+      assert removal.released_at == ~U[2026-04-15 10:00:00Z]
+      assert removal.version == "1.0"
     end
 
-    test "omits the re-addition that follows a removal" do
+    test "is nil for a package removed and re-added" do
       channel = Fixtures.channel!("evt-readd")
       cr1 = revision!(channel, "erd1aaa", ~U[2026-04-01 10:00:00Z])
       cr2 = revision!(channel, "erd2bbb", ~U[2026-04-15 10:00:00Z], cr1)
@@ -76,13 +93,31 @@ defmodule Tracker.Nixpkgs.PackageHistoryTest do
       Fixtures.remove_package!(cr2, pkg)
       Fixtures.apply_package_revision!(cr3, [{pkg, "2.0"}])
 
-      assert [%{type: :removed, channel_revision: rev}] =
-               PackageHistory.removals_by_package(pkg.id, channel.id)
-
-      assert rev.revision == "erd2bbb"
+      assert PackageHistory.terminal_removal(pkg.id, channel.id) == nil
     end
 
-    test "omits channels the package was never removed from" do
+    test "is nil for a package still present in the channel" do
+      channel = Fixtures.channel!("ebp-open")
+      cr = revision!(channel, "ebpo111", ~U[2026-04-01 10:00:00Z])
+
+      pkg = Fixtures.package!("ebp-open-pkg")
+      Fixtures.apply_package_revision!(cr, [{pkg, "1.0"}])
+
+      assert PackageHistory.terminal_removal(pkg.id, channel.id) == nil
+    end
+
+    test "is nil for a package that was never in the channel" do
+      channel = Fixtures.channel!("ebp-elsewhere")
+      other = Fixtures.channel!("ebp-elsewhere-other")
+      cr = revision!(other, "ebpe111", ~U[2026-04-01 10:00:00Z])
+
+      pkg = Fixtures.package!("ebp-elsewhere-pkg")
+      Fixtures.apply_package_revision!(cr, [{pkg, "1.0"}])
+
+      assert PackageHistory.terminal_removal(pkg.id, channel.id) == nil
+    end
+
+    test "describes only the channel asked about" do
       unstable = Fixtures.channel!("ebp-unstable")
       stable = Fixtures.channel!("ebp-stable")
       pkg = Fixtures.package!("ebp-multi")
@@ -95,22 +130,65 @@ defmodule Tracker.Nixpkgs.PackageHistoryTest do
       Fixtures.apply_package_revision!(cr_s1, [{pkg, "1.0"}])
       Fixtures.remove_package!(cr_s2, pkg)
 
-      channels =
-        pkg.id
-        |> PackageHistory.removals_by_package(nil)
-        |> Enum.map(& &1.channel_revision.channel.name)
+      assert PackageHistory.terminal_removal(pkg.id, unstable.id) == nil
+      assert %{channel_name: "ebp-stable"} = PackageHistory.terminal_removal(pkg.id, stable.id)
+    end
+  end
 
-      assert channels == ["ebp-stable"]
+  describe "absent_from_live_channels?/1" do
+    test "is false while any live channel holds the package open" do
+      unstable = Fixtures.channel!("afl-unstable")
+      stable = Fixtures.channel!("afl-stable")
+      pkg = Fixtures.package!("afl-pkg")
+
+      cr_u = revision!(unstable, "afl_u11", ~U[2026-04-01 10:00:00Z])
+      cr_u2 = revision!(unstable, "afl_u22", ~U[2026-04-02 10:00:00Z], cr_u)
+      cr_s = revision!(stable, "afl_s11", ~U[2026-04-01 10:00:00Z])
+
+      Fixtures.apply_package_revision!(cr_u, [{pkg, "1.0"}])
+      Fixtures.remove_package!(cr_u2, pkg)
+      Fixtures.apply_package_revision!(cr_s, [{pkg, "1.0"}])
+
+      refute PackageHistory.absent_from_live_channels?(pkg.id)
     end
 
-    test "is empty for a package that is still present everywhere" do
-      channel = Fixtures.channel!("ebp-open")
-      cr = revision!(channel, "ebpo111", ~U[2026-04-01 10:00:00Z])
+    test "is true once every channel's span is closed" do
+      channel = Fixtures.channel!("afl-closed")
+      pkg = Fixtures.package!("afl-closed-pkg")
 
-      pkg = Fixtures.package!("ebp-open-pkg")
+      cr1 = revision!(channel, "aflc111", ~U[2026-04-01 10:00:00Z])
+      cr2 = revision!(channel, "aflc222", ~U[2026-04-02 10:00:00Z], cr1)
+
+      Fixtures.apply_package_revision!(cr1, [{pkg, "1.0"}])
+      Fixtures.remove_package!(cr2, pkg)
+
+      assert PackageHistory.absent_from_live_channels?(pkg.id)
+    end
+
+    test "ignores the never-closing spans a retired channel leaves behind" do
+      retired = Fixtures.channel!("afl-retired")
+      Tracker.Nixpkgs.Channel.update_status!(retired, %{status: :retired})
+
+      pkg = Fixtures.package!("afl-retired-pkg")
+      cr = revision!(retired, "aflr111", ~U[2026-04-01 10:00:00Z])
       Fixtures.apply_package_revision!(cr, [{pkg, "1.0"}])
 
-      assert PackageHistory.removals_by_package(pkg.id, nil) == []
+      assert PackageHistory.absent_from_live_channels?(pkg.id)
+    end
+
+    test "counts a pre-release channel as live" do
+      pre = Fixtures.channel!("afl-pre")
+      Tracker.Nixpkgs.Channel.update_status!(pre, %{status: :pre_release})
+
+      pkg = Fixtures.package!("afl-pre-pkg")
+      cr = revision!(pre, "aflp111", ~U[2026-04-01 10:00:00Z])
+      Fixtures.apply_package_revision!(cr, [{pkg, "1.0"}])
+
+      refute PackageHistory.absent_from_live_channels?(pkg.id)
+    end
+
+    test "is true for a package with no spans at all" do
+      assert PackageHistory.absent_from_live_channels?(Fixtures.package!("afl-nospan").id)
     end
   end
 
@@ -332,6 +410,49 @@ defmodule Tracker.Nixpkgs.PackageHistoryTest do
       assert results == []
       assert count == 0
     end
+
+    test "omits removal rows unless asked for them" do
+      %{pkg: pkg, channel: channel} = versioned_package("vcr-plain")
+      cr = revision!(channel, "vcr_p33", ~U[2026-04-03 10:00:00Z])
+      Fixtures.remove_package!(cr, pkg)
+
+      {results, count} = PackageHistory.version_changes_by_package(pkg.id)
+
+      assert count == 2
+      assert Enum.all?(results, &match?(%PackageHistory.VersionChange{}, &1))
+    end
+
+    test "injects a removal row carrying the closing span's version" do
+      %{pkg: pkg, channel: channel} = versioned_package("vcr-row")
+      cr = revision!(channel, "vcr_r33", ~U[2026-04-03 10:00:00Z])
+      Fixtures.remove_package!(cr, pkg)
+
+      {results, count} = PackageHistory.version_changes_by_package(pkg.id, removals?: true)
+
+      assert count == 3
+
+      assert [%PackageHistory.Removal{} = removal | _] = results
+      assert removal.version == "2.0"
+      assert removal.channel_name == "vcr-row"
+      assert removal.revision == "vcr_r33"
+      assert removal.released_at == ~U[2026-04-03 10:00:00Z]
+    end
+
+    test "keeps a removal that ended a version the filter matches" do
+      %{pkg: pkg, channel: channel} = versioned_package("vcr-filter")
+      cr = revision!(channel, "vcr_f33", ~U[2026-04-03 10:00:00Z])
+      Fixtures.remove_package!(cr, pkg)
+
+      {results, _} =
+        PackageHistory.version_changes_by_package(pkg.id, removals?: true, version: "2.0")
+
+      assert [%PackageHistory.Removal{}, %PackageHistory.VersionChange{version: "2.0"}] = results
+
+      {results, _} =
+        PackageHistory.version_changes_by_package(pkg.id, removals?: true, version: "1.0")
+
+      assert [%PackageHistory.VersionChange{version: "1.0"}] = results
+    end
   end
 
   describe "versions_at_revisions/2" do
@@ -434,6 +555,45 @@ defmodule Tracker.Nixpkgs.PackageHistoryTest do
                "rbpa222" => true,
                "rbpa333" => false
              }
+    end
+
+    test "emits a removal row at the revision the package left" do
+      %{pkg: pkg, channel: channel, cr2: cr2} = versioned_package("rbp-gone")
+      cr3 = revision!(channel, "rbpg333", ~U[2026-04-03 10:00:00Z], cr2)
+      Fixtures.remove_package!(cr3, pkg)
+
+      %{results: results, count: count} = PackageHistory.revisions_by_package(pkg.id, channel.id)
+
+      assert count == 3
+
+      assert [%PackageHistory.Removal{} = removal | _] = results
+      assert removal.version == "2.0"
+      assert removal.channel_name == "rbp-gone"
+      assert removal.revision == "rbpg333"
+      assert removal.released_at == ~U[2026-04-03 10:00:00Z]
+    end
+
+    test "leaves the revisions between a removal and a re-addition unrowed" do
+      channel = Fixtures.channel!("rbp-gap")
+      pkg = Fixtures.package!("rbp-gap-pkg")
+
+      cr1 = revision!(channel, "rbpgap1", ~U[2026-04-01 10:00:00Z])
+      cr2 = revision!(channel, "rbpgap2", ~U[2026-04-02 10:00:00Z], cr1)
+      cr3 = revision!(channel, "rbpgap3", ~U[2026-04-03 10:00:00Z], cr2)
+      cr4 = revision!(channel, "rbpgap4", ~U[2026-04-04 10:00:00Z], cr3)
+
+      Fixtures.apply_package_revision!(cr1, [{pkg, "1.0"}])
+      Fixtures.remove_package!(cr2, pkg)
+      Fixtures.apply_package_revision!(cr4, [{pkg, "2.0"}])
+
+      %{results: results} =
+        PackageHistory.revisions_by_package(pkg.id, channel.id, sort_dir: :asc)
+
+      assert [
+               %{version: "1.0", added?: true},
+               %PackageHistory.Removal{revision: "rbpgap2"},
+               %{version: "2.0", added?: true}
+             ] = results
     end
   end
 

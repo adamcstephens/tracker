@@ -8,7 +8,7 @@ defmodule Tracker.Nixpkgs.PackageHistory do
   (per-package history is small; point-in-time diffs touch one channel).
   """
 
-  alias Tracker.Nixpkgs.{ChannelRevision, PackageSpan}
+  alias Tracker.Nixpkgs.{Channel, ChannelRevision, PackageSpan}
   alias Tracker.Nixpkgs.ChannelRevision.VersionDiff
 
   defmodule Event do
@@ -43,6 +43,22 @@ defmodule Tracker.Nixpkgs.PackageHistory do
     end
   end
 
+  defmodule Removal do
+    @moduledoc """
+    The revision a package left a channel at, derived from a span's closing
+    boundary. `version` is the version the closing span carried, so a
+    version-filtered list keeps the removal that ended a matching version.
+    """
+    use TypedStruct
+
+    typedstruct enforce: true do
+      field :version, String.t()
+      field :channel_name, String.t()
+      field :revision, String.t()
+      field :released_at, DateTime.t()
+    end
+  end
+
   @doc """
   A package's version-change history as `VersionChange` structs, one per span
   whose version differs from the previous span in the same channel (first
@@ -51,11 +67,13 @@ defmodule Tracker.Nixpkgs.PackageHistory do
 
   Options: `:channel_id` (scope to one channel), `:version` (substring filter),
   `:sort_by` (`:released_at` default | `:version`), `:sort_dir` (`:desc`
-  default | `:asc`), `:limit`, `:offset` (default 0). Returns `{results, count}`
-  where `count` is the total matching before pagination.
+  default | `:asc`), `:limit`, `:offset` (default 0), `:removals?` (mix in a
+  `Removal` at each closing boundary — off by default, so the Atom feed keeps
+  update entries only). Returns `{results, count}` where `count` is the total
+  matching before pagination.
   """
   @spec version_changes_by_package(integer(), keyword()) ::
-          {[VersionChange.t()], non_neg_integer()}
+          {[VersionChange.t() | Removal.t()], non_neg_integer()}
   def version_changes_by_package(package_id, opts \\ []) do
     spans_by_channel =
       spans_by_channel(package_id, Keyword.get(opts, :channel_id), load: [:channel])
@@ -65,16 +83,59 @@ defmodule Tracker.Nixpkgs.PackageHistory do
     change_spans =
       Enum.flat_map(spans_by_channel, fn {_cid, spans} -> version_change_spans(spans) end)
 
-    revisions = revision_map(change_spans)
+    removals =
+      if Keyword.get(opts, :removals?, false) do
+        Enum.flat_map(spans_by_channel, fn {_cid, spans} -> Map.to_list(removal_ats(spans)) end)
+      else
+        []
+      end
 
-    change_spans
-    |> Enum.map(&to_version_change(&1, package_id, revisions, added))
+    revisions =
+      revision_map(
+        Enum.map(change_spans, &{&1.channel_id, released_at(&1)}) ++
+          Enum.map(removals, fn {at, span} -> {span.channel_id, at} end)
+      )
+
+    changes = Enum.map(change_spans, &to_version_change(&1, package_id, revisions, added))
+    removal_rows = Enum.map(removals, &to_removal(&1, revisions))
+
+    (changes ++ removal_rows)
     |> maybe_filter_version(Keyword.get(opts, :version))
     |> sort_changes(
       Keyword.get(opts, :sort_by, :released_at),
       Keyword.get(opts, :sort_dir, :desc)
     )
     |> paginate(Keyword.get(opts, :limit), Keyword.get(opts, :offset, 0))
+  end
+
+  @doc """
+  The package's terminal removal from a channel — the close of its latest span
+  there — or nil when that span is open. A package removed and re-added is
+  present, so it has no terminal removal; neither has one still present, nor
+  one that was never in the channel.
+  """
+  @spec terminal_removal(integer(), integer()) :: Removal.t() | nil
+  def terminal_removal(package_id, channel_id) do
+    spans = Map.get(spans_by_channel(package_id, channel_id, load: [:channel]), channel_id, [])
+
+    with span when not is_nil(span) <- List.last(spans),
+         at when not is_nil(at) <- upper_bound(span.valid) do
+      to_removal({at, span}, revision_map([{channel_id, at}]))
+    end
+  end
+
+  @doc """
+  Whether the package has no open span in any channel still taking revisions.
+
+  A retired channel stops getting revisions, so its final spans never close and
+  every package in it would read as present forever — the check only means
+  anything over live (`status != :retired`) channels.
+  """
+  @spec absent_from_live_channels?(integer()) :: boolean()
+  def absent_from_live_channels?(package_id) do
+    live_ids = Enum.map(Channel.active!(), & &1.id)
+
+    is_nil(PackageSpan.open_in_channels!(package_id, live_ids))
   end
 
   # A package's spans per channel, each group in chronological order — the shape
@@ -89,7 +150,17 @@ defmodule Tracker.Nixpkgs.PackageHistory do
   # The instants a channel's sorted spans open an :added boundary at, truncated
   # to match revision timestamps.
   defp added_ats(spans) do
-    for {:added, at} <- boundary_events(spans), into: MapSet.new(), do: released_at_second(at)
+    for {:added, at, _span} <- boundary_events(spans),
+        into: MapSet.new(),
+        do: released_at_second(at)
+  end
+
+  # The instants a channel's sorted spans close a :removed boundary at, each
+  # mapped to the span that closed — the removal row wears its version.
+  defp removal_ats(spans) do
+    for {:removed, at, span} <- boundary_events(spans),
+        into: %{},
+        do: {released_at_second(at), span}
   end
 
   # Spans (one channel, sorted) whose version differs from the predecessor.
@@ -102,10 +173,11 @@ defmodule Tracker.Nixpkgs.PackageHistory do
     |> Enum.reverse()
   end
 
-  # %{{channel_id, released_at_second} => ChannelRevision} for the spans' lower bounds.
-  defp revision_map(spans) do
-    spans
-    |> Enum.group_by(& &1.channel_id, &released_at(&1))
+  # %{{channel_id, released_at_second} => ChannelRevision} for `{channel_id, at}`
+  # boundary points, one query per channel.
+  defp revision_map(points) do
+    points
+    |> Enum.group_by(fn {cid, _at} -> cid end, fn {_cid, at} -> at end)
     |> Enum.flat_map(fn {channel_id, ats} ->
       channel_id
       |> ChannelRevision.by_released_ats!(Enum.uniq(ats))
@@ -131,37 +203,9 @@ defmodule Tracker.Nixpkgs.PackageHistory do
     }
   end
 
-  @doc """
-  A package's removal history in a channel, derived from span boundaries: a
-  span close not continued by the next span — or a bounded final span — is a
-  `:removed`. Each event carries the `channel_revision` (with `:channel`) at
-  its boundary, newest first.
-
-  Additions — a first appearance or a re-addition after a removal — are not
-  events here; the revisions list badges them on the row they already occupy.
-  """
-  @spec removals_by_package(integer(), integer() | nil) :: [Event.t()]
-  def removals_by_package(package_id, channel_id) do
-    removals =
-      package_id
-      |> spans_by_channel(channel_id)
-      |> Enum.flat_map(fn {cid, spans} ->
-        for {:removed, at} <- boundary_events(spans), do: {cid, at}
-      end)
-
-    revisions = boundary_revision_map(removals)
-
-    removals
-    |> Enum.map(fn {cid, at} ->
-      %Event{
-        type: :removed,
-        channel_revision: Map.fetch!(revisions, {cid, released_at_second(at)})
-      }
-    end)
-    |> Enum.sort_by(& &1.channel_revision.released_at, {:desc, DateTime})
-  end
-
-  # [{:added | :removed, released_at}] boundaries for a channel's sorted spans.
+  # [{:added | :removed, released_at, span}] boundaries for a channel's sorted
+  # spans — the span that opened at an :added, the one that closed at a
+  # :removed.
   defp boundary_events(spans) do
     {events, last} =
       Enum.reduce(spans, {[], nil}, fn span, {acc, prev} ->
@@ -169,9 +213,9 @@ defmodule Tracker.Nixpkgs.PackageHistory do
 
         acc =
           cond do
-            is_nil(prev) -> [{:added, lower} | acc]
+            is_nil(prev) -> [{:added, lower, span} | acc]
             DateTime.compare(upper_bound(prev.valid), lower) == :eq -> acc
-            true -> [{:added, lower}, {:removed, upper_bound(prev.valid)} | acc]
+            true -> [{:added, lower, span}, {:removed, upper_bound(prev.valid), prev} | acc]
           end
 
         {acc, span}
@@ -179,21 +223,19 @@ defmodule Tracker.Nixpkgs.PackageHistory do
 
     case last && upper_bound(last.valid) do
       nil -> events
-      upper -> [{:removed, upper} | events]
+      upper -> [{:removed, upper, last} | events]
     end
   end
 
-  defp boundary_revision_map([]), do: %{}
+  defp to_removal({at, span}, revisions) do
+    rev = Map.fetch!(revisions, {span.channel_id, released_at_second(at)})
 
-  defp boundary_revision_map(boundaries) do
-    boundaries
-    |> Enum.group_by(fn {cid, _at} -> cid end, fn {_cid, at} -> at end)
-    |> Enum.flat_map(fn {channel_id, ats} ->
-      channel_id
-      |> ChannelRevision.by_released_ats!(Enum.uniq(ats), load: [:channel])
-      |> Enum.map(fn rev -> {{channel_id, released_at_second(rev.released_at)}, rev} end)
-    end)
-    |> Map.new()
+    %Removal{
+      version: span.version,
+      channel_name: span.channel.name,
+      revision: rev.revision,
+      released_at: rev.released_at
+    }
   end
 
   @doc """
@@ -265,13 +307,15 @@ defmodule Tracker.Nixpkgs.PackageHistory do
   view), reconstructed by range-containment. Returns
   `%{results, count, more?}` where each result is
   `%{version:, position:, channel_revision:, added?:}` (the revision loaded with
-  `:channel`; `added?` marks the revision the package appeared at).
+  `:channel`; `added?` marks the revision the package appeared at), or a
+  `Removal` at each revision the package left at. Revisions inside a gap
+  between a removal and a re-addition produce no row, so the gap reads as one.
 
   Options: `:version` (substring filter), `:sort_by`/`:sort_dir`, `:limit`,
   `:offset` (default 0).
   """
   @spec revisions_by_package(integer(), integer() | nil, keyword()) :: %{
-          results: [map()],
+          results: [map() | Removal.t()],
           count: non_neg_integer(),
           more?: boolean()
         }
@@ -284,25 +328,11 @@ defmodule Tracker.Nixpkgs.PackageHistory do
       |> spans_by_channel(channel_id)
       |> Enum.flat_map(fn {cid, spans} ->
         added = added_ats(spans)
+        removals = removal_ats(spans)
 
         cid
         |> ChannelRevision.by_channel_asc!(load: [:channel])
-        |> Enum.flat_map(fn rev ->
-          case covering_span(spans, rev.released_at) do
-            nil ->
-              []
-
-            span ->
-              [
-                %{
-                  version: span.version,
-                  position: span.position,
-                  channel_revision: rev,
-                  added?: MapSet.member?(added, released_at_second(rev.released_at))
-                }
-              ]
-          end
-        end)
+        |> Enum.flat_map(&revision_row(&1, spans, added, removals))
       end)
       |> maybe_filter_version(Keyword.get(opts, :version))
       |> sort_revisions(
@@ -314,6 +344,38 @@ defmodule Tracker.Nixpkgs.PackageHistory do
     results = if limit, do: Enum.slice(rows, offset, limit), else: rows
 
     %{results: results, count: count, more?: limit != nil and offset + limit < count}
+  end
+
+  defp revision_row(rev, spans, added, removals) do
+    at = released_at_second(rev.released_at)
+
+    case covering_span(spans, rev.released_at) do
+      nil ->
+        removal_row(rev, Map.get(removals, at))
+
+      span ->
+        [
+          %{
+            version: span.version,
+            position: span.position,
+            channel_revision: rev,
+            added?: MapSet.member?(added, at)
+          }
+        ]
+    end
+  end
+
+  defp removal_row(_rev, nil), do: []
+
+  defp removal_row(rev, span) do
+    [
+      %Removal{
+        version: span.version,
+        channel_name: rev.channel.name,
+        revision: rev.revision,
+        released_at: rev.released_at
+      }
+    ]
   end
 
   @doc """
@@ -389,14 +451,23 @@ defmodule Tracker.Nixpkgs.PackageHistory do
 
   defp sort_revisions(rows, :version, dir), do: Enum.sort_by(rows, & &1.version, dir)
 
-  defp sort_revisions(rows, :channel_name, dir),
-    do: Enum.sort_by(rows, & &1.channel_revision.channel.name, dir)
+  defp sort_revisions(rows, :channel_name, dir), do: Enum.sort_by(rows, &row_channel_name/1, dir)
 
-  defp sort_revisions(rows, :revision_hash, dir),
-    do: Enum.sort_by(rows, & &1.channel_revision.revision, dir)
+  defp sort_revisions(rows, :revision_hash, dir), do: Enum.sort_by(rows, &row_revision/1, dir)
 
   defp sort_revisions(rows, _released_at, dir),
-    do: Enum.sort_by(rows, & &1.channel_revision.released_at, {dir, DateTime})
+    do: Enum.sort_by(rows, &row_released_at/1, {dir, DateTime})
+
+  # A removal row flattens what a version row nests under its revision, so the
+  # two shapes sort together.
+  defp row_channel_name(%Removal{channel_name: name}), do: name
+  defp row_channel_name(%{channel_revision: %{channel: %{name: name}}}), do: name
+
+  defp row_revision(%Removal{revision: revision}), do: revision
+  defp row_revision(%{channel_revision: %{revision: revision}}), do: revision
+
+  defp row_released_at(%Removal{released_at: released_at}), do: released_at
+  defp row_released_at(%{channel_revision: %{released_at: released_at}}), do: released_at
 
   defp upper_bound(%Postgrex.Range{upper: upper}) when upper in [nil, :unbound], do: nil
   defp upper_bound(%Postgrex.Range{upper: upper}), do: upper

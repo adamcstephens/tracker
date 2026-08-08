@@ -87,7 +87,7 @@ defmodule TrackerWeb.FeedControllerTest do
       Tracker.Fixtures.apply_package_revision!(cr1, [{package, "1.0.0"}])
       Tracker.Fixtures.apply_package_revision!(cr2, [{package, "2.0.0"}])
 
-      :ok
+      %{package: package, pkg_channel: pkg_channel}
     end
 
     test "returns valid Atom XML with version changes", %{conn: conn} do
@@ -108,6 +108,27 @@ defmodule TrackerWeb.FeedControllerTest do
       body = response(conn, 200)
       assert body =~ "nixos-feed-pkg"
       assert body =~ "1.0.0"
+    end
+
+    # Every entry reads "{name} updated to {version}", so a removal would render
+    # as an update that never happened.
+    test "carries no entry for a removal", %{
+      conn: conn,
+      package: package,
+      pkg_channel: pkg_channel
+    } do
+      cr3 =
+        Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
+          channel_id: pkg_channel.id,
+          revision: "pkgfeed333ccc444",
+          released_at: ~U[2026-04-01 10:00:00Z]
+        })
+
+      Tracker.Fixtures.remove_package!(cr3, package)
+
+      body = conn |> get("/feeds/packages/feed-test-pkg") |> response(200)
+
+      refute body =~ "pkgfeed333ccc444"
     end
   end
 end
