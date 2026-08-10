@@ -15,13 +15,18 @@ GitHub OAuth is the only sign-in strategy, so logged-in pages (inbox,
 subscriptions, account settings) need a local user:
 
 ```sh
-mix tracker.dev_user.create [--username devuser] [--admin]
+mix tracker.dev_user.create [--username devuser] [--admin] [--notifications 12]
 ```
 
 The task registers the user, writes a freshly minted token to `.dev-login.json`
 (gitignored, mode 0600) and prints a `/dev/login/<token>` URL that signs the
 browser in as them. Pass `--admin` to also unlock `/dev` and `/admin`. Re-run
 the task to rotate the token, or delete the file to revoke it.
+
+It also subscribes the user to a few packages, a channel and a change, and
+back-fills notifications from what actually happened in the most recent
+revisions, so the inbox is not empty. `--notifications 0` skips that; on a box
+with nothing ingested yet the task says so and seeds nothing.
 
 The route only exists when `dev_routes` is enabled, so it is never compiled
 into a production build.
