@@ -557,6 +557,13 @@ defmodule TrackerWeb.LayoutsTest do
                Enum.find(general.shortcuts, &("v" in &1.keys))
     end
 
+    test "it documents \"m\" as the inbox read toggle" do
+      lists = Enum.find(Layouts.shortcut_groups(), &(&1.title == "Lists"))
+
+      assert %{keys: ["m"], label: "Toggle read (inbox)"} =
+               Enum.find(lists.shortcuts, &("m" in &1.keys))
+    end
+
     test "it renders on a dead page too, where there is no socket", %{conn: conn} do
       html = conn |> get(~p"/changes") |> html_response(200)
 

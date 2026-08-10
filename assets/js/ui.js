@@ -116,6 +116,7 @@ function moveRow(step) {
 const ROW_STEPS = {j: 1, ArrowDown: 1, k: -1, ArrowUp: -1}
 const JUMPS = {p: "/packages", o: "/options", c: "/changes", n: "/inbox"}
 const CHORD_MS = 1000
+const PATCH_MS = 1000
 
 let pendingJump = null
 
@@ -179,6 +180,68 @@ document.addEventListener("keydown", (event) => {
 
   if (moveRow(step)) event.preventDefault()
 })
+
+// "m" files the focused inbox row by driving the row's own read/unread button,
+// so the key and the mouse take one path to the server. Rows elsewhere carry no
+// such button and the key is inert on them: only the inbox has a read state.
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "m") return
+  if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return
+  if (isEditable(event.target)) return
+  if (document.querySelector("dialog[open]")) return
+
+  let row = event.target.closest?.("ul.row-list > li")
+  let button = row?.querySelector("button[phx-click='toggle-read']")
+  if (!button) return
+
+  event.preventDefault()
+  keepCursorOn(cursorTarget(row))
+  button.click()
+})
+
+// Which row the cursor belongs on once the toggle lands. The Unread segment
+// holds only unread rows, so the toggle always drops this one and the cursor
+// takes its neighbour — the next row, or the previous one at the end of the
+// list. Under All the row stays, and so does the cursor.
+//
+// Nothing is focused here. Moving the cursor ahead of the round trip only
+// splits one action into two visible steps; leaving it lets the cursor arrive
+// with the row it belongs to.
+function cursorTarget(row) {
+  if (!document.querySelector("#filter-unread.is-active")) return row.id
+
+  let rows = keynavRows()
+  let index = rows.findIndex((line) => line.closest("ul.row-list > li") === row)
+  let neighbour = rows[index + 1] || rows[index - 1]
+
+  return neighbour?.closest("ul.row-list > li")?.id
+}
+
+// Closing the gap left by the toggled row moves the surviving keyed <li> into
+// its place, and moving a node is an implicit remove and re-insert, which blurs
+// whatever inside it held focus. So the cursor is placed by id once the patch
+// lands — the row is there, just somewhere else in the list.
+//
+// Nothing announces the end of a patch, hence the observer and the deadline.
+// It restores only from <body>, so a click elsewhere during the round trip
+// keeps focus, and it stays subscribed until the deadline because a patch that
+// moves the row more than once would otherwise strand the cursor again.
+function keepCursorOn(id) {
+  if (!id) return
+
+  let observer = new MutationObserver(() => {
+    if (document.activeElement !== document.body) return
+
+    let line = document.querySelector(`#${CSS.escape(id)} > .row-line`)
+    if (!line) return
+
+    line.focus()
+    line.scrollIntoView({block: "nearest"})
+  })
+
+  observer.observe(document.body, {childList: true, subtree: true})
+  setTimeout(() => observer.disconnect(), PATCH_MS)
+}
 
 // Auto-submit the lens form on dropdown change so the channel applies without
 // clicking "Set". The form's phx-change is present in the markup either way but

@@ -148,6 +148,40 @@ defmodule TrackerWeb.InboxLive.IndexTest do
     assert {:ok, %Notification{read_at: nil}} = Ash.get(Notification, n.id, actor: user)
   end
 
+  # The "m" handler in assets/js/ui.js reaches the toggle through these
+  # selectors, and steps the cursor off the row only in the Unread segment.
+  # Nothing but this stops the markup drifting out from under it.
+  describe "the markup the m shortcut selects (TRK-393)" do
+    test "the toggle is a phx-click button inside a keyed row-list item", %{conn: conn} do
+      user = register_user!()
+      n = published_notification!(user)
+      conn = log_in(conn, user)
+
+      {:ok, _view, html} = live(conn, ~p"/inbox")
+
+      [row] =
+        html
+        |> Floki.parse_document!()
+        |> Floki.find("ul.row-list > li#notification-#{n.id}")
+
+      assert Floki.find(row, "button[phx-click='toggle-read']") != []
+    end
+
+    test "the Unread segment marks itself active, and All does not", %{conn: conn} do
+      user = register_user!()
+      published_notification!(user)
+      conn = log_in(conn, user)
+
+      {:ok, view, _html} = live(conn, ~p"/inbox")
+
+      assert has_element?(view, "#filter-unread.is-active")
+
+      view |> element("#filter-all") |> render_click()
+
+      refute has_element?(view, "#filter-unread.is-active")
+    end
+  end
+
   test "marks all notifications read and disables the button", %{conn: conn} do
     user = register_user!()
     published_notification!(user)
