@@ -36,6 +36,9 @@ config :phoenix, :plug_init_mode, :runtime
 
 config :tracker, Tracker.GitServer, auto_start: false
 
+# Compiles the /dev/login route so it can be tested.
+config :tracker, dev_routes: true
+
 # Tests that exercise ChangeArtifactRefreshWorker without explicitly stubbing
 # `:files_fetcher` should not hit the GitHub REST API. Tests covering
 # changed_files persistence pass an explicit `:files_fetcher` opt.

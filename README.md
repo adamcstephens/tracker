@@ -9,6 +9,23 @@ Now you can visit [`localhost:6950`](http://localhost:6950) from your browser.
 
 Ready to run in production? Please [check our deployment guides](https://hexdocs.pm/phoenix/deployment.html).
 
+## Signing in during development
+
+GitHub OAuth is the only sign-in strategy, so logged-in pages (inbox,
+subscriptions, account settings) need a local user:
+
+```sh
+mix tracker.dev_user.create [--username devuser] [--admin]
+```
+
+The task registers the user, writes a freshly minted token to `.dev-login.json`
+(gitignored, mode 0600) and prints a `/dev/login/<token>` URL that signs the
+browser in as them. Pass `--admin` to also unlock `/dev` and `/admin`. Re-run
+the task to rotate the token, or delete the file to revoke it.
+
+The route only exists when `dev_routes` is enabled, so it is never compiled
+into a production build.
+
 ## Service accounts and API tokens
 
 Tracker supports long-lived API bearer tokens for non-human callers. Service

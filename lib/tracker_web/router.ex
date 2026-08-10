@@ -150,6 +150,14 @@ defmodule TrackerWeb.Router do
                 overrides: [TrackerWeb.AuthOverrides, AshAuthentication.Phoenix.Overrides.Default]
   end
 
+  if Application.compile_env(:tracker, :dev_routes) do
+    scope "/dev", TrackerWeb do
+      pipe_through :browser
+
+      get "/login/:token", DevLoginController, :create
+    end
+  end
+
   scope "/dev" do
     pipe_through [:browser, :require_admin]
 
