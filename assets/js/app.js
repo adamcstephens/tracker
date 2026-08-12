@@ -78,14 +78,8 @@ Hooks.ChangeTabs = {
 
 Hooks.LensCookie = {
   mounted() {
-    this.handleEvent("set_lens_cookie", ({value, max_age, lens_channel, lens_rev}) => {
+    this.handleEvent("set_lens_cookie", ({value, max_age}) => {
       document.cookie = `_tracker_lens=${encodeURIComponent(value)}; path=/; max-age=${max_age}; samesite=lax`
-      sessionStorage.setItem("lens_channel", lens_channel)
-      if (lens_rev) {
-        sessionStorage.setItem("lens_rev", lens_rev)
-      } else {
-        sessionStorage.removeItem("lens_rev")
-      }
     })
   }
 }
@@ -110,14 +104,7 @@ Hooks.CopyLink = {
 let csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 let liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
-  params: () => {
-    let params = {_csrf_token: csrfToken}
-    let channel = sessionStorage.getItem("lens_channel")
-    let rev = sessionStorage.getItem("lens_rev")
-    if (channel) params._lens_channel = channel
-    if (rev) params._lens_rev = rev
-    return params
-  },
+  params: {_csrf_token: csrfToken},
   hooks: Hooks
 })
 

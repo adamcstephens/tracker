@@ -671,16 +671,6 @@ defmodule TrackerWeb.OptionLive.Show do
     end
   end
 
-  @impl true
-  def handle_info({:set_lens, channel_name, rev}, socket) do
-    socket = TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)
-
-    {:noreply,
-     push_patch(socket,
-       to: options_path(socket, socket.assigns.prefix, socket.assigns.search)
-     )}
-  end
-
   defp show_path(""), do: ~p"/options"
   defp show_path(prefix), do: ~p"/options/#{prefix}"
 end

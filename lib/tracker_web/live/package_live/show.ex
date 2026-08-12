@@ -476,11 +476,6 @@ defmodule TrackerWeb.PackageLive.Show do
     {:noreply, load_revision_data(socket)}
   end
 
-  def handle_info({:set_lens, channel_name, rev}, socket) do
-    socket = TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)
-    {:noreply, load_revision_data(socket)}
-  end
-
   defp assign_subscription(socket, nil, _package_id),
     do: assign_subscription_state(socket, nil)
 

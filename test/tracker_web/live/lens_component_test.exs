@@ -101,6 +101,59 @@ defmodule TrackerWeb.LensComponentTest do
     refute html =~ "app-search--inert"
   end
 
+  describe "switching the channel" do
+    test "patches the URL with the lens param", %{conn: conn, unstable: unstable} do
+      {:ok, view, _html} = live(conn, ~p"/packages")
+
+      view
+      |> form("#lens-form", %{"channel" => unstable.name})
+      |> render_change()
+
+      assert_patch(view, ~p"/packages?lens_channel=#{unstable.name}")
+    end
+
+    test "keeps the rest of the query string", %{conn: conn, unstable: unstable} do
+      {:ok, view, _html} = live(conn, ~p"/packages?search=hello&page=2")
+
+      view
+      |> form("#lens-form", %{"channel" => unstable.name})
+      |> render_change()
+
+      path = assert_patch(view)
+      assert %{query: query} = URI.parse(path)
+      params = URI.decode_query(query)
+
+      assert params["search"] == "hello"
+      assert params["page"] == "2"
+      assert params["lens_channel"] == unstable.name
+    end
+
+    test "replaces a previously pinned revision", %{conn: conn, unstable: unstable} do
+      {:ok, view, _html} = live(conn, ~p"/packages?lens_channel=nixos-old&lens_rev=deadbeef")
+
+      view
+      |> form("#lens-form", %{"channel" => unstable.name})
+      |> render_change()
+
+      path = assert_patch(view)
+      params = path |> URI.parse() |> Map.fetch!(:query) |> URI.decode_query()
+
+      assert params["lens_channel"] == unstable.name
+      refute Map.has_key?(params, "lens_rev")
+    end
+
+    test "persists the choice to the cookie", %{conn: conn, unstable: unstable} do
+      {:ok, view, _html} = live(conn, ~p"/packages")
+
+      view
+      |> form("#lens-form", %{"channel" => unstable.name})
+      |> render_change()
+
+      assert_push_event(view, "set_lens_cookie", payload)
+      assert {:ok, unstable.name} == TrackerWeb.Lens.verify_cookie(payload.value)
+    end
+  end
+
   test "renders the channel's latest revision when none is pinned", %{conn: conn} do
     suffix = System.unique_integer([:positive])
 

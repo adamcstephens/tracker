@@ -2,6 +2,10 @@ defmodule TrackerWeb.Lens do
   @moduledoc """
   Sitewide channel lens — a persistent filter for channel (and optional revision)
   that applies across all pages.
+
+  The lens lives in the URL: `lens_channel` and `lens_rev` query params are its
+  canonical source. The `_tracker_lens` cookie is a preference only, seeding the
+  lens on a request that carries no params (see `TrackerWeb.Plug.Lens`).
   """
 
   use TypedStruct
@@ -48,6 +52,59 @@ defmodule TrackerWeb.Lens do
 
         %__MODULE__{channel: channel, revision: revision}
     end
+  end
+
+  @doc """
+  Resolves the lens for a request, preferring URL params over the session
+  seeded from the cookie.
+  """
+  @spec from_params(map(), map()) :: t() | nil
+  def from_params(params, session \\ %{})
+
+  def from_params(%{"lens_channel" => channel_name} = params, _session) do
+    resolve(channel_name, params["lens_rev"])
+  end
+
+  def from_params(_params, session) do
+    resolve(session["lens_channel_name"], session["lens_rev"])
+  end
+
+  @doc """
+  Rewrites a path so it carries the given lens, leaving its other query params
+  untouched. A channel switch clears any pinned revision.
+  """
+  @spec path_for(String.t(), String.t(), String.t() | nil) :: String.t()
+  def path_for(path, channel_name, rev \\ nil) do
+    uri = URI.parse(path)
+
+    query =
+      (uri.query || "")
+      |> URI.decode_query()
+      |> Map.drop(["lens_rev"])
+      |> Map.put("lens_channel", channel_name)
+      |> then(fn params -> if rev, do: Map.put(params, "lens_rev", rev), else: params end)
+      |> URI.encode_query()
+
+    URI.to_string(%{uri | query: query})
+  end
+
+  @doc """
+  LiveView hook resolving the lens from the URL on every navigation.
+  """
+  def on_mount(:default, _params, session, socket) do
+    {:cont,
+     Phoenix.LiveView.attach_hook(socket, :lens, :handle_params, fn params, uri, socket ->
+       {:cont,
+        socket
+        |> Phoenix.Component.assign(:lens, from_params(params, session))
+        |> Phoenix.Component.assign(:current_path, request_path(uri))}
+     end)}
+  end
+
+  defp request_path(uri) do
+    %URI{path: path, query: query} = URI.parse(uri)
+
+    URI.to_string(%URI{path: path, query: query})
   end
 
   @doc """

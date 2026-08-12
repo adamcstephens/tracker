@@ -84,9 +84,4 @@ defmodule TrackerWeb.ChannelLive.Diff do
   defp order_revisions(a, b) do
     if DateTime.compare(a.released_at, b.released_at) == :gt, do: {b, a}, else: {a, b}
   end
-
-  @impl true
-  def handle_info({:set_lens, channel_name, rev}, socket) do
-    {:noreply, TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)}
-  end
 end

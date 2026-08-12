@@ -150,10 +150,6 @@ defmodule TrackerWeb.ChannelLive.Show do
     {:noreply, assign_revisions(socket, socket.assigns.channel_resource.id)}
   end
 
-  def handle_info({:set_lens, channel_name, rev}, socket) do
-    {:noreply, TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)}
-  end
-
   defp channel_subscribed?(nil, _channel_id), do: false
 
   defp channel_subscribed?(user, channel_id) do

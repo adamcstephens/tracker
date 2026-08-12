@@ -16,16 +16,25 @@ defmodule TrackerWeb.LensController do
       end
 
     token = Phoenix.Token.sign(TrackerWeb.Endpoint, Lens.cookie_salt(), cookie_value)
-    redirect_to = safe_referer_path(conn, get_req_header(conn, "referer"))
+
+    redirect_to =
+      conn
+      |> safe_referer_path(get_req_header(conn, "referer"))
+      |> Lens.path_for(channel, presence(rev))
 
     conn
+    # Readable by JS: the live lens writes this same cookie from the client, and
+    # a browser refuses to overwrite an http_only cookie of the same name.
     |> put_resp_cookie(@cookie_name, token,
       max_age: Lens.cookie_max_age(),
-      http_only: true,
+      http_only: false,
       same_site: "Lax"
     )
     |> redirect(to: redirect_to)
   end
+
+  defp presence(""), do: nil
+  defp presence(value), do: value
 
   defp safe_referer_path(_conn, []), do: "/"
 

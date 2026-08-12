@@ -112,10 +112,4 @@ defmodule TrackerWeb.PackageLive.Index do
     |> assign(:total_pages, pagination.total_pages)
     |> assign(:current_page, pagination.current_page)
   end
-
-  @impl true
-  def handle_info({:set_lens, channel_name, rev}, socket) do
-    socket = TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)
-    {:noreply, load_packages(socket)}
-  end
 end

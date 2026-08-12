@@ -7,14 +7,15 @@ defmodule TrackerWeb.LensComponent do
   display when the lens is pinned to a specific revision.
 
   Progressive enhancement: wraps the channel `<select>` in a form that POSTs
-  to `/lens` for no-JS fallback. With JS, `phx-change` sends events to the
-  parent LiveView.
+  to `/lens` for no-JS fallback. With JS, `phx-change` patches to the same URL
+  with the lens params rewritten.
   """
 
   use TrackerWeb, :live_component
 
   alias Tracker.Nixpkgs.Channel
   alias Tracker.Nixpkgs.ChannelRevision
+  alias TrackerWeb.Lens
 
   @impl true
   def update(assigns, socket) do
@@ -28,6 +29,7 @@ defmodule TrackerWeb.LensComponent do
     {:ok,
      socket
      |> assign(:lens, assigns.lens)
+     |> assign(:current_path, assigns.current_path)
      |> assign(:highlight, Map.get(assigns, :highlight, false))
      |> assign(:channels, channels)
      |> assign(:display_rev, display_rev(assigns.lens))}
@@ -89,9 +91,15 @@ defmodule TrackerWeb.LensComponent do
 
   @impl true
   def handle_event("set_lens", %{"channel" => channel_name}, socket) do
-    send(self(), {:set_lens, channel_name, ""})
+    lens = Lens.resolve(channel_name, nil)
 
-    {:noreply, socket}
+    {:noreply,
+     socket
+     |> push_event("set_lens_cookie", %{
+       value: Lens.sign_cookie(lens),
+       max_age: Lens.cookie_max_age()
+     })
+     |> push_patch(to: Lens.path_for(socket.assigns.current_path, channel_name))}
   end
 
   # The revision shown next to the channel: the pinned one when the lens

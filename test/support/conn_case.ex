@@ -35,4 +35,17 @@ defmodule TrackerWeb.ConnCase do
     Tracker.DataCase.setup_sandbox(tags)
     {:ok, conn: Phoenix.ConnTest.build_conn()}
   end
+
+  @doc """
+  Switches the sitewide lens the way a visitor does, through the nav selector,
+  and returns the re-rendered page.
+  """
+  def switch_lens(view, channel_name) do
+    view
+    |> Phoenix.LiveViewTest.form("#lens-form", %{"channel" => channel_name})
+    |> Phoenix.LiveViewTest.render_change()
+
+    Phoenix.LiveViewTest.assert_patch(view)
+    Phoenix.LiveViewTest.render(view)
+  end
 end

@@ -129,8 +129,7 @@ defmodule TrackerWeb.OptionLive.RootTest do
 
     {:ok, view, _html} = live(conn, ~p"/options")
 
-    send(view.pid, {:set_lens, channel2.name, ""})
-    html = render(view)
+    html = switch_lens(view, channel2.name)
 
     assert html =~ ~s(href="/options/programs")
     refute html =~ ~s(href="/options/services")
@@ -139,8 +138,7 @@ defmodule TrackerWeb.OptionLive.RootTest do
   test "all-channels lens shows only a select-a-channel message", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/options")
 
-    send(view.pid, {:set_lens, "all", ""})
-    html = render(view)
+    html = switch_lens(view, "all")
 
     assert html =~ "Select a channel"
     refute html =~ ~s(href="/options/services")
@@ -152,7 +150,7 @@ defmodule TrackerWeb.OptionLive.RootTest do
 
     refute render(view) =~ "lens-attention"
 
-    send(view.pid, {:set_lens, "all", ""})
+    switch_lens(view, "all")
 
     assert render(view) =~ "lens-attention"
   end
@@ -160,9 +158,8 @@ defmodule TrackerWeb.OptionLive.RootTest do
   test "selecting a channel from the all-channels state restores the tree", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/options")
 
-    send(view.pid, {:set_lens, "all", ""})
-    send(view.pid, {:set_lens, "nixos-unstable", ""})
-    html = render(view)
+    switch_lens(view, "all")
+    html = switch_lens(view, "nixos-unstable")
 
     assert html =~ ~s(href="/options/services")
     refute html =~ "lens-attention"
@@ -239,8 +236,7 @@ defmodule TrackerWeb.OptionLive.RootTest do
   test "searching with the all-channels lens still prompts for a channel", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/options?search=nginx")
 
-    send(view.pid, {:set_lens, "all", ""})
-    html = render(view)
+    html = switch_lens(view, "all")
 
     assert html =~ "Select a channel"
     refute html =~ "Matching options"
@@ -271,8 +267,7 @@ defmodule TrackerWeb.OptionLive.RootTest do
 
     {:ok, view, _html} = live(conn, ~p"/options")
 
-    send(view.pid, {:set_lens, channel2.name, ""})
-    html = render(view)
+    html = switch_lens(view, channel2.name)
 
     assert html =~ "doesn&#39;t have options"
   end

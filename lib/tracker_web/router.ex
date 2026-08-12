@@ -75,7 +75,7 @@ defmodule TrackerWeb.Router do
       on_mount: [
         {TrackerWeb.LiveUserAuth, :live_user_optional},
         {TrackerWeb.Plug.InteractiveUI, :default},
-        {TrackerWeb.LensHook, :default},
+        {TrackerWeb.Lens, :default},
         TrackerWeb.InboxBadgeHook
       ] do
       live "/", PackageLive.Index, :index

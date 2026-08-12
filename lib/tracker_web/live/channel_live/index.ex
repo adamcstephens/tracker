@@ -67,10 +67,6 @@ defmodule TrackerWeb.ChannelLive.Index do
     end
   end
 
-  def handle_info({:set_lens, channel_name, rev}, socket) do
-    {:noreply, TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)}
-  end
-
   @impl true
   def handle_params(params, _url, socket) do
     lens = socket.assigns.lens && %{socket.assigns.lens | disabled?: true}

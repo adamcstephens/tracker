@@ -243,6 +243,28 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
 
       refute html =~ "scopedfull.opts"
     end
+
+    test "switching the lens reloads the page under the new channel", %{
+      conn: conn,
+      change: change,
+      full_cr: full_cr
+    } do
+      Tracker.Fixtures.change_branch!(change, "nixos-99.99", full_cr)
+
+      {:ok, view, html} = live(conn, ~p"/changes/6002?lens_channel=nixos-98.98")
+
+      assert html =~ "scopedsmall.opts"
+
+      view
+      |> form("#lens-form", %{"channel" => "nixos-99.99"})
+      |> render_change()
+
+      assert_patch(view, ~p"/changes/6002?lens_channel=nixos-99.99")
+
+      html = render(view)
+      assert html =~ "scopedfull.opts"
+      refute html =~ "scopedsmall.opts"
+    end
   end
 
   describe "files_over_limit notice" do
@@ -606,9 +628,7 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
       assert html =~ ~r/<li[^>]*class="[^"]*is-mine[^"]*"[^>]*data-branch="nixpkgs-unstable"/
       refute html =~ ~r/<li[^>]*class="[^"]*is-mine[^"]*"[^>]*data-branch="nixos-unstable"/
 
-      send(view.pid, {:set_lens, "nixos-unstable", ""})
-
-      html = render(view)
+      html = switch_lens(view, "nixos-unstable")
 
       assert html =~ ~r/<li[^>]*class="[^"]*is-mine[^"]*"[^>]*data-branch="nixos-unstable"/
       refute html =~ ~r/<li[^>]*class="[^"]*is-mine[^"]*"[^>]*data-branch="nixpkgs-unstable"/

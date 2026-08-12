@@ -56,6 +56,21 @@ defmodule TrackerWeb.TableParamsTest do
       assert tp.page_size == 25
       assert tp.offset == 25
     end
+
+    test "carries the lens params so generated links keep the lens" do
+      tp =
+        TableParams.from_params(%{
+          "page" => "2",
+          "lens_channel" => "nixos-unstable",
+          "lens_rev" => "deadbeef"
+        })
+
+      assert tp.lens_channel == "nixos-unstable"
+      assert tp.lens_rev == "deadbeef"
+
+      assert TableParams.to_path(tp, "/packages") ==
+               "/packages?page=2&lens_channel=nixos-unstable&lens_rev=deadbeef"
+    end
   end
 
   describe "to_query_params/2" do

@@ -511,8 +511,7 @@ defmodule TrackerWeb.OptionLive.ShowTest do
   test "all-channels lens prompts for a channel instead of falling back", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/options/services.nginx")
 
-    send(view.pid, {:set_lens, "all", ""})
-    html = render(view)
+    html = switch_lens(view, "all")
 
     assert html =~ "Select a channel"
     assert html =~ "lens-attention"
@@ -532,7 +531,7 @@ defmodule TrackerWeb.OptionLive.ShowTest do
   test "lens change patches the URL and reloads", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/options/services.nginx")
 
-    send(view.pid, {:set_lens, "nixos-unstable", ""})
+    switch_lens(view, "nixos-unstable")
     # Should still render the prefix
     html = render(view)
     assert html =~ "services.nginx"

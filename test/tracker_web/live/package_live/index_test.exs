@@ -91,9 +91,7 @@ defmodule TrackerWeb.PackageLive.IndexTest do
 
       Tracker.Fixtures.apply_package_revision!(cr2, [{pkg_out, "3.0"}])
 
-      # Simulate JS connect_params carrying the lens from a previous page
-      conn = Phoenix.LiveViewTest.put_connect_params(conn, %{"_lens_channel" => channel2.name})
-      {:ok, _view, html} = live(conn, ~p"/packages")
+      {:ok, _view, html} = live(conn, ~p"/packages?lens_channel=#{channel2.name}")
 
       assert html =~ pkg_out.attribute
     end
@@ -126,8 +124,7 @@ defmodule TrackerWeb.PackageLive.IndexTest do
       {:ok, view, _html} = live(conn, ~p"/packages")
 
       # Switch lens to channel2
-      send(view.pid, {:set_lens, channel2.name, ""})
-      html = render(view)
+      html = switch_lens(view, channel2.name)
 
       assert html =~ pkg_out.attribute
     end
@@ -195,8 +192,7 @@ defmodule TrackerWeb.PackageLive.IndexTest do
         {pkg, %{version: "9.9", description: "A current-state description"}}
       ])
 
-      conn = Phoenix.LiveViewTest.put_connect_params(conn, %{"_lens_channel" => channel.name})
-      {:ok, _view, html} = live(conn, ~p"/packages")
+      {:ok, _view, html} = live(conn, ~p"/packages?lens_channel=#{channel.name}")
 
       assert html =~ "desc-col-pkg"
       assert html =~ "A current-state description"
@@ -263,8 +259,7 @@ defmodule TrackerWeb.PackageLive.IndexTest do
     end
 
     test "prefers the lens channel's description", %{conn: conn, lens_channel: lens_channel} do
-      conn = put_connect_params(conn, %{"_lens_channel" => lens_channel.name})
-      {:ok, _view, html} = live(conn, ~p"/packages")
+      {:ok, _view, html} = live(conn, ~p"/packages?lens_channel=#{lens_channel.name}")
 
       assert html =~ "Lens description"
       refute html =~ "Meta description"
@@ -274,29 +269,25 @@ defmodule TrackerWeb.PackageLive.IndexTest do
       conn: conn,
       lens_channel: lens_channel
     } do
-      conn = put_connect_params(conn, %{"_lens_channel" => lens_channel.name})
-      {:ok, _view, html} = live(conn, ~p"/packages")
+      {:ok, _view, html} = live(conn, ~p"/packages?lens_channel=#{lens_channel.name}")
 
       assert html =~ "premeta-desc-pkg"
       assert html =~ "Fallback description"
     end
 
     test "all-channels lens reads from the metadata channel", %{conn: conn} do
-      conn = put_connect_params(conn, %{"_lens_channel" => "all"})
-      {:ok, _view, html} = live(conn, ~p"/packages")
+      {:ok, _view, html} = live(conn, ~p"/packages?lens_channel=all")
 
       assert html =~ "Meta description"
       refute html =~ "Lens description"
     end
 
     test "lens switch swaps the shown description", %{conn: conn, lens_channel: lens_channel} do
-      conn = put_connect_params(conn, %{"_lens_channel" => lens_channel.name})
-      {:ok, view, html} = live(conn, ~p"/packages")
+      {:ok, view, html} = live(conn, ~p"/packages?lens_channel=#{lens_channel.name}")
 
       assert html =~ "Lens description"
 
-      send(view.pid, {:set_lens, "all", ""})
-      html = render(view)
+      html = switch_lens(view, "all")
 
       assert html =~ "Meta description"
       refute html =~ "Lens description"

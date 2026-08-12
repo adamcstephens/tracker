@@ -84,12 +84,6 @@ defmodule TrackerWeb.TeamLive.Index do
      push_patch(socket, to: TableParams.to_path(%{tp | page: max(tp.page - 1, 1)}, "/teams"))}
   end
 
-  @impl true
-  def handle_info({:set_lens, channel_name, rev}, socket) do
-    socket = TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)
-    {:noreply, load_teams(socket)}
-  end
-
   defp load_teams(socket) do
     tp = socket.assigns.table_params
 

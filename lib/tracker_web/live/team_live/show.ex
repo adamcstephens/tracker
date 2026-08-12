@@ -169,10 +169,4 @@ defmodule TrackerWeb.TeamLive.Show do
     |> assign(:current_page, pagination.current_page)
     |> assign(:package_count, packages.count)
   end
-
-  @impl true
-  def handle_info({:set_lens, channel_name, rev}, socket) do
-    socket = TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)
-    {:noreply, reload_packages(socket)}
-  end
 end

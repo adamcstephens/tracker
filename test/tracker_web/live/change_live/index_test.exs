@@ -258,7 +258,7 @@ defmodule TrackerWeb.ChangeLive.IndexTest do
       assert length(Floki.find(doc, "#changes li")) == 2
     end
 
-    test "pagination links keep the in-channel filter", %{conn: conn, cr: cr} do
+    test "pagination links keep the in-channel filter and the lens", %{conn: conn, cr: cr} do
       Tracker.Nixpkgs.Change.bulk_upsert_all(
         for n <- 7001..7020 do
           %{
@@ -285,7 +285,11 @@ defmodule TrackerWeb.ChangeLive.IndexTest do
         |> Floki.parse_document!()
         |> Floki.find("nav a.pagination-button:last-of-type")
 
-      assert query_params(next) == %{"in_channel" => "1", "page" => "2"}
+      assert query_params(next) == %{
+               "in_channel" => "1",
+               "page" => "2",
+               "lens_channel" => "nixos-97.97"
+             }
     end
   end
 

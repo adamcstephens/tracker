@@ -135,11 +135,6 @@ defmodule TrackerWeb.ChangeLive.Index do
     {:noreply, socket |> assign(:base_refs, load_base_refs()) |> load_changes()}
   end
 
-  def handle_info({:set_lens, channel_name, rev}, socket) do
-    socket = TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)
-    {:noreply, load_changes(socket)}
-  end
-
   @impl true
   def handle_params(params, _url, socket) do
     tp = TableParams.from_params(params)

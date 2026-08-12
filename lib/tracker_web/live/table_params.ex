@@ -11,6 +11,8 @@ defmodule TrackerWeb.TableParams do
     field :page, pos_integer(), default: 1
     field :offset, non_neg_integer(), default: 0
     field :page_size, pos_integer(), default: 15
+    field :lens_channel, String.t() | nil
+    field :lens_rev, String.t() | nil
   end
 
   @doc """
@@ -36,7 +38,9 @@ defmodule TrackerWeb.TableParams do
       search_key: search_key,
       page: page,
       offset: (page - 1) * page_size,
-      page_size: page_size
+      page_size: page_size,
+      lens_channel: params["lens_channel"],
+      lens_rev: params["lens_rev"]
     }
   end
 
@@ -50,6 +54,8 @@ defmodule TrackerWeb.TableParams do
       %{}
       |> maybe_put(tp.search_key, tp.search, "")
       |> maybe_put(:page, tp.page, 1)
+      |> maybe_put(:lens_channel, tp.lens_channel, nil)
+      |> maybe_put(:lens_rev, tp.lens_rev, nil)
 
     extras
     |> Enum.reject(fn {_k, v} -> v in ["", nil, false] end)

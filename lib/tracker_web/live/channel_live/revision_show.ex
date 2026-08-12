@@ -121,10 +121,6 @@ defmodule TrackerWeb.ChannelLive.RevisionShow do
     {:noreply, assign_revision_data(socket, revision)}
   end
 
-  def handle_info({:set_lens, channel_name, rev}, socket) do
-    {:noreply, TrackerWeb.LensHandlers.handle_lens_change(socket, channel_name, rev)}
-  end
-
   defp assign_revision_data(socket, revision) do
     channel_name = socket.assigns[:channel] || ""
 

@@ -1,8 +1,10 @@
 defmodule TrackerWeb.Plug.Lens do
   @moduledoc """
   Reads the `_tracker_lens` cookie (containing a signed Phoenix.Token)
-  and populates the session with `lens_channel_name` and `lens_rev`
-  for downstream LiveView hooks.
+  and populates the session with `lens_channel_name` and `lens_rev`.
+
+  The cookie is a preference, not live state: `TrackerWeb.Lens` only falls
+  back to it when the request carries no `lens_channel` param.
   """
 
   import Plug.Conn

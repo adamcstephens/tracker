@@ -79,6 +79,84 @@ defmodule TrackerWeb.LensTest do
     end
   end
 
+  describe "from_params/2" do
+    test "reads the lens from URL params", %{unstable: unstable} do
+      lens = Lens.from_params(%{"lens_channel" => unstable.name}, %{})
+
+      assert lens.channel.name == unstable.name
+    end
+
+    test "falls back to the session when no params carry a lens", %{unstable: unstable} do
+      lens = Lens.from_params(%{}, %{"lens_channel_name" => unstable.name})
+
+      assert lens.channel.name == unstable.name
+    end
+
+    test "params win over the session", %{stable: stable, unstable: unstable} do
+      lens =
+        Lens.from_params(%{"lens_channel" => unstable.name}, %{
+          "lens_channel_name" => stable.name
+        })
+
+      assert lens.channel.name == unstable.name
+    end
+
+    test "a channel param does not inherit the session's pinned revision", %{
+      unstable: unstable
+    } do
+      revision =
+        Tracker.Nixpkgs.ChannelRevision.create!(%{
+          channel_id: unstable.id,
+          revision: "abc1234567890",
+          released_at: ~U[2026-01-01 00:00:00Z]
+        })
+
+      lens =
+        Lens.from_params(%{"lens_channel" => unstable.name}, %{
+          "lens_channel_name" => unstable.name,
+          "lens_rev" => revision.revision
+        })
+
+      assert lens.revision == nil
+    end
+
+    test "falls back to the default channel with neither", %{stable: stable} do
+      assert Lens.from_params(%{}, %{}).channel.name == stable.name
+    end
+  end
+
+  describe "path_for/3" do
+    test "sets the lens param on a bare path" do
+      assert Lens.path_for("/packages", "nixos-unstable") ==
+               "/packages?lens_channel=nixos-unstable"
+    end
+
+    test "keeps the other query params" do
+      params =
+        "/changes?in_channel=1&page=2"
+        |> Lens.path_for("nixos-unstable")
+        |> URI.parse()
+        |> Map.fetch!(:query)
+        |> URI.decode_query()
+
+      assert params == %{
+               "in_channel" => "1",
+               "page" => "2",
+               "lens_channel" => "nixos-unstable"
+             }
+    end
+
+    test "drops a previously pinned revision" do
+      assert Lens.path_for("/packages?lens_channel=old&lens_rev=deadbeef", "nixos-unstable") ==
+               "/packages?lens_channel=nixos-unstable"
+    end
+
+    test "carries a revision when one is given" do
+      assert Lens.path_for("/packages", "nixos-unstable", "deadbeef") ==
+               "/packages?lens_channel=nixos-unstable&lens_rev=deadbeef"
+    end
+  end
+
   describe "cookie_value/1 and from_cookie/1" do
     test "round-trips channel only", %{unstable: unstable} do
       lens = Lens.resolve(unstable.name, nil)
