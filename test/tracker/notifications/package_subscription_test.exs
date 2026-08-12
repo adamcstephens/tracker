@@ -54,6 +54,64 @@ defmodule Tracker.Notifications.PackageSubscriptionTest do
     end
   end
 
+  describe "events" do
+    test "defaults to the revision events" do
+      user = register_user!()
+      pkg = package!()
+
+      {:ok, sub} = PackageSubscription.subscribe(pkg.id, nil, actor: user)
+
+      assert sub.events == [:package_version_changed, :package_added, :package_removed]
+    end
+
+    test "set_events replaces the selection" do
+      user = register_user!()
+      pkg = package!()
+      {:ok, sub} = PackageSubscription.subscribe(pkg.id, nil, actor: user)
+
+      assert {:ok, updated} =
+               PackageSubscription.set_events(sub, [:package_change_merged], actor: user)
+
+      assert updated.events == [:package_change_merged]
+    end
+
+    test "rejects an unknown event" do
+      user = register_user!()
+      pkg = package!()
+      {:ok, sub} = PackageSubscription.subscribe(pkg.id, nil, actor: user)
+
+      assert {:error, _} = PackageSubscription.set_events(sub, [:package_exploded], actor: user)
+    end
+
+    test "rejects an empty selection" do
+      user = register_user!()
+      pkg = package!()
+      {:ok, sub} = PackageSubscription.subscribe(pkg.id, nil, actor: user)
+
+      assert {:error, _} = PackageSubscription.set_events(sub, [], actor: user)
+    end
+
+    test "another user cannot set the events" do
+      alice = register_user!()
+      bob = register_user!()
+      pkg = package!()
+      {:ok, sub} = PackageSubscription.subscribe(pkg.id, nil, actor: alice)
+
+      assert {:error, _} = PackageSubscription.set_events(sub, [:package_added], actor: bob)
+    end
+
+    test "re-subscribing preserves an existing selection" do
+      user = register_user!()
+      pkg = package!()
+      {:ok, sub} = PackageSubscription.subscribe(pkg.id, nil, actor: user)
+      {:ok, _} = PackageSubscription.set_events(sub, [:package_change_opened], actor: user)
+
+      {:ok, resubscribed} = PackageSubscription.subscribe(pkg.id, nil, actor: user)
+
+      assert resubscribed.events == [:package_change_opened]
+    end
+  end
+
   describe "find" do
     test "returns the actor's subscription at the matching scope" do
       user = register_user!()

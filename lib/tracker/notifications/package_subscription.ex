@@ -2,6 +2,9 @@ defmodule Tracker.Notifications.PackageSubscription do
   @moduledoc """
   A user's subscription to a package. A nil `channel_id` means "all channels";
   a set `channel_id` scopes the subscription to a single channel.
+
+  `events` selects which notification types the subscription fans out, named
+  after the `Notification` types themselves so fan-out is a membership test.
   """
 
   use Ash.Resource,
@@ -10,9 +13,14 @@ defmodule Tracker.Notifications.PackageSubscription do
     authorizers: [Ash.Policy.Authorizer],
     data_layer: AshPostgres.DataLayer
 
+  @event_types Tracker.Notifications.Notification.package_event_types()
+  @default_events [:package_version_changed, :package_added, :package_removed]
+
   postgres do
     table "package_subscriptions"
     repo Tracker.Repo
+
+    migration_defaults events: ~s(["package_version_changed", "package_added", "package_removed"])
 
     references do
       reference :user, on_delete: :delete
@@ -24,9 +32,11 @@ defmodule Tracker.Notifications.PackageSubscription do
   code_interface do
     define :subscribe, args: [:package_id, {:optional, :channel_id}]
     define :find, args: [:package_id, {:optional, :channel_id}], not_found_error?: false
+    define :set_events, args: [:events]
     define :destroy
     define :for_user
     define :subscribers_in_channel_scope, args: [:channel_id]
+    define :subscribers_of_packages, args: [:package_ids]
   end
 
   actions do
@@ -40,6 +50,11 @@ defmodule Tracker.Notifications.PackageSubscription do
       upsert_fields [:updated_at]
 
       change relate_actor(:user)
+    end
+
+    update :set_events do
+      description "Replace the events this subscription notifies on."
+      accept [:events]
     end
 
     read :find do
@@ -65,6 +80,13 @@ defmodule Tracker.Notifications.PackageSubscription do
       argument :channel_id, :integer, allow_nil?: false
       filter expr(is_nil(channel_id) or channel_id == ^arg(:channel_id))
     end
+
+    read :subscribers_of_packages do
+      description "Package subscriptions for any of the given packages, with their channel (system fan-out)."
+      argument :package_ids, {:array, :integer}, allow_nil?: false
+      prepare build(load: [:channel])
+      filter expr(package_id in ^arg(:package_ids))
+    end
   end
 
   policies do
@@ -72,13 +94,21 @@ defmodule Tracker.Notifications.PackageSubscription do
       authorize_if expr(not is_nil(^actor(:id)))
     end
 
-    policy action_type([:read, :destroy]) do
+    policy action_type([:read, :update, :destroy]) do
       authorize_if expr(user_id == ^actor(:id))
     end
   end
 
   attributes do
     integer_primary_key :id
+
+    attribute :events, {:array, :atom} do
+      allow_nil? false
+      public? true
+      default @default_events
+      constraints min_length: 1, items: [one_of: @event_types]
+    end
+
     timestamps()
   end
 

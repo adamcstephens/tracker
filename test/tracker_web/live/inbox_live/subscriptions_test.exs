@@ -46,6 +46,23 @@ defmodule TrackerWeb.InboxLive.SubscriptionsTest do
            )
   end
 
+  test "shows a package subscription's selected events", %{conn: conn} do
+    user = register_user!()
+    package = package!()
+    sub = PackageSubscription.subscribe!(package.id, nil, actor: user)
+
+    {:ok, _} =
+      PackageSubscription.set_events(sub, [:package_change_merged, :package_removed], actor: user)
+
+    conn = log_in(conn, user)
+
+    {:ok, view, _html} = live(conn, ~p"/inbox/subscriptions")
+
+    assert has_element?(view, "#package-subscription-#{sub.id}", "PRs merged")
+    assert has_element?(view, "#package-subscription-#{sub.id}", "Removed")
+    refute has_element?(view, "#package-subscription-#{sub.id}", "Updates")
+  end
+
   test "renders subscriptions through the shared RowList", %{conn: conn} do
     user = register_user!()
     package = package!()

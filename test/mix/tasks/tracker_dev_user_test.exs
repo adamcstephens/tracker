@@ -131,6 +131,7 @@ defmodule Mix.Tasks.Tracker.DevUserTest do
       assert :package_version_changed in types
       assert :package_added in types
       assert :package_removed in types
+      assert :package_change_merged in types
       assert Enum.all?(notifications, &(DateTime.compare(&1.occurred_at, now) == :lt))
     end
 

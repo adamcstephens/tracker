@@ -115,9 +115,13 @@ defmodule Mix.Tasks.Tracker.DevUser.Create do
     |> latest_revisions(revision_depth(count))
     |> Enum.with_index()
     |> Enum.flat_map(fn {revision, index} ->
-      ([%{type: :channel_revision_published, channel_id: channel.id}] ++
-         package_rows(revision, channel) ++ change_rows(changes, channel, index))
-      |> Enum.map(&stamp(&1, user, revision))
+      packages = package_rows(revision, channel)
+
+      Enum.map(
+        [%{type: :channel_revision_published, channel_id: channel.id}] ++
+          packages ++ change_rows(changes, channel, index),
+        &stamp(&1, user, revision)
+      ) ++ package_change_rows(user, packages, changes, revision, index)
     end)
   end
 
@@ -175,11 +179,34 @@ defmodule Mix.Tasks.Tracker.DevUser.Create do
     })
   end
 
+  # Pairs the newest revision's packages with the changes that reached the
+  # channel, so the inbox shows change events beside the revision ones. Timed
+  # to the revision like every other seeded row, not to the PR's own merge.
+  defp package_change_rows(user, packages, changes, revision, 0) do
+    packages
+    |> Enum.map(& &1.package_id)
+    |> Enum.zip(changes)
+    |> Enum.map(fn {package_id, change} ->
+      %{
+        user_id: user.id,
+        type: :package_change_merged,
+        package_id: package_id,
+        change_id: change.id,
+        occurred_at: revision.released_at,
+        dedup_key: "dev:#{user.github_username}:chg:#{change.id}:pkg:#{package_id}"
+      }
+    end)
+  end
+
+  defp package_change_rows(_user, _packages, _changes, _revision, _index), do: []
+
   defp subscribe(user, channel, rows, changes) do
     ChannelSubscription.subscribe!(channel.id, actor: user)
 
     for package_id <- subscribable_packages(rows) do
-      PackageSubscription.subscribe!(package_id, nil, actor: user)
+      package_id
+      |> PackageSubscription.subscribe!(nil, actor: user)
+      |> PackageSubscription.set_events!(Notification.package_event_types(), actor: user)
     end
 
     for change <- Enum.take(changes, 1),

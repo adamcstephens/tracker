@@ -118,6 +118,36 @@ defmodule Tracker.Notifications.NotificationFanoutRevisionWorkerTest do
       assert [:package_version_changed] = types_for(user)
     end
 
+    test "skips a type the subscription has not selected" do
+      user = register_user!()
+      {_chan, prev, rev} = channel_with_revisions()
+      pkg = package!()
+      apply_package_revision!(prev, [{pkg, "1.0"}])
+      apply_package_revision!(rev, [{pkg, "2.0"}])
+      {:ok, sub} = PackageSubscription.subscribe(pkg.id, nil, actor: user)
+
+      {:ok, _} =
+        PackageSubscription.set_events(sub, [:package_removed, :package_change_merged],
+          actor: user
+        )
+
+      assert :ok = Worker.run(channel_revision_id: rev.id)
+      assert [] = Notification.for_user!(actor: user)
+    end
+
+    test "still notifies on a selected type" do
+      user = register_user!()
+      {_chan, prev, rev} = channel_with_revisions()
+      pkg = package!()
+      apply_package_revision!(prev, [{pkg, "1.0"}])
+      remove_package!(rev, pkg)
+      {:ok, sub} = PackageSubscription.subscribe(pkg.id, nil, actor: user)
+      {:ok, _} = PackageSubscription.set_events(sub, [:package_removed], actor: user)
+
+      assert :ok = Worker.run(channel_revision_id: rev.id)
+      assert [:package_removed] = types_for(user)
+    end
+
     test "skips package fan-out on a channel's first revision" do
       user = register_user!()
       chan = channel!()

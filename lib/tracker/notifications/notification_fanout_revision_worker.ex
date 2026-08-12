@@ -11,7 +11,8 @@ defmodule Tracker.Notifications.NotificationFanoutRevisionWorker do
     * package subscriptions whose channel scope includes this channel, joined
       against the revision's changed packages (added/removed/version-changed
       derived from package span boundaries) →
-      `:package_added` / `:package_removed` / `:package_version_changed`.
+      `:package_added` / `:package_removed` / `:package_version_changed`,
+      each emitted only when the subscription selected that event.
 
   Every row carries a unique `dedup_key`, so retries and reconciliation
   reruns are no-ops.
@@ -67,7 +68,10 @@ defmodule Tracker.Notifications.NotificationFanoutRevisionWorker do
       package_ids ->
         type_map = PackageHistory.changed_types(revision, package_ids)
 
-        for sub <- subs, type = Map.get(type_map, sub.package_id), not is_nil(type) do
+        for sub <- subs,
+            type = Map.get(type_map, sub.package_id),
+            not is_nil(type),
+            type in sub.events do
           %{
             user_id: sub.user_id,
             type: type,

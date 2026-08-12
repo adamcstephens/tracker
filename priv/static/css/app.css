@@ -116,6 +116,8 @@ h6 {
 	--t-remove: #c2335a;
 	--t-revision: #7a3fd1;
 	--t-propagate: #0d7f8c;
+	--t-pr-open: #1a7f37;
+	--t-pr-merged: #8250df;
 
 	/* Inbox control surfaces. In light mode these follow the app surfaces;
 	   in dark mode they use the redesign's deeper palette — the app's dark
@@ -158,6 +160,8 @@ h6 {
 		--t-remove: #f07a92;
 		--t-revision: #b694ff;
 		--t-propagate: #4fc8d4;
+		--t-pr-open: #4ac26b;
+		--t-pr-merged: #b57bff;
 
 		--ibx-surface: #15151b;
 		--ibx-surface-2: #1c1c24;
@@ -2564,6 +2568,37 @@ a.revision-link {
 	margin: 0;
 }
 
+.sub-events {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.35rem 0.9rem;
+	margin-bottom: 1rem;
+	padding: 0.6rem 0.85rem;
+	border: 1px solid var(--line-soft);
+	border-radius: 8px;
+	background: var(--surface);
+	font-size: 0.9rem;
+}
+
+.sub-events__label {
+	color: var(--text-2);
+	margin-right: 0.25rem;
+}
+
+.sub-events label {
+	display: flex;
+	align-items: center;
+	gap: 0.35rem;
+	margin-bottom: 0;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.sub-events label input[type="checkbox"] {
+	margin: 0;
+}
+
 .change-show .change-card {
 	border: 1px solid var(--line);
 	border-radius: 8px;
@@ -3346,6 +3381,12 @@ a.revision-link {
 }
 .ibx-t-propagate {
 	background: var(--t-propagate);
+}
+.ibx-t-pr-open {
+	background: var(--t-pr-open);
+}
+.ibx-t-pr-merged {
+	background: var(--t-pr-merged);
 }
 
 /* Notification rows */

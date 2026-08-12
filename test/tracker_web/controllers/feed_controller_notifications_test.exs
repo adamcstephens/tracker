@@ -60,6 +60,29 @@ defmodule TrackerWeb.FeedControllerNotificationsTest do
     assert body =~ "vim 9.0 → 9.1 on nixos-unstable"
   end
 
+  test "describes a package change notification", %{conn: conn} do
+    user = register_user!()
+    pkg = package!("firefox")
+
+    change =
+      change!(nil, %{
+        state: :merged,
+        title: "firefox: 1.0 -> 2.0",
+        base_ref: "release-25.05"
+      })
+
+    notification!(user, %{
+      type: :package_change_merged,
+      package_id: pkg.id,
+      change_id: change.id
+    })
+
+    body = conn |> get("/feeds/notifications/#{feed_token!(user)}") |> response(200)
+
+    assert body =~ "merged into release-25.05, touching firefox"
+    assert body =~ "/changes/#{change.number}"
+  end
+
   test "orders entries newest first", %{conn: conn} do
     user = register_user!()
     published_notification!(user, "nixos-older", ~U[2024-01-01 00:00:00Z])

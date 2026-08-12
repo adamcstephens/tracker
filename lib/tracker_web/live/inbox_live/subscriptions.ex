@@ -135,6 +135,7 @@ defmodule TrackerWeb.InboxLive.Subscriptions do
           path={~p"/packages/#{sub.package.attribute}"}
           label={sub.package.attribute}
           scope={(sub.channel && sub.channel.name) || "All channels"}
+          events={sub.events}
           at={sub.inserted_at}
           now={@now}
         />
@@ -201,6 +202,7 @@ defmodule TrackerWeb.InboxLive.Subscriptions do
   attr :path, :string, required: true
   attr :label, :string, required: true
   attr :scope, :string, default: nil
+  attr :events, :list, default: []
   attr :at, :any, required: true
   attr :now, :any, required: true
 
@@ -217,6 +219,13 @@ defmodule TrackerWeb.InboxLive.Subscriptions do
       <:label>{@label}</:label>
       <:sublabel>
         <span :if={@scope} class="ibx-tag"><span class="dot"></span>{@scope}</span>
+        <span
+          :for={event <- ordered_events(@events)}
+          class="ibx-tag"
+          style={"--type-color: var(--t-#{NotificationPresenter.type_class(event)})"}
+        >
+          {NotificationPresenter.type_filter_label(event)}
+        </span>
         <span :if={@scope} class="ibx-dot-sep">·</span>
         <time class="ibx-time" title={NotificationPresenter.clock_utc(@at)}>
           subscribed {NotificationPresenter.relative_time(@at, @now)}
@@ -225,6 +234,9 @@ defmodule TrackerWeb.InboxLive.Subscriptions do
     </RowList.row>
     """
   end
+
+  defp ordered_events(events),
+    do: Enum.filter(NotificationPresenter.package_type_order(), &(&1 in events))
 
   attr :name, :string, required: true
 

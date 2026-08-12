@@ -24,6 +24,8 @@ defmodule TrackerWeb.NotificationPresenter do
   @type_order [
     :package_version_changed,
     :change_propagated,
+    :package_change_opened,
+    :package_change_merged,
     :package_added,
     :package_removed,
     :channel_revision_published
@@ -36,6 +38,16 @@ defmodule TrackerWeb.NotificationPresenter do
       filter_label: "Propagated",
       class: "propagate"
     },
+    package_change_opened: %TypeMeta{
+      label: "PR opened",
+      filter_label: "PRs opened",
+      class: "pr-open"
+    },
+    package_change_merged: %TypeMeta{
+      label: "PR merged",
+      filter_label: "PRs merged",
+      class: "pr-merged"
+    },
     package_added: %TypeMeta{label: "Added", filter_label: "Added", class: "add"},
     package_removed: %TypeMeta{label: "Removed", filter_label: "Removed", class: "remove"},
     channel_revision_published: %TypeMeta{
@@ -47,6 +59,12 @@ defmodule TrackerWeb.NotificationPresenter do
 
   @doc "All notification types in display order."
   def type_order, do: @type_order
+
+  @doc "The types a package subscription can select, in display order."
+  def package_type_order do
+    package_types = Tracker.Notifications.Notification.package_event_types()
+    Enum.filter(@type_order, &(&1 in package_types))
+  end
 
   @doc "The short status label for a type (row chip)."
   def type_label(type), do: Map.fetch!(@type_meta, type).label
@@ -182,17 +200,20 @@ defmodule TrackerWeb.NotificationPresenter do
   end
 
   def describe(%{type: :change_propagated} = n, _version_changes) do
-    prefix =
-      case change_title(n) do
-        nil -> "PR ##{change_number(n)}"
-        title -> "#{title} — PR ##{change_number(n)}"
-      end
-
-    "#{prefix} reached #{propagation_target(n)}"
+    "#{change_ref(n)} reached #{propagation_target(n)}"
   end
+
+  def describe(%{type: :package_change_opened} = n, _version_changes),
+    do: "#{change_ref(n)} opened against #{base_ref(n)}, touching #{package_name(n)}"
+
+  def describe(%{type: :package_change_merged} = n, _version_changes),
+    do: "#{change_ref(n)} merged into #{base_ref(n)}, touching #{package_name(n)}"
 
   @doc "The in-app path a notification links to, or `nil` when there is no target."
   def path(%{type: :change_propagated} = n), do: ~p"/changes/#{change_number(n)}"
+
+  def path(%{type: type} = n) when type in [:package_change_opened, :package_change_merged],
+    do: ~p"/changes/#{change_number(n)}"
 
   def path(%{
         type: :channel_revision_published,
@@ -213,6 +234,16 @@ defmodule TrackerWeb.NotificationPresenter do
 
   defp change_title(%{change: %{title: title}}) when is_binary(title) and title != "", do: title
   defp change_title(_), do: nil
+
+  defp change_ref(n) do
+    case change_title(n) do
+      nil -> "PR ##{change_number(n)}"
+      title -> "#{title} — PR ##{change_number(n)}"
+    end
+  end
+
+  defp base_ref(%{change: %{base_ref: ref}}) when is_binary(ref), do: ref
+  defp base_ref(_), do: "nixpkgs"
 
   # The propagation destination: the branch the change reached (a channel-kind
   # branch name doubles as the channel name), falling back to the mapped channel.

@@ -68,6 +68,41 @@ defmodule TrackerWeb.NotificationPresenterTest do
     assert text =~ "published on nixos-unstable"
   end
 
+  test "package_change_opened names the PR, its base ref, and the package" do
+    user = register_user!()
+    pkg = package!("firefox")
+    change = change!(nil, %{state: :open, base_ref: "master"})
+
+    n =
+      loaded_notification!(user, %{
+        type: :package_change_opened,
+        package_id: pkg.id,
+        change_id: change.id
+      })
+
+    text = NotificationPresenter.describe(n)
+    assert text =~ "PR ##{change.number}"
+    assert text =~ "opened against master"
+    assert text =~ "touching firefox"
+    assert NotificationPresenter.hero(n) == "firefox"
+    assert NotificationPresenter.path(n) == "/changes/#{change.number}"
+  end
+
+  test "package_change_merged names the branch it merged into" do
+    user = register_user!()
+    pkg = package!("vlc")
+    change = change!(nil, %{base_ref: "release-25.05"})
+
+    n =
+      loaded_notification!(user, %{
+        type: :package_change_merged,
+        package_id: pkg.id,
+        change_id: change.id
+      })
+
+    assert NotificationPresenter.describe(n) =~ "merged into release-25.05, touching vlc"
+  end
+
   describe "hero/1" do
     test "package notifications lead with the package attribute" do
       user = register_user!()
@@ -219,13 +254,25 @@ defmodule TrackerWeb.NotificationPresenterTest do
       assert NotificationPresenter.type_class(:channel_revision_published) == "revision"
     end
 
-    test "type_order/0 lists all five types" do
+    test "type_order/0 lists every type" do
       assert NotificationPresenter.type_order() == [
                :package_version_changed,
                :change_propagated,
+               :package_change_opened,
+               :package_change_merged,
                :package_added,
                :package_removed,
                :channel_revision_published
+             ]
+    end
+
+    test "package_type_order/0 lists only the package subscription types" do
+      assert NotificationPresenter.package_type_order() == [
+               :package_version_changed,
+               :package_change_opened,
+               :package_change_merged,
+               :package_added,
+               :package_removed
              ]
     end
   end

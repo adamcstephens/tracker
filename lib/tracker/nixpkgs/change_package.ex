@@ -9,10 +9,17 @@ defmodule Tracker.Nixpkgs.ChangePackage do
   code_interface do
     define :read
     define :load
+    define :for_change, args: [:change_id]
   end
 
   actions do
     defaults [:read, :destroy]
+
+    read :for_change do
+      description "The package links recorded for one change."
+      argument :change_id, :integer, allow_nil?: false
+      filter expr(change_id == ^arg(:change_id))
+    end
 
     create :load do
       accept [:change_id, :package_id, :type]

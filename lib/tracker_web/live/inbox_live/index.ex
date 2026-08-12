@@ -385,6 +385,9 @@ defmodule TrackerWeb.InboxLive.Index do
             reached {@n.change_branch.branch_name}
           </span>
         <% else %>
+          <.link :if={@n.change} navigate={@path} class="ibx-tag ibx-tag--pr">
+            PR <span class="hash">#{@n.change.number}</span>
+          </.link>
           <span :if={@n.channel} class="ibx-tag">
             <span class="dot"></span>{@n.channel.name}
           </span>
@@ -448,6 +451,18 @@ defmodule TrackerWeb.InboxLive.Index do
             cy="18"
             r="2.5"
           /><path d="M6 8.5v3a4 4 0 0 0 4 4h5.5" />
+        <% "pr-open" -> %>
+          <circle cx="7" cy="6" r="2.5" /><circle cx="7" cy="18" r="2.5" /><path d="M7 8.5v7" /><circle
+            cx="17"
+            cy="18"
+            r="2.5"
+          /><path d="M17 15.5V9a3 3 0 0 0-3-3h-3" />
+        <% "pr-merged" -> %>
+          <circle cx="7" cy="6" r="2.5" /><circle cx="7" cy="18" r="2.5" /><path d="M7 8.5v7" /><circle
+            cx="17"
+            cy="12"
+            r="2.5"
+          /><path d="M14.5 12h-2A5.5 5.5 0 0 1 7 6.5" />
         <% "check" -> %>
           <path d="M20 6 9 17l-5-5" />
         <% "unread" -> %>

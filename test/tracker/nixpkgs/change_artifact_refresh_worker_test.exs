@@ -11,6 +11,7 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorkerTest do
   alias Tracker.Nixpkgs.ChangePackage
   alias Tracker.Nixpkgs.File, as: NixFile
   alias Tracker.Nixpkgs.Package
+  alias Tracker.Notifications.NotificationFanoutChangeWorker
 
   setup do
     table = :"rate_limit_cache_artifact_#{System.unique_integer([:positive])}"
@@ -269,6 +270,52 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorkerTest do
         )
 
       assert link_count == 1
+    end
+  end
+
+  describe "package notification fan-out" do
+    test "a written link set enqueues the fan-out worker", %{rate_limit_table: table} do
+      change = insert_change!(number: 9010, state: :merged, merge_commit_sha: "fansha")
+
+      :ok =
+        ChangeArtifactRefreshWorker.run(
+          %{reason: "merged", number: 9010},
+          rate_limit_table: table,
+          attrdiff_fetcher: fn _ -> {:ok, %{"added" => ["fan-pkg"]}} end
+        )
+
+      assert_enqueued(worker: NotificationFanoutChangeWorker, args: %{change_id: change.id})
+    end
+
+    test "an empty link set enqueues nothing", %{rate_limit_table: table} do
+      insert_change!(number: 9011, state: :merged, merge_commit_sha: "emptysha")
+
+      :ok =
+        ChangeArtifactRefreshWorker.run(
+          %{reason: "merged", number: 9011},
+          rate_limit_table: table,
+          attrdiff_fetcher: fn _ -> {:ok, %{"added" => [], "changed" => [], "removed" => []}} end
+        )
+
+      refute_enqueued(worker: NotificationFanoutChangeWorker)
+    end
+
+    test "a staging-targeted change enqueues nothing", %{rate_limit_table: table} do
+      insert_change!(
+        number: 9012,
+        state: :merged,
+        base_ref: "staging",
+        merge_commit_sha: "stgsha"
+      )
+
+      :ok =
+        ChangeArtifactRefreshWorker.run(
+          %{reason: "merged", number: 9012},
+          rate_limit_table: table,
+          attrdiff_fetcher: fn _ -> {:ok, %{"added" => ["stg-pkg"]}} end
+        )
+
+      refute_enqueued(worker: NotificationFanoutChangeWorker)
     end
   end
 

@@ -26,6 +26,7 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
   alias Tracker.Nixpkgs.ChangePackage
   alias Tracker.Nixpkgs.File, as: NixFile
   alias Tracker.Nixpkgs.Package
+  alias Tracker.Notifications.NotificationFanoutChangeWorker
 
   @repo "NixOS/nixpkgs"
   @link_cap 1000
@@ -321,7 +322,9 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
           :too_large
 
         true ->
-          write_refresh!(change, build_link_records(change, typed_entries), :processed, total)
+          records = build_link_records(change, typed_entries)
+          write_refresh!(change, records, :processed, total)
+          if records != [], do: enqueue_package_fanout(change)
           :processed
       end
 
@@ -333,6 +336,12 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
   # staging churn would otherwise pollute per-package change lists.
   defp staging?(change),
     do: String.starts_with?(change.base_ref || "", "staging")
+
+  defp enqueue_package_fanout(change) do
+    %{"change_id" => change.id}
+    |> NotificationFanoutChangeWorker.new()
+    |> Oban.insert!()
+  end
 
   defp build_link_records(change, typed_entries) do
     all_attrs = Enum.map(typed_entries, &elem(&1, 1))

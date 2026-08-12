@@ -14,13 +14,15 @@ defmodule Tracker.Notifications.Notification do
     data_layer: AshPostgres.DataLayer,
     notifiers: [Ash.Notifier.PubSub]
 
-  @types [
+  @package_event_types [
     :package_version_changed,
     :package_added,
     :package_removed,
-    :channel_revision_published,
-    :change_propagated
+    :package_change_opened,
+    :package_change_merged
   ]
+
+  @types @package_event_types ++ [:channel_revision_published, :change_propagated]
 
   postgres do
     table "notifications"
@@ -147,6 +149,10 @@ defmodule Tracker.Notifications.Notification do
   identities do
     identity :unique_dedup_key, [:dedup_key]
   end
+
+  @doc "The notification types a `PackageSubscription` can select between."
+  @spec package_event_types() :: [atom()]
+  def package_event_types, do: @package_event_types
 
   @doc """
   Idempotently records a batch of notification maps, broadcasting an insert

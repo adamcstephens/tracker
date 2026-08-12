@@ -4,6 +4,7 @@ defmodule TrackerWeb.PackageLive.Show do
   alias Tracker.Nixpkgs.PackageHistory.Removal
   alias Tracker.Nixpkgs.PackageHistory.VersionChange
   alias Tracker.Notifications.PackageSubscription
+  alias TrackerWeb.NotificationPresenter
   alias TrackerWeb.PageSearch
   alias TrackerWeb.Pagination
   alias TrackerWeb.RowList
@@ -45,6 +46,24 @@ defmodule TrackerWeb.PackageLive.Show do
         </button>
       </:actions>
     </.header>
+
+    <form
+      :if={@subscribed?}
+      id="subscription-events"
+      class="sub-events"
+      phx-change="set-subscription-events"
+    >
+      <span class="sub-events__label">Notify me about</span>
+      <label :for={type <- NotificationPresenter.package_type_order()}>
+        <input
+          type="checkbox"
+          name="events[]"
+          value={type}
+          checked={type in @subscription_events}
+        />
+        {NotificationPresenter.type_filter_label(type)}
+      </label>
+    </form>
 
     <p :if={@package_meta.description}>{@package_meta.description}</p>
 
@@ -372,7 +391,7 @@ defmodule TrackerWeb.PackageLive.Show do
     {:ok,
      socket
      |> assign_new(:current_user, fn -> nil end)
-     |> assign(:subscribed?, false)}
+     |> assign_subscription_state(nil)}
   end
 
   # The page is not revision-scoped, so options come from link spans still open
@@ -425,7 +444,7 @@ defmodule TrackerWeb.PackageLive.Show do
      socket
      |> assign(:page_title, package.attribute)
      |> assign(:package, package)
-     |> assign(:subscribed?, package_subscribed?(socket.assigns.current_user, package.id))
+     |> assign_subscription(socket.assigns.current_user, package.id)
      |> assign(:family_siblings, family_siblings)
      |> assign(:variant_siblings, variant_siblings)
      |> assign(:linked_options, linked_options)
@@ -462,13 +481,18 @@ defmodule TrackerWeb.PackageLive.Show do
     {:noreply, load_revision_data(socket)}
   end
 
-  defp package_subscribed?(nil, _package_id), do: false
+  defp assign_subscription(socket, nil, _package_id),
+    do: assign_subscription_state(socket, nil)
 
-  defp package_subscribed?(user, package_id) do
-    case PackageSubscription.find(package_id, nil, actor: user) do
-      {:ok, nil} -> false
-      {:ok, _subscription} -> true
-    end
+  defp assign_subscription(socket, user, package_id) do
+    {:ok, subscription} = PackageSubscription.find(package_id, nil, actor: user)
+    assign_subscription_state(socket, subscription)
+  end
+
+  defp assign_subscription_state(socket, subscription) do
+    socket
+    |> assign(:subscribed?, not is_nil(subscription))
+    |> assign(:subscription_events, (subscription && subscription.events) || [])
   end
 
   defp extra_params(socket, overrides \\ %{}) do
@@ -543,18 +567,45 @@ defmodule TrackerWeb.PackageLive.Show do
   def handle_event("toggle-subscription", _params, socket) do
     %{current_user: user, package: package} = socket.assigns
 
-    subscribed? =
+    subscription =
       case PackageSubscription.find(package.id, nil, actor: user) do
         {:ok, nil} ->
-          {:ok, _subscription} = PackageSubscription.subscribe(package.id, nil, actor: user)
-          true
+          {:ok, subscription} = PackageSubscription.subscribe(package.id, nil, actor: user)
+          subscription
 
         {:ok, subscription} ->
           :ok = PackageSubscription.destroy(subscription, actor: user)
-          false
+          nil
       end
 
-    {:noreply, assign(socket, :subscribed?, subscribed?)}
+    {:noreply, assign_subscription_state(socket, subscription)}
+  end
+
+  # An empty selection means "notify me about nothing", which is an
+  # unsubscribe; the resource itself requires at least one event.
+  @impl true
+  def handle_event("set-subscription-events", params, socket) do
+    %{current_user: user, package: package} = socket.assigns
+    {:ok, subscription} = PackageSubscription.find(package.id, nil, actor: user)
+
+    subscription =
+      case Map.get(params, "events", []) do
+        [] ->
+          :ok = PackageSubscription.destroy(subscription, actor: user)
+          nil
+
+        events ->
+          {:ok, updated} =
+            PackageSubscription.set_events(
+              subscription,
+              Enum.map(events, &String.to_existing_atom/1),
+              actor: user
+            )
+
+          updated
+      end
+
+    {:noreply, assign_subscription_state(socket, subscription)}
   end
 
   @impl true
