@@ -81,7 +81,7 @@ defmodule TrackerWeb.LensTest do
 
   describe "from_params/2" do
     test "reads the lens from URL params", %{unstable: unstable} do
-      lens = Lens.from_params(%{"lens_channel" => unstable.name}, %{})
+      lens = Lens.from_params(%{"channel" => unstable.name}, %{})
 
       assert lens.channel.name == unstable.name
     end
@@ -94,7 +94,7 @@ defmodule TrackerWeb.LensTest do
 
     test "params win over the session", %{stable: stable, unstable: unstable} do
       lens =
-        Lens.from_params(%{"lens_channel" => unstable.name}, %{
+        Lens.from_params(%{"channel" => unstable.name}, %{
           "lens_channel_name" => stable.name
         })
 
@@ -112,7 +112,7 @@ defmodule TrackerWeb.LensTest do
         })
 
       lens =
-        Lens.from_params(%{"lens_channel" => unstable.name}, %{
+        Lens.from_params(%{"channel" => unstable.name}, %{
           "lens_channel_name" => unstable.name,
           "lens_rev" => revision.revision
         })
@@ -128,7 +128,7 @@ defmodule TrackerWeb.LensTest do
   describe "path_for/3" do
     test "sets the lens param on a bare path" do
       assert Lens.path_for("/packages", "nixos-unstable") ==
-               "/packages?lens_channel=nixos-unstable"
+               "/packages?channel=nixos-unstable"
     end
 
     test "keeps the other query params" do
@@ -142,18 +142,18 @@ defmodule TrackerWeb.LensTest do
       assert params == %{
                "in_channel" => "1",
                "page" => "2",
-               "lens_channel" => "nixos-unstable"
+               "channel" => "nixos-unstable"
              }
     end
 
     test "drops a previously pinned revision" do
-      assert Lens.path_for("/packages?lens_channel=old&lens_rev=deadbeef", "nixos-unstable") ==
-               "/packages?lens_channel=nixos-unstable"
+      assert Lens.path_for("/packages?channel=old&rev=deadbeef", "nixos-unstable") ==
+               "/packages?channel=nixos-unstable"
     end
 
     test "carries a revision when one is given" do
       assert Lens.path_for("/packages", "nixos-unstable", "deadbeef") ==
-               "/packages?lens_channel=nixos-unstable&lens_rev=deadbeef"
+               "/packages?channel=nixos-unstable&rev=deadbeef"
     end
   end
 

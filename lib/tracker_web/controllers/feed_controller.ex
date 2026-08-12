@@ -68,7 +68,7 @@ defmodule TrackerWeb.FeedController do
     |> Atomex.Entry.build()
   end
 
-  def channel(conn, %{"channel" => channel_name}) do
+  def channel(conn, %{"path_channel" => channel_name}) do
     channel = Tracker.Nixpkgs.Channel.by_name!(channel_name)
 
     revisions =

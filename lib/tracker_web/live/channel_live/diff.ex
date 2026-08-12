@@ -53,7 +53,7 @@ defmodule TrackerWeb.ChannelLive.Diff do
 
   @impl true
   def handle_params(
-        %{"channel" => channel_name, "rev_a" => rev_a_hash, "rev_b" => rev_b_hash} = params,
+        %{"path_channel" => channel_name, "rev_a" => rev_a_hash, "rev_b" => rev_b_hash} = params,
         _url,
         socket
       ) do

@@ -109,7 +109,7 @@ defmodule TrackerWeb.LensComponentTest do
       |> form("#lens-form", %{"channel" => unstable.name})
       |> render_change()
 
-      assert_patch(view, ~p"/packages?lens_channel=#{unstable.name}")
+      assert_patch(view, ~p"/packages?channel=#{unstable.name}")
     end
 
     test "keeps the rest of the query string", %{conn: conn, unstable: unstable} do
@@ -125,11 +125,11 @@ defmodule TrackerWeb.LensComponentTest do
 
       assert params["search"] == "hello"
       assert params["page"] == "2"
-      assert params["lens_channel"] == unstable.name
+      assert params["channel"] == unstable.name
     end
 
     test "replaces a previously pinned revision", %{conn: conn, unstable: unstable} do
-      {:ok, view, _html} = live(conn, ~p"/packages?lens_channel=nixos-old&lens_rev=deadbeef")
+      {:ok, view, _html} = live(conn, ~p"/packages?channel=nixos-old&rev=deadbeef")
 
       view
       |> form("#lens-form", %{"channel" => unstable.name})
@@ -138,8 +138,8 @@ defmodule TrackerWeb.LensComponentTest do
       path = assert_patch(view)
       params = path |> URI.parse() |> Map.fetch!(:query) |> URI.decode_query()
 
-      assert params["lens_channel"] == unstable.name
-      refute Map.has_key?(params, "lens_rev")
+      assert params["channel"] == unstable.name
+      refute Map.has_key?(params, "rev")
     end
 
     test "persists the choice to the cookie", %{conn: conn, unstable: unstable} do

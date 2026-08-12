@@ -52,11 +52,11 @@ defmodule TrackerWeb.Router do
   scope "/", TrackerWeb do
     pipe_through :browser
 
-    get "/feeds/channels/:channel", FeedController, :channel
+    get "/feeds/channels/:path_channel", FeedController, :channel
     get "/feeds/packages/:name", FeedController, :package
     get "/feeds/notifications/:token", FeedController, :notifications
     post "/lens", LensController, :update
-    get "/channels/:channel/diff", ChannelDiffController, :resolve
+    get "/channels/:path_channel/diff", ChannelDiffController, :resolve
 
     scope "/account" do
       pipe_through :force_interactive
@@ -82,9 +82,9 @@ defmodule TrackerWeb.Router do
       live "/packages", PackageLive.Index, :index
       live "/packages/:name", PackageLive.Show, :show
       live "/channels", ChannelLive.Index, :index
-      live "/channels/:channel", ChannelLive.Show, :show
-      live "/channels/:channel/revisions/:revision", ChannelLive.RevisionShow, :show
-      live "/channels/:channel/diff/:rev_a/:rev_b", ChannelLive.Diff, :diff
+      live "/channels/:path_channel", ChannelLive.Show, :show
+      live "/channels/:path_channel/revisions/:revision", ChannelLive.RevisionShow, :show
+      live "/channels/:path_channel/diff/:rev_a/:rev_b", ChannelLive.Diff, :diff
       live "/options", OptionLive.Show, :index
       live "/options/:prefix", OptionLive.Show, :show
       live "/maintainers", MaintainerLive.Index, :index

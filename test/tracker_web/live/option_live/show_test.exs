@@ -519,7 +519,7 @@ defmodule TrackerWeb.OptionLive.ShowTest do
     refute html =~ ~s(id="option-children")
   end
 
-  test "an explicit ?channel= override trumps the all-channels prompt", %{conn: conn} do
+  test "an explicit ?channel= trumps an all-channels cookie preference", %{conn: conn} do
     conn = Plug.Test.init_test_session(conn, %{"lens_channel_name" => "all"})
 
     {:ok, _view, html} = live(conn, ~p"/options/services.nginx?channel=nixos-unstable")

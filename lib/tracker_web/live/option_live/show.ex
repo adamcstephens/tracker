@@ -403,9 +403,9 @@ defmodule TrackerWeb.OptionLive.Show do
 
     # Options only exist per channel, so "All channels" has nothing honest to
     # show — every options page prompts for one instead of silently falling
-    # back to a default. An explicit ?channel= override still wins.
-    select_channel? =
-      lens != nil and lens.all? and not Map.has_key?(params, "channel")
+    # back to a default. An explicit ?channel= is itself a lens, so it never
+    # reaches here as "all".
+    select_channel? = lens != nil and lens.all?
 
     channel_revision =
       if select_channel?, do: nil, else: resolve_channel_revision(channel, rev)

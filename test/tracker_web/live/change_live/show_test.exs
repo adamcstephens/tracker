@@ -194,7 +194,7 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
 
     test "scopes to the first channel downstream of base_ref when the change has not landed in the lens channel",
          %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/changes/6002?lens_channel=nixos-98.98")
+      {:ok, _view, html} = live(conn, ~p"/changes/6002?channel=nixos-98.98")
 
       assert html =~ "Affected options"
       assert html =~ "scopedsmall.opts"
@@ -208,7 +208,7 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
     } do
       Tracker.Fixtures.change_branch!(change, "nixos-99.99", full_cr)
 
-      {:ok, _view, html} = live(conn, ~p"/changes/6002?lens_channel=nixos-99.99")
+      {:ok, _view, html} = live(conn, ~p"/changes/6002?channel=nixos-99.99")
 
       assert html =~ "scopedfull.opts"
       refute html =~ "scopedsmall.opts"
@@ -235,11 +235,11 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
       })
 
       {:ok, _view, html} =
-        live(conn, ~p"/changes/6002?lens_channel=nixos-99.99&lens_rev=scopedfull001")
+        live(conn, ~p"/changes/6002?channel=nixos-99.99&rev=scopedfull001")
 
       assert html =~ "scopedfull.opts"
 
-      {:ok, _view, html} = live(conn, ~p"/changes/6002?lens_channel=nixos-99.99")
+      {:ok, _view, html} = live(conn, ~p"/changes/6002?channel=nixos-99.99")
 
       refute html =~ "scopedfull.opts"
     end
@@ -251,7 +251,7 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
     } do
       Tracker.Fixtures.change_branch!(change, "nixos-99.99", full_cr)
 
-      {:ok, view, html} = live(conn, ~p"/changes/6002?lens_channel=nixos-98.98")
+      {:ok, view, html} = live(conn, ~p"/changes/6002?channel=nixos-98.98")
 
       assert html =~ "scopedsmall.opts"
 
@@ -259,7 +259,7 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
       |> form("#lens-form", %{"channel" => "nixos-99.99"})
       |> render_change()
 
-      assert_patch(view, ~p"/changes/6002?lens_channel=nixos-99.99")
+      assert_patch(view, ~p"/changes/6002?channel=nixos-99.99")
 
       html = render(view)
       assert html =~ "scopedfull.opts"
@@ -301,7 +301,7 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
         Tracker.Nixpkgs.ChannelRevision.record_options_result!(cr, %{options_result: :success})
       end)
 
-      {:ok, _view, html} = live(conn, ~p"/changes/6001?lens_channel=nixos-lens-channel")
+      {:ok, _view, html} = live(conn, ~p"/changes/6001?channel=nixos-lens-channel")
 
       refute html =~ "Affected options"
     end
@@ -623,7 +623,7 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
       })
 
       {:ok, view, html} =
-        live(conn, ~p"/changes/6001?lens_channel=nixpkgs-unstable")
+        live(conn, ~p"/changes/6001?channel=nixpkgs-unstable")
 
       assert html =~ ~r/<li[^>]*class="[^"]*is-mine[^"]*"[^>]*data-branch="nixpkgs-unstable"/
       refute html =~ ~r/<li[^>]*class="[^"]*is-mine[^"]*"[^>]*data-branch="nixos-unstable"/

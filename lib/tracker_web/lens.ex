@@ -3,7 +3,7 @@ defmodule TrackerWeb.Lens do
   Sitewide channel lens — a persistent filter for channel (and optional revision)
   that applies across all pages.
 
-  The lens lives in the URL: `lens_channel` and `lens_rev` query params are its
+  The lens lives in the URL: the `channel` and `rev` query params are its
   canonical source. The `_tracker_lens` cookie is a preference only, seeding the
   lens on a request that carries no params (see `TrackerWeb.Plug.Lens`).
   """
@@ -61,8 +61,8 @@ defmodule TrackerWeb.Lens do
   @spec from_params(map(), map()) :: t() | nil
   def from_params(params, session \\ %{})
 
-  def from_params(%{"lens_channel" => channel_name} = params, _session) do
-    resolve(channel_name, params["lens_rev"])
+  def from_params(%{"channel" => channel_name} = params, _session) do
+    resolve(channel_name, params["rev"])
   end
 
   def from_params(_params, session) do
@@ -80,9 +80,9 @@ defmodule TrackerWeb.Lens do
     query =
       (uri.query || "")
       |> URI.decode_query()
-      |> Map.drop(["lens_rev"])
-      |> Map.put("lens_channel", channel_name)
-      |> then(fn params -> if rev, do: Map.put(params, "lens_rev", rev), else: params end)
+      |> Map.drop(["rev"])
+      |> Map.put("channel", channel_name)
+      |> then(fn params -> if rev, do: Map.put(params, "rev", rev), else: params end)
       |> URI.encode_query()
 
     URI.to_string(%{uri | query: query})

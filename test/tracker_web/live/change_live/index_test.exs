@@ -210,14 +210,14 @@ defmodule TrackerWeb.ChangeLive.IndexTest do
     end
 
     test "lists changes that have not reached the lens channel", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/changes?lens_channel=nixos-97.97")
+      {:ok, _view, html} = live(conn, ~p"/changes?channel=nixos-97.97")
 
       assert html =~ "5001"
       assert html =~ "5002"
     end
 
     test "the in-channel toggle filters to changes that reached the lens channel", %{conn: conn} do
-      {:ok, view, html} = live(conn, ~p"/changes?lens_channel=nixos-97.97&in_channel=1")
+      {:ok, view, html} = live(conn, ~p"/changes?channel=nixos-97.97&in_channel=1")
 
       assert html =~ "5001"
       refute html =~ "5002"
@@ -225,7 +225,7 @@ defmodule TrackerWeb.ChangeLive.IndexTest do
     end
 
     test "toggling the filter on narrows the list", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/changes?lens_channel=nixos-97.97")
+      {:ok, view, _html} = live(conn, ~p"/changes?channel=nixos-97.97")
 
       html =
         view
@@ -239,18 +239,18 @@ defmodule TrackerWeb.ChangeLive.IndexTest do
     test "the toggle is labelled with the lens channel and reflects the filter state", %{
       conn: conn
     } do
-      {:ok, view, _html} = live(conn, ~p"/changes?lens_channel=nixos-97.97")
+      {:ok, view, _html} = live(conn, ~p"/changes?channel=nixos-97.97")
 
       assert has_element?(view, "form#change-base-ref-filter label", "nixos-97.97")
       refute has_element?(view, "input[name=in_channel][checked]")
 
-      {:ok, view, _html} = live(conn, ~p"/changes?lens_channel=nixos-97.97&in_channel=1")
+      {:ok, view, _html} = live(conn, ~p"/changes?channel=nixos-97.97&in_channel=1")
 
       assert has_element?(view, "input[name=in_channel][checked]")
     end
 
     test "rows that reached the lens channel carry a badge", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/changes?lens_channel=nixos-97.97")
+      {:ok, _view, html} = live(conn, ~p"/changes?channel=nixos-97.97")
       doc = Floki.parse_document!(html)
 
       assert [badge] = Floki.find(doc, "#changes li .pill-landed")
@@ -278,7 +278,7 @@ defmodule TrackerWeb.ChangeLive.IndexTest do
         |> Tracker.Fixtures.change_branch!("nixos-97.97", cr)
       end
 
-      {:ok, _view, html} = live(conn, ~p"/changes?lens_channel=nixos-97.97&in_channel=1")
+      {:ok, _view, html} = live(conn, ~p"/changes?channel=nixos-97.97&in_channel=1")
 
       [next] =
         html
@@ -288,7 +288,7 @@ defmodule TrackerWeb.ChangeLive.IndexTest do
       assert query_params(next) == %{
                "in_channel" => "1",
                "page" => "2",
-               "lens_channel" => "nixos-97.97"
+               "channel" => "nixos-97.97"
              }
     end
   end

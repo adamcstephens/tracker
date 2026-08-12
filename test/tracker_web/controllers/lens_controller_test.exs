@@ -10,7 +10,7 @@ defmodule TrackerWeb.LensControllerTest do
         |> put_req_header("referer", "/packages/firefox")
         |> post("/lens", %{"channel" => "nixos-unstable"})
 
-      assert redirected_to(conn) == "/packages/firefox?lens_channel=nixos-unstable"
+      assert redirected_to(conn) == "/packages/firefox?channel=nixos-unstable"
 
       cookie = conn.resp_cookies["_tracker_lens"]
       assert cookie
@@ -26,7 +26,7 @@ defmodule TrackerWeb.LensControllerTest do
     test "includes revision in cookie when provided", %{conn: conn} do
       conn = post(conn, "/lens", %{"channel" => "nixos-unstable", "rev" => "abc123"})
 
-      assert redirected_to(conn) == "/?lens_channel=nixos-unstable&lens_rev=abc123"
+      assert redirected_to(conn) == "/?channel=nixos-unstable&rev=abc123"
 
       cookie = conn.resp_cookies["_tracker_lens"]
       {:ok, value} = Lens.verify_cookie(cookie.value)
@@ -36,7 +36,7 @@ defmodule TrackerWeb.LensControllerTest do
     test "redirects to / when no referer", %{conn: conn} do
       conn = post(conn, "/lens", %{"channel" => "nixos-unstable"})
 
-      assert redirected_to(conn) == "/?lens_channel=nixos-unstable"
+      assert redirected_to(conn) == "/?channel=nixos-unstable"
     end
 
     test "ignores empty revision", %{conn: conn} do
@@ -53,7 +53,7 @@ defmodule TrackerWeb.LensControllerTest do
         |> put_req_header("referer", "http://#{conn.host}/packages?search=foo")
         |> post("/lens", %{"channel" => "nixos-unstable"})
 
-      assert redirected_to(conn) == "/packages?lens_channel=nixos-unstable&search=foo"
+      assert redirected_to(conn) == "/packages?channel=nixos-unstable&search=foo"
     end
 
     test "falls back to / when referer is a cross-origin URL", %{conn: conn} do
@@ -62,7 +62,7 @@ defmodule TrackerWeb.LensControllerTest do
         |> put_req_header("referer", "https://evil.example/attack")
         |> post("/lens", %{"channel" => "nixos-unstable"})
 
-      assert redirected_to(conn) == "/?lens_channel=nixos-unstable"
+      assert redirected_to(conn) == "/?channel=nixos-unstable"
     end
   end
 end

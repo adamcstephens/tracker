@@ -4,7 +4,7 @@ defmodule TrackerWeb.Plug.Lens do
   and populates the session with `lens_channel_name` and `lens_rev`.
 
   The cookie is a preference, not live state: `TrackerWeb.Lens` only falls
-  back to it when the request carries no `lens_channel` param.
+  back to it when the request carries no `channel` param.
   """
 
   import Plug.Conn

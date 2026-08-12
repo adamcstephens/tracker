@@ -102,7 +102,7 @@ defmodule TrackerWeb.ChannelLive.Show do
   end
 
   @impl true
-  def handle_params(%{"channel" => channel_name} = params, _url, socket) do
+  def handle_params(%{"path_channel" => channel_name} = params, _url, socket) do
     channel = Tracker.Nixpkgs.Channel.by_name!(channel_name, load: [:build_problem?])
 
     if connected?(socket) && socket.assigns.subscribed_channel_id != channel.id do

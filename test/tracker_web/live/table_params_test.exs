@@ -61,15 +61,21 @@ defmodule TrackerWeb.TableParamsTest do
       tp =
         TableParams.from_params(%{
           "page" => "2",
-          "lens_channel" => "nixos-unstable",
-          "lens_rev" => "deadbeef"
+          "channel" => "nixos-unstable",
+          "rev" => "deadbeef"
         })
 
-      assert tp.lens_channel == "nixos-unstable"
-      assert tp.lens_rev == "deadbeef"
+      assert tp.channel == "nixos-unstable"
+      assert tp.rev == "deadbeef"
 
-      assert TableParams.to_path(tp, "/packages") ==
-               "/packages?page=2&lens_channel=nixos-unstable&lens_rev=deadbeef"
+      query =
+        tp |> TableParams.to_path("/packages") |> URI.parse() |> Map.fetch!(:query)
+
+      assert URI.decode_query(query) == %{
+               "page" => "2",
+               "channel" => "nixos-unstable",
+               "rev" => "deadbeef"
+             }
     end
   end
 
