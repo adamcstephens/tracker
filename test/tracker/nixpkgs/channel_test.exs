@@ -343,4 +343,65 @@ defmodule Tracker.Nixpkgs.ChannelTest do
       assert loaded.build_problem? == false
     end
   end
+
+  describe "revision aggregates" do
+    setup do
+      channel =
+        Channel.create!(%{
+          name: "nixos-aggregate-#{System.unique_integer([:positive])}",
+          display_name: "Aggregates",
+          status: :active,
+          is_stable: false
+        })
+
+      %{channel: channel}
+    end
+
+    test "revision_count and latest_release are zero and nil without revisions", %{
+      channel: channel
+    } do
+      {:ok, loaded} = Channel.by_name(channel.name, load: [:revision_count, :latest_release])
+
+      assert loaded.revision_count == 0
+      assert loaded.latest_release == nil
+    end
+
+    test "revision_count counts the channel's revisions", %{channel: channel} do
+      other =
+        Channel.create!(%{
+          name: "nixos-other-#{System.unique_integer([:positive])}",
+          display_name: "Other",
+          status: :active,
+          is_stable: false
+        })
+
+      for {ch, at} <- [
+            {channel, ~U[2026-03-01 10:00:00Z]},
+            {channel, ~U[2026-03-15 10:00:00Z]},
+            {other, ~U[2026-03-20 10:00:00Z]}
+          ] do
+        Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
+          channel_id: ch.id,
+          revision: "rev#{System.unique_integer([:positive])}",
+          released_at: at
+        })
+      end
+
+      {:ok, loaded} = Channel.by_name(channel.name, load: [:revision_count])
+      assert loaded.revision_count == 2
+    end
+
+    test "latest_release is the newest released_at", %{channel: channel} do
+      for at <- [~U[2026-03-15 10:00:00Z], ~U[2026-03-01 10:00:00Z], ~U[2026-03-10 10:00:00Z]] do
+        Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
+          channel_id: channel.id,
+          revision: "rev#{System.unique_integer([:positive])}",
+          released_at: at
+        })
+      end
+
+      {:ok, loaded} = Channel.by_name(channel.name, load: [:latest_release])
+      assert loaded.latest_release == ~U[2026-03-15 10:00:00Z]
+    end
+  end
 end

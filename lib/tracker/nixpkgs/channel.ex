@@ -169,6 +169,11 @@ defmodule Tracker.Nixpkgs.Channel do
               )
   end
 
+  aggregates do
+    count :revision_count, :channel_revisions
+    max :latest_release, :channel_revisions, :released_at
+  end
+
   identities do
     identity :unique_name, [:name]
   end

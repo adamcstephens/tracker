@@ -83,7 +83,7 @@ defmodule TrackerWeb.ChannelLive.Index do
   end
 
   defp load_channels do
-    Tracker.Nixpkgs.Channel.read!(load: [:build_problem?])
+    Tracker.Nixpkgs.Channel.read!(load: [:build_problem?, :revision_count, :latest_release])
     |> Enum.map(&channel_row/1)
     |> sort_channels()
   end
@@ -101,13 +101,10 @@ defmodule TrackerWeb.ChannelLive.Index do
   end
 
   defp channel_row(channel) do
-    revisions = Tracker.Nixpkgs.ChannelRevision.by_channel!(channel.id)
-    latest = Enum.max_by(revisions, & &1.released_at, DateTime, fn -> nil end)
-
     %{
       name: channel.name,
-      count: length(revisions),
-      latest_release: latest && latest.released_at,
+      count: channel.revision_count,
+      latest_release: channel.latest_release,
       build_problem?: channel.build_problem?,
       status: channel.status
     }
