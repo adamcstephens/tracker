@@ -3675,3 +3675,20 @@ kbd {
 kbd + kbd {
 	margin-left: 0.25rem;
 }
+
+.pipeline-error {
+	margin: 0;
+	max-height: 14rem;
+	overflow-y: auto;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+/* Diagnostics, not decoration: the sublabel carries the failed step, the retry
+   budget and the blocked-revision count, so it wraps instead of being clipped. */
+.pipeline-list .row-sublabel {
+	flex-wrap: wrap;
+	white-space: normal;
+	overflow: visible;
+	mask-image: none;
+}

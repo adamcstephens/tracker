@@ -468,6 +468,66 @@ defmodule Tracker.Ingestion.PipelineTest do
     end
   end
 
+  describe "unhealthy" do
+    test "returns failed and stuck pipelines", %{channel: channel} do
+      run = create_run!()
+
+      failed = create_pipeline!(run, channel, %{revision: "r1", sequence: 0})
+      Pipeline.mark_failed!(failed, :finalize, "boom")
+
+      stuck = create_pipeline!(run, channel, %{revision: "r2", sequence: 1})
+      Pipeline.mark_stuck!(stuck, :load_packages, "wedged")
+
+      revisions = Pipeline.unhealthy!() |> Enum.map(& &1.revision)
+
+      assert Enum.sort(revisions) == ["r1", "r2"]
+    end
+
+    test "excludes pending, running and completed pipelines", %{channel: channel} do
+      run = create_run!()
+
+      create_pipeline!(run, channel, %{revision: "pending", sequence: 0})
+
+      running = create_pipeline!(run, channel, %{revision: "running", sequence: 1})
+      Pipeline.start!(running)
+
+      completed = create_pipeline!(run, channel, %{revision: "completed", sequence: 2})
+      Pipeline.mark_completed!(completed)
+
+      assert [] = Pipeline.unhealthy!()
+    end
+
+    test "sorts oldest first and loads the channel", %{channel: channel} do
+      run = create_run!()
+      older = ~U[2021-11-09 10:01:25Z]
+      newer = ~U[2026-08-13 04:44:56Z]
+
+      recent = create_pipeline!(run, channel, %{revision: "r2", released_at: newer, sequence: 1})
+      Pipeline.mark_failed!(recent, :finalize, "boom")
+
+      old = create_pipeline!(run, channel, %{revision: "r1", released_at: older, sequence: 0})
+      Pipeline.mark_failed!(old, :finalize, "boom")
+
+      assert [first, second] = Pipeline.unhealthy!()
+      assert first.revision == "r1"
+      assert second.revision == "r2"
+      assert first.channel.name == channel.name
+    end
+
+    test "counts the pending pipelines blocked behind the head", %{channel: channel} do
+      run = create_run!()
+
+      head = create_pipeline!(run, channel, %{revision: "head", sequence: 0})
+      Pipeline.mark_failed!(head, :finalize, "boom")
+
+      create_pipeline!(run, channel, %{revision: "blocked1", sequence: 1})
+      create_pipeline!(run, channel, %{revision: "blocked2", sequence: 2})
+
+      assert [pipeline] = Pipeline.unhealthy!()
+      assert pipeline.channel.pending_pipeline_count == 2
+    end
+  end
+
   describe "identity" do
     test "enforces unique channel_id+revision", %{channel: channel} do
       run = create_run!()

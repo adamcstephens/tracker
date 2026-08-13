@@ -26,6 +26,8 @@ defmodule Tracker.Ingestion.Pipeline do
     define :next_pending_for_channel, args: [:channel_id]
     define :oldest_incomplete_for_channel, args: [:channel_id], not_found_error?: false
     define :for_run, args: [:ingestion_run_id]
+    define :unhealthy
+    define :get_pipeline, action: :read, get_by: [:id]
   end
 
   @max_auto_retries 3
@@ -100,6 +102,17 @@ defmodule Tracker.Ingestion.Pipeline do
       argument :channel_id, :integer, allow_nil?: false
 
       filter expr(channel_id == ^arg(:channel_id))
+    end
+
+    read :unhealthy do
+      description "Pipelines needing operator attention: failed or stuck."
+
+      prepare build(
+                sort: [{:released_at, :asc}, {:sequence, :asc}],
+                load: [channel: [:pending_pipeline_count]]
+              )
+
+      filter expr(status in [:failed, :stuck])
     end
 
     read :for_run do

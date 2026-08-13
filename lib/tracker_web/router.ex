@@ -169,8 +169,22 @@ defmodule TrackerWeb.Router do
     oban_dashboard "/oban", on_mount: @dev_dashboard_on_mount
   end
 
-  scope "/admin" do
-    pipe_through :browser
+  scope "/admin", TrackerWeb do
+    pipe_through [:browser, :require_admin]
+
+    ash_authentication_live_session :admin_routes,
+      on_mount: [
+        {TrackerWeb.LiveUserAuth, :admin_only},
+        {TrackerWeb.Layouts, :chrome}
+      ] do
+      live "/", AdminLive.Ingestion, :index
+    end
+  end
+
+  # Declared after the ingestion page so its `/*route` wildcard, which would
+  # otherwise swallow `/admin` itself, only ever sees `/admin/ash`.
+  scope "/admin/ash" do
+    pipe_through [:browser, :require_admin]
 
     ash_admin "/",
               AshAuthentication.Phoenix.LiveSession.opts(

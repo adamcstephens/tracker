@@ -471,10 +471,10 @@ defmodule TrackerWeb.LayoutsTest do
       assert "/admin" in Enum.map(more.children, & &1.path)
     end
 
-    test "Admin tab carries no active prefix so it doesn't share Teams' underline" do
+    test "Admin tab underlines on the admin page without sharing Teams' underline" do
       admin = Enum.find(Layouts.nav_items(%User{roles: [:user, :admin]}), &(&1.full == "Admin"))
 
-      assert admin.active == []
+      assert Layouts.nav_active?(TrackerWeb.AdminLive.Ingestion, admin)
       refute Layouts.nav_active?(TrackerWeb.TeamLive.Index, admin)
     end
   end

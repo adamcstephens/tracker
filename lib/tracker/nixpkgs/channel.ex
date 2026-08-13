@@ -167,6 +167,7 @@ defmodule Tracker.Nixpkgs.Channel do
 
   relationships do
     has_many :channel_revisions, Tracker.Nixpkgs.ChannelRevision
+    has_many :ingestion_pipelines, Tracker.Ingestion.Pipeline
   end
 
   calculations do
@@ -181,6 +182,11 @@ defmodule Tracker.Nixpkgs.Channel do
   aggregates do
     count :revision_count, :channel_revisions
     max :latest_release, :channel_revisions, :released_at
+
+    count :pending_pipeline_count, :ingestion_pipelines do
+      description "Pipelines blocked behind the channel's chain head."
+      filter expr(status == :pending)
+    end
   end
 
   identities do
