@@ -1,8 +1,11 @@
 defmodule TrackerWeb.ChannelLive.Index do
   use TrackerWeb, :live_view
 
+  alias Tracker.Nixpkgs.Channel
   alias TrackerWeb.PageSearch
   alias TrackerWeb.RowList
+
+  @row_loads [:build_problem?, :revision_count, :latest_release]
 
   @impl true
   def render(assigns) do
@@ -48,10 +51,10 @@ defmodule TrackerWeb.ChannelLive.Index do
 
   @impl true
   def handle_info(
-        %Ash.Notifier.Notification{resource: Tracker.Nixpkgs.Channel, data: channel},
+        %Ash.Notifier.Notification{resource: Tracker.Nixpkgs.Channel, data: %{id: channel_id}},
         socket
       ) do
-    {:noreply, replace_channel(socket, channel)}
+    {:noreply, reload_channel(socket, channel_id)}
   end
 
   def handle_info(
@@ -61,10 +64,7 @@ defmodule TrackerWeb.ChannelLive.Index do
         },
         socket
       ) do
-    case Ash.get(Tracker.Nixpkgs.Channel, channel_id, load: [:build_problem?]) do
-      {:ok, channel} -> {:noreply, replace_channel(socket, channel)}
-      _ -> {:noreply, socket}
-    end
+    {:noreply, reload_channel(socket, channel_id)}
   end
 
   @impl true
@@ -83,9 +83,16 @@ defmodule TrackerWeb.ChannelLive.Index do
   end
 
   defp load_channels do
-    Tracker.Nixpkgs.Channel.read!(load: [:build_problem?, :revision_count, :latest_release])
+    Channel.read!(load: @row_loads)
     |> Enum.map(&channel_row/1)
     |> sort_channels()
+  end
+
+  defp reload_channel(socket, channel_id) do
+    case Channel.by_id(channel_id, load: @row_loads) do
+      {:ok, channel} -> replace_channel(socket, channel)
+      _ -> socket
+    end
   end
 
   defp replace_channel(socket, channel) do

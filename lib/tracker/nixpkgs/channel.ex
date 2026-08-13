@@ -19,6 +19,7 @@ defmodule Tracker.Nixpkgs.Channel do
     define :create
     define :read
     define :by_name, args: [:name]
+    define :by_id, args: [:id]
     define :active
     define :nixos_channels
     define :default_stable
@@ -44,6 +45,14 @@ defmodule Tracker.Nixpkgs.Channel do
       argument :name, :string, allow_nil?: false
 
       filter expr(name == ^arg(:name))
+    end
+
+    read :by_id do
+      get? true
+
+      argument :id, :integer, allow_nil?: false
+
+      filter expr(id == ^arg(:id))
     end
 
     read :active do

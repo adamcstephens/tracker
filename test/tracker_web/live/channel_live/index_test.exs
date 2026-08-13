@@ -130,6 +130,7 @@ defmodule TrackerWeb.ChannelLive.IndexTest do
   test "revision count and latest release update live when a revision is created", %{conn: conn} do
     {:ok, view, html} = live(conn, ~p"/channels")
     refute html =~ "2026-04-02"
+    assert html =~ "2 revisions"
 
     channel = Channel.by_name!("nixos-unstable")
 
@@ -141,6 +142,7 @@ defmodule TrackerWeb.ChannelLive.IndexTest do
 
     html = render(view)
     assert html =~ "2026-04-02"
+    assert html =~ "3 revisions"
   end
 
   test "orders channels by latest release, most recent first", %{conn: conn} do
