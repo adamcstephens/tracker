@@ -292,8 +292,23 @@ where
         short_name: Option<String>,
     }
 
-    Option::<Vec<ProvenanceEntry>>::deserialize(deserializer)
-        .map(|opt| opt.map(|entries| entries.into_iter().filter_map(|e| e.short_name).collect()))
+    #[derive(serde::Deserialize)]
+    #[serde(untagged)]
+    enum ProvenanceRaw {
+        Single(ProvenanceEntry),
+        Multiple(Vec<ProvenanceEntry>),
+    }
+
+    Option::<ProvenanceRaw>::deserialize(deserializer).map(|opt| {
+        opt.map(|raw| {
+            let entries = match raw {
+                ProvenanceRaw::Single(entry) => vec![entry],
+                ProvenanceRaw::Multiple(entries) => entries,
+            };
+
+            entries.into_iter().filter_map(|e| e.short_name).collect()
+        })
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -1278,6 +1293,25 @@ mod tests {
         assert_eq!(meta.broken, None);
         assert_eq!(meta.known_vulnerabilities, None);
         assert_eq!(meta.source_provenance, None);
+    }
+
+    // Older nixpkgs (2022) serializes a lone sourceProvenance as a bare
+    // attrset rather than a one-element list.
+    #[test]
+    fn test_source_provenance_single_object_normalized_to_list() {
+        let json = r#"{"version": "1.0", "meta": {"sourceProvenance": {"isSource": false, "shortName": "binaryBytecode"}}}"#;
+        let entry: PackageEntry = serde_json::from_str(json).unwrap();
+        assert_eq!(
+            entry.meta.unwrap().source_provenance,
+            Some(vec!["binaryBytecode".to_string()])
+        );
+    }
+
+    #[test]
+    fn test_source_provenance_null() {
+        let json = r#"{"version": "1.0", "meta": {"sourceProvenance": null}}"#;
+        let entry: PackageEntry = serde_json::from_str(json).unwrap();
+        assert_eq!(entry.meta.unwrap().source_provenance, None);
     }
 
     // -- Platform pattern normalization --
