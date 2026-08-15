@@ -96,6 +96,136 @@ defmodule Tracker.Nixpkgs.OptionHistoryTest do
     end
   end
 
+  describe "diff_between/2" do
+    test "is empty when nothing changed in the window" do
+      channel = Fixtures.channel!()
+      before_rev = revision!(channel, "odnop000", ~U[2026-03-01 10:00:00Z])
+      from_rev = revision!(channel, "odnop001", ~U[2026-04-01 10:00:00Z], before_rev)
+      to_rev = revision!(channel, "odnop002", ~U[2026-04-15 10:00:00Z], from_rev)
+
+      opt = Fixtures.option!("services.odnop")
+      Fixtures.apply_option_revision!(before_rev, [{opt, %{type: "bool"}}])
+      Fixtures.apply_option_revision!(from_rev, [{opt, %{type: "str"}}])
+      Fixtures.apply_option_revision!(to_rev, [{opt, %{type: "str"}}])
+
+      diff = OptionHistory.diff_between(to_rev, from_rev.released_at)
+
+      assert diff.events == []
+      assert diff.metadata_changes == []
+    end
+
+    test "ignores an option that changes and changes back inside the window" do
+      channel = Fixtures.channel!()
+      from_rev = revision!(channel, "odrtp001", ~U[2026-04-01 10:00:00Z])
+      mid_rev = revision!(channel, "odrtp002", ~U[2026-04-08 10:00:00Z], from_rev)
+      to_rev = revision!(channel, "odrtp003", ~U[2026-04-15 10:00:00Z], mid_rev)
+
+      opt = Fixtures.option!("services.odrtp")
+      Fixtures.apply_option_revision!(from_rev, [{opt, %{type: "bool"}}])
+      Fixtures.apply_option_revision!(mid_rev, [{opt, %{type: "str"}}])
+      Fixtures.apply_option_revision!(to_rev, [{opt, %{type: "bool"}}])
+
+      diff = OptionHistory.diff_between(to_rev, from_rev.released_at)
+
+      assert diff.events == []
+      assert diff.metadata_changes == []
+    end
+
+    test "nets out intermediate revisions for a non-adjacent pair" do
+      channel = Fixtures.channel!()
+      from_rev = revision!(channel, "odnet001", ~U[2026-04-01 10:00:00Z])
+      mid_rev = revision!(channel, "odnet002", ~U[2026-04-08 10:00:00Z], from_rev)
+      to_rev = revision!(channel, "odnet003", ~U[2026-04-15 10:00:00Z], mid_rev)
+
+      opt = Fixtures.option!("services.odnet")
+      transient = Fixtures.option!("services.odnet-transient")
+
+      Fixtures.apply_option_revision!(from_rev, [{opt, %{type: "bool"}}])
+
+      Fixtures.apply_option_revision!(mid_rev, [
+        {opt, %{type: "str"}},
+        {transient, %{type: "int"}}
+      ])
+
+      Fixtures.apply_option_revision!(to_rev, [{opt, %{type: "path"}}])
+      Fixtures.remove_option!(to_rev, transient)
+
+      diff = OptionHistory.diff_between(to_rev, from_rev.released_at)
+
+      assert diff.events == []
+
+      assert [%{option_name: "services.odnet", field: :type, old: "bool", new: "path"}] =
+               diff.metadata_changes
+    end
+
+    test "reports no metadata change when only an untracked payload field moved" do
+      channel = Fixtures.channel!()
+      from_rev = revision!(channel, "odunt001", ~U[2026-04-01 10:00:00Z])
+      to_rev = revision!(channel, "odunt002", ~U[2026-04-15 10:00:00Z], from_rev)
+
+      opt = Fixtures.option!("services.odunt")
+      Fixtures.apply_option_revision!(from_rev, [{opt, %{type: "bool", loc: ["a", "b"]}}])
+      Fixtures.apply_option_revision!(to_rev, [{opt, %{type: "bool", loc: ["a", "c"]}}])
+
+      diff = OptionHistory.diff_between(to_rev, from_rev.released_at)
+
+      assert diff.events == []
+      assert diff.metadata_changes == []
+    end
+
+    test "sorts events by option name" do
+      channel = Fixtures.channel!()
+      from_rev = revision!(channel, "odsrt001", ~U[2026-04-01 10:00:00Z])
+      to_rev = revision!(channel, "odsrt002", ~U[2026-04-15 10:00:00Z], from_rev)
+
+      zed = Fixtures.option!("services.zed")
+      alpha = Fixtures.option!("services.alpha")
+      Fixtures.apply_option_revision!(to_rev, [{zed, %{type: "bool"}}, {alpha, %{type: "bool"}}])
+
+      diff = OptionHistory.diff_between(to_rev, from_rev.released_at)
+
+      assert Enum.map(diff.events, & &1.option.name) == ["services.alpha", "services.zed"]
+    end
+
+    test "ignores changes outside the window" do
+      channel = Fixtures.channel!()
+      old_rev = revision!(channel, "odout001", ~U[2026-02-01 10:00:00Z])
+      from_rev = revision!(channel, "odout002", ~U[2026-04-01 10:00:00Z], old_rev)
+      to_rev = revision!(channel, "odout003", ~U[2026-04-15 10:00:00Z], from_rev)
+      later_rev = revision!(channel, "odout004", ~U[2026-05-01 10:00:00Z], to_rev)
+
+      early = Fixtures.option!("services.odout-early")
+      late = Fixtures.option!("services.odout-late")
+      changed = Fixtures.option!("services.odout-changed")
+
+      Fixtures.apply_option_revision!(old_rev, [
+        {early, %{type: "bool"}},
+        {changed, %{type: "bool"}}
+      ])
+
+      Fixtures.apply_option_revision!(from_rev, [
+        {early, %{type: "str"}},
+        {changed, %{type: "bool"}}
+      ])
+
+      Fixtures.apply_option_revision!(to_rev, [
+        {early, %{type: "str"}},
+        {changed, %{type: "str"}}
+      ])
+
+      Fixtures.apply_option_revision!(later_rev, [
+        {early, %{type: "str"}},
+        {changed, %{type: "str"}},
+        {late, %{type: "int"}}
+      ])
+
+      diff = OptionHistory.diff_between(to_rev, from_rev.released_at)
+
+      assert diff.events == []
+      assert Enum.map(diff.metadata_changes, & &1.option_name) == ["services.odout-changed"]
+    end
+  end
+
   describe "current_metadata/1" do
     test "returns the open span per option" do
       channel = Fixtures.channel!("nixos-unstable")

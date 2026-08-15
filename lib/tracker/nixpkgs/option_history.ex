@@ -8,7 +8,7 @@ defmodule Tracker.Nixpkgs.OptionHistory do
   `Tracker.Nixpkgs.PackageHistory` for the package-side equivalent.
   """
 
-  alias Tracker.Nixpkgs.{ChannelRevision, OptionSpan}
+  alias Tracker.Nixpkgs.{ChannelRevision, Option, OptionSpan}
 
   defmodule Event do
     @moduledoc "A derived option lifecycle event (added/removed) at a revision."
@@ -48,8 +48,26 @@ defmodule Tracker.Nixpkgs.OptionHistory do
           metadata_changes: [MetadataDiff.t()]
         }
   def diff_between(to_rev, from_at) do
-    rows = diff_rows(to_rev.channel_id, from_at, to_rev.released_at)
+    rows =
+      to_rev.channel_id
+      |> diff_rows(from_at, to_rev.released_at)
+      |> with_names()
+
     %{events: option_events(rows, to_rev), metadata_changes: metadata_changes(rows)}
+  end
+
+  defp with_names([]), do: []
+
+  defp with_names(rows) do
+    names =
+      rows
+      |> Enum.map(& &1.option_id)
+      |> Option.by_ids!()
+      |> Map.new(&{&1.id, &1.name})
+
+    rows
+    |> Enum.map(&Map.put(&1, :name, Map.fetch!(names, &1.option_id)))
+    |> Enum.sort_by(& &1.name)
   end
 
   @doc """
@@ -94,37 +112,49 @@ defmodule Tracker.Nixpkgs.OptionHistory do
     |> Enum.sort_by(&{&1.option_name, &1.field})
   end
 
-  # DB-side set-diff: only options added/removed or with a changed tracked field.
+  # An option whose metadata differs across the window must have the span holding
+  # `from_at` close inside it and the span holding `to_at` open inside it — one of
+  # the two is missing when the option is added or removed, and both are when
+  # nothing changed. So the boundary indexes alone carry both endpoints, and cost
+  # tracks the size of the diff rather than the size of the channel. Spans also
+  # cut on payload fields not compared here, which land in the join and fall out
+  # of the field comparison.
   defp diff_rows(channel_id, from_at, to_at) do
     {:ok, %{rows: rows}} =
       Tracker.Repo.query(
         """
-        WITH a AS (SELECT option_id, description, type, "default", example, read_only
-                   FROM option_spans WHERE channel_id = $1 AND valid @> $2::timestamptz),
-             b AS (SELECT option_id, description, type, "default", example, read_only
-                   FROM option_spans WHERE channel_id = $1 AND valid @> $3::timestamptz)
-        SELECT o.name,
-               a.option_id IS NOT NULL AS in_old,
-               b.option_id IS NOT NULL AS in_new,
-               a.description, b.description, a.type, b.type,
-               a."default", b."default", a.example, b.example,
-               a.read_only, b.read_only,
-               COALESCE(a.option_id, b.option_id) AS option_id
-        FROM a FULL OUTER JOIN b ON a.option_id = b.option_id
-        JOIN options o ON o.id = COALESCE(a.option_id, b.option_id)
-        WHERE a.option_id IS NULL OR b.option_id IS NULL
-           OR a.description IS DISTINCT FROM b.description
-           OR a.type IS DISTINCT FROM b.type
-           OR a."default" IS DISTINCT FROM b."default"
-           OR a.example IS DISTINCT FROM b.example
-           OR a.read_only IS DISTINCT FROM b.read_only
-        ORDER BY o.name
+        WITH old_spans AS (
+               SELECT option_id, description, type, "default", example, read_only
+               FROM option_spans
+               WHERE channel_id = $1
+                 AND upper(valid) > $2::timestamptz AND upper(valid) <= $3::timestamptz
+                 AND valid @> $2::timestamptz
+             ),
+             new_spans AS (
+               SELECT option_id, description, type, "default", example, read_only
+               FROM option_spans
+               WHERE channel_id = $1
+                 AND lower(valid) > $2::timestamptz AND lower(valid) <= $3::timestamptz
+                 AND valid @> $3::timestamptz
+             )
+        SELECT o.option_id IS NOT NULL AS in_old,
+               n.option_id IS NOT NULL AS in_new,
+               o.description, n.description, o.type, n.type,
+               o."default", n."default", o.example, n.example,
+               o.read_only, n.read_only,
+               COALESCE(o.option_id, n.option_id) AS option_id
+        FROM old_spans o FULL OUTER JOIN new_spans n ON o.option_id = n.option_id
+        WHERE o.option_id IS NULL OR n.option_id IS NULL
+           OR o.description IS DISTINCT FROM n.description
+           OR o.type IS DISTINCT FROM n.type
+           OR o."default" IS DISTINCT FROM n."default"
+           OR o.example IS DISTINCT FROM n.example
+           OR o.read_only IS DISTINCT FROM n.read_only
         """,
         [channel_id, from_at, to_at]
       )
 
     Enum.map(rows, fn [
-                        name,
                         in_old,
                         in_new,
                         o_desc,
@@ -140,7 +170,6 @@ defmodule Tracker.Nixpkgs.OptionHistory do
                         option_id
                       ] ->
       %{
-        name: name,
         in_old: in_old,
         in_new: in_new,
         option_id: option_id,

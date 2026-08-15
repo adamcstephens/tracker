@@ -11,6 +11,7 @@ defmodule Tracker.Nixpkgs.Option do
     define :list, args: [{:optional, :search}]
     define :bulk_upsert, args: [:name]
     define :id_map, action: :id_map
+    define :by_ids, args: [:ids]
   end
 
   actions do
@@ -39,6 +40,14 @@ defmodule Tracker.Nixpkgs.Option do
 
     read :id_map do
       prepare build(select: [:name])
+    end
+
+    read :by_ids do
+      description "Options matching a set of ids."
+      argument :ids, {:array, :integer}, allow_nil?: false
+
+      prepare build(select: [:name])
+      filter expr(id in ^arg(:ids))
     end
 
     create :bulk_upsert do

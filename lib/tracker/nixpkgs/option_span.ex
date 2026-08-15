@@ -24,6 +24,19 @@ defmodule Tracker.Nixpkgs.OptionSpan do
         up "CREATE INDEX option_spans_current ON option_spans (channel_id, option_id) WHERE upper_inf(valid)"
         down "DROP INDEX option_spans_current"
       end
+
+      # Boundary lookups for revision diffs: only spans opening or closing inside
+      # the window can change an option, so these bound the work by the size of
+      # the diff rather than by the size of the channel.
+      statement :option_spans_opened_at do
+        up "CREATE INDEX option_spans_opened_at ON option_spans (channel_id, lower(valid))"
+        down "DROP INDEX option_spans_opened_at"
+      end
+
+      statement :option_spans_closed_at do
+        up "CREATE INDEX option_spans_closed_at ON option_spans (channel_id, upper(valid))"
+        down "DROP INDEX option_spans_closed_at"
+      end
     end
   end
 
