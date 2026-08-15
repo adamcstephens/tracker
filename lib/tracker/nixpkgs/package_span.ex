@@ -31,6 +31,19 @@ defmodule Tracker.Nixpkgs.PackageSpan do
         up "CREATE INDEX package_spans_current ON package_spans (channel_id, package_id) WHERE upper_inf(valid)"
         down "DROP INDEX package_spans_current"
       end
+
+      # Boundary lookups for revision diffs: only spans opening or closing inside
+      # the window can change a version, so these bound the candidate set by the
+      # size of the diff rather than by the size of the channel.
+      statement :package_spans_opened_at do
+        up "CREATE INDEX package_spans_opened_at ON package_spans (channel_id, lower(valid))"
+        down "DROP INDEX package_spans_opened_at"
+      end
+
+      statement :package_spans_closed_at do
+        up "CREATE INDEX package_spans_closed_at ON package_spans (channel_id, upper(valid))"
+        down "DROP INDEX package_spans_closed_at"
+      end
     end
   end
 

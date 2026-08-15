@@ -8,7 +8,7 @@ defmodule Tracker.Nixpkgs.PackageHistory do
   (per-package history is small; point-in-time diffs touch one channel).
   """
 
-  alias Tracker.Nixpkgs.{Channel, ChannelRevision, PackageSpan}
+  alias Tracker.Nixpkgs.{Channel, ChannelRevision, Package, PackageSpan}
   alias Tracker.Nixpkgs.ChannelRevision.VersionDiff
 
   defmodule Event do
@@ -503,7 +503,10 @@ defmodule Tracker.Nixpkgs.PackageHistory do
           version_changes: [VersionDiff.t()]
         }
   def diff_between(to_rev, from_at) do
-    rows = diff_rows(to_rev.channel_id, from_at, to_rev.released_at)
+    rows =
+      to_rev.channel_id
+      |> diff_rows(from_at, to_rev.released_at)
+      |> with_attributes()
 
     version_changes =
       Enum.map(rows, fn r ->
@@ -515,6 +518,20 @@ defmodule Tracker.Nixpkgs.PackageHistory do
       end)
 
     %{events: package_events(rows, to_rev), version_changes: version_changes}
+  end
+
+  defp with_attributes([]), do: []
+
+  defp with_attributes(rows) do
+    attributes =
+      rows
+      |> Enum.map(& &1.package_id)
+      |> Package.by_ids!()
+      |> Map.new(&{&1.id, &1.attribute})
+
+    rows
+    |> Enum.map(&Map.put(&1, :attribute, Map.fetch!(attributes, &1.package_id)))
+    |> Enum.sort_by(& &1.attribute)
   end
 
   @doc """
@@ -534,32 +551,40 @@ defmodule Tracker.Nixpkgs.PackageHistory do
     end
   end
 
-  # DB-side set-diff of the two point-in-time sets; valid @> rides the span GiST
-  # index, bounding cost to one revision's size rather than total history.
+  # A package whose version differs across the window must have the span holding
+  # `from_at` close inside it and the span holding `to_at` open inside it — one
+  # of the two is missing when the package is added or removed, and both are when
+  # nothing changed. So the boundary indexes alone carry both endpoints, and cost
+  # tracks the size of the diff rather than the size of the channel. A package
+  # that changes and changes back matches both and falls out of the comparison.
   defp diff_rows(channel_id, from_at, to_at) do
     {:ok, %{rows: rows}} =
       Tracker.Repo.query(
         """
-        WITH a AS (SELECT package_id, version FROM package_spans
-                   WHERE channel_id = $1 AND valid @> $2::timestamptz),
-             b AS (SELECT package_id, version FROM package_spans
-                   WHERE channel_id = $1 AND valid @> $3::timestamptz)
-        SELECT pk.attribute,
-               a.package_id IS NOT NULL AS in_old,
-               b.package_id IS NOT NULL AS in_new,
-               a.version, b.version,
-               COALESCE(a.package_id, b.package_id) AS package_id
-        FROM a FULL OUTER JOIN b ON a.package_id = b.package_id
-        JOIN packages pk ON pk.id = COALESCE(a.package_id, b.package_id)
-        WHERE a.version IS DISTINCT FROM b.version
-        ORDER BY pk.attribute
+        WITH old_spans AS (
+               SELECT package_id, version FROM package_spans
+               WHERE channel_id = $1
+                 AND upper(valid) > $2::timestamptz AND upper(valid) <= $3::timestamptz
+                 AND valid @> $2::timestamptz
+             ),
+             new_spans AS (
+               SELECT package_id, version FROM package_spans
+               WHERE channel_id = $1
+                 AND lower(valid) > $2::timestamptz AND lower(valid) <= $3::timestamptz
+                 AND valid @> $3::timestamptz
+             )
+        SELECT o.package_id IS NOT NULL AS in_old,
+               n.package_id IS NOT NULL AS in_new,
+               o.version, n.version,
+               COALESCE(o.package_id, n.package_id) AS package_id
+        FROM old_spans o FULL OUTER JOIN new_spans n ON o.package_id = n.package_id
+        WHERE o.version IS DISTINCT FROM n.version
         """,
         [channel_id, from_at, to_at]
       )
 
-    Enum.map(rows, fn [attribute, in_old, in_new, old_version, new_version, package_id] ->
+    Enum.map(rows, fn [in_old, in_new, old_version, new_version, package_id] ->
       %{
-        attribute: attribute,
         in_old: in_old,
         in_new: in_new,
         old_version: old_version,

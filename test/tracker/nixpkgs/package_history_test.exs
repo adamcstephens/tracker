@@ -62,6 +62,160 @@ defmodule Tracker.Nixpkgs.PackageHistoryTest do
     end
   end
 
+  describe "diff_between/2" do
+    test "reports a version change with both endpoints" do
+      channel = Fixtures.channel!()
+      from_rev = revision!(channel, "dbver001", ~U[2026-04-01 10:00:00Z])
+      to_rev = revision!(channel, "dbver002", ~U[2026-04-15 10:00:00Z], from_rev)
+
+      pkg = Fixtures.package!("dbver-pkg")
+      Fixtures.apply_package_revision!(from_rev, [{pkg, "1.0"}])
+      Fixtures.apply_package_revision!(to_rev, [{pkg, "2.0"}])
+
+      diff = PackageHistory.diff_between(to_rev, from_rev.released_at)
+
+      assert diff.events == []
+
+      assert [%{attribute: "dbver-pkg", old_version: "1.0", new_version: "2.0"}] =
+               diff.version_changes
+    end
+
+    test "reports an addition with a nil old version" do
+      channel = Fixtures.channel!()
+      from_rev = revision!(channel, "dbadd001", ~U[2026-04-01 10:00:00Z])
+      to_rev = revision!(channel, "dbadd002", ~U[2026-04-15 10:00:00Z], from_rev)
+
+      kept = Fixtures.package!("dbadd-kept")
+      added = Fixtures.package!("dbadd-new")
+      Fixtures.apply_package_revision!(from_rev, [{kept, "1.0"}])
+      Fixtures.apply_package_revision!(to_rev, [{kept, "1.0"}, {added, "3.0"}])
+
+      diff = PackageHistory.diff_between(to_rev, from_rev.released_at)
+
+      assert [%{type: :added, package: %{attribute: "dbadd-new"}}] = diff.events
+
+      assert [%{attribute: "dbadd-new", old_version: nil, new_version: "3.0"}] =
+               diff.version_changes
+    end
+
+    test "reports a removal with a nil new version" do
+      channel = Fixtures.channel!()
+      from_rev = revision!(channel, "dbrem001", ~U[2026-04-01 10:00:00Z])
+      to_rev = revision!(channel, "dbrem002", ~U[2026-04-15 10:00:00Z], from_rev)
+
+      kept = Fixtures.package!("dbrem-kept")
+      gone = Fixtures.package!("dbrem-gone")
+      Fixtures.apply_package_revision!(from_rev, [{kept, "1.0"}, {gone, "1.0"}])
+      Fixtures.apply_package_revision!(to_rev, [{kept, "1.0"}])
+      Fixtures.remove_package!(to_rev, gone)
+
+      diff = PackageHistory.diff_between(to_rev, from_rev.released_at)
+
+      assert [%{type: :removed, package: %{attribute: "dbrem-gone"}}] = diff.events
+
+      assert [%{attribute: "dbrem-gone", old_version: "1.0", new_version: nil}] =
+               diff.version_changes
+    end
+
+    test "is empty when nothing changed in the window" do
+      channel = Fixtures.channel!()
+      before_rev = revision!(channel, "dbnop000", ~U[2026-03-01 10:00:00Z])
+      from_rev = revision!(channel, "dbnop001", ~U[2026-04-01 10:00:00Z], before_rev)
+      to_rev = revision!(channel, "dbnop002", ~U[2026-04-15 10:00:00Z], from_rev)
+
+      pkg = Fixtures.package!("dbnop-pkg")
+      Fixtures.apply_package_revision!(before_rev, [{pkg, "1.0"}])
+      Fixtures.apply_package_revision!(from_rev, [{pkg, "2.0"}])
+      Fixtures.apply_package_revision!(to_rev, [{pkg, "2.0"}])
+
+      diff = PackageHistory.diff_between(to_rev, from_rev.released_at)
+
+      assert diff.events == []
+      assert diff.version_changes == []
+    end
+
+    test "ignores a package that changes and changes back inside the window" do
+      channel = Fixtures.channel!()
+      from_rev = revision!(channel, "dbrtp001", ~U[2026-04-01 10:00:00Z])
+      mid_rev = revision!(channel, "dbrtp002", ~U[2026-04-08 10:00:00Z], from_rev)
+      to_rev = revision!(channel, "dbrtp003", ~U[2026-04-15 10:00:00Z], mid_rev)
+
+      pkg = Fixtures.package!("dbrtp-pkg")
+      Fixtures.apply_package_revision!(from_rev, [{pkg, "1.0"}])
+      Fixtures.apply_package_revision!(mid_rev, [{pkg, "2.0"}])
+      Fixtures.apply_package_revision!(to_rev, [{pkg, "1.0"}])
+
+      diff = PackageHistory.diff_between(to_rev, from_rev.released_at)
+
+      assert diff.events == []
+      assert diff.version_changes == []
+    end
+
+    test "nets out intermediate revisions for a non-adjacent pair" do
+      channel = Fixtures.channel!()
+      from_rev = revision!(channel, "dbnet001", ~U[2026-04-01 10:00:00Z])
+      mid_rev = revision!(channel, "dbnet002", ~U[2026-04-08 10:00:00Z], from_rev)
+      to_rev = revision!(channel, "dbnet003", ~U[2026-04-15 10:00:00Z], mid_rev)
+
+      pkg = Fixtures.package!("dbnet-pkg")
+      short_lived = Fixtures.package!("dbnet-transient")
+
+      Fixtures.apply_package_revision!(from_rev, [{pkg, "1.0"}])
+      Fixtures.apply_package_revision!(mid_rev, [{pkg, "2.0"}, {short_lived, "0.1"}])
+      Fixtures.apply_package_revision!(to_rev, [{pkg, "3.0"}])
+      Fixtures.remove_package!(to_rev, short_lived)
+
+      diff = PackageHistory.diff_between(to_rev, from_rev.released_at)
+
+      assert diff.events == []
+
+      assert [%{attribute: "dbnet-pkg", old_version: "1.0", new_version: "3.0"}] =
+               diff.version_changes
+    end
+
+    test "sorts version changes by attribute" do
+      channel = Fixtures.channel!()
+      from_rev = revision!(channel, "dbsrt001", ~U[2026-04-01 10:00:00Z])
+      to_rev = revision!(channel, "dbsrt002", ~U[2026-04-15 10:00:00Z], from_rev)
+
+      zed = Fixtures.package!("dbsrt-zed")
+      alpha = Fixtures.package!("dbsrt-alpha")
+      Fixtures.apply_package_revision!(from_rev, [{zed, "1.0"}, {alpha, "1.0"}])
+      Fixtures.apply_package_revision!(to_rev, [{zed, "2.0"}, {alpha, "2.0"}])
+
+      diff = PackageHistory.diff_between(to_rev, from_rev.released_at)
+
+      assert Enum.map(diff.version_changes, & &1.attribute) == ["dbsrt-alpha", "dbsrt-zed"]
+    end
+
+    test "ignores changes outside the window" do
+      channel = Fixtures.channel!()
+      old_rev = revision!(channel, "dbout001", ~U[2026-02-01 10:00:00Z])
+      from_rev = revision!(channel, "dbout002", ~U[2026-04-01 10:00:00Z], old_rev)
+      to_rev = revision!(channel, "dbout003", ~U[2026-04-15 10:00:00Z], from_rev)
+      later_rev = revision!(channel, "dbout004", ~U[2026-05-01 10:00:00Z], to_rev)
+
+      early = Fixtures.package!("dbout-early")
+      late = Fixtures.package!("dbout-late")
+      changed = Fixtures.package!("dbout-changed")
+
+      Fixtures.apply_package_revision!(old_rev, [{early, "1.0"}, {changed, "1.0"}])
+      Fixtures.apply_package_revision!(from_rev, [{early, "2.0"}, {changed, "1.0"}])
+      Fixtures.apply_package_revision!(to_rev, [{early, "2.0"}, {changed, "2.0"}])
+
+      Fixtures.apply_package_revision!(later_rev, [
+        {early, "2.0"},
+        {changed, "2.0"},
+        {late, "1.0"}
+      ])
+
+      diff = PackageHistory.diff_between(to_rev, from_rev.released_at)
+
+      assert diff.events == []
+      assert Enum.map(diff.version_changes, & &1.attribute) == ["dbout-changed"]
+    end
+  end
+
   describe "terminal_removal/2" do
     test "derives the removal boundary from the channel's closed latest span" do
       channel = Fixtures.channel!("evt-chan")

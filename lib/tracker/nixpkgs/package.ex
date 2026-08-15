@@ -24,6 +24,7 @@ defmodule Tracker.Nixpkgs.Package do
     define :variant_siblings, args: [:package_variant_group_id, :exclude_id]
     define :id_map, action: :id_map
     define :ids_by_attributes, args: [:attributes]
+    define :by_ids, args: [:ids]
     define :by_change, args: [:change_id, {:optional, :search}]
   end
 
@@ -191,6 +192,14 @@ defmodule Tracker.Nixpkgs.Package do
       argument :attributes, {:array, :string}, allow_nil?: false
 
       filter expr(attribute in ^arg(:attributes))
+    end
+
+    read :by_ids do
+      description "Packages matching a set of ids."
+      argument :ids, {:array, :integer}, allow_nil?: false
+
+      prepare build(select: [:attribute])
+      filter expr(id in ^arg(:ids))
     end
 
     create :create do
