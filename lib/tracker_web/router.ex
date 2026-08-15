@@ -175,7 +175,7 @@ defmodule TrackerWeb.Router do
     ash_authentication_live_session :admin_routes,
       on_mount: [
         {TrackerWeb.LiveUserAuth, :admin_only},
-        {TrackerWeb.Layouts, :chrome}
+        TrackerWeb.InboxBadgeHook
       ] do
       live "/", AdminLive.Ingestion, :index
     end
