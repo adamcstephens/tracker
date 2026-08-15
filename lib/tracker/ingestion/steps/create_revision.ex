@@ -41,7 +41,7 @@ defmodule Tracker.Ingestion.Steps.CreateRevision do
 
     %{} |> ChangeBranchDetectionWorker.new() |> Oban.insert!()
 
-    %{channel_revision_id: channel_revision.id}
+    %{channel_id: pipeline.channel_id}
     |> ChannelRevisionLinkWorker.new()
     |> Oban.insert!()
 

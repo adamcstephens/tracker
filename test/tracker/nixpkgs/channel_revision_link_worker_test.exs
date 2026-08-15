@@ -63,48 +63,51 @@ defmodule Tracker.Nixpkgs.ChannelRevisionLinkWorkerTest do
   end
 
   describe "run/1" do
-    test "links a change to R_n when it first lands in R_n", ctx do
-      # Change with sha_b lands in R2 (B and onwards) but not R1 (A).
+    test "links a change to the revision it first landed in, not the tip", ctx do
+      # sha_b is in R2 and R3. Running against the tip must still record R2.
       change = insert_change!(base_ref: "master", merge_commit_sha: ctx.sha_b)
 
-      :ok =
-        ChannelRevisionLinkWorker.run(
-          channel_revision_id: ctx.r2.id,
-          git_server: ctx.git_server
-        )
+      :ok = run_channel(ctx)
 
       [cb] = change_branches_for(change, "nixos-unstable")
       assert cb.channel_revision_id == ctx.r2.id
     end
 
-    test "links to R_n when it is the first revision (no previous)", ctx do
-      # Change with sha_a — only ancestor of R1 (sha_a), not R2/R3.
+    test "links to the earliest revision when the change predates all of them", ctx do
+      # sha_a is an ancestor of R1, R2 and R3.
       change = insert_change!(base_ref: "master", merge_commit_sha: ctx.sha_a)
 
-      :ok =
-        ChannelRevisionLinkWorker.run(
-          channel_revision_id: ctx.r1.id,
-          git_server: ctx.git_server
-        )
+      :ok = run_channel(ctx)
 
       [cb] = change_branches_for(change, "nixos-unstable")
       assert cb.channel_revision_id == ctx.r1.id
     end
 
-    test "bisects backwards when change was already in a prior revision", ctx do
-      # Change with sha_a is an ancestor of R1, R2, R3. Trigger fires for R3
-      # before any earlier trigger has recorded the change. Worker must
-      # bisect and link to R1.
-      change = insert_change!(base_ref: "master", merge_commit_sha: ctx.sha_a)
+    test "links to the tip when the change first lands there", ctx do
+      change = insert_change!(base_ref: "master", merge_commit_sha: ctx.sha_mc)
 
-      :ok =
-        ChannelRevisionLinkWorker.run(
-          channel_revision_id: ctx.r3.id,
-          git_server: ctx.git_server
-        )
+      :ok = run_channel(ctx)
 
       [cb] = change_branches_for(change, "nixos-unstable")
-      assert cb.channel_revision_id == ctx.r1.id
+      assert cb.channel_revision_id == ctx.r3.id
+    end
+
+    test "recovers links for every revision missed while the pass was not running", ctx do
+      # No pass ever ran for R1 or R2. A single pass against the tip must
+      # still assign each change its own first-containing revision.
+      first = insert_change!(base_ref: "master", merge_commit_sha: ctx.sha_a)
+      second = insert_change!(base_ref: "master", merge_commit_sha: ctx.sha_b)
+      third = insert_change!(base_ref: "master", merge_commit_sha: ctx.sha_mc)
+
+      :ok = run_channel(ctx)
+
+      assert [%{channel_revision_id: r1_id}] = change_branches_for(first, "nixos-unstable")
+      assert [%{channel_revision_id: r2_id}] = change_branches_for(second, "nixos-unstable")
+      assert [%{channel_revision_id: r3_id}] = change_branches_for(third, "nixos-unstable")
+
+      assert r1_id == ctx.r1.id
+      assert r2_id == ctx.r2.id
+      assert r3_id == ctx.r3.id
     end
 
     test "fills channel_revision_id on a legacy nil row", ctx do
@@ -112,11 +115,7 @@ defmodule Tracker.Nixpkgs.ChannelRevisionLinkWorkerTest do
 
       ChangeBranch.create!(%{change_id: change.id, branch_name: "nixos-unstable"})
 
-      :ok =
-        ChannelRevisionLinkWorker.run(
-          channel_revision_id: ctx.r2.id,
-          git_server: ctx.git_server
-        )
+      :ok = run_channel(ctx)
 
       [cb] = change_branches_for(change, "nixos-unstable")
       assert cb.channel_revision_id == ctx.r2.id
@@ -125,32 +124,25 @@ defmodule Tracker.Nixpkgs.ChannelRevisionLinkWorkerTest do
     test "skips changes already linked for this branch", ctx do
       change = insert_change!(base_ref: "master", merge_commit_sha: ctx.sha_b)
 
+      # R3 is not where sha_b first landed; an unskipped pass would rewrite
+      # this to R2.
       ChangeBranch.create!(%{
         change_id: change.id,
         branch_name: "nixos-unstable",
-        channel_revision_id: ctx.r2.id
+        channel_revision_id: ctx.r3.id
       })
 
-      :ok =
-        ChannelRevisionLinkWorker.run(
-          channel_revision_id: ctx.r3.id,
-          git_server: ctx.git_server
-        )
+      :ok = run_channel(ctx)
 
       [cb] = change_branches_for(change, "nixos-unstable")
-      # unchanged — still points at R2
-      assert cb.channel_revision_id == ctx.r2.id
+      assert cb.channel_revision_id == ctx.r3.id
     end
 
-    test "skips changes whose sha is not an ancestor of R_n", ctx do
-      # sha_mc is in R3 only. Triggering R2 (sha_b) — sha_mc is NOT ancestor.
-      change = insert_change!(base_ref: "master", merge_commit_sha: ctx.sha_mc)
+    test "skips changes whose sha has not reached the channel", ctx do
+      # sha_c is on master past every channel revision.
+      change = insert_change!(base_ref: "master", merge_commit_sha: ctx.sha_c)
 
-      :ok =
-        ChannelRevisionLinkWorker.run(
-          channel_revision_id: ctx.r2.id,
-          git_server: ctx.git_server
-        )
+      :ok = run_channel(ctx)
 
       assert change_branches_for(change, "nixos-unstable") == []
     end
@@ -158,29 +150,31 @@ defmodule Tracker.Nixpkgs.ChannelRevisionLinkWorkerTest do
     test "ignores changes with nil merge_commit_sha", ctx do
       change = insert_change!(base_ref: "master", merge_commit_sha: nil)
 
-      :ok =
-        ChannelRevisionLinkWorker.run(
-          channel_revision_id: ctx.r2.id,
-          git_server: ctx.git_server
-        )
+      :ok = run_channel(ctx)
 
       assert change_branches_for(change, "nixos-unstable") == []
     end
 
     test "ignores changes whose base_ref is not a propagation ancestor", ctx do
-      # sha_b is an ancestor of R2, so a naive candidate filter would link
-      # this change. But base_ref="wip-home-assistant" never propagates into
-      # nixos-unstable, so the change must be filtered out before the
-      # ancestor check runs.
+      # sha_b is an ancestor of the tip, so a naive candidate filter would
+      # link this change. But base_ref="wip-home-assistant" never propagates
+      # into nixos-unstable, so it must be filtered out before the ancestor
+      # check runs.
       change = insert_change!(base_ref: "wip-home-assistant", merge_commit_sha: ctx.sha_b)
 
-      :ok =
-        ChannelRevisionLinkWorker.run(
-          channel_revision_id: ctx.r2.id,
-          git_server: ctx.git_server
-        )
+      :ok = run_channel(ctx)
 
       assert change_branches_for(change, "nixos-unstable") == []
+    end
+
+    test "no-ops for a channel with no revisions", ctx do
+      empty = create_channel!("nixos-unstable-small")
+      change = insert_change!(base_ref: "master", merge_commit_sha: ctx.sha_b)
+
+      :ok =
+        ChannelRevisionLinkWorker.run(channel_id: empty.id, git_server: ctx.git_server)
+
+      assert change_branches_for(change, "nixos-unstable-small") == []
     end
 
     test "emits structured start/stop logs", ctx do
@@ -188,23 +182,22 @@ defmodule Tracker.Nixpkgs.ChannelRevisionLinkWorkerTest do
       Logger.put_module_level(ChannelRevisionLinkWorker, :info)
       on_exit(fn -> Logger.delete_module_level(ChannelRevisionLinkWorker) end)
 
-      log =
-        capture_log(fn ->
-          assert :ok =
-                   ChannelRevisionLinkWorker.run(
-                     channel_revision_id: ctx.r2.id,
-                     git_server: ctx.git_server
-                   )
-        end)
+      log = capture_log(fn -> assert :ok = run_channel(ctx) end)
 
       assert log =~ ~s(msg: "channel revision link started")
       assert log =~ ~s(msg: "channel revision link finished")
       assert log =~ "outcome: :ok"
       assert log =~ "branch_name: \"nixos-unstable\""
+      assert log =~ "channel_id: #{ctx.channel.id}"
+      assert log =~ "channel_revision_id: #{ctx.r3.id}"
       assert log =~ ~r/candidates: \d+/
       assert log =~ ~r/recorded: [1-9]\d*/
       assert log =~ ~r/duration_ms: \d+/
     end
+  end
+
+  defp run_channel(ctx) do
+    ChannelRevisionLinkWorker.run(channel_id: ctx.channel.id, git_server: ctx.git_server)
   end
 
   defp insert_change!(attrs) do
@@ -244,8 +237,9 @@ defmodule Tracker.Nixpkgs.ChannelRevisionLinkWorkerTest do
   end
 
   # Linear chain: A -- B -- MC -- C, with channel-revision shas pointing
-  # at A, B, MC. Branch `master` is at MC so propagation-graph candidates
-  # exist for changes with base_ref="master".
+  # at A, B, MC. Branch `master` is at C so propagation-graph candidates
+  # exist for changes with base_ref="master", including one (C) that has
+  # not yet reached the channel.
   defp build_upstream(work, bare) do
     File.mkdir_p!(work)
     git!(work, ["init", "--quiet", "--initial-branch=master"])
@@ -271,10 +265,11 @@ defmodule Tracker.Nixpkgs.ChannelRevisionLinkWorkerTest do
     File.write!(Path.join(work, "c.txt"), "c\n")
     git!(work, ["add", "c.txt"])
     git!(work, ["commit", "--quiet", "--message", "C"])
+    sha_c = work |> git!(["rev-parse", "HEAD"]) |> String.trim()
 
     {_, 0} = System.cmd("git", ["clone", "--quiet", "--bare", work, bare])
 
-    %{sha_a: sha_a, sha_b: sha_b, sha_mc: sha_mc}
+    %{sha_a: sha_a, sha_b: sha_b, sha_mc: sha_mc, sha_c: sha_c}
   end
 
   defp git!(cwd, args) do

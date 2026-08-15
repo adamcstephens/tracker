@@ -3,10 +3,9 @@ defmodule Tracker.Nixpkgs.ChannelRevisionLinkWorker do
   Links merged Changes to the specific `ChannelRevision` that first
   carried them.
 
-  Enqueued per-`ChannelRevision` from
-  `Tracker.Ingestion.Steps.CreateRevision`. Owns all `ChangeBranch`
-  rows for channel-kind branches (`nixos-*`, `nixpkgs-*`); intermediate
-  branches are handled by
+  Enqueued per-`Channel` from `Tracker.Ingestion.Steps.CreateRevision`.
+  Owns all `ChangeBranch` rows for channel-kind branches (`nixos-*`,
+  `nixpkgs-*`); intermediate branches are handled by
   `Tracker.Nixpkgs.ChangeBranchDetectionWorker`.
 
   ## Invariant
@@ -20,27 +19,35 @@ defmodule Tracker.Nixpkgs.ChannelRevisionLinkWorker do
 
   ## Algorithm
 
-  For each candidate Change (merged, with `merge_commit_sha`, no
-  `ChangeBranch` row for this branch with a non-nil
-  `channel_revision_id`):
+  Each pass runs against `R_n`, the channel's newest revision. For each
+  candidate Change (merged, with `merge_commit_sha`, no `ChangeBranch`
+  row for this branch with a non-nil `channel_revision_id`):
 
-  1.  Check ancestor against `R_n` (the triggering revision). If
-      false, skip — the change isn't in this channel yet.
+  1.  Check ancestor against `R_n`. If false, skip — the change isn't
+      in this channel yet.
   2.  Check ancestor against `R_{n-1}` (previous revision). If false
       or nil, the change first landed in `R_n` — link and stop.
-  3.  Otherwise the change was already in `R_{n-1}` (late detection /
-      back-fill). Bisect over the channel's revisions ordered
-      ascending by `released_at` to find the smallest containing one.
+  3.  Otherwise the change was already in `R_{n-1}`. Bisect over the
+      channel's revisions ordered ascending by `released_at` to find
+      the smallest containing one.
+
+  Because step 3 searches the channel's whole revision list, one pass
+  against the tip yields the same rows a revision-by-revision replay
+  would write, however many revisions were missed. That is what lets a
+  burst of revisions collapse into a single job: uniqueness is keyed on
+  `channel_id`, so at most one pass per channel is ever in flight and
+  the next one picks up everything since. A revision landing while a
+  pass runs is therefore linked by the following pass, not this one.
 
   Steady-state cost is two ancestor checks per change. Bisection
-  (step 3) is O(log n) and only fires when this worker missed an
-  earlier window.
+  (step 3) is O(log n) and only fires for changes this worker has not
+  yet seen land.
   """
 
   use Oban.Worker,
     queue: :revision_link,
     max_attempts: 5,
-    unique: [period: 60, keys: [:channel_revision_id]]
+    unique: [period: :infinity, keys: [:channel_id], states: :incomplete]
 
   require Logger
 
@@ -54,91 +61,107 @@ defmodule Tracker.Nixpkgs.ChannelRevisionLinkWorker do
   @ancestor_timeout :timer.seconds(30)
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: %{"channel_revision_id" => id}}) do
-    run(channel_revision_id: id)
+  def perform(%Oban.Job{args: %{"channel_id" => id}}) do
+    run(channel_id: id)
   end
 
   @doc """
-  Runs the link pass for `channel_revision_id`.
+  Runs the link pass for `channel_id` against that channel's newest
+  revision.
 
   Options:
-    * `:channel_revision_id` — required.
+    * `:channel_id` — required.
     * `:git_server` — `GenServer.server()` for the `GitServer` instance
       (defaults to the named `Tracker.GitServer`).
   """
   def run(opts) do
-    channel_revision_id = Keyword.fetch!(opts, :channel_revision_id)
+    channel_id = Keyword.fetch!(opts, :channel_id)
     git_server = Keyword.get(opts, :git_server, Tracker.GitServer)
 
-    Logger.info(
-      msg: "channel revision link started",
-      channel_revision_id: channel_revision_id
-    )
+    Logger.info(msg: "channel revision link started", channel_id: channel_id)
 
     started_at = System.monotonic_time()
     snapshot = GitServer.state(git_server)
 
     if snapshot.ready do
-      r_n =
-        Ash.get!(ChannelRevision, channel_revision_id,
-          load: [:channel, :previous_channel_revision]
-        )
-
-      branch_name = r_n.channel.name
-
-      if Propagation.valid_branch?(branch_name) and Propagation.kind(branch_name) == :channel do
-        candidates = Change.for_channel_link!(branch_name)
-
-        recorded =
-          candidates
-          |> Task.async_stream(
-            fn change -> link_change(change, r_n, branch_name, snapshot) end,
-            max_concurrency: @max_concurrency,
-            timeout: @ancestor_timeout,
-            on_timeout: :kill_task
-          )
-          |> Enum.count(&match?({:ok, {:recorded, _}}, &1))
-
-        Logger.info(
-          msg: "channel revision link finished",
-          outcome: :ok,
-          channel_revision_id: channel_revision_id,
-          branch_name: branch_name,
-          candidates: length(candidates),
-          recorded: recorded,
-          duration_ms: duration_ms(started_at)
-        )
-
-        :ok
-      else
-        Logger.warning(
-          msg: "ChannelRevisionLinkWorker: channel name is not a propagation channel",
-          channel_revision_id: channel_revision_id,
-          branch_name: branch_name
-        )
-
-        Logger.info(
-          msg: "channel revision link finished",
-          outcome: :skipped,
-          channel_revision_id: channel_revision_id,
-          branch_name: branch_name,
-          duration_ms: duration_ms(started_at)
-        )
-
-        :ok
-      end
+      channel_id
+      |> newest_revision()
+      |> link_pass(channel_id, snapshot, started_at)
     else
       Logger.warning(msg: "ChannelRevisionLinkWorker: GitServer not ready, snoozing")
 
       Logger.info(
         msg: "channel revision link finished",
         outcome: :snoozed,
-        channel_revision_id: channel_revision_id,
+        channel_id: channel_id,
         snooze_seconds: 30,
         duration_ms: duration_ms(started_at)
       )
 
       {:snooze, 30}
+    end
+  end
+
+  defp newest_revision(channel_id) do
+    ChannelRevision.latest_at!(channel_id, nil, load: [:channel, :previous_channel_revision])
+  end
+
+  defp link_pass(nil, channel_id, _snapshot, started_at) do
+    Logger.info(
+      msg: "channel revision link finished",
+      outcome: :skipped,
+      reason: :no_revisions,
+      channel_id: channel_id,
+      duration_ms: duration_ms(started_at)
+    )
+
+    :ok
+  end
+
+  defp link_pass(r_n, channel_id, snapshot, started_at) do
+    branch_name = r_n.channel.name
+
+    if Propagation.valid_branch?(branch_name) and Propagation.kind(branch_name) == :channel do
+      candidates = Change.for_channel_link!(branch_name)
+
+      recorded =
+        candidates
+        |> Task.async_stream(
+          fn change -> link_change(change, r_n, branch_name, snapshot) end,
+          max_concurrency: @max_concurrency,
+          timeout: @ancestor_timeout,
+          on_timeout: :kill_task
+        )
+        |> Enum.count(&match?({:ok, {:recorded, _}}, &1))
+
+      Logger.info(
+        msg: "channel revision link finished",
+        outcome: :ok,
+        channel_id: channel_id,
+        channel_revision_id: r_n.id,
+        branch_name: branch_name,
+        candidates: length(candidates),
+        recorded: recorded,
+        duration_ms: duration_ms(started_at)
+      )
+
+      :ok
+    else
+      Logger.warning(
+        msg: "ChannelRevisionLinkWorker: channel name is not a propagation channel",
+        channel_id: channel_id,
+        branch_name: branch_name
+      )
+
+      Logger.info(
+        msg: "channel revision link finished",
+        outcome: :skipped,
+        channel_id: channel_id,
+        branch_name: branch_name,
+        duration_ms: duration_ms(started_at)
+      )
+
+      :ok
     end
   end
 
