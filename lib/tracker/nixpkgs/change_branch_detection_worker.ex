@@ -13,6 +13,10 @@ defmodule Tracker.Nixpkgs.ChangeBranchDetectionWorker do
   `ChannelRevision` lands. Ingestion implies a recent `git fetch`, so
   every branch tip in the propagation DAG is current.
 
+  The job takes no arguments and sweeps globally, so enqueues coalesce
+  into a single pending job: one sweep runs while at most one waits
+  behind it, and the waiting job picks up whatever landed mid-sweep.
+
   For each in-flight Change (merged, with a `merge_commit_sha` and
   `base_ref` in the propagation graph, not yet covering `base_ref` and
   every terminal channel reachable from it), the worker fans out
@@ -23,7 +27,12 @@ defmodule Tracker.Nixpkgs.ChangeBranchDetectionWorker do
   transition was applied via `bulk_upsert_all` (which bypasses Ash
   actions).
   """
-  use Oban.Worker, queue: :branch_detection, max_attempts: 5, unique: [period: 60]
+  # `:executing` is excluded so a revision landing mid-sweep still enqueues:
+  # the running job's GitServer snapshot predates its refs.
+  use Oban.Worker,
+    queue: :branch_detection,
+    max_attempts: 5,
+    unique: [period: :infinity, states: Oban.Job.unique_states(:incomplete) -- [:executing]]
 
   require Logger
 

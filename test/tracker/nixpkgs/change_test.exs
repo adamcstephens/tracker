@@ -453,4 +453,85 @@ defmodule Tracker.Nixpkgs.ChangeTest do
       assert hd(change.packages).id == package_id
     end
   end
+
+  describe "in_flight_propagation/0" do
+    test "excludes changes whose recorded branches cover base_ref and every terminal channel" do
+      change = merged_change!(base_ref: "master")
+
+      record_branches!(change, ~w(master nixos-unstable nixos-unstable-small nixpkgs-unstable))
+
+      refute change.id in in_flight_ids()
+    end
+
+    test "includes a change still missing one terminal channel" do
+      change = merged_change!(base_ref: "master")
+
+      record_branches!(change, ~w(master nixos-unstable nixos-unstable-small))
+
+      assert change.id in in_flight_ids()
+    end
+
+    test "includes a change that has not recorded its own base_ref" do
+      change = merged_change!(base_ref: "staging")
+
+      assert change.id in in_flight_ids()
+    end
+
+    test "excludes changes whose base_ref is outside the propagation graph" do
+      change = merged_change!(base_ref: "wip-home-assistant")
+
+      refute change.id in in_flight_ids()
+    end
+
+    test "excludes changes that are not merged or have no merge_commit_sha" do
+      open = merged_change!(base_ref: "master", state: :open)
+      unmerged = merged_change!(base_ref: "master", merge_commit_sha: nil)
+
+      ids = in_flight_ids()
+
+      refute open.id in ids
+      refute unmerged.id in ids
+    end
+
+    test "covers a release line against its own versioned channels" do
+      change = merged_change!(base_ref: "release-26.05")
+
+      record_branches!(change, ~w(release-26.05 nixos-26.05 nixos-26.05-small))
+      assert change.id in in_flight_ids()
+
+      record_branches!(change, ~w(nixpkgs-26.05-darwin))
+      refute change.id in in_flight_ids()
+    end
+  end
+
+  defp in_flight_ids do
+    Change.in_flight_propagation!() |> Enum.map(& &1.id)
+  end
+
+  defp merged_change!(attrs) do
+    number = System.unique_integer([:positive])
+
+    record =
+      Map.merge(
+        %{
+          number: number,
+          title: "PR ##{number}",
+          state: :merged,
+          author: "tester",
+          url: "https://github.com/NixOS/nixpkgs/pull/#{number}",
+          merged_at: ~U[2026-04-23 10:00:00Z],
+          merge_commit_sha: "deadbeef#{number}"
+        },
+        Map.new(attrs)
+      )
+
+    Change.bulk_upsert_all([record])
+    Change.get_by_number!(number)
+  end
+
+  defp record_branches!(change, branches) do
+    for branch <- branches do
+      Tracker.Nixpkgs.ChangeBranch.create!(%{change_id: change.id, branch_name: branch})
+    end
+  end
 end

@@ -5,6 +5,9 @@ defmodule Tracker.Nixpkgs.Change do
     data_layer: AshPostgres.DataLayer,
     notifiers: [Ash.Notifier.PubSub]
 
+  require Ash.Expr
+  require Ash.Query
+
   postgres do
     table "changes"
     repo Tracker.Repo
@@ -203,6 +206,10 @@ defmodule Tracker.Nixpkgs.Change do
 
     read :in_flight_propagation do
       prepare build(sort: [merged_at: :desc_nils_last], load: [:change_branches])
+
+      prepare fn query, _context ->
+        Ash.Query.do_filter(query, __MODULE__.incomplete_propagation_filter())
+      end
 
       filter expr(
                state == :merged and
@@ -444,6 +451,33 @@ defmodule Tracker.Nixpkgs.Change do
   # inserted_at, updated_at
   @insert_cols 22
   @max_rows div(65_535, @insert_cols)
+
+  @doc """
+  Builds the filter selecting Changes whose `ChangeBranch` rows do not yet
+  cover their `base_ref` and every terminal channel reachable from it.
+
+  The covered set differs per `base_ref` and comes from `Propagation`, which
+  has no SQL equivalent, so the expression is an `or` over the `base_ref`
+  values actually present. Anything not in the propagation graph produces no
+  clause and is therefore excluded.
+  """
+  def incomplete_propagation_filter do
+    __MODULE__.distinct_base_refs!()
+    |> Enum.map(& &1.base_ref)
+    |> Enum.filter(&(is_binary(&1) and Tracker.Nixpkgs.Propagation.valid_branch?(&1)))
+    |> Enum.map(fn ref ->
+      covered = [ref | Tracker.Nixpkgs.Propagation.terminal_channels(ref)]
+      required = length(covered)
+
+      Ash.Expr.expr(
+        base_ref == ^ref and
+          count(change_branches, query: [filter: branch_name in ^covered]) < ^required
+      )
+    end)
+    |> Enum.reduce(Ash.Expr.expr(false), fn clause, acc ->
+      Ash.Expr.expr(^acc or ^clause)
+    end)
+  end
 
   @doc """
   Marks every active, non-terminal Change whose `gh_updated_at` predates the

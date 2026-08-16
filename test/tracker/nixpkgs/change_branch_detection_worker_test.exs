@@ -10,31 +10,33 @@ defmodule Tracker.Nixpkgs.ChangeBranchDetectionWorkerTest do
 
   @tmp_root Path.expand("../../../tmp/change_branch_detection_worker_test", __DIR__)
 
-  setup do
-    base = Path.join(@tmp_root, "#{System.unique_integer([:positive])}")
-    File.mkdir_p!(base)
-    on_exit(fn -> File.rm_rf!(base) end)
-
-    upstream_work = Path.join(base, "upstream_work")
-    upstream = Path.join(base, "upstream.git")
-    local = Path.join(base, "local.git")
-
-    shas = build_upstream(upstream_work, upstream)
-
-    pid =
-      start_supervised!({GitServer, name: nil, repo_url: upstream, path: local, auto_start: true})
-
-    assert GitServer.ready?(pid)
-
-    Map.merge(shas, %{
-      git_server: pid,
-      base: base,
-      upstream: upstream,
-      upstream_work: upstream_work
-    })
-  end
-
   describe "run/1" do
+    setup do
+      base = Path.join(@tmp_root, "#{System.unique_integer([:positive])}")
+      File.mkdir_p!(base)
+      on_exit(fn -> File.rm_rf!(base) end)
+
+      upstream_work = Path.join(base, "upstream_work")
+      upstream = Path.join(base, "upstream.git")
+      local = Path.join(base, "local.git")
+
+      shas = build_upstream(upstream_work, upstream)
+
+      pid =
+        start_supervised!(
+          {GitServer, name: nil, repo_url: upstream, path: local, auto_start: true}
+        )
+
+      assert GitServer.ready?(pid)
+
+      Map.merge(shas, %{
+        git_server: pid,
+        base: base,
+        upstream: upstream,
+        upstream_work: upstream_work
+      })
+    end
+
     test "creates ChangeBranch for base_ref but skips channel-kind branches", ctx do
       change = insert_change!(base_ref: "master", merge_commit_sha: ctx.sha_mc)
 
@@ -125,6 +127,60 @@ defmodule Tracker.Nixpkgs.ChangeBranchDetectionWorkerTest do
       assert log =~ "ancestor check failed"
       assert recorded_branches(change) == []
     end
+  end
+
+  describe "enqueueing" do
+    test "coalesces a duplicate enqueue however long the pending job has waited" do
+      {:ok, first} = enqueue()
+      backdate!(first, 2)
+
+      {:ok, second} = enqueue()
+
+      assert second.id == first.id
+      assert [_only_one] = all_enqueued(worker: ChangeBranchDetectionWorker)
+    end
+
+    test "enqueues again once the previous job has completed" do
+      {:ok, first} = enqueue()
+      set_state!(first, "completed")
+
+      {:ok, second} = enqueue()
+
+      assert second.id != first.id
+      assert [_fresh] = all_enqueued(worker: ChangeBranchDetectionWorker)
+    end
+
+    test "enqueues alongside an executing job so a mid-sweep revision is not dropped" do
+      {:ok, running} = enqueue()
+      set_state!(running, "executing")
+
+      {:ok, pending} = enqueue()
+
+      assert pending.id != running.id
+      assert [_waiting] = all_enqueued(worker: ChangeBranchDetectionWorker)
+    end
+  end
+
+  defp enqueue do
+    %{} |> ChangeBranchDetectionWorker.new() |> Oban.insert()
+  end
+
+  defp set_state!(job, state) do
+    update_job!(job, state: state)
+  end
+
+  defp backdate!(job, hours) do
+    update_job!(job, inserted_at: DateTime.add(DateTime.utc_now(), -hours, :hour))
+  end
+
+  defp update_job!(job, changes) do
+    {1, _} =
+      Tracker.Repo.update_all(
+        Ecto.Query.from(j in Oban.Job, where: j.id == ^job.id),
+        set: changes
+      )
+
+    :ok
   end
 
   defp insert_change!(attrs) do
