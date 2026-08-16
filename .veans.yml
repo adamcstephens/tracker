@@ -1,0 +1,13 @@
+server: https://project.junco.dev
+project_id: 8
+project_identifier: TRK
+view_id: 32
+buckets:
+    todo: 26
+    in_progress: 24
+    in_review: 30
+    done: 25
+    scrapped: 31
+bot:
+    username: bot-tracker
+    user_id: 2

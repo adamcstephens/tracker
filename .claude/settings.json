@@ -1,3 +1,25 @@
 {
-  "enabledPlugins": {}
+  "enabledPlugins": {},
+  "hooks": {
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "command": "veans prime",
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "command": "veans prime",
+            "type": "command"
+          }
+        ]
+      }
+    ]
+  }
 }

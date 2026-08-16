@@ -1,6 +1,6 @@
 ## Agent Workflow
-- **IMPORTANT**: before you do anything else, invoke the cli `vein prompt orient` heed its output.
-- If generating a plan as part of a vein, you must write it to the description or comment of the associated vein before implementing.
+- **IMPORTANT**: before you do anything else, invoke the cli `veans prime` and heed its output.
+- If generating a plan as part of a vean, you must write it to the description or comment of the associated vean before implementing.
 
 ## Definition of done
 - formatting done, `just format`
