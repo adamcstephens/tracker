@@ -25,8 +25,8 @@ defmodule Tracker.Ingestion.Steps.LinkOptionsTest do
 
     %{
       channel: channel,
-      logs: Fixtures.package!("victorialogs"),
-      metrics: Fixtures.package!("victoriametrics")
+      logs: Fixtures.package!("victorialogs-lo"),
+      metrics: Fixtures.package!("victoriametrics-lo")
     }
   end
 
@@ -82,16 +82,18 @@ defmodule Tracker.Ingestion.Steps.LinkOptionsTest do
   end
 
   test "opens a link span for each extracted option↔package pair", %{channel: channel} do
-    cr = run_revision!(channel, "linkopt1", ~U[2026-04-01 10:00:00Z], entry("victoriametrics"))
+    cr = run_revision!(channel, "linkopt1", ~U[2026-04-01 10:00:00Z], entry("victoriametrics-lo"))
 
-    assert linked_attributes(cr) == ["victoriametrics"]
+    assert linked_attributes(cr) == ["victoriametrics-lo"]
   end
 
   test "closes a link the revision no longer declares", %{channel: channel} do
-    cr1 = run_revision!(channel, "linkopt1", ~U[2026-04-01 10:00:00Z], entry("victoriametrics"))
-    cr2 = run_revision!(channel, "linkopt2", ~U[2026-04-02 10:00:00Z], entry("victorialogs"))
+    cr1 =
+      run_revision!(channel, "linkopt1", ~U[2026-04-01 10:00:00Z], entry("victoriametrics-lo"))
 
-    assert linked_attributes(cr1) == ["victoriametrics"]
-    assert linked_attributes(cr2) == ["victorialogs"]
+    cr2 = run_revision!(channel, "linkopt2", ~U[2026-04-02 10:00:00Z], entry("victorialogs-lo"))
+
+    assert linked_attributes(cr1) == ["victoriametrics-lo"]
+    assert linked_attributes(cr2) == ["victorialogs-lo"]
   end
 end

@@ -42,7 +42,7 @@ defmodule TrackerWeb.OptionLive.RootTest do
   setup do
     channel =
       Channel.create!(%{
-        name: "nixos-unstable",
+        name: "nixos-optroot",
         display_name: "NixOS Unstable",
         status: :active,
         is_stable: true
@@ -107,7 +107,7 @@ defmodule TrackerWeb.OptionLive.RootTest do
   test "lens change reloads the tree for the new channel", %{conn: conn} do
     channel2 =
       Channel.create!(%{
-        name: "nixos-24.11",
+        name: "nixos-24.63",
         display_name: "NixOS 24.11",
         status: :active,
         is_stable: false
@@ -159,7 +159,7 @@ defmodule TrackerWeb.OptionLive.RootTest do
     {:ok, view, _html} = live(conn, ~p"/options")
 
     switch_lens(view, "all")
-    html = switch_lens(view, "nixos-unstable")
+    html = switch_lens(view, "nixos-optroot")
 
     assert html =~ ~s(href="/options/services")
     refute html =~ "lens-attention"
@@ -253,7 +253,7 @@ defmodule TrackerWeb.OptionLive.RootTest do
   test "shows message when channel has no options data", %{conn: conn} do
     channel2 =
       Channel.create!(%{
-        name: "nixos-24.11",
+        name: "nixos-24.63",
         display_name: "NixOS 24.11",
         status: :active,
         is_stable: false

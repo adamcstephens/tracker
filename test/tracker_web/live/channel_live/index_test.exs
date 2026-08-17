@@ -8,7 +8,7 @@ defmodule TrackerWeb.ChannelLive.IndexTest do
   setup do
     channel_unstable =
       Channel.create!(%{
-        name: "nixos-unstable",
+        name: "nixos-chanindex",
         display_name: "NixOS Unstable",
         status: :active,
         is_stable: false
@@ -16,7 +16,7 @@ defmodule TrackerWeb.ChannelLive.IndexTest do
 
     channel_stable =
       Channel.create!(%{
-        name: "nixos-24.11",
+        name: "nixos-24.62",
         display_name: "NixOS 24.11",
         status: :active,
         is_stable: true
@@ -60,8 +60,8 @@ defmodule TrackerWeb.ChannelLive.IndexTest do
   test "renders channel list with revision counts", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/channels")
 
-    assert html =~ "nixos-unstable"
-    assert html =~ "nixos-24.11"
+    assert html =~ "nixos-chanindex"
+    assert html =~ "nixos-24.62"
   end
 
   test "renders channels as shared row-list link rows", %{conn: conn} do
@@ -69,7 +69,7 @@ defmodule TrackerWeb.ChannelLive.IndexTest do
 
     assert html =~ ~s(class="row-list row-list--stacked")
     assert html =~ ~s(class="row-line row-link")
-    assert html =~ ~s(href="/channels/nixos-unstable")
+    assert html =~ ~s(href="/channels/nixos-chanindex")
   end
 
   test "rows carry the revision count and latest release as meta", %{conn: conn} do
@@ -87,7 +87,7 @@ defmodule TrackerWeb.ChannelLive.IndexTest do
   end
 
   test "renders a Build problem badge for channels whose hydra job failed", %{conn: conn} do
-    channel = Channel.by_name!("nixos-unstable")
+    channel = Channel.by_name!("nixos-chanindex")
 
     {:ok, _} =
       Channel.update_hydra_status(channel, %{
@@ -113,7 +113,7 @@ defmodule TrackerWeb.ChannelLive.IndexTest do
     {:ok, view, html} = live(conn, ~p"/channels")
     refute html =~ "Build problem"
 
-    channel = Channel.by_name!("nixos-unstable")
+    channel = Channel.by_name!("nixos-chanindex")
 
     {:ok, _} =
       Channel.update_hydra_status(channel, %{
@@ -132,7 +132,7 @@ defmodule TrackerWeb.ChannelLive.IndexTest do
     refute html =~ "2026-04-02"
     assert html =~ "2 revisions"
 
-    channel = Channel.by_name!("nixos-unstable")
+    channel = Channel.by_name!("nixos-chanindex")
 
     Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
       channel_id: channel.id,
@@ -146,7 +146,7 @@ defmodule TrackerWeb.ChannelLive.IndexTest do
   end
 
   test "orders channels by latest release, most recent first", %{conn: conn} do
-    channel = Channel.by_name!("nixos-24.11")
+    channel = Channel.by_name!("nixos-24.62")
 
     Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
       channel_id: channel.id,
@@ -155,7 +155,7 @@ defmodule TrackerWeb.ChannelLive.IndexTest do
     })
 
     Channel.create!(%{
-      name: "nixos-25.05",
+      name: "nixos-24.61",
       display_name: "NixOS 25.05",
       status: :retired,
       is_stable: true
@@ -164,7 +164,7 @@ defmodule TrackerWeb.ChannelLive.IndexTest do
     {:ok, _view, html} = live(conn, ~p"/channels")
 
     positions =
-      for name <- ~w(nixos-24.11 nixos-unstable nixos-26.05 nixos-25.05) do
+      for name <- ~w(nixos-24.62 nixos-chanindex nixos-26.05 nixos-24.61) do
         {pos, _} = :binary.match(html, ~s(/channels/#{name}"))
         pos
       end

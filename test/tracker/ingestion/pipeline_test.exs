@@ -7,7 +7,7 @@ defmodule Tracker.Ingestion.PipelineTest do
   setup do
     channel =
       Channel.create!(%{
-        name: "nixos-unstable",
+        name: "nixos-pipeline",
         display_name: "NixOS Unstable",
         status: :active,
         is_stable: false
@@ -422,7 +422,7 @@ defmodule Tracker.Ingestion.PipelineTest do
     test "ignores pipelines from other channels", %{channel: channel} do
       other_channel =
         Channel.create!(%{
-          name: "nixos-25.11",
+          name: "nixos-25.52",
           display_name: "NixOS 25.11",
           status: :active,
           is_stable: true
@@ -446,7 +446,7 @@ defmodule Tracker.Ingestion.PipelineTest do
     test "returns all pipelines for a channel", %{channel: channel} do
       other_channel =
         Channel.create!(%{
-          name: "nixos-25.11",
+          name: "nixos-25.52",
           display_name: "NixOS 25.11",
           status: :active,
           is_stable: true

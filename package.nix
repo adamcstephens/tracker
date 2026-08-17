@@ -3,12 +3,45 @@
   callPackages,
   cargo,
   esbuild,
+  fetchurl,
+  jq,
   lib,
   postgresql,
   postgresqlTestHook,
   rustc,
   rustPlatform,
+  stdenvNoCC,
 }:
+let
+  # Lumis fetches tree-sitter grammars from npm the first time it highlights,
+  # which the sandbox has no network for. Lay the nix grammar out the way its
+  # cache expects so `LUMIS_DATA_DIR` finds it already there.
+  lumisNixGrammar = stdenvNoCC.mkDerivation {
+    pname = "lumis-wasm-nix";
+    version = "0.26.1";
+
+    src = fetchurl {
+      url = "https://registry.npmjs.org/@lumis-sh/wasm-nix/-/wasm-nix-0.26.1.tgz";
+      hash = "sha256-jDwbRtY+iApQacMqRPmEta5AJ32lok9udRAXQytdDbU=";
+    };
+
+    nativeBuildInputs = [ jq ];
+
+    installPhase = ''
+      runHook preInstall
+
+      language=$(jq -r '.languages | keys[0]' lumis.json)
+      parser=$(jq -r .parser.name lumis.json)
+      version=$(jq -r .version lumis.json)
+      sha=$(jq -r .parser.sha256 lumis.json)
+
+      install -Dm444 lumis.json "$out/parsers/$language.lumis.json"
+      install -Dm444 "$parser.wasm" "$out/parsers/$parser-$version-$sha.wasm"
+
+      runHook postInstall
+    '';
+  };
+in
 beamPackages.mixRelease rec {
   pname = "tracker-server";
   version = "0.0.1";
@@ -87,6 +120,11 @@ beamPackages.mixRelease rec {
   ];
   checkPhase = ''
     runHook preCheck
+
+    export LUMIS_DATA_DIR=$TMPDIR/lumis
+    mkdir -p $LUMIS_DATA_DIR
+    cp -r ${lumisNixGrammar}/parsers $LUMIS_DATA_DIR/
+    chmod -R u+w $LUMIS_DATA_DIR
 
     export MIX_ENV=test
     ln -sv $PWD/_build/prod _build/test

@@ -26,7 +26,7 @@ defmodule Tracker.Notifications.NotificationFanoutPropagationWorkerTest do
     test "notifies when the branch maps to the subscribed channel" do
       user = register_user!()
       change = change!()
-      chan = channel!("nixos-unstable")
+      chan = channel!()
       rev = channel_revision!(chan)
       {:ok, _} = ChangeSubscription.subscribe(change.id, chan.id, actor: user)
       branch = change_branch!(change, "nixos-unstable", rev)
@@ -42,7 +42,7 @@ defmodule Tracker.Notifications.NotificationFanoutPropagationWorkerTest do
       user = register_user!()
       change = change!()
       subscribed = channel!()
-      other = channel!("nixos-unstable")
+      other = channel!()
       rev = channel_revision!(other)
       {:ok, _} = ChangeSubscription.subscribe(change.id, subscribed.id, actor: user)
       branch = change_branch!(change, "nixos-unstable", rev)

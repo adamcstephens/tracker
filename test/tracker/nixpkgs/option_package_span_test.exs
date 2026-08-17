@@ -47,8 +47,8 @@ defmodule Tracker.Nixpkgs.OptionPackageSpanTest do
       rev2 = revision!(channel, "pkgmove2", ~U[2026-04-02 10:00:00Z], rev1)
 
       option = Fixtures.option!("services.victorialogs.package")
-      old_pkg = Fixtures.package!("victoriametrics")
-      new_pkg = Fixtures.package!("victorialogs")
+      old_pkg = Fixtures.package!("victoriametrics-ops")
+      new_pkg = Fixtures.package!("victorialogs-ops")
 
       Fixtures.apply_option_packages!(rev1, [{option, old_pkg}])
       Fixtures.apply_option_packages!(rev2, [{option, new_pkg}])
@@ -93,7 +93,7 @@ defmodule Tracker.Nixpkgs.OptionPackageSpanTest do
       rev1 = revision!(channel, "pkgopen1", ~U[2026-04-01 10:00:00Z])
       rev2 = revision!(channel, "pkgopen2", ~U[2026-04-02 10:00:00Z], rev1)
 
-      package = Fixtures.package!("victoriametrics")
+      package = Fixtures.package!("victoriametrics-ops")
       stale_option = Fixtures.option!("services.victorialogs.package")
       live_option = Fixtures.option!("services.victoriametrics.package")
 

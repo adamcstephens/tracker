@@ -58,7 +58,7 @@ defmodule TrackerWeb.OptionLive.ShowTest do
   setup do
     channel =
       Channel.create!(%{
-        name: "nixos-unstable",
+        name: "nixos-optshow",
         display_name: "NixOS Unstable",
         status: :active,
         is_stable: true
@@ -230,7 +230,7 @@ defmodule TrackerWeb.OptionLive.ShowTest do
     setup do
       channel =
         Channel.create!(%{
-          name: "nixos-25.11",
+          name: "nixos-25.66",
           display_name: "NixOS 25.11",
           status: :active,
           is_stable: true
@@ -248,8 +248,11 @@ defmodule TrackerWeb.OptionLive.ShowTest do
 
       option = Fixtures.option!("services.victorialogs.package")
 
-      Fixtures.apply_option_packages!(cr1, [{option, Fixtures.package!("victoriametrics")}])
-      Fixtures.apply_option_packages!(cr2, [{option, Fixtures.package!("victorialogs")}])
+      Fixtures.apply_option_packages!(cr1, [
+        {option, Fixtures.package!("victoriametrics-optshow")}
+      ])
+
+      Fixtures.apply_option_packages!(cr2, [{option, Fixtures.package!("victorialogs-optshow")}])
 
       %{channel: channel, cr1: cr1, cr2: cr2}
     end
@@ -272,18 +275,18 @@ defmodule TrackerWeb.OptionLive.ShowTest do
 
     test "shows only the package linked at the latest revision", %{conn: conn} do
       {:ok, _view, html} =
-        live(conn, ~p"/options/services.victorialogs?channel=nixos-25.11")
+        live(conn, ~p"/options/services.victorialogs?channel=nixos-25.66")
 
-      assert html =~ ~s(href="/packages/victorialogs")
-      refute html =~ ~s(href="/packages/victoriametrics")
+      assert html =~ ~s(href="/packages/victorialogs-optshow")
+      refute html =~ ~s(href="/packages/victoriametrics-optshow")
     end
 
     test "an earlier revision still shows the package it linked then", %{conn: conn, cr1: cr1} do
       {:ok, _view, html} =
-        live(conn, ~p"/options/services.victorialogs?channel=nixos-25.11&rev=#{cr1.revision}")
+        live(conn, ~p"/options/services.victorialogs?channel=nixos-25.66&rev=#{cr1.revision}")
 
-      assert html =~ ~s(href="/packages/victoriametrics")
-      refute html =~ ~s(href="/packages/victorialogs")
+      assert html =~ ~s(href="/packages/victoriametrics-optshow")
+      refute html =~ ~s(href="/packages/victorialogs-optshow")
     end
   end
 
@@ -491,7 +494,7 @@ defmodule TrackerWeb.OptionLive.ShowTest do
   test "shows fallback when channel has no options data", %{conn: conn} do
     nixpkgs_channel =
       Channel.create!(%{
-        name: "nixpkgs-unstable",
+        name: "nixpkgs-optshow",
         display_name: "Nixpkgs Unstable",
         status: :active,
         is_stable: false
@@ -522,7 +525,7 @@ defmodule TrackerWeb.OptionLive.ShowTest do
   test "an explicit ?channel= trumps an all-channels cookie preference", %{conn: conn} do
     conn = Plug.Test.init_test_session(conn, %{"lens_channel_name" => "all"})
 
-    {:ok, _view, html} = live(conn, ~p"/options/services.nginx?channel=nixos-unstable")
+    {:ok, _view, html} = live(conn, ~p"/options/services.nginx?channel=nixos-optshow")
 
     refute html =~ "Select a channel"
     assert html =~ "Options at this prefix"
@@ -531,7 +534,7 @@ defmodule TrackerWeb.OptionLive.ShowTest do
   test "lens change patches the URL and reloads", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/options/services.nginx")
 
-    switch_lens(view, "nixos-unstable")
+    switch_lens(view, "nixos-optshow")
     # Should still render the prefix
     html = render(view)
     assert html =~ "services.nginx"

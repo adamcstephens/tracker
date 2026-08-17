@@ -79,6 +79,44 @@ defmodule TrackerWeb.LensTest do
     end
   end
 
+  describe "default channel fallback" do
+    test "picks the newest nixos channel when no stable release is active", %{stable: stable} do
+      suffix = System.unique_integer([:positive])
+      Channel.update_status!(stable, %{status: :retired})
+
+      Channel.create!(%{
+        name: "nixos-unstable-a#{suffix}",
+        display_name: "Older",
+        status: :active,
+        is_stable: false
+      })
+
+      newest =
+        Channel.create!(%{
+          name: "nixos-unstable-z#{suffix}",
+          display_name: "Newest",
+          status: :active,
+          is_stable: false
+        })
+
+      assert Lens.resolve(nil, nil).channel.name == newest.name
+    end
+
+    test "skips retired channels when falling back", %{stable: stable, unstable: unstable} do
+      suffix = System.unique_integer([:positive])
+      Channel.update_status!(stable, %{status: :retired})
+
+      Channel.create!(%{
+        name: "nixos-zzz#{suffix}",
+        display_name: "Retired",
+        status: :retired,
+        is_stable: false
+      })
+
+      assert Lens.resolve(nil, nil).channel.name == unstable.name
+    end
+  end
+
   describe "from_params/2" do
     test "reads the lens from URL params", %{unstable: unstable} do
       lens = Lens.from_params(%{"channel" => unstable.name}, %{})

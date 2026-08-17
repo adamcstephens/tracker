@@ -14,7 +14,7 @@ defmodule TrackerWeb.InboxLive.IndexTest do
   end
 
   defp published_notification!(user, overrides \\ %{}) do
-    chan = channel!("nixos-unstable")
+    chan = channel!()
     rev = channel_revision!(chan)
 
     notification!(
@@ -243,8 +243,8 @@ defmodule TrackerWeb.InboxLive.IndexTest do
 
   test "shows the version bump for package_version_changed notifications", %{conn: conn} do
     user = register_user!()
-    pkg = package!("vim")
-    chan = channel!("nixos-unstable")
+    pkg = package!()
+    chan = channel!()
     prev = channel_revision!(chan, %{released_at: ~U[2026-02-01 00:00:00Z]})
 
     rev =
@@ -268,13 +268,14 @@ defmodule TrackerWeb.InboxLive.IndexTest do
 
     {:ok, view, _html} = live(conn, ~p"/inbox")
 
-    assert view |> element("#notification-#{n.id}") |> render() =~ "vim 9.0 → 9.1"
+    assert view |> element("#notification-#{n.id}") |> render() =~
+             "#{pkg.attribute} 9.0 → 9.1"
   end
 
   test "shows the version bump for a read notification after widening to All", %{conn: conn} do
     user = register_user!()
-    pkg = package!("htop")
-    chan = channel!("nixos-unstable")
+    pkg = package!()
+    chan = channel!()
     prev = channel_revision!(chan, %{released_at: ~U[2026-02-01 00:00:00Z]})
 
     rev =
@@ -302,7 +303,7 @@ defmodule TrackerWeb.InboxLive.IndexTest do
 
     view |> element("#filter-all") |> render_click()
 
-    assert view |> element("#notification-#{n.id}") |> render() =~ "htop 3.2 → 3.3"
+    assert view |> element("#notification-#{n.id}") |> render() =~ "#{pkg.attribute} 3.2 → 3.3"
   end
 
   test "type chip counts reflect the unread/all selection", %{conn: conn} do
@@ -339,7 +340,7 @@ defmodule TrackerWeb.InboxLive.IndexTest do
 
   test "filters to a single channel revision", %{conn: conn} do
     user = register_user!()
-    chan = channel!("nixos-unstable")
+    chan = channel!()
     rev = channel_revision!(chan)
     other_rev = channel_revision!(chan)
 
@@ -449,7 +450,7 @@ defmodule TrackerWeb.InboxLive.IndexTest do
   describe "search bar and lens" do
     test "renders the lens with its selector disabled", %{conn: conn} do
       user = register_user!()
-      channel!("nixos-unstable")
+      channel!()
       conn = log_in(conn, user)
 
       {:ok, view, _html} = live(conn, ~p"/inbox")
@@ -474,14 +475,14 @@ defmodule TrackerWeb.InboxLive.IndexTest do
       firefox =
         notification!(user, %{
           type: :package_added,
-          package_id: package!("firefox").id,
+          package_id: package!("firefox-#{System.unique_integer([:positive])}").id,
           channel_id: chan.id
         })
 
       vim =
         notification!(user, %{
           type: :package_added,
-          package_id: package!("vim").id,
+          package_id: package!().id,
           channel_id: chan.id
         })
 
@@ -498,19 +499,20 @@ defmodule TrackerWeb.InboxLive.IndexTest do
 
     test "search matches the channel name", %{conn: conn} do
       user = register_user!()
+      chan = channel!()
 
       n =
         notification!(user, %{
           type: :package_added,
-          package_id: package!("vim").id,
-          channel_id: channel!("nixos-unstable").id
+          package_id: package!().id,
+          channel_id: chan.id
         })
 
       conn = log_in(conn, user)
 
       {:ok, view, _html} = live(conn, ~p"/inbox")
 
-      view |> element("#page-search") |> render_change(%{"search" => "unstable"})
+      view |> element("#page-search") |> render_change(%{"search" => chan.name})
       assert has_element?(view, "#notification-#{n.id}")
 
       view |> element("#page-search") |> render_change(%{"search" => "nomatch"})
@@ -524,14 +526,14 @@ defmodule TrackerWeb.InboxLive.IndexTest do
       firefox =
         notification!(user, %{
           type: :package_added,
-          package_id: package!("firefox").id,
+          package_id: package!("firefox-#{System.unique_integer([:positive])}").id,
           channel_id: chan.id
         })
 
       vim =
         notification!(user, %{
           type: :package_added,
-          package_id: package!("vim").id,
+          package_id: package!().id,
           channel_id: chan.id
         })
 

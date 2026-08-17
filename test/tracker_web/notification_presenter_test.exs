@@ -17,7 +17,7 @@ defmodule TrackerWeb.NotificationPresenterTest do
   test "change_propagated names the change and its destination branch" do
     user = register_user!()
     change = change!()
-    chan = channel!("nixos-unstable")
+    chan = channel!()
     rev = channel_revision!(chan)
     branch = change_branch!(change, "nixos-unstable", rev)
 
@@ -53,7 +53,7 @@ defmodule TrackerWeb.NotificationPresenterTest do
 
   test "channel_revision_published includes the short revision hash" do
     user = register_user!()
-    chan = channel!("nixos-unstable")
+    chan = channel!()
     rev = channel_revision!(chan)
 
     n =
@@ -65,12 +65,12 @@ defmodule TrackerWeb.NotificationPresenterTest do
 
     text = NotificationPresenter.describe(n)
     assert text =~ String.slice(rev.revision, 0, 7)
-    assert text =~ "published on nixos-unstable"
+    assert text =~ "published on #{chan.name}"
   end
 
   test "package_change_opened names the PR, its base ref, and the package" do
     user = register_user!()
-    pkg = package!("firefox")
+    pkg = package!()
     change = change!(nil, %{state: :open, base_ref: "master"})
 
     n =
@@ -83,8 +83,8 @@ defmodule TrackerWeb.NotificationPresenterTest do
     text = NotificationPresenter.describe(n)
     assert text =~ "PR ##{change.number}"
     assert text =~ "opened against master"
-    assert text =~ "touching firefox"
-    assert NotificationPresenter.hero(n) == "firefox"
+    assert text =~ "touching #{pkg.attribute}"
+    assert NotificationPresenter.hero(n) == pkg.attribute
     assert NotificationPresenter.path(n) == "/changes/#{change.number}"
   end
 
@@ -151,8 +151,8 @@ defmodule TrackerWeb.NotificationPresenterTest do
   end
 
   describe "version changes" do
-    defp version_bump!(user, attribute, old_version, new_version) do
-      pkg = package!(attribute)
+    defp version_bump!(user, old_version, new_version) do
+      pkg = package!()
       chan = channel!()
       prev = channel_revision!(chan, %{released_at: ~U[2026-02-01 00:00:00Z]})
 
@@ -175,8 +175,8 @@ defmodule TrackerWeb.NotificationPresenterTest do
 
     test "version_changes/1 resolves old and new versions per notification" do
       user = register_user!()
-      vim = version_bump!(user, "vim", "9.0", "9.1")
-      rg = version_bump!(user, "ripgrep", "14.0.3", "14.1.0")
+      vim = version_bump!(user, "9.0", "9.1")
+      rg = version_bump!(user, "14.0.3", "14.1.0")
       notifications = Notification.for_user!(actor: user)
 
       changes = NotificationPresenter.version_changes(notifications)
@@ -207,8 +207,8 @@ defmodule TrackerWeb.NotificationPresenterTest do
 
     test "hero/2 and describe/2 render the bump, falling back without one" do
       user = register_user!()
-      chan = channel!("nixos-unstable")
-      pkg = package!("vim")
+      chan = channel!()
+      pkg = package!()
 
       n =
         loaded_notification!(user, %{
@@ -219,17 +219,19 @@ defmodule TrackerWeb.NotificationPresenterTest do
 
       changes = %{n.id => {"9.0", "9.1"}}
 
-      assert NotificationPresenter.hero(n, changes) == "vim 9.0 → 9.1"
-      assert NotificationPresenter.describe(n, changes) == "vim 9.0 → 9.1 on nixos-unstable"
+      assert NotificationPresenter.hero(n, changes) == "#{pkg.attribute} 9.0 → 9.1"
 
-      assert NotificationPresenter.hero(n, %{}) == "vim"
-      assert NotificationPresenter.describe(n, %{}) == "vim updated on nixos-unstable"
+      assert NotificationPresenter.describe(n, changes) ==
+               "#{pkg.attribute} 9.0 → 9.1 on #{chan.name}"
+
+      assert NotificationPresenter.hero(n, %{}) == pkg.attribute
+      assert NotificationPresenter.describe(n, %{}) == "#{pkg.attribute} updated on #{chan.name}"
     end
 
     test "hero/2 and describe/2 ignore the map for other types" do
       user = register_user!()
-      chan = channel!("nixos-unstable")
-      pkg = package!("vim")
+      chan = channel!()
+      pkg = package!()
 
       n =
         loaded_notification!(user, %{
@@ -240,8 +242,10 @@ defmodule TrackerWeb.NotificationPresenterTest do
 
       changes = %{n.id => {"9.0", "9.1"}}
 
-      assert NotificationPresenter.hero(n, changes) == "vim"
-      assert NotificationPresenter.describe(n, changes) == "vim added to nixos-unstable"
+      assert NotificationPresenter.hero(n, changes) == pkg.attribute
+
+      assert NotificationPresenter.describe(n, changes) ==
+               "#{pkg.attribute} added to #{chan.name}"
     end
   end
 

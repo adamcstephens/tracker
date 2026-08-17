@@ -14,7 +14,7 @@ defmodule Tracker.Ingestion.CronWorkerTest do
   setup do
     channel =
       Channel.create!(%{
-        name: "nixos-unstable",
+        name: "nixos-cronwork",
         display_name: "NixOS Unstable",
         status: :active,
         is_stable: false
@@ -99,7 +99,7 @@ defmodule Tracker.Ingestion.CronWorkerTest do
       Application.put_env(
         :tracker,
         :releases_fetcher,
-        fn "nixos-unstable" -> [new_release] end
+        fn "nixos-cronwork" -> [new_release] end
       )
 
       Req.Test.stub(@stub, fn conn ->
@@ -136,7 +136,7 @@ defmodule Tracker.Ingestion.CronWorkerTest do
       Application.put_env(
         :tracker,
         :releases_fetcher,
-        fn "nixos-unstable" -> [new_release] end
+        fn "nixos-cronwork" -> [new_release] end
       )
 
       Req.Test.stub(@stub, fn conn ->
@@ -161,7 +161,7 @@ defmodule Tracker.Ingestion.CronWorkerTest do
       Application.put_env(
         :tracker,
         :releases_fetcher,
-        fn "nixos-unstable" -> [new_release, old_release] end
+        fn "nixos-cronwork" -> [new_release, old_release] end
       )
 
       Req.Test.stub(@stub, fn conn ->
@@ -211,7 +211,7 @@ defmodule Tracker.Ingestion.CronWorkerTest do
       Application.put_env(
         :tracker,
         :releases_fetcher,
-        fn "nixos-unstable" -> [failed_release, new_release] end
+        fn "nixos-cronwork" -> [failed_release, new_release] end
       )
 
       Req.Test.stub(@stub, fn conn ->
@@ -231,7 +231,7 @@ defmodule Tracker.Ingestion.CronWorkerTest do
 
     test "a channel that raises during sync does not stop later channels", %{channel: channel} do
       Channel.create!(%{
-        name: "nixos-26.05",
+        name: "nixos-26.53",
         display_name: "NixOS 26.05",
         status: :active,
         is_stable: true
@@ -244,8 +244,8 @@ defmodule Tracker.Ingestion.CronWorkerTest do
       }
 
       Application.put_env(:tracker, :releases_fetcher, fn
-        "nixos-26.05" -> raise "release ledger unavailable"
-        "nixos-unstable" -> [new_release]
+        "nixos-26.53" -> raise "release ledger unavailable"
+        "nixos-cronwork" -> [new_release]
       end)
 
       Req.Test.stub(@stub, fn conn ->
@@ -266,7 +266,7 @@ defmodule Tracker.Ingestion.CronWorkerTest do
       assert length(Pipeline.for_channel!(channel.id)) == before + 1
 
       assert log =~ ~s(msg: "channel poll failed")
-      assert log =~ "nixos-26.05"
+      assert log =~ "nixos-26.53"
       assert log =~ "release ledger unavailable"
       assert log =~ "outcome: :error"
       assert log =~ "failed: 1"

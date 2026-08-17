@@ -8,7 +8,7 @@ defmodule TrackerWeb.ChannelLive.ShowTest do
   setup do
     channel =
       Channel.create!(%{
-        name: "nixos-unstable",
+        name: "nixos-chanshow",
         display_name: "NixOS Unstable",
         status: :active,
         is_stable: false
@@ -33,7 +33,7 @@ defmodule TrackerWeb.ChannelLive.ShowTest do
   end
 
   test "updates when a revision result is recorded", %{conn: conn, channel: channel} do
-    {:ok, view, html} = live(conn, ~p"/channels/nixos-unstable")
+    {:ok, view, html} = live(conn, ~p"/channels/nixos-chanshow")
 
     refute html =~ "fff999"
 
@@ -51,7 +51,7 @@ defmodule TrackerWeb.ChannelLive.ShowTest do
   end
 
   test "updates when a new revision is created", %{conn: conn, channel: channel} do
-    {:ok, view, html} = live(conn, ~p"/channels/nixos-unstable")
+    {:ok, view, html} = live(conn, ~p"/channels/nixos-chanshow")
 
     refute html =~ "ccc888"
 
@@ -66,29 +66,29 @@ defmodule TrackerWeb.ChannelLive.ShowTest do
   end
 
   test "the revisions list carries a section header with its count", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/channels/nixos-unstable")
+    {:ok, view, _html} = live(conn, ~p"/channels/nixos-chanshow")
 
     assert has_element?(view, ".section-header h2", "Revisions")
     assert has_element?(view, ".section-header .n", "2")
   end
 
   test "renders checkboxes for revision selection", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/channels/nixos-unstable")
+    {:ok, _view, html} = live(conn, ~p"/channels/nixos-chanshow")
 
     assert html =~ ~s|type="checkbox"|
   end
 
   test "renders revisions as shared row-list rows", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/channels/nixos-unstable")
+    {:ok, _view, html} = live(conn, ~p"/channels/nixos-chanshow")
 
     assert html =~ ~s(class="row-list)
     assert html =~ ~s(class="row-line")
-    assert html =~ ~s(href="/channels/nixos-unstable/revisions/shw222bbb444555")
+    assert html =~ ~s(href="/channels/nixos-chanshow/revisions/shw222bbb444555")
     assert html =~ "2026-03-15 10:00"
   end
 
   test "rows are not whole-row links, so the compare checkbox stays clickable", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/channels/nixos-unstable")
+    {:ok, _view, html} = live(conn, ~p"/channels/nixos-chanshow")
 
     refute html =~ "row-link"
   end
@@ -103,21 +103,21 @@ defmodule TrackerWeb.ChannelLive.ShowTest do
 
     Tracker.Nixpkgs.ChannelRevision.record_result!(cr, %{result: :success})
 
-    {:ok, _view, html} = live(conn, ~p"/channels/nixos-unstable")
+    {:ok, _view, html} = live(conn, ~p"/channels/nixos-chanshow")
 
     assert html =~ "res111a"
     refute html =~ "Success"
   end
 
   test "column sorting is gone", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/channels/nixos-unstable")
+    {:ok, _view, html} = live(conn, ~p"/channels/nixos-chanshow")
 
     refute html =~ "phx-value-field"
     refute html =~ "<table"
   end
 
   test "revisions are listed newest first", %{conn: conn, cr1: cr1, cr2: cr2} do
-    {:ok, _view, html} = live(conn, ~p"/channels/nixos-unstable")
+    {:ok, _view, html} = live(conn, ~p"/channels/nixos-chanshow")
 
     {newest, _} = :binary.match(html, String.slice(cr2.revision, 0, 7))
     {oldest, _} = :binary.match(html, String.slice(cr1.revision, 0, 7))
@@ -126,13 +126,13 @@ defmodule TrackerWeb.ChannelLive.ShowTest do
   end
 
   test "revisions form submits via GET to the diff endpoint", %{conn: conn, cr1: cr1} do
-    {:ok, _view, html} = live(conn, ~p"/channels/nixos-unstable")
+    {:ok, _view, html} = live(conn, ~p"/channels/nixos-chanshow")
 
     document = Floki.parse_document!(html)
     [form] = Floki.find(document, "form#revisions-form")
 
     assert Floki.attribute(form, "method") == ["get"]
-    assert Floki.attribute(form, "action") == ["/channels/nixos-unstable/diff"]
+    assert Floki.attribute(form, "action") == ["/channels/nixos-chanshow/diff"]
 
     checkboxes = Floki.find(form, ~s|input[type="checkbox"][name="compare[]"]|)
     assert Enum.any?(checkboxes, &(Floki.attribute(&1, "value") == [cr1.revision]))
@@ -149,13 +149,13 @@ defmodule TrackerWeb.ChannelLive.ShowTest do
       })
     end
 
-    {:ok, view, html} = live(conn, ~p"/channels/nixos-unstable")
+    {:ok, view, html} = live(conn, ~p"/channels/nixos-chanshow")
 
     assert html =~ "Page 1 of 2"
     # Newest first, so the oldest seeded revision can only be on page 2
     refute html =~ "shw111a"
 
-    html = view |> element(~s(a[href="/channels/nixos-unstable?page=2"])) |> render_click()
+    html = view |> element(~s(a[href="/channels/nixos-chanshow?page=2"])) |> render_click()
 
     assert html =~ "shw111a"
   end
@@ -170,14 +170,14 @@ defmodule TrackerWeb.ChannelLive.ShowTest do
         hydra_exported_job: "tested"
       })
 
-    {:ok, _view, html} = live(conn, ~p"/channels/nixos-unstable")
+    {:ok, _view, html} = live(conn, ~p"/channels/nixos-chanshow")
 
     assert html =~ "Build problem"
     assert html =~ "https://hydra.nixos.org/jobset/nixos/unstable"
   end
 
   test "does not render Build problem badge by default", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/channels/nixos-unstable")
+    {:ok, _view, html} = live(conn, ~p"/channels/nixos-chanshow")
     refute html =~ "Build problem"
   end
 end

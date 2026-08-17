@@ -82,11 +82,11 @@ defmodule Tracker.Nixpkgs.ReleaseTest do
 
     test "does not touch other channels" do
       channel = create_channel()
-      other = create_channel("nixos-25.05")
+      other = create_channel("nixos-25.71")
 
       Release.upsert!(%{
         channel_id: other.id,
-        base_url: "https://releases.nixos.org/nixos/25.05/nixos-other",
+        base_url: "https://releases.nixos.org/nixos/25.71/nixos-other",
         released_at: ~U[2025-05-01 00:00:00Z],
         revision: rev("other")
       })

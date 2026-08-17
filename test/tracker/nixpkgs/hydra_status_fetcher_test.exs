@@ -132,7 +132,8 @@ defmodule Tracker.Nixpkgs.HydraStatusFetcherTest do
 
       assert {:ok, %{updated: 0, skipped: 1}} = HydraStatusFetcher.run(fetch: fetch)
 
-      refute_receive %Ash.Notifier.Notification{resource: Channel}, 50
+      channel_id = channel.id
+      refute_receive %Ash.Notifier.Notification{resource: Channel, data: %{id: ^channel_id}}, 50
 
       {:ok, after_second} = Channel.by_name(channel.name)
       assert after_second.hydra_checked_at == first_checked_at

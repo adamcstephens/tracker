@@ -40,7 +40,7 @@ defmodule Tracker.Ingestion.StepWorkerTest do
     setup do
       channel =
         Channel.create!(%{
-          name: "nixos-unstable",
+          name: "nixos-stepwork",
           display_name: "NixOS Unstable",
           status: :active,
           is_stable: false
@@ -115,7 +115,7 @@ defmodule Tracker.Ingestion.StepWorkerTest do
     setup do
       channel =
         Channel.create!(%{
-          name: "nixos-unstable",
+          name: "nixos-stepwork",
           display_name: "NixOS Unstable",
           status: :active,
           is_stable: false

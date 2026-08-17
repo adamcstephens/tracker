@@ -14,7 +14,7 @@ defmodule Tracker.Nixpkgs.OptionSpanTest do
   end
 
   defp setup_tree do
-    channel = Fixtures.channel!("nixos-unstable")
+    channel = Fixtures.channel!()
     rev = revision!(channel, "treeaaaa", ~U[2026-04-01 10:00:00Z])
 
     opts =
@@ -79,7 +79,7 @@ defmodule Tracker.Nixpkgs.OptionSpanTest do
 
   describe "reconstruction against source" do
     test "the spans reconstruct exactly the loaded option set" do
-      channel = Fixtures.channel!("nixos-unstable")
+      channel = Fixtures.channel!()
       rev = revision!(channel, "reconaaa", ~U[2026-04-01 10:00:00Z])
 
       source = %{
@@ -124,7 +124,7 @@ defmodule Tracker.Nixpkgs.OptionSpanTest do
 
   describe "fingerprint stability" do
     test "an option whose description has trailing whitespace does not churn" do
-      channel = Fixtures.channel!("nixos-unstable")
+      channel = Fixtures.channel!()
       rev1 = revision!(channel, "trimws01", ~U[2026-04-01 10:00:00Z])
       rev2 = revision!(channel, "trimws02", ~U[2026-04-02 10:00:00Z], rev1)
       opt = Fixtures.option!("services.x")

@@ -8,7 +8,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
   setup do
     channel_unstable =
       Channel.create!(%{
-        name: "nixos-unstable",
+        name: "nixos-25.67",
         display_name: "NixOS Unstable",
         status: :active,
         is_stable: true
@@ -16,7 +16,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
 
     channel_stable =
       Channel.create!(%{
-        name: "nixos-24.11",
+        name: "nixos-24.66",
         display_name: "NixOS 24.11",
         status: :active,
         is_stable: false
@@ -103,7 +103,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
       package: package
     } do
       {:ok, _view, html} =
-        live(conn, ~p"/packages/#{package.attribute}?channel=nixos-24.11")
+        live(conn, ~p"/packages/#{package.attribute}?channel=nixos-24.66")
 
       assert html =~ "blob/stab111ccc222333/pkgs/stable/default.nix#L20"
       refute html =~ "blob/master/"
@@ -124,7 +124,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
       package: package
     } do
       {:ok, _view, html} =
-        live(conn, ~p"/packages/#{package.attribute}?channel=nixos-24.11")
+        live(conn, ~p"/packages/#{package.attribute}?channel=nixos-24.66")
 
       assert html =~ "Stable-channel description"
       refute html =~ "Meta-channel description"
@@ -145,7 +145,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
       package: package
     } do
       {:ok, _view, html} =
-        live(conn, ~p"/packages/#{package.attribute}?channel=nixos-unstable")
+        live(conn, ~p"/packages/#{package.attribute}?channel=nixos-25.67")
 
       assert html =~ "Meta-channel description"
     end
@@ -201,7 +201,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
       moved: moved
     } do
       {:ok, _view, html} =
-        live(conn, ~p"/packages/#{moved.attribute}?channel=nixos-unstable")
+        live(conn, ~p"/packages/#{moved.attribute}?channel=nixos-25.67")
 
       assert html =~ "blob/old111aaa222333/pkgs/old/default.nix"
       assert html =~ "blob/new111aaa222333/pkgs/new/default.nix"
@@ -214,7 +214,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
       {:ok, _view, html} =
         live(
           conn,
-          ~p"/packages/#{moved.attribute}?channel=nixos-unstable&all_revisions=true"
+          ~p"/packages/#{moved.attribute}?channel=nixos-25.67&all_revisions=true"
         )
 
       assert html =~ "blob/old111aaa222333/pkgs/old/default.nix"
@@ -278,7 +278,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
 
     defp pinned_view(conn, package, rev) do
       {:ok, _view, html} =
-        live(conn, ~p"/packages/#{package.attribute}?channel=nixos-unstable&rev=#{rev}")
+        live(conn, ~p"/packages/#{package.attribute}?channel=nixos-25.67&rev=#{rev}")
 
       html
     end
@@ -314,7 +314,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
       pinned: pinned
     } do
       {:ok, _view, html} =
-        live(conn, ~p"/packages/#{pinned.attribute}?channel=nixos-unstable")
+        live(conn, ~p"/packages/#{pinned.attribute}?channel=nixos-25.67")
 
       assert html =~ "blob/abc123def456789/pkgs/pinned/default.nix#L20"
       refute html =~ "blob/pinb11bbb222333/pkgs/pinned/default.nix#L20"
@@ -341,7 +341,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
 
     test "an unpinned lens resolves metadata from the open span", %{conn: conn, pinned: pinned} do
       {:ok, _view, html} =
-        live(conn, ~p"/packages/#{pinned.attribute}?channel=nixos-unstable")
+        live(conn, ~p"/packages/#{pinned.attribute}?channel=nixos-25.67")
 
       assert html =~ "Present-day description"
       refute html =~ "Pinned-era description"
@@ -491,7 +491,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
         {pkg, %{version: "1.0", main_program: "extbin"}}
       ])
 
-      {:ok, _view, html} = live(conn, ~p"/packages/#{pkg.attribute}?channel=nixos-24.11")
+      {:ok, _view, html} = live(conn, ~p"/packages/#{pkg.attribute}?channel=nixos-24.66")
 
       assert html =~ "extbin"
       refute html =~ "Fallback description"
@@ -565,9 +565,9 @@ defmodule TrackerWeb.PackageLive.ShowTest do
   test "displays revision with version and channel", %{conn: conn, package: package} do
     {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}")
 
-    # Default lens is nixos-unstable (the stable channel in this test)
+    # Default lens is nixos-25.67 (the stable channel in this test)
     assert html =~ "2.12.1"
-    assert html =~ "nixos-unstable"
+    assert html =~ "nixos-25.67"
   end
 
   test "displays truncated revision hash linked to revision show page", %{
@@ -577,7 +577,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
     {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}")
 
     assert html =~ "abc123d"
-    assert html =~ "/channels/nixos-unstable/revisions/abc123def456789"
+    assert html =~ "/channels/nixos-25.67/revisions/abc123def456789"
   end
 
   test "shows empty state when no revisions", %{conn: conn} do
@@ -600,7 +600,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
   test "revisions are listed most recently released first", %{conn: conn, package: package} do
     {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}")
 
-    # Only nixos-unstable revision is shown (lens default)
+    # Only the nixos-25.67 revision is shown (lens default)
     assert version_order(html) == ["2.12.1"]
   end
 
@@ -640,7 +640,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
     {:ok, _view, html} =
       live(conn, ~p"/packages/#{package.attribute}?sort_by=version&sort_dir=asc")
 
-    # Only one revision in the lens channel (nixos-unstable)
+    # Only one revision in the lens channel (nixos-25.67)
     assert version_order(html) == ["2.12.1"]
   end
 
@@ -651,11 +651,11 @@ defmodule TrackerWeb.PackageLive.ShowTest do
   } do
     {:ok, view, html} = live(conn, ~p"/packages/#{package.attribute}")
 
-    # Default lens shows nixos-unstable (2.12.1)
+    # Default lens shows nixos-25.67 (2.12.1)
     assert html =~ "2.12.1"
     refute html =~ "2.13.0"
 
-    # Switch lens to nixos-24.11
+    # Switch lens to nixos-24.66
     html = switch_lens(view, channel_stable.name)
 
     assert html =~ "2.13.0"
@@ -833,7 +833,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
 
       versions = version_order(html)
 
-      # Lens defaults to nixos-unstable. Shows version changes only:
+      # Lens defaults to nixos-25.67. Shows version changes only:
       # cr1(2.12.1 first), cr4(2.14.0 changed) — cr3 is noop (same 2.12.1)
       assert length(versions) == 2
       assert "2.12.1" in versions
@@ -933,12 +933,12 @@ defmodule TrackerWeb.PackageLive.ShowTest do
 
       Tracker.Nixpkgs.ChangeBranch.create!(%{
         change_id: change_in.id,
-        branch_name: "nixos-unstable"
+        branch_name: "nixos-25.67"
       })
 
       Tracker.Nixpkgs.ChangeBranch.create!(%{
         change_id: change_out.id,
-        branch_name: "nixos-24.11"
+        branch_name: "nixos-24.66"
       })
 
       %{change_in: change_in, change_out: change_out}
@@ -985,10 +985,10 @@ defmodule TrackerWeb.PackageLive.ShowTest do
     end
 
     test "badges a lens channel the package has left", %{conn: conn, package: package} do
-      {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}?channel=nixos-24.11")
+      {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}?channel=nixos-24.66")
 
       assert {"removed", title} = removed_badge(html)
-      assert title =~ "nixos-24.11"
+      assert title =~ "nixos-24.66"
       assert title =~ "stabler"
       assert title =~ "2026-04-01"
     end
@@ -998,7 +998,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
       package: package
     } do
       {:ok, _view, html} =
-        live(conn, ~p"/packages/#{package.attribute}?channel=nixos-unstable")
+        live(conn, ~p"/packages/#{package.attribute}?channel=nixos-25.67")
 
       assert removed_badge(html) == nil
     end
@@ -1007,7 +1007,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
       {:ok, _view, html} =
         live(
           conn,
-          ~p"/packages/#{package.attribute}?channel=nixos-24.11&rev=def456abc789012"
+          ~p"/packages/#{package.attribute}?channel=nixos-24.66&rev=def456abc789012"
         )
 
       assert {"removed later", _title} = removed_badge(html)
@@ -1029,7 +1029,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
 
       Tracker.Fixtures.apply_package_revision!(cr_readd, [{package, "2.14.0"}])
 
-      {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}?channel=nixos-24.11")
+      {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}?channel=nixos-24.66")
 
       assert removed_badge(html) == nil
     end
@@ -1064,19 +1064,19 @@ defmodule TrackerWeb.PackageLive.ShowTest do
     end
 
     test "the revisions list carries the removal as a row", %{conn: conn, package: package} do
-      {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}?channel=nixos-24.11")
+      {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}?channel=nixos-24.66")
 
-      assert removal_rows(html) == [{"nixos-24.11", "stabler"}]
+      assert removal_rows(html) == [{"nixos-24.66", "stabler"}]
     end
 
     test "the removal row shows in all-revisions mode too", %{conn: conn, package: package} do
       {:ok, _view, html} =
         live(
           conn,
-          ~p"/packages/#{package.attribute}?channel=nixos-24.11&all_revisions=true"
+          ~p"/packages/#{package.attribute}?channel=nixos-24.66&all_revisions=true"
         )
 
-      assert removal_rows(html) == [{"nixos-24.11", "stabler"}]
+      assert removal_rows(html) == [{"nixos-24.66", "stabler"}]
     end
   end
 

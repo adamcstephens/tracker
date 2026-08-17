@@ -15,7 +15,7 @@ defmodule Tracker.Ingestion.Steps.CreateRevisionTest do
   setup do
     channel =
       Channel.create!(%{
-        name: "nixos-unstable",
+        name: "nixos-createrev",
         display_name: "NixOS Unstable",
         status: :active,
         is_stable: false

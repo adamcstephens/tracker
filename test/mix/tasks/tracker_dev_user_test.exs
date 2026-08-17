@@ -88,7 +88,7 @@ defmodule Mix.Tasks.Tracker.DevUserTest do
   describe "run/1 with ingested data" do
     setup do
       now = DateTime.utc_now(:second)
-      channel = channel!("nixos-unstable")
+      channel = channel!()
       older = channel_revision!(channel, %{released_at: DateTime.add(now, -3, :day)})
 
       newer =

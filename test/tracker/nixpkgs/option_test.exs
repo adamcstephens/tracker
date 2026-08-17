@@ -6,7 +6,7 @@ defmodule Tracker.Nixpkgs.OptionTest do
 
   describe "prefix_counts_by_change_and_channel_revision/2" do
     setup do
-      channel = Fixtures.channel!("nixos-unstable")
+      channel = Fixtures.channel!()
 
       cr =
         ChannelRevision.create!(%{

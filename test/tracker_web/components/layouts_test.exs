@@ -390,7 +390,7 @@ defmodule TrackerWeb.LayoutsTest do
 
     test "signed in: unread count renders as a badge on the mobile bell", %{conn: conn} do
       user = register_user!()
-      chan = channel!("nixos-unstable")
+      chan = channel!()
       rev = channel_revision!(chan)
 
       notification!(user, %{

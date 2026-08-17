@@ -168,13 +168,13 @@ defmodule Tracker.Nixpkgs.ChannelRevisionLinkWorkerTest do
     end
 
     test "no-ops for a channel with no revisions", ctx do
-      empty = create_channel!("nixos-unstable-small")
+      empty = create_channel!("nixos-26.54")
       change = insert_change!(base_ref: "master", merge_commit_sha: ctx.sha_b)
 
       :ok =
         ChannelRevisionLinkWorker.run(channel_id: empty.id, git_server: ctx.git_server)
 
-      assert change_branches_for(change, "nixos-unstable-small") == []
+      assert change_branches_for(change, "nixos-26.54") == []
     end
 
     test "emits structured start/stop logs", ctx do

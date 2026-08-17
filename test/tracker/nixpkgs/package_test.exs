@@ -198,7 +198,7 @@ defmodule Tracker.Nixpkgs.PackageTest do
 
   describe "list/2 channel filtering" do
     setup do
-      channel = create_channel!("nixos-unstable")
+      channel = create_channel!(Fixtures.channel_name())
       cr = create_channel_revision!(channel.id, "aaa1111", ~U[2025-01-01 00:00:00Z])
 
       pkg_in = create_package!("in-channel-pkg")
@@ -232,7 +232,7 @@ defmodule Tracker.Nixpkgs.PackageTest do
 
   describe "by_maintainer/3 channel filtering" do
     setup do
-      channel = create_channel!("nixos-unstable")
+      channel = create_channel!(Fixtures.channel_name())
       cr = create_channel_revision!(channel.id, "bbb2222", ~U[2025-01-01 00:00:00Z])
 
       maintainer =
@@ -283,7 +283,7 @@ defmodule Tracker.Nixpkgs.PackageTest do
 
   describe "by_team/3 channel filtering" do
     setup do
-      channel = create_channel!("nixos-unstable")
+      channel = create_channel!(Fixtures.channel_name())
       cr = create_channel_revision!(channel.id, "ccc3333", ~U[2025-01-01 00:00:00Z])
 
       team =

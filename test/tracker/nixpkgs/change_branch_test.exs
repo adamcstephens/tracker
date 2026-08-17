@@ -41,7 +41,7 @@ defmodule Tracker.Nixpkgs.ChangeBranchTest do
 
     test "can optionally link a channel_revision" do
       change = create_change!()
-      channel = create_channel!("nixos-unstable")
+      channel = create_channel!(Tracker.Fixtures.channel_name())
 
       rev =
         ChannelRevision.create!(%{

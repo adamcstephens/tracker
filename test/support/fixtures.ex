@@ -33,9 +33,21 @@ defmodule Tracker.Fixtures do
 
   @doc "Creates an active channel with a unique name."
   def channel!(name \\ nil) do
-    name = name || "chan-#{System.unique_integer([:positive])}"
+    name = name || channel_name()
     Tracker.Nixpkgs.Channel.create!(%{name: name, display_name: name, status: :active})
   end
+
+  @doc """
+  A unique name shaped like a real NixOS release channel.
+
+  Async tests share one database, and the sandbox isolates visibility but not
+  locks: two tests upserting the same `channels.name` serialize on the unique
+  index, and two of them sharing a second key deadlock. The shape matters as
+  much as the uniqueness — `nixos-` keeps the lens channel filter matching, and
+  the release suffix keeps `Propagation.valid_branch?/1` accepting it. Channels
+  are created with `is_stable` false, so these never become the default stable.
+  """
+  def channel_name, do: "nixos-25.#{System.unique_integer([:positive])}"
 
   @doc "Creates a merged change with a unique PR number."
   def change!(number \\ nil, attrs \\ %{}) do

@@ -13,7 +13,7 @@ defmodule TrackerWeb.AdminLive.IngestionTest do
   setup do
     channel =
       Channel.create!(%{
-        name: "nixpkgs-unstable",
+        name: "nixpkgs-adminingest",
         display_name: "Nixpkgs Unstable",
         status: :active,
         is_stable: false
@@ -59,7 +59,7 @@ defmodule TrackerWeb.AdminLive.IngestionTest do
 
       {:ok, _view, html} = conn |> log_in(admin!()) |> live(~p"/admin")
 
-      assert html =~ "nixpkgs-unstable"
+      assert html =~ "nixpkgs-adminingest"
       assert html =~ "d14ae62"
       assert html =~ "finalize"
       assert html =~ "unknown registry"

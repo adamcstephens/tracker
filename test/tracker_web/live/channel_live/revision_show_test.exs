@@ -6,8 +6,8 @@ defmodule TrackerWeb.ChannelLive.RevisionShowTest do
   alias Tracker.Fixtures
 
   setup do
-    channel_unstable = Fixtures.channel!("nixos-unstable")
-    channel_stable = Fixtures.channel!("nixos-24.11")
+    channel_unstable = Fixtures.channel!("nixos-revshow")
+    channel_stable = Fixtures.channel!("nixos-revshow-rel")
 
     cr1 =
       Fixtures.channel_revision!(channel_unstable, %{
@@ -53,16 +53,16 @@ defmodule TrackerWeb.ChannelLive.RevisionShowTest do
 
   test "renders revision metadata", %{conn: conn, cr2: cr2} do
     {:ok, _view, html} =
-      live(conn, ~p"/channels/nixos-unstable/revisions/#{short(cr2)}")
+      live(conn, ~p"/channels/nixos-revshow/revisions/#{short(cr2)}")
 
-    assert html =~ "nixos-unstable"
+    assert html =~ "nixos-revshow"
     assert html =~ String.slice(cr2.revision, 0, 7)
     assert html =~ "2026-03-15"
   end
 
   test "renders with full hash", %{conn: conn, cr2: cr2} do
     {:ok, _view, html} =
-      live(conn, ~p"/channels/nixos-unstable/revisions/#{cr2.revision}")
+      live(conn, ~p"/channels/nixos-revshow/revisions/#{cr2.revision}")
 
     assert html =~ String.slice(cr2.revision, 0, 7)
   end
@@ -71,14 +71,14 @@ defmodule TrackerWeb.ChannelLive.RevisionShowTest do
     Ash.update!(Ash.Changeset.for_update(cr2, :record_result, %{result: :success}))
 
     {:ok, _view, html} =
-      live(conn, ~p"/channels/nixos-unstable/revisions/#{short(cr2)}")
+      live(conn, ~p"/channels/nixos-revshow/revisions/#{short(cr2)}")
 
     assert html =~ "Success"
   end
 
   test "shows diff from previous revision", %{conn: conn, cr2: cr2} do
     {:ok, _view, html} =
-      live(conn, ~p"/channels/nixos-unstable/revisions/#{short(cr2)}")
+      live(conn, ~p"/channels/nixos-revshow/revisions/#{short(cr2)}")
 
     # Should show version changes from cr1 -> cr2
     assert html =~ "revshow-hello"
@@ -88,14 +88,14 @@ defmodule TrackerWeb.ChannelLive.RevisionShowTest do
 
   test "shows package events from previous revision", %{conn: conn, cr2: cr2} do
     {:ok, _view, html} =
-      live(conn, ~p"/channels/nixos-unstable/revisions/#{short(cr2)}")
+      live(conn, ~p"/channels/nixos-revshow/revisions/#{short(cr2)}")
 
     assert html =~ "added"
   end
 
   test "shows option events from previous revision", %{conn: conn, cr2: cr2} do
     {:ok, _view, html} =
-      live(conn, ~p"/channels/nixos-unstable/revisions/#{short(cr2)}")
+      live(conn, ~p"/channels/nixos-revshow/revisions/#{short(cr2)}")
 
     assert html =~ "revshow.opt.added"
     assert html =~ ~s|href="/options/revshow.opt.added"|
@@ -103,7 +103,7 @@ defmodule TrackerWeb.ChannelLive.RevisionShowTest do
 
   test "shows option metadata changes from previous revision", %{conn: conn, cr2: cr2} do
     {:ok, _view, html} =
-      live(conn, ~p"/channels/nixos-unstable/revisions/#{short(cr2)}")
+      live(conn, ~p"/channels/nixos-revshow/revisions/#{short(cr2)}")
 
     assert html =~ "revshow.opt.changed"
     assert html =~ "Revshow old description."
@@ -112,7 +112,7 @@ defmodule TrackerWeb.ChannelLive.RevisionShowTest do
 
   test "shows diff summary counts when previous revision exists", %{conn: conn, cr2: cr2} do
     {:ok, _view, html} =
-      live(conn, ~p"/channels/nixos-unstable/revisions/#{short(cr2)}")
+      live(conn, ~p"/channels/nixos-revshow/revisions/#{short(cr2)}")
 
     [summary] = html |> Floki.parse_document!() |> Floki.find("dl.diff-summary")
     text = summary |> Floki.text() |> String.replace(~r/\s+/, " ") |> String.trim()
@@ -126,21 +126,21 @@ defmodule TrackerWeb.ChannelLive.RevisionShowTest do
 
   test "does not render diff summary when no previous revision", %{conn: conn, cr_no_prev: cr} do
     {:ok, _view, html} =
-      live(conn, ~p"/channels/nixos-24.11/revisions/#{short(cr)}")
+      live(conn, ~p"/channels/nixos-revshow-rel/revisions/#{short(cr)}")
 
     assert html |> Floki.parse_document!() |> Floki.find("dl.diff-summary") == []
   end
 
   test "shows no-diff message when no previous revision", %{conn: conn, cr_no_prev: cr} do
     {:ok, _view, html} =
-      live(conn, ~p"/channels/nixos-24.11/revisions/#{short(cr)}")
+      live(conn, ~p"/channels/nixos-revshow-rel/revisions/#{short(cr)}")
 
     assert html =~ "first known revision"
   end
 
   test "links to GitHub commit", %{conn: conn, cr2: cr2} do
     {:ok, _view, html} =
-      live(conn, ~p"/channels/nixos-unstable/revisions/#{short(cr2)}")
+      live(conn, ~p"/channels/nixos-revshow/revisions/#{short(cr2)}")
 
     assert html =~ "https://github.com/NixOS/nixpkgs/commit/#{cr2.revision}"
   end
@@ -150,7 +150,7 @@ defmodule TrackerWeb.ChannelLive.RevisionShowTest do
     cr2: cr2
   } do
     {:ok, view, html} =
-      live(conn, ~p"/channels/nixos-unstable/revisions/#{cr2.revision}")
+      live(conn, ~p"/channels/nixos-revshow/revisions/#{cr2.revision}")
 
     # Initially no result
     refute html =~ "Success"
@@ -164,7 +164,7 @@ defmodule TrackerWeb.ChannelLive.RevisionShowTest do
 
   test "returns error for unknown revision", %{conn: conn} do
     assert_raise Ash.Error.Invalid, fn ->
-      live(conn, ~p"/channels/nixos-unstable/revisions/fffffff")
+      live(conn, ~p"/channels/nixos-revshow/revisions/fffffff")
     end
   end
 

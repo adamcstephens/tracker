@@ -15,7 +15,7 @@ defmodule Tracker.Nixpkgs.OptionHistoryTest do
 
   describe "events_between/2" do
     test "derives added and removed options from span boundaries" do
-      channel = Fixtures.channel!("nixos-unstable")
+      channel = Fixtures.channel!()
       from_rev = revision!(channel, "from1aaa", ~U[2026-04-01 10:00:00Z])
       to_rev = revision!(channel, "to2bbbb", ~U[2026-04-15 10:00:00Z], from_rev)
 
@@ -39,7 +39,7 @@ defmodule Tracker.Nixpkgs.OptionHistoryTest do
     end
 
     test "is empty when the option set is unchanged" do
-      channel = Fixtures.channel!("nixos-unstable")
+      channel = Fixtures.channel!()
       from_rev = revision!(channel, "stable01", ~U[2026-05-01 10:00:00Z])
       to_rev = revision!(channel, "stable02", ~U[2026-05-15 10:00:00Z], from_rev)
 
@@ -53,7 +53,7 @@ defmodule Tracker.Nixpkgs.OptionHistoryTest do
 
   describe "metadata_diff/2" do
     test "emits one struct per changed field for options in both revisions" do
-      channel = Fixtures.channel!("nixos-unstable")
+      channel = Fixtures.channel!()
       from_rev = revision!(channel, "metaaaaa", ~U[2026-04-01 10:00:00Z])
       to_rev = revision!(channel, "metbbbbb", ~U[2026-04-15 10:00:00Z], from_rev)
 
@@ -85,7 +85,7 @@ defmodule Tracker.Nixpkgs.OptionHistoryTest do
     end
 
     test "ignores options present in only one revision" do
-      channel = Fixtures.channel!("nixos-unstable")
+      channel = Fixtures.channel!()
       from_rev = revision!(channel, "onlyaaaa", ~U[2026-04-01 10:00:00Z])
       to_rev = revision!(channel, "onlybbbb", ~U[2026-04-15 10:00:00Z], from_rev)
 
@@ -228,7 +228,7 @@ defmodule Tracker.Nixpkgs.OptionHistoryTest do
 
   describe "current_metadata/1" do
     test "returns the open span per option" do
-      channel = Fixtures.channel!("nixos-unstable")
+      channel = Fixtures.channel!()
       r1 = revision!(channel, "curr0001", ~U[2026-04-01 10:00:00Z])
       r2 = revision!(channel, "curr0002", ~U[2026-04-15 10:00:00Z], r1)
 

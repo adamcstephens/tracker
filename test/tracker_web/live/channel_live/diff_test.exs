@@ -6,7 +6,7 @@ defmodule TrackerWeb.ChannelLive.DiffTest do
   alias Tracker.Fixtures
 
   setup do
-    channel = Fixtures.channel!("nixos-unstable")
+    channel = Fixtures.channel!("nixos-diffview")
 
     cr1 =
       Fixtures.channel_revision!(channel, %{
@@ -57,7 +57,7 @@ defmodule TrackerWeb.ChannelLive.DiffTest do
 
   test "renders diff page with short hashes", %{conn: conn, cr1: cr1, cr2: cr2} do
     {:ok, _view, html} =
-      live(conn, ~p"/channels/nixos-unstable/diff/#{cr1.revision}/#{cr2.revision}")
+      live(conn, ~p"/channels/nixos-diffview/diff/#{cr1.revision}/#{cr2.revision}")
 
     assert html =~ String.slice(cr1.revision, 0, 7)
     assert html =~ String.slice(cr2.revision, 0, 7)
@@ -65,7 +65,7 @@ defmodule TrackerWeb.ChannelLive.DiffTest do
 
   test "shows package events between revisions", %{conn: conn, cr1: cr1, cr2: cr2} do
     {:ok, _view, html} =
-      live(conn, ~p"/channels/nixos-unstable/diff/#{cr1.revision}/#{cr2.revision}")
+      live(conn, ~p"/channels/nixos-diffview/diff/#{cr1.revision}/#{cr2.revision}")
 
     assert html =~ "diff-added-pkg"
     assert html =~ "added"
@@ -73,7 +73,7 @@ defmodule TrackerWeb.ChannelLive.DiffTest do
 
   test "shows package version changes", %{conn: conn, cr1: cr1, cr2: cr2} do
     {:ok, _view, html} =
-      live(conn, ~p"/channels/nixos-unstable/diff/#{cr1.revision}/#{cr2.revision}")
+      live(conn, ~p"/channels/nixos-diffview/diff/#{cr1.revision}/#{cr2.revision}")
 
     # diff-hello changed from 2.12.1 to 2.13.0
     assert html =~ "diff-hello"
@@ -83,14 +83,14 @@ defmodule TrackerWeb.ChannelLive.DiffTest do
 
   test "shows removed packages in diff", %{conn: conn, cr1: cr1, cr2: cr2} do
     {:ok, _view, html} =
-      live(conn, ~p"/channels/nixos-unstable/diff/#{cr1.revision}/#{cr2.revision}")
+      live(conn, ~p"/channels/nixos-diffview/diff/#{cr1.revision}/#{cr2.revision}")
 
     assert html =~ "diff-gone-pkg"
   end
 
   test "does not show unchanged packages in version changes", %{conn: conn, cr1: cr1, cr2: cr2} do
     {:ok, view, _html} =
-      live(conn, ~p"/channels/nixos-unstable/diff/#{cr1.revision}/#{cr2.revision}")
+      live(conn, ~p"/channels/nixos-diffview/diff/#{cr1.revision}/#{cr2.revision}")
 
     # diff-stay is 1.0.0 in both revisions - it should not appear in version changes
     version_changes_html = view |> element("section:last-of-type table") |> render()
@@ -99,13 +99,13 @@ defmodule TrackerWeb.ChannelLive.DiffTest do
 
   test "returns 404 for unknown revision", %{conn: conn, cr1: cr1} do
     assert_raise Ash.Error.Invalid, fn ->
-      live(conn, ~p"/channels/nixos-unstable/diff/#{cr1.revision}/fffffff")
+      live(conn, ~p"/channels/nixos-diffview/diff/#{cr1.revision}/fffffff")
     end
   end
 
   test "shows option events between revisions", %{conn: conn, cr1: cr1, cr2: cr2} do
     {:ok, _view, html} =
-      live(conn, ~p"/channels/nixos-unstable/diff/#{cr1.revision}/#{cr2.revision}")
+      live(conn, ~p"/channels/nixos-diffview/diff/#{cr1.revision}/#{cr2.revision}")
 
     assert html =~ "diff.opt.added"
     assert html =~ ~s|href="/options/diff.opt.added"|
@@ -113,7 +113,7 @@ defmodule TrackerWeb.ChannelLive.DiffTest do
 
   test "shows option metadata changes between revisions", %{conn: conn, cr1: cr1, cr2: cr2} do
     {:ok, _view, html} =
-      live(conn, ~p"/channels/nixos-unstable/diff/#{cr1.revision}/#{cr2.revision}")
+      live(conn, ~p"/channels/nixos-diffview/diff/#{cr1.revision}/#{cr2.revision}")
 
     assert html =~ "diff.opt.changed"
     assert html =~ "Old description."
@@ -122,7 +122,7 @@ defmodule TrackerWeb.ChannelLive.DiffTest do
 
   test "does not list unchanged options in metadata changes", %{conn: conn, cr1: cr1, cr2: cr2} do
     {:ok, _view, html} =
-      live(conn, ~p"/channels/nixos-unstable/diff/#{cr1.revision}/#{cr2.revision}")
+      live(conn, ~p"/channels/nixos-diffview/diff/#{cr1.revision}/#{cr2.revision}")
 
     # opt_added exists only in cr2; it should appear in option events,
     # not the metadata-changes section.
@@ -131,7 +131,7 @@ defmodule TrackerWeb.ChannelLive.DiffTest do
 
   test "shows diff summary counts", %{conn: conn, cr1: cr1, cr2: cr2} do
     {:ok, _view, html} =
-      live(conn, ~p"/channels/nixos-unstable/diff/#{cr1.revision}/#{cr2.revision}")
+      live(conn, ~p"/channels/nixos-diffview/diff/#{cr1.revision}/#{cr2.revision}")
 
     [summary] = html |> Floki.parse_document!() |> Floki.find("dl.diff-summary")
     text = summary |> Floki.text() |> String.replace(~r/\s+/, " ") |> String.trim()
@@ -144,7 +144,7 @@ defmodule TrackerWeb.ChannelLive.DiffTest do
 
   test "links to github compare", %{conn: conn, cr1: cr1, cr2: cr2} do
     {:ok, _view, html} =
-      live(conn, ~p"/channels/nixos-unstable/diff/#{cr1.revision}/#{cr2.revision}")
+      live(conn, ~p"/channels/nixos-diffview/diff/#{cr1.revision}/#{cr2.revision}")
 
     assert html =~
              "https://github.com/NixOS/nixpkgs/compare/#{cr1.revision}...#{cr2.revision}"

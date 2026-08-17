@@ -154,8 +154,16 @@ defmodule TrackerWeb.InboxLive.SubscriptionsTest do
 
     test "filters subscriptions across kinds", %{conn: conn} do
       user = register_user!()
-      firefox = PackageSubscription.subscribe!(package!("firefox").id, nil, actor: user)
-      chan = ChannelSubscription.subscribe!(channel!("nixos-unstable").id, actor: user)
+
+      firefox =
+        PackageSubscription.subscribe!(
+          package!("firefox-#{System.unique_integer([:positive])}").id,
+          nil,
+          actor: user
+        )
+
+      channel = channel!()
+      chan = ChannelSubscription.subscribe!(channel.id, actor: user)
       change = ChangeSubscription.subscribe!(change!().id, nil, actor: user)
       conn = log_in(conn, user)
 
@@ -167,7 +175,7 @@ defmodule TrackerWeb.InboxLive.SubscriptionsTest do
       refute has_element?(view, "#channel-subscription-#{chan.id}")
       refute has_element?(view, "#change-subscription-#{change.id}")
 
-      view |> element("#page-search") |> render_change(%{"search" => "unstable"})
+      view |> element("#page-search") |> render_change(%{"search" => channel.name})
 
       refute has_element?(view, "#package-subscription-#{firefox.id}")
       assert has_element?(view, "#channel-subscription-#{chan.id}")
@@ -191,8 +199,15 @@ defmodule TrackerWeb.InboxLive.SubscriptionsTest do
 
     test "applies the search param from the URL", %{conn: conn} do
       user = register_user!()
-      firefox = PackageSubscription.subscribe!(package!("firefox").id, nil, actor: user)
-      vim = PackageSubscription.subscribe!(package!("vim").id, nil, actor: user)
+
+      firefox =
+        PackageSubscription.subscribe!(
+          package!("firefox-#{System.unique_integer([:positive])}").id,
+          nil,
+          actor: user
+        )
+
+      vim = PackageSubscription.subscribe!(package!().id, nil, actor: user)
       conn = log_in(conn, user)
 
       {:ok, view, _html} = live(conn, ~p"/inbox/subscriptions?search=firefox")

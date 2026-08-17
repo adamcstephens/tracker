@@ -207,7 +207,7 @@ defmodule TrackerWeb.Lens do
   defp default_channel do
     case Channel.default_stable() do
       {:ok, channel} -> channel
-      {:error, _} -> Channel.read!() |> List.first()
+      {:error, _} -> Channel.newest_nixos!()
     end
   end
 

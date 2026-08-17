@@ -15,7 +15,7 @@ defmodule Tracker.Nixpkgs.ChannelRevisionTest do
 
   describe "create/1" do
     test "creates a channel revision linked to a channel" do
-      channel = create_channel!("nixos-unstable")
+      channel = create_channel!(Fixtures.channel_name())
 
       {:ok, rev} =
         ChannelRevision.create(%{
@@ -29,7 +29,7 @@ defmodule Tracker.Nixpkgs.ChannelRevisionTest do
     end
 
     test "upserts on channel_id + revision" do
-      channel = create_channel!("nixos-unstable")
+      channel = create_channel!(Fixtures.channel_name())
 
       {:ok, r1} =
         ChannelRevision.create(%{
@@ -52,8 +52,8 @@ defmodule Tracker.Nixpkgs.ChannelRevisionTest do
 
   describe "by_channel/1" do
     test "returns revisions for a given channel" do
-      ch1 = create_channel!("nixos-unstable")
-      ch2 = create_channel!("nixos-24.11")
+      ch1 = create_channel!(Fixtures.channel_name())
+      ch2 = create_channel!(Fixtures.channel_name())
 
       ChannelRevision.create!(%{
         channel_id: ch1.id,
@@ -117,7 +117,7 @@ defmodule Tracker.Nixpkgs.ChannelRevisionTest do
 
   describe "find_by_channel_hash/2" do
     test "finds by channel_id and revision prefix" do
-      channel = create_channel!("nixos-unstable")
+      channel = create_channel!(Fixtures.channel_name())
 
       ChannelRevision.create!(%{
         channel_id: channel.id,
@@ -132,7 +132,7 @@ defmodule Tracker.Nixpkgs.ChannelRevisionTest do
 
   describe "version_diff/2" do
     setup do
-      channel = create_channel!("nixos-unstable")
+      channel = create_channel!(Fixtures.channel_name())
 
       from_rev =
         ChannelRevision.create!(%{
@@ -184,7 +184,7 @@ defmodule Tracker.Nixpkgs.ChannelRevisionTest do
 
   describe "diff_between/2 — arbitrary (non-adjacent) revisions" do
     test "computes the net diff across a skipped revision" do
-      channel = create_channel!("nixos-unstable")
+      channel = create_channel!(Fixtures.channel_name())
 
       rev1 =
         ChannelRevision.create!(%{

@@ -134,8 +134,8 @@ defmodule Tracker.Nixpkgs.ChangeTest do
     setup do
       channel =
         Channel.create!(%{
-          name: "nixos-unstable",
-          display_name: "nixos-unstable",
+          name: "nixos-26.52",
+          display_name: "nixos-26.52",
           status: :active,
           is_stable: false
         })
@@ -175,7 +175,7 @@ defmodule Tracker.Nixpkgs.ChangeTest do
 
       Tracker.Nixpkgs.ChangeBranch.create!(%{
         change_id: change_in_id,
-        branch_name: "nixos-unstable",
+        branch_name: "nixos-26.52",
         channel_revision_id: cr.id
       })
 
@@ -210,8 +210,8 @@ defmodule Tracker.Nixpkgs.ChangeTest do
     setup do
       channel =
         Channel.create!(%{
-          name: "nixos-unstable",
-          display_name: "nixos-unstable",
+          name: "nixos-26.52",
+          display_name: "nixos-26.52",
           status: :active,
           is_stable: false
         })
@@ -247,7 +247,7 @@ defmodule Tracker.Nixpkgs.ChangeTest do
 
       Tracker.Nixpkgs.ChangeBranch.create!(%{
         change_id: Map.fetch!(id_map, 6101),
-        branch_name: "nixos-unstable",
+        branch_name: "nixos-26.52",
         channel_revision_id: cr.id
       })
 

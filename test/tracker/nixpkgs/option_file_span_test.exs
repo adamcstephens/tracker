@@ -18,7 +18,7 @@ defmodule Tracker.Nixpkgs.OptionFileSpanTest do
 
   describe "reconstruction against source" do
     test "the spans reconstruct exactly the loaded option↔file membership" do
-      channel = Fixtures.channel!("nixos-unstable")
+      channel = Fixtures.channel!()
       rev = revision!(channel, "filerec1", ~U[2026-04-01 10:00:00Z])
 
       source = %{
@@ -45,7 +45,7 @@ defmodule Tracker.Nixpkgs.OptionFileSpanTest do
 
   describe "a file move closes the old span and opens a new one" do
     test "membership tracks the declaring file, keyed by file identity (path)" do
-      channel = Fixtures.channel!("nixos-unstable")
+      channel = Fixtures.channel!()
       rev1 = revision!(channel, "filemv01", ~U[2026-04-01 10:00:00Z])
       rev2 = revision!(channel, "filemv02", ~U[2026-04-02 10:00:00Z], rev1)
 
@@ -67,7 +67,7 @@ defmodule Tracker.Nixpkgs.OptionFileSpanTest do
 
   describe "file-membership span ⊆ option existence span invariant" do
     test "removing an option closes its membership spans too" do
-      channel = Fixtures.channel!("nixos-unstable")
+      channel = Fixtures.channel!()
       rev1 = revision!(channel, "fileinv1", ~U[2026-04-01 10:00:00Z])
       rev2 = revision!(channel, "fileinv2", ~U[2026-04-02 10:00:00Z], rev1)
 

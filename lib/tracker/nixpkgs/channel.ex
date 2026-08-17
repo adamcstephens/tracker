@@ -23,6 +23,7 @@ defmodule Tracker.Nixpkgs.Channel do
     define :active
     define :nixos_channels
     define :default_stable
+    define :newest_nixos, not_found_error?: false
     define :update_hydra_status
     define :update_status
     define :put_pointer
@@ -72,6 +73,15 @@ defmodule Tracker.Nixpkgs.Channel do
                is_stable == true and status == :active and
                  fragment("? ~ '^nixos-\\d+\\.\\d+$'", name)
              )
+
+      prepare build(sort: [{:name, :desc}], limit: 1)
+    end
+
+    read :newest_nixos do
+      description "The newest live NixOS channel by name, for when no stable release resolves."
+      get? true
+
+      filter expr(status != :retired and fragment("? LIKE 'nixos-%'", name))
 
       prepare build(sort: [{:name, :desc}], limit: 1)
     end

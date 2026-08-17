@@ -24,8 +24,8 @@ defmodule TrackerWeb.PackageLive.IndexTest do
     setup do
       channel =
         Tracker.Nixpkgs.Channel.create!(%{
-          name: "nixos-unstable",
-          display_name: "nixos-unstable",
+          name: "nixos-pkgindex",
+          display_name: "nixos-pkgindex",
           status: :active,
           is_stable: true
         })
@@ -59,7 +59,7 @@ defmodule TrackerWeb.PackageLive.IndexTest do
       pkg_in: pkg_in,
       pkg_out: pkg_out
     } do
-      # Default lens resolves to the stable channel (nixos-unstable in this test)
+      # Default lens resolves to the stable channel (nixos-pkgindex in this test)
       {:ok, _view, html} = live(conn, ~p"/packages")
 
       assert html =~ pkg_in.attribute
@@ -74,8 +74,8 @@ defmodule TrackerWeb.PackageLive.IndexTest do
       # Create a second channel with pkg_out in it
       channel2 =
         Tracker.Nixpkgs.Channel.create!(%{
-          name: "nixos-24.11-cp",
-          display_name: "nixos-24.11-cp",
+          name: "nixos-24.64-cp",
+          display_name: "nixos-24.64-cp",
           status: :active,
           is_stable: false
         })
@@ -104,8 +104,8 @@ defmodule TrackerWeb.PackageLive.IndexTest do
       # Create a second channel with pkg_out in it
       channel2 =
         Tracker.Nixpkgs.Channel.create!(%{
-          name: "nixos-24.11",
-          display_name: "nixos-24.11",
+          name: "nixos-24.64",
+          display_name: "nixos-24.64",
           status: :active,
           is_stable: false
         })
@@ -220,8 +220,8 @@ defmodule TrackerWeb.PackageLive.IndexTest do
 
       lens_channel =
         Tracker.Nixpkgs.Channel.create!(%{
-          name: "nixos-24.05",
-          display_name: "nixos-24.05",
+          name: "nixos-24.65",
+          display_name: "nixos-24.65",
           status: :active,
           is_stable: true
         })

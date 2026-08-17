@@ -7,14 +7,14 @@ defmodule Tracker.Nixpkgs.ChannelTest do
     test "creates a channel with all attributes" do
       {:ok, channel} =
         Channel.create(%{
-          name: "nixos-unstable",
+          name: "nixos-chantest",
           display_name: "NixOS Unstable",
           status: :active,
           is_stable: false,
           options_source: "nixos"
         })
 
-      assert channel.name == "nixos-unstable"
+      assert channel.name == "nixos-chantest"
       assert channel.display_name == "NixOS Unstable"
       assert channel.status == :active
       assert channel.is_stable == false
@@ -28,7 +28,7 @@ defmodule Tracker.Nixpkgs.ChannelTest do
     test "upserts on name" do
       {:ok, c1} =
         Channel.create(%{
-          name: "nixos-unstable",
+          name: "nixos-chantest",
           display_name: "NixOS Unstable",
           status: :active,
           is_stable: false
@@ -36,7 +36,7 @@ defmodule Tracker.Nixpkgs.ChannelTest do
 
       {:ok, c2} =
         Channel.create(%{
-          name: "nixos-unstable",
+          name: "nixos-chantest",
           display_name: "NixOS Unstable (updated)",
           status: :retired,
           is_stable: false
@@ -67,44 +67,44 @@ defmodule Tracker.Nixpkgs.ChannelTest do
   describe "active/0" do
     test "returns active and pre_release channels but excludes retired" do
       Channel.create!(%{
-        name: "nixos-unstable",
+        name: "nixos-chantest",
         display_name: "NixOS Unstable",
         status: :active,
         is_stable: false
       })
 
       Channel.create!(%{
-        name: "nixos-26.05",
+        name: "nixos-26.51",
         display_name: "NixOS 26.05",
         status: :pre_release,
         is_stable: true
       })
 
       Channel.create!(%{
-        name: "nixos-24.05",
+        name: "nixos-24.51",
         display_name: "NixOS 24.05",
         status: :retired,
         is_stable: true
       })
 
       names = Channel.active!() |> Enum.map(& &1.name)
-      assert "nixos-unstable" in names
-      assert "nixos-26.05" in names
-      refute "nixos-24.05" in names
+      assert "nixos-chantest" in names
+      assert "nixos-26.51" in names
+      refute "nixos-24.51" in names
     end
   end
 
   describe "by_name/1" do
     test "finds a channel by name" do
       Channel.create!(%{
-        name: "nixos-unstable",
+        name: "nixos-chantest",
         display_name: "NixOS Unstable",
         status: :active,
         is_stable: false
       })
 
-      {:ok, channel} = Channel.by_name("nixos-unstable")
-      assert channel.name == "nixos-unstable"
+      {:ok, channel} = Channel.by_name("nixos-chantest")
+      assert channel.name == "nixos-chantest"
     end
 
     test "returns error for unknown channel" do
@@ -115,21 +115,21 @@ defmodule Tracker.Nixpkgs.ChannelTest do
   describe "nixos_channels/0" do
     test "returns only nixos-* channels sorted by name" do
       Channel.create!(%{
-        name: "nixpkgs-unstable",
+        name: "nixpkgs-chantest",
         display_name: "Nixpkgs Unstable",
         status: :active,
         is_stable: false
       })
 
       Channel.create!(%{
-        name: "nixos-unstable",
+        name: "nixos-chantest",
         display_name: "NixOS Unstable",
         status: :active,
         is_stable: false
       })
 
       Channel.create!(%{
-        name: "nixos-25.11",
+        name: "nixos-25.51",
         display_name: "NixOS 25.11",
         status: :active,
         is_stable: true
@@ -138,7 +138,7 @@ defmodule Tracker.Nixpkgs.ChannelTest do
       channels = Channel.nixos_channels!()
       names = Enum.map(channels, & &1.name)
 
-      assert names == ["nixos-25.11", "nixos-unstable"]
+      assert names == ["nixos-25.51", "nixos-chantest"]
     end
   end
 
