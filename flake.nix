@@ -13,6 +13,11 @@
         inputs.sower.flakeModules.sower
       ];
 
+      flake.nixosModules = rec {
+        tracker = import ./nix/module.nix inputs.self;
+        default = tracker;
+      };
+
       systems = [
         "x86_64-linux"
         "aarch64-darwin"
@@ -77,6 +82,10 @@
           packages = rec {
             default = server;
             server = pkgs.callPackage ./package.nix { inherit beamPackages; };
+          };
+
+          checks = lib.optionalAttrs pkgs.stdenv.isLinux {
+            vm = pkgs.testers.runNixOSTest (import ./nix/test.nix { inherit (inputs) self; });
           };
         };
     };

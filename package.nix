@@ -47,6 +47,8 @@ beamPackages.mixRelease rec {
     overrides =
       _self: prev:
       let
+        withAppConfig = drv: drv.override { appConfigPath = ./config; };
+
         # The workaround installs cargo's lib<crate>.so, but Rustler's
         # force-build load path is priv/native/<crate>.so; add the alias.
         fixNif =
@@ -62,6 +64,13 @@ beamPackages.mixRelease rec {
           });
       in
       {
+        ash = withAppConfig prev.ash;
+        ash_json_api = withAppConfig prev.ash_json_api;
+        ash_phoenix = withAppConfig prev.ash_phoenix;
+        crux = withAppConfig prev.crux;
+        mime = withAppConfig prev.mime;
+        spark = withAppConfig prev.spark;
+
         mdex_native = fixNif prev.mdex_native;
         ex_brotli = fixNif prev.ex_brotli;
         lumis = fixNif prev.lumis;
