@@ -64,7 +64,7 @@
                 pkgs.biome
                 pkgs.just
               ]
-              ++ (lib.optionals pkgs.stdenv.isLinux [ pkgs.inotify-tools ]);
+              ++ (lib.optionals pkgs.stdenv.hostPlatform.isLinux [ pkgs.inotify-tools ]);
 
               env = {
                 ESBUILD_PATH = lib.getExe pkgs.esbuild;
@@ -84,7 +84,7 @@
             server = pkgs.callPackage ./package.nix { inherit beamPackages; };
           };
 
-          checks = lib.optionalAttrs pkgs.stdenv.isLinux {
+          checks = lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
             vm = pkgs.testers.runNixOSTest (import ./nix/test.nix { inherit (inputs) self; });
           };
         };

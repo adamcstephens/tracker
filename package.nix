@@ -39,6 +39,7 @@ beamPackages.mixRelease rec {
           "lumis"
         ];
       };
+      # 0.7.0 lock is broken
       lumis = _old: {
         cargoDeps = rustPlatform.importCargoLock { lockFile = ./nix/lumis_nif-Cargo.lock; };
         postPatch = "cp ${./nix/lumis_nif-Cargo.lock} Cargo.lock";
@@ -48,32 +49,17 @@ beamPackages.mixRelease rec {
       _self: prev:
       let
         withAppConfig = drv: drv.override { appConfigPath = ./config; };
-
-        # The workaround installs cargo's lib<crate>.so, but Rustler's
-        # force-build load path is priv/native/<crate>.so; add the alias.
-        fixNif =
-          drv:
-          drv.override (old: {
-            appConfigPath = ./config;
-            preConfigure = (old.preConfigure or "") + ''
-              for so in priv/native/lib*.so; do
-                [ -e "$so" ] || continue
-                ln -sf "$(basename "$so")" "priv/native/$(basename "$so" | sed 's/^lib//')"
-              done
-            '';
-          });
       in
       {
         ash = withAppConfig prev.ash;
         ash_json_api = withAppConfig prev.ash_json_api;
         ash_phoenix = withAppConfig prev.ash_phoenix;
         crux = withAppConfig prev.crux;
+        ex_brotli = withAppConfig prev.ex_brotli;
+        lumis = withAppConfig prev.lumis;
+        mdex_native = withAppConfig prev.mdex_native;
         mime = withAppConfig prev.mime;
         spark = withAppConfig prev.spark;
-
-        mdex_native = fixNif prev.mdex_native;
-        ex_brotli = fixNif prev.ex_brotli;
-        lumis = fixNif prev.lumis;
       };
   };
 

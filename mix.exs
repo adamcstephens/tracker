@@ -35,7 +35,7 @@ defmodule Tracker.MixProject do
   # Type `mix help deps` for examples and options.
   defp deps do
     [
-      {:deps_nix, git: "https://github.com/adamcstephens/deps_nix", ref: "push-svyrlvtpzrnp"},
+      {:deps_nix, "~> 3.1", only: [:dev]},
       {:usage_rules, "~> 1.0", only: [:dev]},
       {:tidewave, "~> 0.5", only: [:dev]},
       {:ash, "~> 3.0"},
@@ -58,7 +58,7 @@ defmodule Tracker.MixProject do
       {:gettext, "~> 1.0"},
       {:igniter, "~> 0.5", only: [:dev, :test]},
       {:jason, "~> 1.2"},
-      {:lumis, "~> 0.6"},
+      {:lumis, "~> 0.7"},
       {:mdex, "~> 0.13.3"},
       {:jose, "~> 1.11"},
       {:oban, "~> 2.0"},
@@ -68,7 +68,7 @@ defmodule Tracker.MixProject do
       {:phoenix, "~> 1.8"},
       {:phoenix_ecto, "~> 4.5"},
       {:phoenix_html, "~> 4.1"},
-      {:phoenix_live_dashboard, "~> 0.8.3"},
+      {:phoenix_live_dashboard, "~> 0.9.0"},
       {:phoenix_live_reload, "~> 1.2", only: :dev},
       {:phoenix_live_view, "~> 1.1"},
       {:picosat_elixir, "~> 0.2"},
