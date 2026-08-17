@@ -42,7 +42,7 @@ defmodule TrackerWeb.InboxLive.SubscriptionsTest do
 
     assert has_element?(
              view,
-             ~s{#package-subscription-#{sub.id} a[href="/packages/#{package.attribute}"]}
+             ~s{#package-subscription-#{sub.id} a[href^="/packages/#{package.attribute}"]}
            )
   end
 
@@ -81,7 +81,8 @@ defmodule TrackerWeb.InboxLive.SubscriptionsTest do
 
     # Whole row navigates; the scope and subscribed-time sit on a second line
     assert [link] = Floki.find(row, "a.row-line.row-link")
-    assert Floki.attribute(link, "href") == ["/packages/#{package.attribute}"]
+    assert [href] = Floki.attribute(link, "href")
+    assert_same_path(href, "/packages/#{package.attribute}")
     assert Floki.find(row, ".row-leading .ibx-glyph") != []
     assert Floki.find(row, ".row-sublabel time") != []
     assert Floki.text(Floki.find(row, ".row-label")) =~ package.attribute
@@ -110,7 +111,7 @@ defmodule TrackerWeb.InboxLive.SubscriptionsTest do
 
     assert has_element?(
              view,
-             ~s{#channel-subscription-#{sub.id} a[href="/channels/#{channel.name}"]}
+             ~s{#channel-subscription-#{sub.id} a[href^="/channels/#{channel.name}"]}
            )
   end
 
@@ -126,7 +127,7 @@ defmodule TrackerWeb.InboxLive.SubscriptionsTest do
 
     assert has_element?(
              view,
-             ~s{#change-subscription-#{sub.id} a[href="/changes/#{change.number}"]}
+             ~s{#change-subscription-#{sub.id} a[href^="/changes/#{change.number}"]}
            )
   end
 
@@ -224,7 +225,7 @@ defmodule TrackerWeb.InboxLive.SubscriptionsTest do
 
     {:ok, view, _html} = live(conn, ~p"/inbox/subscriptions")
 
-    assert has_element?(view, ~s{#view-nav-inbox[href="/inbox"]})
+    assert has_element?(view, ~s{#view-nav-inbox[href^="/inbox"]})
     assert has_element?(view, ~s{#view-nav-subscriptions.is-active[aria-current="page"]})
     refute has_element?(view, "#view-nav-inbox.is-active")
   end

@@ -167,12 +167,13 @@ defmodule TrackerWeb.LayoutsTest do
       {:ok, _view, html} = live(conn, ~p"/packages?search=elixir")
 
       # Top tabs and mobile tabs both append the current search to navigations,
-      # so jumping to /options keeps the query intact.
-      assert html =~ ~r{href="/options\?search=elixir"}
-      assert html =~ ~r{href="/changes\?search=elixir"}
-      assert html =~ ~r{href="/maintainers\?search=elixir"}
-      assert html =~ ~r{href="/teams\?search=elixir"}
-      assert html =~ ~r{href="/channels\?search=elixir"}
+      # so jumping to /options keeps the query intact. The lens rides along too.
+      doc = Floki.parse_document!(html)
+
+      for section <- ~w(/options /changes /maintainers /teams /channels) do
+        assert [href | _] = Floki.attribute(doc, ~s(a[href^="#{section}?"]), "href")
+        assert URI.decode_query(URI.parse(href).query)["search"] == "elixir"
+      end
     end
 
     test "inert page (Channels) still echoes the persisted query", %{conn: conn} do
@@ -332,7 +333,8 @@ defmodule TrackerWeb.LayoutsTest do
       doc = Floki.parse_document!(html)
 
       [link] = Floki.find(doc, ~s(a[aria-label="Sign in"]))
-      assert Floki.attribute(link, "href") == ["/sign-in"]
+      assert [href] = Floki.attribute(link, "href")
+      assert URI.parse(href).path == "/sign-in"
       assert [class] = Floki.attribute(link, "class")
       assert class =~ "is-mobile-only"
 
@@ -373,7 +375,8 @@ defmodule TrackerWeb.LayoutsTest do
       doc = Floki.parse_document!(html)
 
       [bell] = Floki.find(doc, "#inbox-icon-mobile")
-      assert Floki.attribute(bell, "href") == ["/inbox"]
+      assert [href] = Floki.attribute(bell, "href")
+      assert URI.parse(href).path == "/inbox"
       assert Floki.attribute(bell, "aria-label") == ["Inbox"]
 
       # The bell sits beside the lens in a shared row wrapper.

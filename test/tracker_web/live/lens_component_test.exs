@@ -102,26 +102,18 @@ defmodule TrackerWeb.LensComponentTest do
   end
 
   describe "switching the channel" do
-    test "patches the URL with the lens param", %{conn: conn, unstable: unstable} do
+    test "navigates to the URL carrying the lens param", %{conn: conn, unstable: unstable} do
       {:ok, view, _html} = live(conn, ~p"/packages")
 
-      view
-      |> form("#lens-form", %{"channel" => unstable.name})
-      |> render_change()
-
-      assert_patch(view, ~p"/packages?channel=#{unstable.name}")
+      assert {:error, {:live_redirect, %{to: to}}} = switch_to(view, unstable.name)
+      assert to == ~p"/packages?channel=#{unstable.name}"
     end
 
     test "keeps the rest of the query string", %{conn: conn, unstable: unstable} do
       {:ok, view, _html} = live(conn, ~p"/packages?search=hello&page=2")
 
-      view
-      |> form("#lens-form", %{"channel" => unstable.name})
-      |> render_change()
-
-      path = assert_patch(view)
-      assert %{query: query} = URI.parse(path)
-      params = URI.decode_query(query)
+      assert {:error, {:live_redirect, %{to: to}}} = switch_to(view, unstable.name)
+      params = to |> URI.parse() |> Map.fetch!(:query) |> URI.decode_query()
 
       assert params["search"] == "hello"
       assert params["page"] == "2"
@@ -131,27 +123,121 @@ defmodule TrackerWeb.LensComponentTest do
     test "replaces a previously pinned revision", %{conn: conn, unstable: unstable} do
       {:ok, view, _html} = live(conn, ~p"/packages?channel=nixos-old&rev=deadbeef")
 
-      view
-      |> form("#lens-form", %{"channel" => unstable.name})
-      |> render_change()
-
-      path = assert_patch(view)
-      params = path |> URI.parse() |> Map.fetch!(:query) |> URI.decode_query()
+      assert {:error, {:live_redirect, %{to: to}}} = switch_to(view, unstable.name)
+      params = to |> URI.parse() |> Map.fetch!(:query) |> URI.decode_query()
 
       assert params["channel"] == unstable.name
       refute Map.has_key?(params, "rev")
     end
 
-    test "persists the choice to the cookie", %{conn: conn, unstable: unstable} do
+    test "persists the rendered lens to the cookie", %{conn: conn, unstable: unstable} do
       {:ok, view, _html} = live(conn, ~p"/packages")
 
-      view
-      |> form("#lens-form", %{"channel" => unstable.name})
-      |> render_change()
+      {:ok, _view, html} = switch_lens(conn, view, unstable.name)
 
-      assert_push_event(view, "set_lens_cookie", payload)
-      assert {:ok, unstable.name} == TrackerWeb.Lens.verify_cookie(payload.value)
+      assert [token] =
+               html |> Floki.parse_document!() |> Floki.attribute("#lens", "data-lens")
+
+      assert {:ok, unstable.name} == TrackerWeb.Lens.verify_cookie(token)
     end
+  end
+
+  describe "the lens across navigation" do
+    test "a navigation that drops the channel param has it patched back in", %{
+      conn: conn,
+      stable: stable
+    } do
+      {:ok, view, _html} = live(conn, ~p"/packages?channel=#{stable.name}")
+
+      render_patch(view, ~p"/packages")
+
+      assert_patch(view, ~p"/packages?channel=#{stable.name}")
+    end
+
+    test "an unknown channel canonicalizes to the one that actually rendered", %{
+      conn: conn,
+      stable: stable
+    } do
+      {:ok, view, _html} = live(conn, ~p"/packages?channel=#{stable.name}")
+
+      render_patch(view, ~p"/packages?channel=nixos-nope")
+
+      assert_patch(view, ~p"/packages?channel=#{stable.name}")
+    end
+
+    test "the client preference seeds a page that states no channel", %{
+      conn: conn,
+      unstable: unstable
+    } do
+      {:ok, view, html} =
+        conn
+        |> put_connect_params(%{"_lens" => sign_lens(unstable.name)})
+        |> live(~p"/packages")
+
+      assert selected_channel(html) == unstable.name
+
+      render_patch(view, ~p"/packages")
+
+      assert_patch(view, ~p"/packages?channel=#{unstable.name}")
+    end
+
+    test "nav links carry the switched channel", %{
+      conn: conn,
+      stable: stable,
+      unstable: unstable
+    } do
+      {:ok, view, _html} = live(conn, ~p"/packages?channel=#{stable.name}")
+
+      {:ok, _view, html} = switch_lens(conn, view, unstable.name)
+
+      for href <- nav_hrefs(html) do
+        assert URI.decode_query(URI.parse(href).query || "")["channel"] == unstable.name,
+               "#{href} dropped the lens"
+      end
+    end
+
+    test "following a nav link keeps the lens and shows it in the URL", %{
+      conn: conn,
+      stable: stable,
+      unstable: unstable
+    } do
+      {:ok, view, _html} = live(conn, ~p"/packages?channel=#{stable.name}")
+
+      {:ok, view, _html} = switch_lens(conn, view, unstable.name)
+
+      assert {:error, {:live_redirect, %{to: to}}} =
+               view |> element(".app-nav a[href^='/changes']") |> render_click()
+
+      assert URI.decode_query(URI.parse(to).query)["channel"] == unstable.name
+
+      {:ok, _next, html} = follow_redirect({:error, {:live_redirect, %{to: to}}}, conn)
+
+      assert selected_channel(html) == unstable.name
+    end
+  end
+
+  defp switch_to(view, channel_name) do
+    view
+    |> form("#lens-form", %{"channel" => channel_name})
+    |> render_change()
+  end
+
+  defp sign_lens(channel_name) do
+    Phoenix.Token.sign(TrackerWeb.Endpoint, TrackerWeb.Lens.cookie_salt(), channel_name)
+  end
+
+  defp selected_channel(html) do
+    html
+    |> Floki.parse_document!()
+    |> Floki.find("#lens-channel option[selected]")
+    |> Floki.text()
+    |> String.trim()
+  end
+
+  defp nav_hrefs(html) do
+    html
+    |> Floki.parse_document!()
+    |> Floki.attribute(".app-nav a", "href")
   end
 
   test "renders the channel's latest revision when none is pinned", %{conn: conn} do

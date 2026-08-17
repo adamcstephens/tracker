@@ -16,6 +16,12 @@ defmodule TrackerWeb.Plug.Lens do
   def init(opts), do: opts
 
   def call(conn, _opts) do
+    # Request processes outlive a request, and the ambient lens is per-process.
+    # The dead render sets it from the URL a moment later; without this reset a
+    # page with no lens hook would decorate its links with the previous
+    # request's channel.
+    Lens.put_current(nil)
+
     conn = fetch_cookies(conn)
 
     case conn.req_cookies[@cookie_name] do

@@ -124,7 +124,7 @@ defmodule TrackerWeb.PackageLive.IndexTest do
       {:ok, view, _html} = live(conn, ~p"/packages")
 
       # Switch lens to channel2
-      html = switch_lens(view, channel2.name)
+      {:ok, _view, html} = switch_lens(conn, view, channel2.name)
 
       assert html =~ pkg_out.attribute
     end
@@ -287,7 +287,7 @@ defmodule TrackerWeb.PackageLive.IndexTest do
 
       assert html =~ "Lens description"
 
-      html = switch_lens(view, "all")
+      {:ok, _view, html} = switch_lens(conn, view, "all")
 
       assert html =~ "Meta description"
       refute html =~ "Lens description"

@@ -5,7 +5,7 @@ defmodule TrackerWeb.Pagination do
   Emits `prev-page` and `next-page` events for the parent LiveView to handle,
   or renders links when `prev_path`/`next_path` are given.
   """
-  use Phoenix.Component
+  use TrackerWeb, :html
 
   @doc """
   Renders pagination controls with prev/next buttons and page indicator.

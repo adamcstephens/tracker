@@ -37,15 +37,47 @@ defmodule TrackerWeb.ConnCase do
   end
 
   @doc """
-  Switches the sitewide lens the way a visitor does, through the nav selector,
-  and returns the re-rendered page.
-  """
-  def switch_lens(view, channel_name) do
-    view
-    |> Phoenix.LiveViewTest.form("#lens-form", %{"channel" => channel_name})
-    |> Phoenix.LiveViewTest.render_change()
+  Switches the sitewide lens the way a visitor does, through the nav selector.
 
-    Phoenix.LiveViewTest.assert_patch(view)
-    Phoenix.LiveViewTest.render(view)
+  The switch navigates rather than patches, so this follows the redirect and
+  returns `{:ok, view, html}` for the re-mounted page. A macro because
+  `follow_redirect/2` needs the caller's `@endpoint`.
+  """
+  defmacro switch_lens(conn, view, channel_name) do
+    quote do
+      unquote(view)
+      |> Phoenix.LiveViewTest.form("#lens-form", %{"channel" => unquote(channel_name)})
+      |> Phoenix.LiveViewTest.render_change()
+      |> Phoenix.LiveViewTest.follow_redirect(unquote(conn))
+    end
+  end
+
+  @doc """
+  Asserts the next patch went to `expected`, disregarding the sitewide lens.
+
+  Every internal URL carries the lens (see `TrackerWeb.Lens`), which is noise in
+  a test about some other param.
+  """
+  def assert_patch_ignoring_lens(view, expected) do
+    assert_same_path(Phoenix.LiveViewTest.assert_patch(view), expected)
+  end
+
+  @doc """
+  Asserts two paths match once the sitewide lens is stripped from both.
+  """
+  def assert_same_path(actual, expected) do
+    ExUnit.Assertions.assert(without_lens(actual) == without_lens(expected))
+  end
+
+  defp without_lens(path) do
+    uri = URI.parse(path)
+
+    query =
+      (uri.query || "")
+      |> URI.decode_query()
+      |> Map.drop(["channel", "rev"])
+      |> URI.encode_query()
+
+    URI.to_string(%{uri | query: if(query == "", do: nil, else: query)})
   end
 end

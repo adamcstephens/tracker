@@ -76,12 +76,24 @@ Hooks.ChangeTabs = {
   }
 }
 
+// Records the lens the page rendered as the restoration preference.
 Hooks.LensCookie = {
-  mounted() {
-    this.handleEvent("set_lens_cookie", ({value, max_age}) => {
-      document.cookie = `_tracker_lens=${encodeURIComponent(value)}; path=/; max-age=${max_age}; samesite=lax`
-    })
+  mounted() { this.write() },
+  updated() { this.write() },
+  write() {
+    const value = this.el.dataset.lens
+    if (!value) return
+    const maxAge = this.el.dataset.lensMaxAge
+    document.cookie = `_tracker_lens=${encodeURIComponent(value)}; path=/; max-age=${maxAge}; samesite=lax`
   }
+}
+
+// The lens preference, for a LiveView that arrives with no channel param. The
+// plug that reads this cookie only runs on a full page load, so mid-session the
+// join is the only way the server sees a cookie the client has since rewritten.
+let lensPreference = () => {
+  const match = document.cookie.match(/(?:^|;\s*)_tracker_lens=([^;]*)/)
+  return match ? decodeURIComponent(match[1]) : null
 }
 
 // Copy a link's URL to the clipboard instead of navigating to it. The anchor
@@ -104,7 +116,9 @@ Hooks.CopyLink = {
 let csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 let liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
-  params: {_csrf_token: csrfToken},
+  // A function, so every join re-reads the preference rather than pinning the
+  // one that happened to be set when the page loaded.
+  params: () => ({_csrf_token: csrfToken, _lens: lensPreference()}),
   hooks: Hooks
 })
 

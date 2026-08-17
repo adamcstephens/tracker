@@ -108,7 +108,7 @@ defmodule TrackerWeb.ChannelLive.DiffTest do
       live(conn, ~p"/channels/nixos-diffview/diff/#{cr1.revision}/#{cr2.revision}")
 
     assert html =~ "diff.opt.added"
-    assert html =~ ~s|href="/options/diff.opt.added"|
+    assert html =~ ~s|href="/options/diff.opt.added?|
   end
 
   test "shows option metadata changes between revisions", %{conn: conn, cr1: cr1, cr2: cr2} do

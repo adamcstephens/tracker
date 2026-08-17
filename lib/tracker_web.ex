@@ -87,7 +87,11 @@ defmodule TrackerWeb do
 
       # HTML escaping functionality
       import Phoenix.HTML
-      # Core UI components
+
+      # Core UI components. `link/1` shadows the one `Phoenix.Component` imports
+      # so every internal navigation carries the channel lens; see
+      # `TrackerWeb.Lens`.
+      import Phoenix.Component, except: [link: 1]
       import TrackerWeb.CoreComponents
 
       # Shortcut for generating JS commands

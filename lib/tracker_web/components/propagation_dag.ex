@@ -76,11 +76,11 @@ defmodule TrackerWeb.PropagationDag do
 
   defp dag_node(assigns) do
     ~H"""
-    <a href={~p"/channels/#{@link.channel_name}/revisions/#{@link.revision}"}>
+    <.link href={~p"/channels/#{@link.channel_name}/revisions/#{@link.revision}"}>
       <g class={node_class(@node)} data-branch={@node.name}>
         <.node_shape node={@node} />
       </g>
-    </a>
+    </.link>
     """
   end
 

@@ -79,7 +79,7 @@ defmodule TrackerWeb.ChannelLive.DiffSections do
           <tbody>
             <tr :for={event <- @diff.package_events}>
               <td>
-                <a href={~p"/packages/#{event.package.attribute}"}>{event.package.attribute}</a>
+                <.link href={~p"/packages/#{event.package.attribute}"}>{event.package.attribute}</.link>
               </td>
               <td>{format_event_type(event.type)}</td>
               <td :if={@show_revision_column}>
@@ -105,7 +105,7 @@ defmodule TrackerWeb.ChannelLive.DiffSections do
           <tbody>
             <tr :for={change <- @diff.version_changes}>
               <td>
-                <a href={~p"/packages/#{change.attribute}"}>{change.attribute}</a>
+                <.link href={~p"/packages/#{change.attribute}"}>{change.attribute}</.link>
               </td>
               <td>{change.old_version || "—"}</td>
               <td>{change.new_version || "—"}</td>
@@ -129,7 +129,7 @@ defmodule TrackerWeb.ChannelLive.DiffSections do
           <tbody>
             <tr :for={event <- @diff.option_events}>
               <td>
-                <a href={~p"/options/#{event.option.name}"}>{event.option.name}</a>
+                <.link href={~p"/options/#{event.option.name}"}>{event.option.name}</.link>
               </td>
               <td>{format_event_type(event.type)}</td>
               <td :if={@show_revision_column}>
@@ -156,7 +156,7 @@ defmodule TrackerWeb.ChannelLive.DiffSections do
           <tbody>
             <tr :for={change <- @diff.option_metadata_changes}>
               <td>
-                <a href={~p"/options/#{change.option_name}"}>{change.option_name}</a>
+                <.link href={~p"/options/#{change.option_name}"}>{change.option_name}</.link>
               </td>
               <td>{change.field}</td>
               <td>{format_metadata_value(change.old)}</td>

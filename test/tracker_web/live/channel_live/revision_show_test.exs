@@ -98,7 +98,7 @@ defmodule TrackerWeb.ChannelLive.RevisionShowTest do
       live(conn, ~p"/channels/nixos-revshow/revisions/#{short(cr2)}")
 
     assert html =~ "revshow.opt.added"
-    assert html =~ ~s|href="/options/revshow.opt.added"|
+    assert html =~ ~s|href="/options/revshow.opt.added?|
   end
 
   test "shows option metadata changes from previous revision", %{conn: conn, cr2: cr2} do

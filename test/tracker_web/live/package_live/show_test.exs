@@ -159,7 +159,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
 
       assert html =~ "Meta-channel description"
 
-      html = switch_lens(view, channel_stable.name)
+      {:ok, _view, html} = switch_lens(conn, view, channel_stable.name)
 
       assert html =~ "Stable-channel description"
       refute html =~ "Meta-channel description"
@@ -656,7 +656,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
     refute html =~ "2.13.0"
 
     # Switch lens to nixos-24.66
-    html = switch_lens(view, channel_stable.name)
+    {:ok, _view, html} = switch_lens(conn, view, channel_stable.name)
 
     assert html =~ "2.13.0"
     refute html =~ "2.12.1"
@@ -961,7 +961,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
     } do
       {:ok, view, _html} = live(conn, ~p"/packages/#{package.attribute}")
 
-      html = switch_lens(view, channel_stable.name)
+      {:ok, _view, html} = switch_lens(conn, view, channel_stable.name)
 
       assert html =~ "out-of-lens change"
       refute html =~ "in-lens change"

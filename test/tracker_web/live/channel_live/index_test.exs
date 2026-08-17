@@ -69,7 +69,7 @@ defmodule TrackerWeb.ChannelLive.IndexTest do
 
     assert html =~ ~s(class="row-list row-list--stacked")
     assert html =~ ~s(class="row-line row-link")
-    assert html =~ ~s(href="/channels/nixos-chanindex")
+    assert html =~ ~s(href="/channels/nixos-chanindex?)
   end
 
   test "rows carry the revision count and latest release as meta", %{conn: conn} do
@@ -165,7 +165,7 @@ defmodule TrackerWeb.ChannelLive.IndexTest do
 
     positions =
       for name <- ~w(nixos-24.62 nixos-chanindex nixos-26.05 nixos-24.61) do
-        {pos, _} = :binary.match(html, ~s(/channels/#{name}"))
+        {pos, _} = :binary.match(html, ~s(/channels/#{name}?))
         pos
       end
 

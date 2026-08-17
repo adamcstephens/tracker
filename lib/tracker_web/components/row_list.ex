@@ -33,7 +33,7 @@ defmodule TrackerWeb.RowList do
   taller. It names the row, so truncating it would cost more than the drift
   it saves.
   """
-  use Phoenix.Component
+  use TrackerWeb, :html
 
   @doc """
   Renders the list container. Rows go in the inner block as `row/1` calls.

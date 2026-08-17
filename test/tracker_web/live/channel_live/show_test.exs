@@ -83,7 +83,12 @@ defmodule TrackerWeb.ChannelLive.ShowTest do
 
     assert html =~ ~s(class="row-list)
     assert html =~ ~s(class="row-line")
-    assert html =~ ~s(href="/channels/nixos-chanshow/revisions/shw222bbb444555")
+
+    assert [_] =
+             html
+             |> Floki.parse_document!()
+             |> Floki.find(~s(a[href^="/channels/nixos-chanshow/revisions/shw222bbb444555"]))
+
     assert html =~ "2026-03-15 10:00"
   end
 
@@ -155,7 +160,7 @@ defmodule TrackerWeb.ChannelLive.ShowTest do
     # Newest first, so the oldest seeded revision can only be on page 2
     refute html =~ "shw111a"
 
-    html = view |> element(~s(a[href="/channels/nixos-chanshow?page=2"])) |> render_click()
+    html = view |> element(~s(a[href*="page=2"])) |> render_click()
 
     assert html =~ "shw111a"
   end

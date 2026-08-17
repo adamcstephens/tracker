@@ -117,31 +117,14 @@ defmodule TrackerWeb.LensTest do
     end
   end
 
-  describe "from_params/2" do
+  describe "from_params/1" do
     test "reads the lens from URL params", %{unstable: unstable} do
-      lens = Lens.from_params(%{"channel" => unstable.name}, %{})
+      lens = Lens.from_params(%{"channel" => unstable.name})
 
       assert lens.channel.name == unstable.name
     end
 
-    test "falls back to the session when no params carry a lens", %{unstable: unstable} do
-      lens = Lens.from_params(%{}, %{"lens_channel_name" => unstable.name})
-
-      assert lens.channel.name == unstable.name
-    end
-
-    test "params win over the session", %{stable: stable, unstable: unstable} do
-      lens =
-        Lens.from_params(%{"channel" => unstable.name}, %{
-          "lens_channel_name" => stable.name
-        })
-
-      assert lens.channel.name == unstable.name
-    end
-
-    test "a channel param does not inherit the session's pinned revision", %{
-      unstable: unstable
-    } do
+    test "reads a pinned revision from URL params", %{unstable: unstable} do
       revision =
         Tracker.Nixpkgs.ChannelRevision.create!(%{
           channel_id: unstable.id,
@@ -149,17 +132,88 @@ defmodule TrackerWeb.LensTest do
           released_at: ~U[2026-01-01 00:00:00Z]
         })
 
-      lens =
-        Lens.from_params(%{"channel" => unstable.name}, %{
-          "lens_channel_name" => unstable.name,
-          "lens_rev" => revision.revision
-        })
+      lens = Lens.from_params(%{"channel" => unstable.name, "rev" => revision.revision})
 
-      assert lens.revision == nil
+      assert lens.revision.revision == revision.revision
     end
 
-    test "falls back to the default channel with neither", %{stable: stable} do
-      assert Lens.from_params(%{}, %{}).channel.name == stable.name
+    test "params stating no channel state no lens" do
+      assert Lens.from_params(%{}) == nil
+    end
+  end
+
+  describe "canonical/1" do
+    test "serializes a channel-only lens", %{unstable: unstable} do
+      assert Lens.canonical(Lens.resolve(unstable.name, nil)) == {unstable.name, nil}
+    end
+
+    test "serializes a pinned lens", %{unstable: unstable} do
+      revision =
+        Tracker.Nixpkgs.ChannelRevision.create!(%{
+          channel_id: unstable.id,
+          revision: "abc1234567890",
+          released_at: ~U[2026-01-01 00:00:00Z]
+        })
+
+      lens = Lens.resolve(unstable.name, revision.revision)
+
+      assert Lens.canonical(lens) == {unstable.name, revision.revision}
+    end
+
+    test "serializes the all-channels lens" do
+      assert Lens.canonical(Lens.resolve("all", nil)) == {"all", nil}
+    end
+
+    test "serializes no lens" do
+      assert Lens.canonical(nil) == {nil, nil}
+    end
+  end
+
+  describe "decorate/1" do
+    setup %{unstable: unstable} do
+      on_exit(fn -> Lens.put_current(nil) end)
+
+      Lens.put_current(Lens.resolve(unstable.name, nil))
+
+      :ok
+    end
+
+    test "puts the lens in force on a local path", %{unstable: unstable} do
+      assert Lens.decorate("/packages") == "/packages?channel=#{unstable.name}"
+    end
+
+    test "keeps the other query params", %{unstable: unstable} do
+      assert Lens.decorate("/packages?search=hello") ==
+               "/packages?channel=#{unstable.name}&search=hello"
+    end
+
+    test "leaves a path that states its own channel alone" do
+      assert Lens.decorate("/options?channel=nixos-pinned&rev=abc") ==
+               "/options?channel=nixos-pinned&rev=abc"
+    end
+
+    test "leaves external targets alone" do
+      assert Lens.decorate("https://github.com/NixOS/nixpkgs") ==
+               "https://github.com/NixOS/nixpkgs"
+
+      assert Lens.decorate("//cdn.example.com/thing") == "//cdn.example.com/thing"
+      assert Lens.decorate("mailto:nobody@example.com") == "mailto:nobody@example.com"
+      assert Lens.decorate("#main") == "#main"
+    end
+
+    test "leaves static assets alone" do
+      assert Lens.decorate("/images/logo.png") == "/images/logo.png"
+      assert Lens.decorate("/robots.txt") == "/robots.txt"
+    end
+
+    test "leaves non-paths alone" do
+      assert Lens.decorate(nil) == nil
+    end
+
+    test "does nothing with no lens in force" do
+      Lens.put_current(nil)
+
+      assert Lens.decorate("/packages") == "/packages"
     end
   end
 

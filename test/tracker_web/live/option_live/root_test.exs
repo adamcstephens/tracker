@@ -66,8 +66,8 @@ defmodule TrackerWeb.OptionLive.RootTest do
   test "shows top-level groups as children cards with option counts", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/options")
 
-    assert html =~ ~s(href="/options/services")
-    assert html =~ ~s(href="/options/programs")
+    assert html =~ ~s(href="/options/services?)
+    assert html =~ ~s(href="/options/programs?)
     assert html =~ "2 options"
     assert html =~ "1 options"
   end
@@ -129,19 +129,19 @@ defmodule TrackerWeb.OptionLive.RootTest do
 
     {:ok, view, _html} = live(conn, ~p"/options")
 
-    html = switch_lens(view, channel2.name)
+    {:ok, _view, html} = switch_lens(conn, view, channel2.name)
 
-    assert html =~ ~s(href="/options/programs")
-    refute html =~ ~s(href="/options/services")
+    assert html =~ ~s(href="/options/programs?)
+    refute html =~ ~s(href="/options/services?)
   end
 
   test "all-channels lens shows only a select-a-channel message", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/options")
 
-    html = switch_lens(view, "all")
+    {:ok, _view, html} = switch_lens(conn, view, "all")
 
     assert html =~ "Select a channel"
-    refute html =~ ~s(href="/options/services")
+    refute html =~ ~s(href="/options/services?)
     refute html =~ "enableDebugging"
   end
 
@@ -150,7 +150,7 @@ defmodule TrackerWeb.OptionLive.RootTest do
 
     refute render(view) =~ "lens-attention"
 
-    switch_lens(view, "all")
+    {:ok, view, _html} = switch_lens(conn, view, "all")
 
     assert render(view) =~ "lens-attention"
   end
@@ -158,10 +158,10 @@ defmodule TrackerWeb.OptionLive.RootTest do
   test "selecting a channel from the all-channels state restores the tree", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/options")
 
-    switch_lens(view, "all")
-    html = switch_lens(view, "nixos-optroot")
+    {:ok, view, _html} = switch_lens(conn, view, "all")
+    {:ok, _view, html} = switch_lens(conn, view, "nixos-optroot")
 
-    assert html =~ ~s(href="/options/services")
+    assert html =~ ~s(href="/options/services?)
     refute html =~ "lens-attention"
   end
 
@@ -169,9 +169,9 @@ defmodule TrackerWeb.OptionLive.RootTest do
     {:ok, _view, html} = live(conn, ~p"/options?search=enable")
 
     assert html =~ "Matching options"
-    assert html =~ ~s(href="/options/services.nginx.enable")
-    assert html =~ ~s(href="/options/programs.vim.enable")
-    assert html =~ ~s(href="/options/enableDebugging")
+    assert html =~ ~s(href="/options/services.nginx.enable?)
+    assert html =~ ~s(href="/options/programs.vim.enable?)
+    assert html =~ ~s(href="/options/enableDebugging?)
   end
 
   test "search at the root shows no group cards", %{conn: conn} do
@@ -183,8 +183,8 @@ defmodule TrackerWeb.OptionLive.RootTest do
   test "fuzzy search tolerates typos", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/options?search=nginxx")
 
-    assert html =~ ~s(href="/options/services.nginx.enable")
-    refute html =~ ~s(href="/options/programs.vim.enable")
+    assert html =~ ~s(href="/options/services.nginx.enable?)
+    refute html =~ ~s(href="/options/programs.vim.enable?)
   end
 
   test "dot-segment match outranks fuzzy substring matches", %{
@@ -236,7 +236,7 @@ defmodule TrackerWeb.OptionLive.RootTest do
   test "searching with the all-channels lens still prompts for a channel", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/options?search=nginx")
 
-    html = switch_lens(view, "all")
+    {:ok, _view, html} = switch_lens(conn, view, "all")
 
     assert html =~ "Select a channel"
     refute html =~ "Matching options"
@@ -247,7 +247,12 @@ defmodule TrackerWeb.OptionLive.RootTest do
     |> Floki.parse_document!()
     |> Floki.find("#matching-options a[href]")
     |> Enum.flat_map(&Floki.attribute(&1, "href"))
-    |> Enum.map(&String.replace_prefix(&1, "/options/", ""))
+    |> Enum.map(
+      &(&1
+        |> URI.parse()
+        |> Map.fetch!(:path)
+        |> String.replace_prefix("/options/", ""))
+    )
   end
 
   test "shows message when channel has no options data", %{conn: conn} do
@@ -267,7 +272,7 @@ defmodule TrackerWeb.OptionLive.RootTest do
 
     {:ok, view, _html} = live(conn, ~p"/options")
 
-    html = switch_lens(view, channel2.name)
+    {:ok, _view, html} = switch_lens(conn, view, channel2.name)
 
     assert html =~ "doesn&#39;t have options"
   end

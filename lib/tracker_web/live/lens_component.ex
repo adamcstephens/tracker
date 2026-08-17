@@ -7,8 +7,12 @@ defmodule TrackerWeb.LensComponent do
   display when the lens is pinned to a specific revision.
 
   Progressive enhancement: wraps the channel `<select>` in a form that POSTs
-  to `/lens` for no-JS fallback. With JS, `phx-change` patches to the same URL
+  to `/lens` for no-JS fallback. With JS, `phx-change` navigates to the same URL
   with the lens params rewritten.
+
+  The signed cookie value rides on `data-lens` for the `LensCookie` hook to
+  write, so the preference records the lens the page actually rendered rather
+  than the last switch.
   """
 
   use TrackerWeb, :live_component
@@ -38,7 +42,13 @@ defmodule TrackerWeb.LensComponent do
   @impl true
   def render(assigns) do
     ~H"""
-    <div id="lens" class={["lens", @highlight && "lens-attention"]} phx-hook="LensCookie">
+    <div
+      id="lens"
+      class={["lens", @highlight && "lens-attention"]}
+      phx-hook="LensCookie"
+      data-lens={@lens && Lens.sign_cookie(@lens)}
+      data-lens-max-age={Lens.cookie_max_age()}
+    >
       <form
         :if={@lens != nil}
         id="lens-form"
@@ -89,17 +99,15 @@ defmodule TrackerWeb.LensComponent do
     """
   end
 
+  # A navigation, not a patch: every link on the page carries the lens, and
+  # LiveView reuses a function component whose assigns did not change, so a
+  # patch would leave some of those links pointing at the old channel. The new
+  # URL states the lens, so re-mounting from it is also the honest reload of a
+  # page whose every list is channel-scoped.
   @impl true
   def handle_event("set_lens", %{"channel" => channel_name}, socket) do
-    lens = Lens.resolve(channel_name, nil)
-
     {:noreply,
-     socket
-     |> push_event("set_lens_cookie", %{
-       value: Lens.sign_cookie(lens),
-       max_age: Lens.cookie_max_age()
-     })
-     |> push_patch(to: Lens.path_for(socket.assigns.current_path, channel_name))}
+     push_navigate(socket, to: Lens.path_for(socket.assigns.current_path, channel_name))}
   end
 
   # The revision shown next to the channel: the pinned one when the lens

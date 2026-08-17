@@ -85,7 +85,7 @@ defmodule TrackerWeb.OptionLive.ShowTest do
     # The h1 reads as the whole attribute path for screen readers
     assert html =~ ~s(aria-label="services.nginx")
     # Every segment but the last links to its cumulative prefix
-    assert html =~ ~s(href="/options/services")
+    assert html =~ ~s(href="/options/services?)
     # The last segment is the current page, not a link
     assert html =~ ~s(aria-current="page")
   end
@@ -122,7 +122,7 @@ defmodule TrackerWeb.OptionLive.ShowTest do
     refute html =~ "Sub-groups"
     assert html =~ "services.nginx.virtualHosts"
     # The child card links to the sub-group prefix
-    assert html =~ ~s(href="/options/services.nginx.virtualHosts")
+    assert html =~ ~s(href="/options/services.nginx.virtualHosts?)
   end
 
   test "children and leaf sections use the shared section header", %{conn: conn} do
@@ -164,10 +164,11 @@ defmodule TrackerWeb.OptionLive.ShowTest do
       assert html =~ ~s(class="row-line row-link")
 
       view
-      |> element(~s(a[href="/options/services.nginx.virtualHosts"]))
+      |> element(~s(a[href^="/options/services.nginx.virtualHosts?"]))
       |> render_click()
 
-      assert_redirect(view, ~p"/options/services.nginx.virtualHosts")
+      {to, _flash} = assert_redirect(view)
+      assert_same_path(to, ~p"/options/services.nginx.virtualHosts")
     end
 
     test "children rows carry their option count as trailing meta", %{conn: conn} do
@@ -215,7 +216,7 @@ defmodule TrackerWeb.OptionLive.ShowTest do
 
       # virtualHosts is an attrsOf-submodule option with deeper children:
       # it keeps its child card but loses the duplicate leaf detail row.
-      assert html =~ ~s(href="/options/services.nginx.virtualHosts")
+      assert html =~ ~s(href="/options/services.nginx.virtualHosts?)
       refute html =~ ~s(id="opt-services.nginx.virtualHosts")
     end
 
@@ -277,16 +278,16 @@ defmodule TrackerWeb.OptionLive.ShowTest do
       {:ok, _view, html} =
         live(conn, ~p"/options/services.victorialogs?channel=nixos-25.66")
 
-      assert html =~ ~s(href="/packages/victorialogs-optshow")
-      refute html =~ ~s(href="/packages/victoriametrics-optshow")
+      assert html =~ ~s(href="/packages/victorialogs-optshow?)
+      refute html =~ ~s(href="/packages/victoriametrics-optshow?)
     end
 
     test "an earlier revision still shows the package it linked then", %{conn: conn, cr1: cr1} do
       {:ok, _view, html} =
         live(conn, ~p"/options/services.victorialogs?channel=nixos-25.66&rev=#{cr1.revision}")
 
-      assert html =~ ~s(href="/packages/victoriametrics-optshow")
-      refute html =~ ~s(href="/packages/victorialogs-optshow")
+      assert html =~ ~s(href="/packages/victoriametrics-optshow?)
+      refute html =~ ~s(href="/packages/victorialogs-optshow?)
     end
   end
 
@@ -506,7 +507,7 @@ defmodule TrackerWeb.OptionLive.ShowTest do
       released_at: ~U[2026-03-01 10:00:00Z]
     })
 
-    {:ok, _view, html} = live(conn, "/options/services.nginx?channel=nixpkgs-unstable")
+    {:ok, _view, html} = live(conn, "/options/services.nginx?channel=#{nixpkgs_channel.name}")
 
     assert html =~ "doesn&#39;t have options"
   end
@@ -514,7 +515,7 @@ defmodule TrackerWeb.OptionLive.ShowTest do
   test "all-channels lens prompts for a channel instead of falling back", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/options/services.nginx")
 
-    html = switch_lens(view, "all")
+    {:ok, _view, html} = switch_lens(conn, view, "all")
 
     assert html =~ "Select a channel"
     assert html =~ "lens-attention"
@@ -534,7 +535,7 @@ defmodule TrackerWeb.OptionLive.ShowTest do
   test "lens change patches the URL and reloads", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/options/services.nginx")
 
-    switch_lens(view, "nixos-optshow")
+    {:ok, view, _html} = switch_lens(conn, view, "nixos-optshow")
     # Should still render the prefix
     html = render(view)
     assert html =~ "services.nginx"
@@ -544,7 +545,7 @@ defmodule TrackerWeb.OptionLive.ShowTest do
     {:ok, _view, html} = live(conn, ~p"/options/services.nginx?search=serverName")
 
     assert html =~ "Matching options"
-    assert html =~ ~s(href="/options/services.nginx.virtualHosts.example.serverName")
+    assert html =~ ~s(href="/options/services.nginx.virtualHosts.example.serverName?)
   end
 
   test "matching options render as shared row-list link rows", %{conn: conn} do
@@ -559,7 +560,7 @@ defmodule TrackerWeb.OptionLive.ShowTest do
     [row] = Floki.find(list, "li")
     name = "services.nginx.virtualHosts.example.serverName"
 
-    assert Floki.find(row, ~s(a.row-link[href="/options/#{name}"])) != []
+    assert Floki.find(row, ~s(a.row-link[href^="/options/#{name}?"])) != []
     # The parent group is context, not a second link inside the row link. It
     # rides in the body column: it's a full attribute path, so a trailing
     # column would crush the label on narrow screens.
@@ -590,7 +591,7 @@ defmodule TrackerWeb.OptionLive.ShowTest do
 
     html =
       view
-      |> element(~s(a[href="/options/services.nginx?search=pageOption&page=2"]))
+      |> element(~s(a[href*="page=2"]))
       |> render_click()
 
     assert html =~ "Page 2 of 2"
@@ -638,29 +639,29 @@ defmodule TrackerWeb.OptionLive.ShowTest do
 
     view |> element("#page-search") |> render_change(%{"search" => "user"})
 
-    assert_patch(view, ~p"/options?search=user")
-    assert render(view) =~ ~s(href="/options/services.nginx.user")
+    assert_patch_ignoring_lens(view, ~p"/options?search=user")
+    assert render(view) =~ ~s(href="/options/services.nginx.user?)
   end
 
   test "cancelling a search returns to the page it started from", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/options/services.nginx")
 
     view |> element("#page-search") |> render_change(%{"search" => "user"})
-    assert_patch(view, ~p"/options?search=user")
+    assert_patch_ignoring_lens(view, ~p"/options?search=user")
 
     # Refining the search keeps the original return point
     view |> element("#page-search") |> render_change(%{"search" => "use"})
-    assert_patch(view, ~p"/options?search=use")
+    assert_patch_ignoring_lens(view, ~p"/options?search=use")
 
     view |> element("#page-search") |> render_change(%{"search" => ""})
-    assert_patch(view, ~p"/options/services.nginx")
+    assert_patch_ignoring_lens(view, ~p"/options/services.nginx")
   end
 
   test "the clear button links back to where the search started", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/options/services.nginx")
 
     view |> element("#page-search") |> render_change(%{"search" => "user"})
-    assert_patch(view, ~p"/options?search=user")
+    assert_patch_ignoring_lens(view, ~p"/options?search=user")
 
     [href] =
       view
@@ -669,7 +670,7 @@ defmodule TrackerWeb.OptionLive.ShowTest do
       |> Floki.find("a.app-search__clear")
       |> Floki.attribute("href")
 
-    assert href == "/options/services.nginx"
+    assert_same_path(href, "/options/services.nginx")
   end
 
   test "clearing a deep-linked search stays on the current page", %{conn: conn} do
@@ -677,7 +678,7 @@ defmodule TrackerWeb.OptionLive.ShowTest do
 
     view |> element("#page-search") |> render_change(%{"search" => ""})
 
-    assert_patch(view, ~p"/options/services.nginx")
+    assert_patch_ignoring_lens(view, ~p"/options/services.nginx")
   end
 
   test "clearing the search restores the tree view", %{conn: conn} do

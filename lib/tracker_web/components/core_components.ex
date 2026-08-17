@@ -6,6 +6,7 @@ defmodule TrackerWeb.CoreComponents do
   use Gettext, backend: TrackerWeb.Gettext
 
   alias Phoenix.LiveView.JS
+  alias TrackerWeb.Lens
 
   @doc """
   Renders a modal.
@@ -390,6 +391,32 @@ defmodule TrackerWeb.CoreComponents do
       {render_slot(@inner_block)}
     </span>
     """
+  end
+
+  @doc """
+  `Phoenix.Component.link/1`, with the channel lens on every internal target.
+
+  This shadows the imported `link/1` (see `TrackerWeb`) so a link cannot forget
+  the lens and silently hand the next page a different channel than the one the
+  visitor is looking at. External targets and links that state their own channel
+  are left alone; see `TrackerWeb.Lens.decorate/1`.
+  """
+  attr :navigate, :string, default: nil
+  attr :patch, :string, default: nil
+  attr :href, :any, default: nil
+  attr :replace, :boolean, default: false
+  attr :method, :string, default: "get"
+  attr :csrf_token, :any, default: true
+  attr :rest, :global, include: ~w(download hreflang referrerpolicy rel target type)
+
+  slot :inner_block, required: true
+
+  def link(assigns) do
+    assigns
+    |> assign(:navigate, Lens.decorate(assigns.navigate))
+    |> assign(:patch, Lens.decorate(assigns.patch))
+    |> assign(:href, Lens.decorate(assigns.href))
+    |> Phoenix.Component.link()
   end
 
   @doc """

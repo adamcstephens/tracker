@@ -255,13 +255,8 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
 
       assert html =~ "scopedsmall.opts"
 
-      view
-      |> form("#lens-form", %{"channel" => "nixos-99.99"})
-      |> render_change()
+      {:ok, _view, html} = switch_lens(conn, view, "nixos-99.99")
 
-      assert_patch(view, ~p"/changes/6002?channel=nixos-99.99")
-
-      html = render(view)
       assert html =~ "scopedfull.opts"
       refute html =~ "scopedsmall.opts"
     end
@@ -628,7 +623,7 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
       assert html =~ ~r/<li[^>]*class="[^"]*is-mine[^"]*"[^>]*data-branch="nixpkgs-unstable"/
       refute html =~ ~r/<li[^>]*class="[^"]*is-mine[^"]*"[^>]*data-branch="nixos-unstable"/
 
-      html = switch_lens(view, "nixos-unstable")
+      {:ok, _view, html} = switch_lens(conn, view, "nixos-unstable")
 
       assert html =~ ~r/<li[^>]*class="[^"]*is-mine[^"]*"[^>]*data-branch="nixos-unstable"/
       refute html =~ ~r/<li[^>]*class="[^"]*is-mine[^"]*"[^>]*data-branch="nixpkgs-unstable"/
