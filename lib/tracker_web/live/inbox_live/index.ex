@@ -2,9 +2,15 @@ defmodule TrackerWeb.InboxLive.Index do
   @moduledoc """
   The per-user in-app inbox. A triage view over durable notifications:
   unread/all segment, multi-select type filter chips, chrome search over
-  row text, day-grouped rows with per-row read/unread toggling. Updates
-  live as new ones are inserted, and doubles as the "everything
-  affected" view when filtered to a single channel revision.
+  the package, channel, change and branch a row references, day-grouped
+  rows with per-row read/unread toggling. Updates live as new ones are
+  inserted, and doubles as the "everything affected" view when filtered
+  to a single channel revision.
+
+  Every filter is a `for_user` argument and every count its own query, so
+  a page costs 25 rows no matter how long the history is. The URL carries
+  the whole view — page, segment, types, search — and is what a reload or
+  a shared link restores.
 
   The sitewide lens renders disabled here: notifications are
   point-in-time events on subscriptions, so channel-scoping them would
@@ -18,8 +24,10 @@ defmodule TrackerWeb.InboxLive.Index do
   alias TrackerWeb.FeedLink
   alias TrackerWeb.NotificationPresenter
   alias TrackerWeb.PageSearch
+  alias TrackerWeb.Pagination
   alias TrackerWeb.RowList
   alias TrackerWeb.SectionHeader
+  alias TrackerWeb.TableParams
 
   @impl true
   def mount(_params, _session, socket) do
@@ -33,10 +41,6 @@ defmodule TrackerWeb.InboxLive.Index do
      socket
      |> assign(:current_user, user)
      |> assign(:page_title, "Inbox")
-     |> assign(:unread_filter, :unread)
-     |> assign(:active_types, MapSet.new())
-     |> assign(:version_changes, %{})
-     |> assign(:version_checked, MapSet.new())
      |> assign(:feed_path, FeedLink.path(user))}
   end
 
@@ -48,27 +52,20 @@ defmodule TrackerWeb.InboxLive.Index do
         :error -> nil
       end
 
-    search = params["search"] || ""
+    tp = TableParams.from_params(params, page_size: 25)
 
-    hidden =
-      case channel_revision_id do
-        nil -> %{}
-        id -> %{"channel_revision_id" => Integer.to_string(id)}
-      end
-
+    unread_filter = if params["filter"] == "all", do: :all, else: :unread
+    active_types = parse_types(params["types"])
     lens = socket.assigns.lens && %{socket.assigns.lens | disabled?: true}
 
     {:noreply,
      socket
      |> assign(:channel_revision_id, channel_revision_id)
-     |> assign(:search, search)
+     |> assign(:table_params, tp)
+     |> assign(:unread_filter, unread_filter)
+     |> assign(:active_types, active_types)
      |> assign(:lens, lens)
-     |> assign(:page_search, %PageSearch{
-       action: "/inbox",
-       value: search,
-       placeholder: "Search notifications…",
-       hidden: hidden
-     })
+     |> assign_page_search()
      |> load_notifications()}
   end
 
@@ -92,23 +89,15 @@ defmodule TrackerWeb.InboxLive.Index do
   end
 
   def handle_event("search", %{"search" => search}, socket) do
-    {:noreply,
-     socket
-     |> assign(:search, search)
-     |> update(:page_search, &%{&1 | value: search})
-     |> apply_filters()
-     |> push_event("update-url", %{
-       path: inbox_path(socket.assigns.channel_revision_id, search)
-     })}
+    socket
+    |> update(:table_params, &%{&1 | search: search})
+    |> reset_to_first_page()
   end
 
   def handle_event("set-unread-filter", %{"filter" => filter}, socket) do
-    unread_filter = if filter == "unread", do: :unread, else: :all
-
-    {:noreply,
-     socket
-     |> assign(:unread_filter, unread_filter)
-     |> apply_filters()}
+    socket
+    |> assign(:unread_filter, if(filter == "unread", do: :unread, else: :all))
+    |> reset_to_first_page()
   end
 
   def handle_event("toggle-type", %{"type" => type}, socket) do
@@ -120,17 +109,26 @@ defmodule TrackerWeb.InboxLive.Index do
         do: MapSet.delete(active, type),
         else: MapSet.put(active, type)
 
-    {:noreply,
-     socket
-     |> assign(:active_types, active)
-     |> apply_filters()}
+    socket
+    |> assign(:active_types, active)
+    |> reset_to_first_page()
+  end
+
+  def handle_event("next-page", _params, socket) do
+    {:noreply, patch_to_page(socket, socket.assigns.table_params.page + 1)}
+  end
+
+  def handle_event("prev-page", _params, socket) do
+    {:noreply, patch_to_page(socket, max(socket.assigns.table_params.page - 1, 1))}
   end
 
   def handle_event("mark-all-read", _params, socket) do
     user = socket.assigns.current_user
 
-    socket.assigns.notifications
-    |> Enum.filter(&is_nil(&1.read_at))
+    Notification.for_user!(
+      %{channel_revision_id: socket.assigns.channel_revision_id, unread_only: true},
+      actor: user
+    )
     |> case do
       [] -> :ok
       unread -> Ash.bulk_update!(unread, :mark_read, %{}, actor: user, return_records?: false)
@@ -146,93 +144,116 @@ defmodule TrackerWeb.InboxLive.Index do
 
   def handle_info(_message, socket), do: {:noreply, socket}
 
-  defp load_notifications(socket) do
-    user = socket.assigns.current_user
+  # Filter changes re-query from the top: the row that pushed you onto page 3
+  # is rarely still there once the filter moves.
+  defp reset_to_first_page(socket) do
+    socket = update(socket, :table_params, &%{&1 | page: 1, offset: 0})
 
-    params =
-      case socket.assigns.channel_revision_id do
-        nil -> %{}
-        id -> %{channel_revision_id: id}
-      end
-
-    notifications = Notification.for_user!(params, actor: user)
-    unread_count = Enum.count(notifications, &is_nil(&1.read_at))
-
-    socket
-    |> assign(:notifications, notifications)
-    |> assign(:unread_count, unread_count)
-    |> assign(:unread_notification_count, unread_count)
-    |> apply_filters()
+    {:noreply,
+     socket
+     |> assign_page_search()
+     |> load_notifications()
+     |> push_event("update-url", %{path: inbox_path(socket)})}
   end
 
-  defp apply_filters(socket) do
-    %{notifications: notifications, unread_filter: unread_filter} = socket.assigns
+  defp patch_to_page(socket, page) do
+    tp = %{socket.assigns.table_params | page: page}
+    push_patch(socket, to: TableParams.to_path(tp, "/inbox", extra_params(socket.assigns)))
+  end
 
-    segment =
-      Enum.filter(notifications, fn n -> unread_filter == :all or is_nil(n.read_at) end)
+  defp assign_page_search(socket) do
+    tp = socket.assigns.table_params
 
-    socket = ensure_versions(socket, segment)
+    assign(socket, :page_search, %PageSearch{
+      action: "/inbox",
+      value: tp.search,
+      placeholder: "Search notifications…",
+      hidden: TableParams.to_hidden_inputs(tp, extra_params(socket.assigns))
+    })
+  end
 
-    %{active_types: active_types, search: search, version_changes: version_changes} =
-      socket.assigns
+  defp load_notifications(socket) do
+    %{current_user: user, table_params: tp} = socket.assigns
 
-    query = search |> String.trim() |> String.downcase()
+    page =
+      Notification.for_user!(query_args(socket),
+        page: [offset: tp.offset, limit: tp.page_size, count: true],
+        actor: user
+      )
 
-    in_segment = Enum.filter(segment, &search_match?(&1, version_changes, query))
-
-    visible =
-      Enum.filter(in_segment, fn n ->
-        MapSet.size(active_types) == 0 or MapSet.member?(active_types, n.type)
-      end)
-
+    pagination = TableParams.apply_pagination(tp, page, :notifications)
+    unread_count = count(socket, %{unread_only: true})
     now = DateTime.utc_now()
 
     socket
+    |> assign(:notifications, page.results)
+    |> assign(:version_changes, NotificationPresenter.version_changes(page.results))
+    |> assign(:groups, NotificationPresenter.group_by_day(page.results, now))
     |> assign(:now, now)
-    |> assign(:type_counts, Enum.frequencies_by(in_segment, & &1.type))
-    |> assign(:groups, NotificationPresenter.group_by_day(visible, now))
+    |> assign(:unread_count, unread_count)
+    |> assign(:unread_notification_count, unread_count)
+    |> assign(:total_count, count(socket, %{}))
+    |> assign(:type_counts, type_counts(socket))
+    |> assign(:has_prev_page?, pagination.has_prev_page?)
+    |> assign(:has_next_page?, pagination.has_next_page?)
+    |> assign(:total_pages, pagination.total_pages)
+    |> assign(:current_page, pagination.current_page)
   end
 
-  # Version bumps are looked up on demand for the notifications the current
-  # segment can show, so an unread-only mount never pays for the full history.
-  defp ensure_versions(socket, segment) do
-    case Enum.reject(segment, &MapSet.member?(socket.assigns.version_checked, &1.id)) do
-      [] ->
-        socket
+  # The segment tallies count the whole scope; the chips count within the
+  # active segment and search, so they read as "what selecting me would show".
+  defp type_counts(socket) do
+    %{search: search} = socket.assigns.table_params
 
-      missing ->
-        socket
-        |> update(
-          :version_changes,
-          &Map.merge(&1, NotificationPresenter.version_changes(missing))
-        )
-        |> update(:version_checked, &Enum.into(missing, &1, fn n -> n.id end))
-    end
-  end
-
-  defp search_match?(_n, _version_changes, ""), do: true
-
-  defp search_match?(n, version_changes, query) do
-    [
-      NotificationPresenter.hero(n, version_changes),
-      n.package && n.package.attribute,
-      n.channel && n.channel.name,
-      n.change_branch && n.change_branch.branch_name
-    ]
-    |> Enum.any?(fn text ->
-      is_binary(text) and String.contains?(String.downcase(text), query)
+    Map.new(NotificationPresenter.type_order(), fn type ->
+      {type,
+       count(socket, %{
+         unread_only: socket.assigns.unread_filter == :unread,
+         search: search,
+         types: [type]
+       })}
     end)
   end
 
-  defp inbox_path(channel_revision_id, search) do
-    params =
-      %{"channel_revision_id" => channel_revision_id, "search" => search}
-      |> Enum.reject(fn {_key, value} -> value in [nil, ""] end)
+  defp count(socket, args) do
+    args = Map.put(args, :channel_revision_id, socket.assigns.channel_revision_id)
 
-    case params do
-      [] -> ~p"/inbox"
-      params -> ~p"/inbox?#{params}"
-    end
+    Notification.for_user!(args,
+      page: [limit: 1, count: true],
+      actor: socket.assigns.current_user
+    ).count
+  end
+
+  defp query_args(socket) do
+    %{active_types: active_types, table_params: tp} = socket.assigns
+
+    %{
+      channel_revision_id: socket.assigns.channel_revision_id,
+      unread_only: socket.assigns.unread_filter == :unread,
+      types: if(MapSet.size(active_types) == 0, do: nil, else: MapSet.to_list(active_types)),
+      search: tp.search
+    }
+  end
+
+  defp parse_types(nil), do: MapSet.new()
+
+  defp parse_types(types) do
+    names = String.split(types, ",", trim: true)
+    MapSet.new(Enum.filter(NotificationPresenter.type_order(), &(Atom.to_string(&1) in names)))
+  end
+
+  defp extra_params(assigns) do
+    %{active_types: active_types} = assigns
+
+    %{
+      channel_revision_id: assigns.channel_revision_id,
+      filter: assigns.unread_filter == :all && "all",
+      types: active_types |> Enum.sort() |> Enum.map_join(",", &Atom.to_string/1)
+    }
+  end
+
+  defp inbox_path(socket) do
+    TableParams.to_path(socket.assigns.table_params, "/inbox", extra_params(socket.assigns))
   end
 
   @impl true
@@ -258,7 +279,7 @@ defmodule TrackerWeb.InboxLive.Index do
             phx-click="set-unread-filter"
             phx-value-filter="all"
           >
-            All <span class="n">{length(@notifications)}</span>
+            All <span class="n">{@total_count}</span>
           </button>
         </div>
 
@@ -305,9 +326,9 @@ defmodule TrackerWeb.InboxLive.Index do
         Showing notifications for one revision. <.link navigate={~p"/inbox"}>Show all</.link>
       </p>
 
-      <p :if={@notifications == []} id="inbox-empty" class="ibx-empty">No notifications yet.</p>
+      <p :if={@total_count == 0} id="inbox-empty" class="ibx-empty">No notifications yet.</p>
 
-      <div :if={@notifications != [] && @groups == []} class="ibx-empty">
+      <div :if={@total_count > 0 && @groups == []} class="ibx-empty">
         Nothing matches these filters.
       </div>
 
@@ -317,6 +338,19 @@ defmodule TrackerWeb.InboxLive.Index do
           <.row :for={n <- rows} n={n} now={@now} version_changes={@version_changes} />
         </RowList.row_list>
       </section>
+
+      <Pagination.controls
+        total_pages={@total_pages}
+        current_page={@current_page}
+        has_prev_page?={@has_prev_page?}
+        has_next_page?={@has_next_page?}
+        prev_path={
+          TableParams.page_path(@table_params, @current_page - 1, "/inbox", extra_params(assigns))
+        }
+        next_path={
+          TableParams.page_path(@table_params, @current_page + 1, "/inbox", extra_params(assigns))
+        }
+      />
     </div>
     """
   end

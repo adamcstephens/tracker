@@ -95,6 +95,123 @@ defmodule Tracker.Notifications.NotificationTest do
 
       assert id == rev.id
     end
+
+    test "paginates by offset with a count" do
+      user = register_user!()
+
+      :ok =
+        Notification.fanout([
+          row(user, %{occurred_at: ~U[2024-01-01 00:00:00Z]}),
+          row(user, %{occurred_at: ~U[2024-02-01 00:00:00Z]}),
+          row(user, %{occurred_at: ~U[2024-03-01 00:00:00Z]})
+        ])
+
+      assert %Ash.Page.Offset{count: 3, more?: true, results: [first, second]} =
+               Notification.for_user!(%{}, page: [limit: 2, offset: 0, count: true], actor: user)
+
+      assert first.occurred_at == ~U[2024-03-01 00:00:00Z]
+      assert second.occurred_at == ~U[2024-02-01 00:00:00Z]
+
+      assert %Ash.Page.Offset{count: 3, more?: false, results: [third]} =
+               Notification.for_user!(%{}, page: [limit: 2, offset: 2, count: true], actor: user)
+
+      assert third.occurred_at == ~U[2024-01-01 00:00:00Z]
+    end
+
+    test "orders ties by id so pages never repeat or skip a row" do
+      user = register_user!()
+      at = ~U[2024-01-01 00:00:00Z]
+
+      :ok =
+        Notification.fanout([
+          row(user, %{occurred_at: at}),
+          row(user, %{occurred_at: at}),
+          row(user, %{occurred_at: at})
+        ])
+
+      paged =
+        Enum.flat_map(0..2, fn offset ->
+          Notification.for_user!(%{}, page: [limit: 1, offset: offset], actor: user).results
+        end)
+
+      assert length(Enum.uniq_by(paged, & &1.id)) == 3
+    end
+
+    test "filters to unread only" do
+      user = register_user!()
+      :ok = Notification.fanout([row(user, %{}), row(user, %{})])
+      [read, _unread] = Notification.for_user!(actor: user)
+      {:ok, _} = Notification.mark_read(read, actor: user)
+
+      assert [%Notification{read_at: nil}] =
+               Notification.for_user!(%{unread_only: true}, actor: user)
+    end
+
+    test "filters by type" do
+      user = register_user!()
+      :ok = Notification.fanout([row(user, %{}), row(user, %{type: :package_added})])
+
+      assert [%Notification{type: :package_added}] =
+               Notification.for_user!(%{types: [:package_added]}, actor: user)
+
+      assert [_, _] =
+               Notification.for_user!(
+                 %{types: [:package_added, :channel_revision_published]},
+                 actor: user
+               )
+    end
+
+    test "search matches the package attribute, case-insensitively" do
+      user = register_user!()
+      firefox = package!("firefox-#{System.unique_integer([:positive])}")
+
+      :ok = Notification.fanout([row(user, %{package_id: firefox.id}), row(user, %{})])
+
+      assert [%Notification{package_id: id}] =
+               Notification.for_user!(%{search: "FIRE"}, actor: user)
+
+      assert id == firefox.id
+    end
+
+    test "search matches the channel name, change title and branch name" do
+      user = register_user!()
+      chan = channel!()
+      change = change!(nil, %{state: :open, title: "ripgrep: 14.1.0 -> 14.1.1"})
+      branch = change_branch!(change, "staging-next")
+
+      :ok =
+        Notification.fanout([
+          row(user, %{channel_id: chan.id}),
+          row(user, %{change_id: change.id}),
+          row(user, %{change_branch_id: branch.id}),
+          row(user, %{})
+        ])
+
+      assert [_] = Notification.for_user!(%{search: chan.name}, actor: user)
+      assert [_] = Notification.for_user!(%{search: "ripgrep"}, actor: user)
+      assert [_] = Notification.for_user!(%{search: "staging-next"}, actor: user)
+      assert [] = Notification.for_user!(%{search: "nothing-matches-this"}, actor: user)
+    end
+
+    test "combines the filters" do
+      user = register_user!()
+      firefox = package!("firefox-#{System.unique_integer([:positive])}")
+
+      :ok =
+        Notification.fanout([
+          row(user, %{type: :package_added, package_id: firefox.id}),
+          row(user, %{type: :package_removed, package_id: firefox.id}),
+          row(user, %{type: :package_added})
+        ])
+
+      assert [%Notification{type: :package_added, package_id: id}] =
+               Notification.for_user!(
+                 %{types: [:package_added], search: "firefox", unread_only: true},
+                 actor: user
+               )
+
+      assert id == firefox.id
+    end
   end
 
   describe "mark_read/2" do

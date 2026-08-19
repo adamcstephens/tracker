@@ -69,12 +69,22 @@ defmodule Tracker.Notifications.Notification do
     end
 
     read :for_user do
-      description "List the actor's notifications, newest first; optionally scoped to a revision."
+      description "List the actor's notifications, newest first, filtered by read state, type, search and revision."
 
       argument :channel_revision_id, :integer
+      argument :unread_only, :boolean, default: false
+      argument :types, {:array, :atom}
+      argument :search, :ci_string
+
+      pagination do
+        offset? true
+        countable true
+        required? false
+        default_limit 25
+      end
 
       prepare build(
-                sort: [occurred_at: :desc],
+                sort: [occurred_at: :desc, id: :desc],
                 load: [
                   :package,
                   :channel,
@@ -89,7 +99,25 @@ defmodule Tracker.Notifications.Notification do
                  channel_revision_id == ^arg(:channel_revision_id)
                else
                  true
-               end
+               end and
+                 if ^arg(:unread_only) do
+                   is_nil(read_at)
+                 else
+                   true
+                 end and
+                 if not is_nil(^arg(:types)) do
+                   type in ^arg(:types)
+                 else
+                   true
+                 end and
+                 if not is_nil(^arg(:search)) and ^arg(:search) != "" do
+                   contains(package.attribute, ^arg(:search)) or
+                     contains(channel.name, ^arg(:search)) or
+                     contains(change.title, ^arg(:search)) or
+                     contains(change_branch.branch_name, ^arg(:search))
+                 else
+                   true
+                 end
              )
     end
 

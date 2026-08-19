@@ -26,6 +26,27 @@ defmodule TrackerWeb.InboxLive.IndexTest do
     )
   end
 
+  defp notifications!(user, count) do
+    chan = channel!()
+    rev = channel_revision!(chan)
+
+    rows =
+      for i <- 1..count do
+        %{
+          user_id: user.id,
+          type: :channel_revision_published,
+          channel_id: chan.id,
+          channel_revision_id: rev.id,
+          occurred_at: DateTime.add(~U[2024-01-01 00:00:00Z], i, :minute),
+          dedup_key: "dk-#{System.unique_integer([:positive])}"
+        }
+      end
+
+    :ok = Notification.fanout(rows)
+
+    Notification.for_user!(actor: user)
+  end
+
   test "redirects a logged-out visitor to sign in", %{conn: conn} do
     assert {:error, {:redirect, %{to: "/sign-in"}}} = live(conn, ~p"/inbox")
   end
@@ -591,6 +612,130 @@ defmodule TrackerWeb.InboxLive.IndexTest do
       assert has_element?(view, "#notification-#{firefox.id}")
       refute has_element?(view, "#notification-#{vim.id}")
       assert has_element?(view, "#page-search-input[value='firefox']")
+    end
+  end
+
+  describe "pagination" do
+    test "shows 25 notifications a page with controls to the next", %{conn: conn} do
+      user = register_user!()
+      [newest | _] = all = notifications!(user, 30)
+      twenty_sixth = Enum.at(all, 25)
+      conn = log_in(conn, user)
+
+      {:ok, view, _html} = live(conn, ~p"/inbox")
+
+      assert has_element?(view, "#notification-#{newest.id}")
+      refute has_element?(view, "#notification-#{twenty_sixth.id}")
+      assert view |> render() =~ "Page 1 of 2"
+
+      {:ok, view, _html} = live(conn, ~p"/inbox?page=2")
+
+      refute has_element?(view, "#notification-#{newest.id}")
+      assert has_element?(view, "#notification-#{twenty_sixth.id}")
+      assert view |> render() =~ "Page 2 of 2"
+    end
+
+    test "the segment and chip counts cover every page", %{conn: conn} do
+      user = register_user!()
+      notifications!(user, 30)
+      conn = log_in(conn, user)
+
+      {:ok, view, _html} = live(conn, ~p"/inbox")
+
+      assert view |> element("#filter-unread .n") |> render() =~ ">30<"
+      assert view |> element("#filter-all .n") |> render() =~ ">30<"
+
+      assert view |> element("#filter-type-channel_revision_published .n") |> render() =~ ">30<"
+    end
+
+    test "search reaches notifications on later pages", %{conn: conn} do
+      user = register_user!()
+      notifications!(user, 30)
+      pkg = package!("firefox-#{System.unique_integer([:positive])}")
+      chan = channel!()
+
+      firefox =
+        notification!(user, %{
+          type: :package_added,
+          package_id: pkg.id,
+          channel_id: chan.id,
+          occurred_at: ~U[2023-01-01 00:00:00Z]
+        })
+
+      conn = log_in(conn, user)
+
+      {:ok, view, _html} = live(conn, ~p"/inbox")
+      refute has_element?(view, "#notification-#{firefox.id}")
+
+      view |> element("#page-search") |> render_change(%{"search" => "FIRE"})
+
+      assert has_element?(view, "#notification-#{firefox.id}")
+    end
+
+    test "a type filter reaches notifications on later pages", %{conn: conn} do
+      user = register_user!()
+      notifications!(user, 30)
+      chan = channel!()
+
+      added =
+        notification!(user, %{
+          type: :package_added,
+          package_id: package!().id,
+          channel_id: chan.id,
+          occurred_at: ~U[2023-01-01 00:00:00Z]
+        })
+
+      conn = log_in(conn, user)
+
+      {:ok, view, _html} = live(conn, ~p"/inbox")
+      refute has_element?(view, "#notification-#{added.id}")
+
+      view |> element("#filter-type-package_added") |> render_click()
+
+      assert has_element?(view, "#notification-#{added.id}")
+    end
+
+    test "changing a filter returns to the first page", %{conn: conn} do
+      user = register_user!()
+      [newest | _] = notifications!(user, 30)
+      conn = log_in(conn, user)
+
+      {:ok, view, _html} = live(conn, ~p"/inbox?page=2")
+      refute has_element?(view, "#notification-#{newest.id}")
+
+      view |> element("#filter-all") |> render_click()
+
+      assert has_element?(view, "#notification-#{newest.id}")
+      assert render(view) =~ "Page 1 of 2"
+    end
+
+    test "mark all read clears notifications beyond the current page", %{conn: conn} do
+      user = register_user!()
+      notifications!(user, 30)
+      conn = log_in(conn, user)
+
+      {:ok, view, _html} = live(conn, ~p"/inbox")
+
+      view |> element("#mark-all-read") |> render_click()
+
+      assert has_element?(view, "#mark-all-read[disabled]")
+      assert view |> element("#filter-unread .n") |> render() =~ ">0<"
+      assert [] = Notification.for_user!(%{unread_only: true}, actor: user)
+    end
+
+    test "the search form carries the segment but resets the page", %{conn: conn} do
+      user = register_user!()
+      notifications!(user, 30)
+      conn = log_in(conn, user)
+
+      {:ok, view, _html} = live(conn, ~p"/inbox?filter=all&page=2")
+
+      assert has_element?(
+               view,
+               ~s{form#page-search input[type="hidden"][name="filter"][value="all"]}
+             )
+
+      refute has_element?(view, ~s{form#page-search input[type="hidden"][name="page"]})
     end
   end
 end
