@@ -49,6 +49,36 @@ document.addEventListener("keydown", (event) => {
   event.target.blur()
 })
 
+// The × clears by navigating, which destroys the input, so the intent to focus
+// has to outlive the trip. Park it in sessionStorage and pick it up on the far
+// side, which covers both the live nav and the full reload an opted-out page
+// takes. A modifier click opens the × in another tab and leaves this one where
+// it is, so it must not set the flag: nothing here would ever spend it.
+const CLEARED_SEARCH = "tracker:cleared-search"
+
+document.addEventListener("click", (event) => {
+  if (event.button !== 0) return
+  if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return
+  if (!event.target.closest?.(".app-search__clear")) return
+
+  sessionStorage.setItem(CLEARED_SEARCH, "1")
+})
+
+// The live nav stops page loading twice, first with the header torn out and
+// then with the rebuilt one, so hold the flag until the input is back.
+function focusClearedSearch() {
+  if (!sessionStorage.getItem(CLEARED_SEARCH)) return
+
+  let input = document.getElementById("page-search-input")
+  if (!input) return
+
+  sessionStorage.removeItem(CLEARED_SEARCH)
+  input.focus()
+}
+
+focusClearedSearch()
+window.addEventListener("phx:page-loading-stop", focusClearedSearch)
+
 // "#" is Shift+3 on most layouts, so match the character rather than the key
 // position, and keep it out of the row-navigation listener below, whose
 // shiftKey guard would reject it. Focus only: .focus() cannot pop a native
