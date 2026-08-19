@@ -215,6 +215,7 @@ defmodule TrackerWeb.InboxLive.Index do
   defp search_match?(n, version_changes, query) do
     [
       NotificationPresenter.hero(n, version_changes),
+      n.package && n.package.attribute,
       n.channel && n.channel.name,
       n.change_branch && n.change_branch.branch_name
     ]
@@ -388,6 +389,13 @@ defmodule TrackerWeb.InboxLive.Index do
           <.link :if={@n.change} navigate={@path} class="ibx-tag ibx-tag--pr">
             PR <span class="hash">#{@n.change.number}</span>
           </.link>
+          <.link
+            :if={@n.change && @n.package}
+            navigate={~p"/packages/#{@n.package.attribute}"}
+            class="ibx-tag ibx-tag--package"
+          >
+            {@n.package.attribute}
+          </.link>
           <span :if={@n.channel} class="ibx-tag">
             <span class="dot"></span>{@n.channel.name}
           </span>
@@ -419,7 +427,10 @@ defmodule TrackerWeb.InboxLive.Index do
     """
   end
 
-  defp hero_class(:change_propagated), do: "ibx-title"
+  defp hero_class(type)
+       when type in [:change_propagated, :package_change_opened, :package_change_merged],
+       do: "ibx-title"
+
   defp hero_class(_type), do: "ibx-attr"
 
   attr :name, :string, required: true

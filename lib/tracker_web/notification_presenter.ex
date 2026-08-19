@@ -117,12 +117,13 @@ defmodule TrackerWeb.NotificationPresenter do
   @doc """
   The row's leading identifier: the package attribute (with its version
   bump when resolved via `version_changes/1`), the short revision hash,
-  or — for propagations — the change title rendered verbatim (titles
-  are free-form; never parsed for versions).
+  or — for the change-backed types — the change title rendered verbatim
+  (titles are free-form; never parsed for versions).
   """
   def hero(n, version_changes \\ %{})
 
-  def hero(%{type: :change_propagated} = n, _version_changes) do
+  def hero(%{type: type} = n, _version_changes)
+      when type in [:change_propagated, :package_change_opened, :package_change_merged] do
     change_title(n) || "PR ##{change_number(n)}"
   end
 

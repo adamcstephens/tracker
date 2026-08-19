@@ -241,6 +241,30 @@ defmodule TrackerWeb.InboxLive.IndexTest do
     assert has_element?(view, "#notification-#{revision.id}")
   end
 
+  test "a PR notification leads with the change title and tags the package", %{conn: conn} do
+    user = register_user!()
+    pkg = package!("ripgrep")
+    chan = channel!()
+    change = change!(nil, %{state: :open, title: "ripgrep: 14.1.0 -> 14.1.1"})
+
+    n =
+      notification!(user, %{
+        type: :package_change_opened,
+        package_id: pkg.id,
+        channel_id: chan.id,
+        change_id: change.id
+      })
+
+    conn = log_in(conn, user)
+
+    {:ok, _view, html} = live(conn, ~p"/inbox")
+
+    [row] = html |> Floki.parse_document!() |> Floki.find("#notification-#{n.id}")
+
+    assert row |> Floki.find(".row-label .ibx-title") |> Floki.text() =~ change.title
+    assert row |> Floki.find(".row-sublabel .ibx-tag--package") |> Floki.text() =~ pkg.attribute
+  end
+
   test "shows the version bump for package_version_changed notifications", %{conn: conn} do
     user = register_user!()
     pkg = package!()
@@ -513,6 +537,29 @@ defmodule TrackerWeb.InboxLive.IndexTest do
       {:ok, view, _html} = live(conn, ~p"/inbox")
 
       view |> element("#page-search") |> render_change(%{"search" => chan.name})
+      assert has_element?(view, "#notification-#{n.id}")
+
+      view |> element("#page-search") |> render_change(%{"search" => "nomatch"})
+      refute has_element?(view, "#notification-#{n.id}")
+    end
+
+    test "search matches the package attribute on a PR notification", %{conn: conn} do
+      user = register_user!()
+      pkg = package!("firefox-#{System.unique_integer([:positive])}")
+      change = change!(nil, %{state: :open, title: "no package name here"})
+
+      n =
+        notification!(user, %{
+          type: :package_change_opened,
+          package_id: pkg.id,
+          change_id: change.id
+        })
+
+      conn = log_in(conn, user)
+
+      {:ok, view, _html} = live(conn, ~p"/inbox")
+
+      view |> element("#page-search") |> render_change(%{"search" => "FIRE"})
       assert has_element?(view, "#notification-#{n.id}")
 
       view |> element("#page-search") |> render_change(%{"search" => "nomatch"})

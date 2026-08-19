@@ -3487,6 +3487,11 @@ a.revision-link {
 	color: var(--text-3);
 }
 
+.ibx-tag--package {
+	color: var(--text);
+	font-weight: 600;
+}
+
 .ibx-tag--reached {
 	font-family: var(--sans);
 }

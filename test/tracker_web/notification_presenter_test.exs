@@ -84,7 +84,6 @@ defmodule TrackerWeb.NotificationPresenterTest do
     assert text =~ "PR ##{change.number}"
     assert text =~ "opened against master"
     assert text =~ "touching #{pkg.attribute}"
-    assert NotificationPresenter.hero(n) == pkg.attribute
     assert NotificationPresenter.path(n) == "/changes/#{change.number}"
   end
 
@@ -147,6 +146,39 @@ defmodule TrackerWeb.NotificationPresenterTest do
         })
 
       assert NotificationPresenter.hero(n) == change.title
+    end
+
+    test "change notifications lead with the change title" do
+      pkg = package!("ripgrep")
+
+      for type <- [:package_change_opened, :package_change_merged] do
+        user = register_user!()
+        change = change!()
+
+        n =
+          loaded_notification!(user, %{
+            type: type,
+            package_id: pkg.id,
+            change_id: change.id
+          })
+
+        assert NotificationPresenter.hero(n) == change.title
+      end
+    end
+
+    test "change notifications without a title fall back to the PR number" do
+      user = register_user!()
+      pkg = package!("vlc")
+      change = change!(nil, %{title: ""})
+
+      n =
+        loaded_notification!(user, %{
+          type: :package_change_opened,
+          package_id: pkg.id,
+          change_id: change.id
+        })
+
+      assert NotificationPresenter.hero(n) == "PR ##{change.number}"
     end
   end
 
