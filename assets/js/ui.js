@@ -24,6 +24,7 @@ document.addEventListener("keydown", (event) => {
   if (event.key !== "/") return
   if (event.ctrlKey || event.metaKey || event.altKey) return
   if (isEditable(event.target)) return
+  if (document.querySelector("dialog[open]")) return
 
   let input = document.getElementById("page-search-input")
   if (!input) return
