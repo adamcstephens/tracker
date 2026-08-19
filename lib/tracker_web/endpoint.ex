@@ -36,7 +36,7 @@ defmodule TrackerWeb.Endpoint do
     only: ["github_light.css", "onedark.css"]
 
   if Mix.env() == :dev do
-    plug Tidewave
+    plug Tidewave, toolbar: false
   end
 
   # Code reloading can be explicitly enabled under the
