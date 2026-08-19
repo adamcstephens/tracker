@@ -5,9 +5,9 @@ defmodule TrackerWeb.PlaywrightCase do
 
   use ExUnit.CaseTemplate
 
-  using do
+  using opts do
     quote do
-      use PhoenixTest.Playwright.Case, async: false
+      use PhoenixTest.Playwright.Case, unquote([{:async, false} | opts])
 
       use TrackerWeb, :verified_routes
 
