@@ -204,4 +204,71 @@ defmodule Tracker.Notifications.ChangeSubscriptionTest do
       assert [_only] = ChangeSubscription.for_user!(actor: user)
     end
   end
+
+  describe "propagated? calculation" do
+    test "any-branch subscription is propagated once every terminal channel is reached" do
+      user = register_user!()
+      change = change!()
+      sub = ChangeSubscription.subscribe!(change.id, nil, actor: user)
+
+      for branch <- ["master", "nixos-unstable-small", "nixpkgs-unstable"],
+          do: change_branch!(change, branch)
+
+      refute load_propagated?(sub, user)
+
+      change_branch!(change, "nixos-unstable")
+
+      assert load_propagated?(sub, user)
+    end
+
+    test "channel-scoped subscription is propagated once that channel is reached" do
+      user = register_user!()
+      channel = channel!()
+      change = change!(nil, %{base_ref: "release-#{release_version(channel.name)}"})
+      sub = ChangeSubscription.subscribe!(change.id, channel.id, actor: user)
+
+      refute load_propagated?(sub, user)
+
+      change_branch!(change, channel.name)
+
+      assert load_propagated?(sub, user)
+    end
+
+    test "a channel-scoped subscription ignores channels it is not scoped to" do
+      user = register_user!()
+      channel = channel!()
+      change = change!()
+      sub = ChangeSubscription.subscribe!(change.id, channel.id, actor: user)
+
+      change_branch!(change, "nixos-unstable")
+
+      refute load_propagated?(sub, user)
+    end
+
+    test "loads across a list of subscriptions" do
+      user = register_user!()
+      propagated = change!()
+      pending = change!()
+
+      for branch <- ["master", "nixos-unstable", "nixos-unstable-small", "nixpkgs-unstable"],
+          do: change_branch!(propagated, branch)
+
+      ChangeSubscription.subscribe!(propagated.id, nil, actor: user)
+      ChangeSubscription.subscribe!(pending.id, nil, actor: user)
+
+      subs = ChangeSubscription.for_user!(actor: user, load: [:change, :propagated?])
+
+      assert %{propagated.number => true, pending.number => false} ==
+               Map.new(subs, &{&1.change.number, &1.propagated?})
+    end
+  end
+
+  defp load_propagated?(sub, user) do
+    sub |> Ash.load!(:propagated?, actor: user) |> Map.fetch!(:propagated?)
+  end
+
+  defp release_version(channel_name) do
+    "nixos-" <> version = channel_name
+    version
+  end
 end

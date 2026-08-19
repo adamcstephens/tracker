@@ -131,6 +131,34 @@ defmodule TrackerWeb.InboxLive.SubscriptionsTest do
            )
   end
 
+  test "marks a fully propagated change subscription", %{conn: conn} do
+    user = register_user!()
+    change = change!()
+
+    for branch <- ["master", "nixos-unstable", "nixos-unstable-small", "nixpkgs-unstable"],
+        do: change_branch!(change, branch)
+
+    sub = ChangeSubscription.subscribe!(change.id, nil, actor: user)
+    conn = log_in(conn, user)
+
+    {:ok, view, _html} = live(conn, ~p"/inbox/subscriptions")
+
+    assert has_element?(view, "#change-subscription-#{sub.id} .pill-landed", "propagated")
+  end
+
+  test "does not mark a change subscription still in flight", %{conn: conn} do
+    user = register_user!()
+    change = change!()
+    change_branch!(change, "master")
+    sub = ChangeSubscription.subscribe!(change.id, nil, actor: user)
+    conn = log_in(conn, user)
+
+    {:ok, view, _html} = live(conn, ~p"/inbox/subscriptions")
+
+    assert has_element?(view, "#change-subscription-#{sub.id}")
+    refute has_element?(view, "#change-subscription-#{sub.id} .pill-landed")
+  end
+
   test "does not show another user's subscriptions", %{conn: conn} do
     user = register_user!()
     other = register_user!()

@@ -276,4 +276,41 @@ defmodule Tracker.Nixpkgs.PropagationTest do
       assert Propagation.lifecycle(nil, []) == %Dag{nodes: [], edges: []}
     end
   end
+
+  describe "complete?/2" do
+    @master_covered ["master", "nixos-unstable", "nixos-unstable-small", "nixpkgs-unstable"]
+
+    test "true when every terminal channel and the base ref are present" do
+      assert Propagation.complete?("master", @master_covered)
+    end
+
+    test "false when a terminal channel is missing" do
+      refute Propagation.complete?("master", @master_covered -- ["nixos-unstable"])
+    end
+
+    test "false when the base ref itself is missing" do
+      refute Propagation.complete?("master", @master_covered -- ["master"])
+    end
+
+    test "intermediate branches are not required" do
+      assert Propagation.complete?("staging", ["staging" | @master_covered])
+    end
+
+    test "release lines only require their own channels" do
+      assert Propagation.complete?("release-25.11", [
+               "release-25.11",
+               "nixos-25.11",
+               "nixos-25.11-small",
+               "nixpkgs-25.11-darwin"
+             ])
+    end
+
+    test "false for an unknown base ref" do
+      refute Propagation.complete?("not-a-branch", ["not-a-branch"])
+    end
+
+    test "false for a nil base ref" do
+      refute Propagation.complete?(nil, [])
+    end
+  end
 end

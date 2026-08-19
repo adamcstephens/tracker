@@ -123,18 +123,14 @@ defmodule Tracker.Nixpkgs.ChangeBranchDetectionWorker do
   end
 
   defp pending_branches(change) do
-    if Propagation.valid_branch?(change.base_ref) do
-      recorded = MapSet.new(change.change_branches, & &1.branch_name)
-      covered = MapSet.new([change.base_ref | Propagation.terminal_channels(change.base_ref)])
+    recorded = Enum.map(change.change_branches, & &1.branch_name)
 
-      if MapSet.subset?(covered, recorded) do
-        []
-      else
-        [change.base_ref | Propagation.downstream(change.base_ref)]
-        |> Enum.reject(&(Propagation.kind(&1) == :channel))
-        |> Enum.reject(&MapSet.member?(recorded, &1))
-        |> Enum.map(&{change, &1})
-      end
+    if Propagation.valid_branch?(change.base_ref) and
+         not Propagation.complete?(change.base_ref, recorded) do
+      [change.base_ref | Propagation.downstream(change.base_ref)]
+      |> Enum.reject(&(Propagation.kind(&1) == :channel))
+      |> Enum.reject(&(&1 in recorded))
+      |> Enum.map(&{change, &1})
     else
       []
     end

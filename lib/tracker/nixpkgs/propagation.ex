@@ -82,6 +82,21 @@ defmodule Tracker.Nixpkgs.Propagation do
   end
 
   @doc """
+  Returns true when `present_branches` covers `base_ref` and every terminal
+  channel reachable from it — the change has finished propagating.
+  """
+  @spec complete?(String.t() | nil, [String.t()]) :: boolean()
+  def complete?(base_ref, present_branches) when is_binary(base_ref) do
+    valid_branch?(base_ref) and
+      MapSet.subset?(
+        MapSet.new([base_ref | terminal_channels(base_ref)]),
+        MapSet.new(present_branches)
+      )
+  end
+
+  def complete?(nil, _present_branches), do: false
+
+  @doc """
   Returns the set of branches that propagate into `name`, excluding `name`
   itself.
 

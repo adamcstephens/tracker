@@ -98,6 +98,35 @@ defmodule Tracker.Notifications.ChangeSubscription do
     belongs_to :channel, Tracker.Nixpkgs.Channel, attribute_type: :integer
   end
 
+  calculations do
+    calculate :propagated?, :boolean, __MODULE__.Propagated do
+      load channel: [:name], change: [:base_ref, change_branches: [:branch_name]]
+    end
+  end
+
+  defmodule Propagated do
+    @moduledoc """
+    Whether a subscription's target has been reached, relative to its scope: a
+    channel-scoped subscription once the change is present on that channel, an
+    any-branch subscription once the change has propagated everywhere.
+    """
+    use Ash.Resource.Calculation
+
+    alias Tracker.Nixpkgs.Propagation
+
+    @impl true
+    def calculate(subscriptions, _opts, _context) do
+      Enum.map(subscriptions, fn sub ->
+        branches = Enum.map(sub.change.change_branches, & &1.branch_name)
+
+        case sub.channel do
+          nil -> Propagation.complete?(sub.change.base_ref, branches)
+          channel -> channel.name in branches
+        end
+      end)
+    end
+  end
+
   identities do
     identity :unique_change_subscription, [:user_id, :change_id, :channel_id] do
       nils_distinct? false

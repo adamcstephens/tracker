@@ -30,7 +30,10 @@ defmodule TrackerWeb.InboxLive.Subscriptions do
        PackageSubscription.for_user!(actor: user, load: [:package, :channel])
      )
      |> assign(:channel_subs, ChannelSubscription.for_user!(actor: user, load: [:channel]))
-     |> assign(:change_subs, ChangeSubscription.for_user!(actor: user, load: [:change, :channel]))
+     |> assign(
+       :change_subs,
+       ChangeSubscription.for_user!(actor: user, load: [:change, :channel, :propagated?])
+     )
      |> assign(:now, DateTime.utc_now())}
   end
 
@@ -171,6 +174,7 @@ defmodule TrackerWeb.InboxLive.Subscriptions do
           path={~p"/changes/#{sub.change.number}"}
           label={"##{sub.change.number} #{sub.change.title}"}
           scope={(sub.channel && sub.channel.name) || "Any branch"}
+          propagated?={sub.propagated?}
           at={sub.inserted_at}
           now={@now}
         />
@@ -203,6 +207,7 @@ defmodule TrackerWeb.InboxLive.Subscriptions do
   attr :label, :string, required: true
   attr :scope, :string, default: nil
   attr :events, :list, default: []
+  attr :propagated?, :boolean, default: false
   attr :at, :any, required: true
   attr :now, :any, required: true
 
@@ -219,6 +224,9 @@ defmodule TrackerWeb.InboxLive.Subscriptions do
       <:label>{@label}</:label>
       <:sublabel>
         <span :if={@scope} class="ibx-tag"><span class="dot"></span>{@scope}</span>
+        <span :if={@propagated?} class="pill pill-landed">
+          <span class="dot" aria-hidden="true"></span>propagated
+        </span>
         <span
           :for={event <- ordered_events(@events)}
           class="ibx-tag"
