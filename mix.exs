@@ -71,6 +71,7 @@ defmodule Tracker.MixProject do
       {:phoenix_live_dashboard, "~> 0.9.0"},
       {:phoenix_live_reload, "~> 1.2", only: :dev},
       {:phoenix_live_view, "~> 1.1"},
+      {:phoenix_test_playwright, "~> 0.15", only: :test, runtime: false},
       {:picosat_elixir, "~> 0.2"},
       {:postgrex, ">= 0.0.0"},
       {:req, "~> 0.6"},

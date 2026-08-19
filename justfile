@@ -35,6 +35,10 @@ mix-nix-lock:
 test:
     mix test
 
+test-browser:
+    mix assets.build
+    mix test --only playwright
+
 update-deps: update-elixir update-rust
 
 update-elixir:

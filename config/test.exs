@@ -15,12 +15,21 @@ config :tracker, Tracker.Repo,
   pool: Ecto.Adapters.SQL.Sandbox,
   pool_size: System.schedulers_online() * 2
 
-# We don't run a server during test. If one is required,
-# you can enable the server option below.
 config :tracker, TrackerWeb.Endpoint,
   http: [ip: {127, 0, 0, 1}, port: 4002],
   secret_key_base: "WqdxLnwcONLhSyGcqDcDTUU8CcoSD35IqOWwEuVbRCc1jR8Ph4S+fsMDXi0ExrsD",
-  server: false
+  server: true
+
+config :tracker, sql_sandbox: true
+
+config :phoenix_test,
+  otp_app: :tracker,
+  playwright: [
+    assets_dir: System.get_env("PLAYWRIGHT_ASSETS_DIR", "./assets"),
+    headless: true,
+    trace: false,
+    timeout: to_timeout(second: 2)
+  ]
 
 # In test we don't send emails
 config :tracker, Tracker.Mailer, adapter: Swoosh.Adapters.Test

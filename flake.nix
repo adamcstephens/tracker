@@ -36,6 +36,11 @@
               elixir = prev.elixir_1_20;
             }
           );
+
+          playwrightAssets = pkgs.runCommand "playwright-assets" { } ''
+            mkdir -p $out/node_modules
+            ln -s ${pkgs.playwright-driver} $out/node_modules/playwright
+          '';
         in
         {
           devShells = {
@@ -68,6 +73,9 @@
 
               env = {
                 ESBUILD_PATH = lib.getExe pkgs.esbuild;
+                PLAYWRIGHT_ASSETS_DIR = "${playwrightAssets}";
+                PLAYWRIGHT_BROWSERS_PATH = "${pkgs.playwright-driver.browsers}";
+                PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1";
                 # PGBINOLD = "${pkgs.postgresql_17}/bin";
                 # PGDATAOLD = ".services/postgres/data/17";
                 # PGDATANEW = ".services/postgres/data/18";

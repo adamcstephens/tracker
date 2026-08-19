@@ -62,6 +62,11 @@ defmodule TrackerWeb.Endpoint do
 
   plug Plug.MethodOverride
   plug Plug.Head
+
+  if Application.compile_env(:tracker, :sql_sandbox, false) do
+    plug Phoenix.Ecto.SQL.Sandbox
+  end
+
   plug Plug.Session, @session_options
   plug TrackerWeb.Router
 end

@@ -1564,6 +1564,57 @@ let
         in
         drv;
 
+      phoenix_test =
+        let
+          version = "0.12.1";
+          drv = buildMix {
+            inherit version;
+            name = "phoenix_test";
+
+            src = fetchHex {
+              inherit version;
+              pkg = "phoenix_test";
+              sha256 = "bb8e6ef31a0fbd24e3ac3c972f88949b6f5f5d0816ae9a98a6fc0d423094195f";
+            };
+
+            beamDeps = [
+              jason
+              lazy_html
+              mime
+              phoenix
+              phoenix_html
+              phoenix_live_view
+            ];
+          };
+        in
+        drv;
+
+      phoenix_test_playwright =
+        let
+          version = "0.15.0";
+          drv = buildMix {
+            inherit version;
+            name = "phoenix_test_playwright";
+
+            src = fetchHex {
+              inherit version;
+              pkg = "phoenix_test_playwright";
+              sha256 = "d3c4ef7a182efe4590baf6ee9ecefd382e0b29565b78b99399fd944ed15132ad";
+            };
+
+            beamDeps = [
+              ecto_sql
+              nimble_options
+              phoenix
+              phoenix_ecto
+              phoenix_live_view
+              phoenix_test
+              playwright_ex
+            ];
+          };
+        in
+        drv;
+
       phoenix_view =
         let
           version = "2.0.4";
@@ -1604,6 +1655,26 @@ let
           };
         in
         drv.override (workarounds.elixirMake { } drv);
+
+      playwright_ex =
+        let
+          version = "0.7.1";
+          drv = buildMix {
+            inherit version;
+            name = "playwright_ex";
+
+            src = fetchHex {
+              inherit version;
+              pkg = "playwright_ex";
+              sha256 = "558176309cf322b8ba5c4f85ec6c655c1667cd68531db83d1d3065bd572755c2";
+            };
+
+            beamDeps = [
+              nimble_options
+            ];
+          };
+        in
+        drv;
 
       plug =
         let
