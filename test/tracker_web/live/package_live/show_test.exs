@@ -95,7 +95,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
          }}
       ])
 
-      %{channel_meta: channel_meta}
+      %{channel_meta: channel_meta, cr_meta: cr_meta}
     end
 
     test "the position link targets the lens channel span's revision", %{
@@ -140,14 +140,72 @@ defmodule TrackerWeb.PackageLive.ShowTest do
       refute html =~ "Stable-channel description"
     end
 
-    test "falls back to the metadata channel when the lens channel span has no metadata", %{
+    test "a metadata-less lens channel span does not borrow the metadata channel", %{
       conn: conn,
       package: package
     } do
       {:ok, _view, html} =
         live(conn, ~p"/packages/#{package.attribute}?channel=nixos-25.67")
 
-      assert html =~ "Meta-channel description"
+      refute html =~ "Meta-channel description"
+    end
+
+    test "a package absent from the lens channel shows no metadata and says so", %{
+      conn: conn,
+      cr_meta: cr_meta
+    } do
+      absent = Tracker.Fixtures.package!("pkgshow-absent")
+
+      Tracker.Fixtures.apply_package_revision!(cr_meta, [
+        {absent, %{version: "1.0", description: "Meta-only description"}}
+      ])
+
+      {:ok, _view, html} = live(conn, ~p"/packages/#{absent.attribute}?channel=nixos-24.66")
+
+      refute html =~ "Meta-only description"
+      assert html =~ "not in nixos-24.66"
+    end
+
+    test "the absent pill states the pin when the lens carries one", %{
+      conn: conn,
+      cr_meta: cr_meta
+    } do
+      absent = Tracker.Fixtures.package!("pkgshow-absent-pinned")
+
+      Tracker.Fixtures.apply_package_revision!(cr_meta, [
+        {absent, %{version: "1.0", description: "Meta-only description"}}
+      ])
+
+      {:ok, _view, html} =
+        live(conn, ~p"/packages/#{absent.attribute}?channel=nixos-24.66&rev=stab111ccc222333")
+
+      assert html =~ "not in nixos-24.66 at this revision"
+    end
+
+    test "a package removed from the lens channel keeps the removed pill alone", %{
+      conn: conn,
+      channel_stable: channel_stable,
+      cr2: cr2
+    } do
+      gone = Tracker.Fixtures.package!("pkgshow-gone")
+
+      Tracker.Fixtures.apply_package_revision!(cr2, [
+        {gone, %{version: "1.0", description: "Stable description"}}
+      ])
+
+      cr_gone =
+        Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
+          channel_id: channel_stable.id,
+          revision: "gone111ddd222333",
+          released_at: ~U[2026-03-20 10:00:00Z]
+        })
+
+      Tracker.Fixtures.remove_package!(cr_gone, gone)
+
+      {:ok, _view, html} = live(conn, ~p"/packages/#{gone.attribute}?channel=nixos-24.66")
+
+      assert html =~ "Removed from nixos-24.66 at gone111"
+      refute html =~ "not in nixos-24.66"
     end
 
     test "a lens switch reloads metadata", %{
