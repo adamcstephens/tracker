@@ -2375,9 +2375,17 @@ a.revision-link {
 		gap: 0.625rem;
 	}
 
+	/* Search and lens sit at the same 2.5rem height as the avatar and bell
+	   that share their rows. */
 	.app-search {
 		flex: 1;
 		min-width: 0;
+		height: 2.5rem;
+	}
+
+	.app-search__field {
+		padding-top: 0;
+		padding-bottom: 0;
 	}
 
 	.app-search__hint {
@@ -2462,9 +2470,14 @@ a.revision-link {
 		border-color: var(--ibx-line);
 	}
 
+	.lens {
+		flex: 1;
+	}
+
 	.lens__form {
 		display: flex;
 		width: 100%;
+		min-height: 2.5rem;
 	}
 
 	/* The label doesn't fit alongside the revision display; the dot +
