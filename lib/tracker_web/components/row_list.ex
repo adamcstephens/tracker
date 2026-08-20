@@ -27,7 +27,15 @@ defmodule TrackerWeb.RowList do
   Every row in a list is the same height, so paging a list doesn't move the
   controls underneath it. The CSS does this in two parts: a `:sublabel` is
   held to a single line and fades out where it overflows, and a row without
-  one still reserves the line, in any list where some row has a sublabel.
+  one still reserves the line — but only where the caller passes
+  `reserve_sublabel` to `row_list/1`.
+
+  That flag is why the reserve is declared rather than derived from the rows
+  on screen. Reserving wherever a rendered row happens to carry a sublabel
+  reads the data, not the list, and a paginated list changes its data: a page
+  of packages that all lack a description would reserve nothing and come out
+  a third of a screen shorter than its neighbours. A list declares once that
+  its sublabel is optional, and every page of it is the same height.
 
   A `:label` is exempt — it can wrap, and a wrapped label does make its row
   taller. It names the row, so truncating it would cost more than the drift
@@ -54,20 +62,27 @@ defmodule TrackerWeb.RowList do
     default: false,
     doc: "drop meta and actions onto their own line on narrow screens"
 
+  attr :reserve_sublabel, :boolean,
+    default: false,
+    doc: "this list's rows carry a sublabel only sometimes — hold the line for the ones without"
+
   attr :rest, :global
 
   slot :inner_block, required: true
 
   def row_list(assigns) do
     ~H"""
-    <ul id={@id} class={row_list_class(@stacked)} {@rest}>
+    <ul id={@id} class={row_list_class(@stacked, @reserve_sublabel)} {@rest}>
       {render_slot(@inner_block)}
     </ul>
     """
   end
 
-  defp row_list_class(true), do: "row-list row-list--stacked"
-  defp row_list_class(false), do: "row-list"
+  defp row_list_class(stacked, reserve_sublabel) do
+    ["row-list", stacked && "row-list--stacked", reserve_sublabel && "row-list--reserve-sublabel"]
+    |> Enum.filter(& &1)
+    |> Enum.join(" ")
+  end
 
   @doc """
   Renders one row.

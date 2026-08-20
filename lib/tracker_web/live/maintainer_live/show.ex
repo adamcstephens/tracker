@@ -29,7 +29,7 @@ defmodule TrackerWeb.MaintainerLive.Show do
 
     <div :if={@maintainer.teams != []}>
       <SectionHeader.section_header title="Teams" count={length(@maintainer.teams)} />
-      <RowList.row_list id="maintainer-teams">
+      <RowList.row_list id="maintainer-teams" reserve_sublabel>
         <RowList.row
           :for={t <- @maintainer.teams}
           mode={:link}

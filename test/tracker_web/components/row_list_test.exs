@@ -39,6 +39,52 @@ defmodule TrackerWeb.RowListTest do
 
       assert html =~ ~s(class="row-list row-list--stacked")
     end
+
+    test "lists with optional sublabels reserve the line even when no row has one" do
+      assigns = %{}
+
+      html =
+        rendered_to_string(~H"""
+        <RowList.row_list id="things" reserve_sublabel>
+          <RowList.row mode={:plain}>
+            <:label>alpha</:label>
+          </RowList.row>
+        </RowList.row_list>
+        """)
+
+      assert html =~ ~s(class="row-list row-list--reserve-sublabel")
+      refute html =~ ~s(class="row-sublabel")
+    end
+
+    test "lists without optional sublabels do not reserve the line" do
+      assigns = %{}
+
+      html =
+        rendered_to_string(~H"""
+        <RowList.row_list id="things">
+          <RowList.row mode={:plain}>
+            <:label>alpha</:label>
+          </RowList.row>
+        </RowList.row_list>
+        """)
+
+      refute html =~ "row-list--reserve-sublabel"
+    end
+
+    test "stacked and reserve_sublabel compose" do
+      assigns = %{}
+
+      html =
+        rendered_to_string(~H"""
+        <RowList.row_list id="things" stacked reserve_sublabel>
+          <RowList.row mode={:plain}>
+            <:label>alpha</:label>
+          </RowList.row>
+        </RowList.row_list>
+        """)
+
+      assert html =~ ~s(class="row-list row-list--stacked row-list--reserve-sublabel")
+    end
   end
 
   # ui.js walks rows with this selector. Asserting it here keeps the markup and

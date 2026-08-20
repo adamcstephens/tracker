@@ -9,7 +9,7 @@ defmodule TrackerWeb.TeamLive.Index do
   @impl true
   def render(assigns) do
     ~H"""
-    <RowList.row_list id="teams" phx-update="stream">
+    <RowList.row_list id="teams" phx-update="stream" reserve_sublabel>
       <RowList.row
         :for={{dom_id, t} <- @streams.teams}
         id={dom_id}

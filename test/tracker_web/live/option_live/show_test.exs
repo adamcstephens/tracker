@@ -554,7 +554,7 @@ defmodule TrackerWeb.OptionLive.ShowTest do
     document = Floki.parse_document!(html)
     [list] = Floki.find(document, "#matching-options")
 
-    assert Floki.attribute(list, "class") == ["row-list"]
+    assert Floki.attribute(list, "class") == ["row-list row-list--reserve-sublabel"]
     assert Floki.find(document, "table") == []
 
     [row] = Floki.find(list, "li")

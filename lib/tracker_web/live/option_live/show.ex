@@ -82,7 +82,7 @@ defmodule TrackerWeb.OptionLive.Show do
 
       <section :if={@matches != []}>
         <SectionHeader.section_header title="Matching options" count={@match_count} />
-        <RowList.row_list id="matching-options">
+        <RowList.row_list id="matching-options" reserve_sublabel>
           <RowList.row
             :for={rev <- @matches}
             mode={:link}

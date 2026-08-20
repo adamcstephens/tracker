@@ -1133,10 +1133,11 @@ a.revision-link {
 }
 
 /* The other half of that: a row with no sublabel reserves the line anyway, so
-   it matches the rows around it. Only in lists that carry sublabels — rows
-   with one nest their label in .row-body, so a bare .row-label is a row
-   without. */
-.row-list:has(.row-sublabel) .row-line > .row-label::after {
+   it matches the rows around it. Only in lists that declare an optional
+   sublabel — keying off a sublabel being present on screen would make the
+   reserve depend on the rows a page happened to load. Rows with a sublabel
+   nest their label in .row-body, so a bare .row-label is a row without. */
+.row-list--reserve-sublabel .row-line > .row-label::after {
 	content: "";
 	display: block;
 	font-size: 0.75rem;

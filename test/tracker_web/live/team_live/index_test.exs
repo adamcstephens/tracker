@@ -32,7 +32,7 @@ defmodule TrackerWeb.TeamLive.IndexTest do
     document = Floki.parse_document!(html)
     [list] = Floki.find(document, "#teams")
 
-    assert Floki.attribute(list, "class") == ["row-list"]
+    assert Floki.attribute(list, "class") == ["row-list row-list--reserve-sublabel"]
     assert Floki.attribute(list, "phx-update") == ["stream"]
     assert Floki.find(document, "table") == []
 
