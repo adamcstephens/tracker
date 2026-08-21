@@ -115,6 +115,22 @@ document.addEventListener("keydown", (event) => {
   window.open(link.href, "_blank", "noopener")
 })
 
+// "u" climbs the options prefix tree. The pathbar names its own parent, so the
+// key and a crumb click agree on the target — lens and all — and a page with no
+// pathbar (the options root, everywhere else) has nowhere to go.
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "u") return
+  if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return
+  if (isEditable(event.target)) return
+  if (document.querySelector("dialog[open]")) return
+
+  let pathbar = document.querySelector("[data-parent-link]")
+  if (!pathbar) return
+
+  event.preventDefault()
+  window.location.assign(pathbar.dataset.parentLink)
+})
+
 // A row's focus target differs per mode: an anchor for :link, a summary for
 // :expandable, and the line itself for :plain.
 //

@@ -90,6 +90,18 @@ defmodule TrackerWeb.OptionLive.ShowTest do
     assert html =~ ~s(aria-current="page")
   end
 
+  test "path bar carries the parent prefix for the up-a-level shortcut", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/options/services.nginx")
+
+    assert html =~ ~s(data-parent-link="/options/services?)
+  end
+
+  test "the shallowest prefix points up at the options root", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/options/services")
+
+    assert html =~ ~s(data-parent-link="/options?)
+  end
+
   test "path bar has a copy button that copies the attribute path", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/options/services.nginx")
 

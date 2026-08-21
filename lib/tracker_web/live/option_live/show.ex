@@ -3,6 +3,7 @@ defmodule TrackerWeb.OptionLive.Show do
 
   import TrackerWeb.CodeHighlight
 
+  alias TrackerWeb.Lens
   alias TrackerWeb.PageSearch
   alias TrackerWeb.Pagination
   alias TrackerWeb.RowList
@@ -27,7 +28,12 @@ defmodule TrackerWeb.OptionLive.Show do
   def render(assigns) do
     ~H"""
     <div class="option-show">
-      <h1 :if={@prefix != ""} class="opt-pathbar" aria-label={@prefix}>
+      <h1
+        :if={@prefix != ""}
+        class="opt-pathbar"
+        aria-label={@prefix}
+        data-parent-link={parent_link(@parent_prefix)}
+      >
         <%= for {seg, cumulative, last?} <- crumbs(@prefix) do %>
           <.link :if={!last?} navigate={~p"/options/#{cumulative}"} class="crumb-link">
             {seg}
@@ -275,6 +281,9 @@ defmodule TrackerWeb.OptionLive.Show do
     </svg>
     """
   end
+
+  defp parent_link(nil), do: Lens.decorate(~p"/options")
+  defp parent_link(parent), do: Lens.decorate(~p"/options/#{parent}")
 
   defp crumbs(prefix) do
     segments = String.split(prefix, ".")
