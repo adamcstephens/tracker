@@ -90,16 +90,35 @@ defmodule TrackerWeb.OptionLive.ShowTest do
     assert html =~ ~s(aria-current="page")
   end
 
-  test "path bar carries the parent prefix for the up-a-level shortcut", %{conn: conn} do
+  test "path bar carries a parent link for the up-a-level shortcut", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/options/services.nginx")
 
-    assert html =~ ~s(data-parent-link="/options/services?)
+    assert [href] = parent_link_hrefs(html)
+    assert href =~ ~r|^/options/services\?|
   end
 
   test "the shallowest prefix points up at the options root", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/options/services")
 
-    assert html =~ ~s(data-parent-link="/options?)
+    assert [href] = parent_link_hrefs(html)
+    assert href =~ ~r|^/options\?|
+  end
+
+  # A live link, not a bare href: the shortcut clicks it, so pressing the key
+  # patches the page the way clicking a crumb does.
+  test "the parent link navigates live", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/options/services.nginx")
+
+    assert [_] =
+             html
+             |> Floki.parse_document!()
+             |> Floki.attribute(~s|a[data-parent-link][data-phx-link="redirect"]|, "href")
+  end
+
+  defp parent_link_hrefs(html) do
+    html
+    |> Floki.parse_document!()
+    |> Floki.attribute("a[data-parent-link]", "href")
   end
 
   test "path bar has a copy button that copies the attribute path", %{conn: conn} do

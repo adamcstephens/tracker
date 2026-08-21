@@ -42,7 +42,16 @@ defmodule TrackerWeb.Browser.OptionTreeTest do
 
     Tracker.Fixtures.load_options(@options, cr)
 
+    path = Path.join(System.tmp_dir!(), "dev-login-#{System.unique_integer([:positive])}.json")
+    Application.put_env(:tracker, :dev_login_file, path)
+    on_exit(fn -> File.rm(path) end)
+
     :ok
+  end
+
+  defp sign_in(conn) do
+    user = register_user!()
+    visit(conn, "/dev/login/#{Tracker.DevLogin.issue!(user.github_username)}")
   end
 
   defp read(conn, expression) do
@@ -81,6 +90,19 @@ defmodule TrackerWeb.Browser.OptionTreeTest do
 
     assert path(conn) == "/options/services"
     assert read(conn, "window.location.search") == "?channel=nixos-opttree"
+  end
+
+  test "u navigates live rather than reloading the page", %{conn: conn} do
+    conn =
+      conn
+      |> sign_in()
+      |> visit(~p"/options/services.nginx.virtualHosts")
+      |> evaluate("window.__survived = true")
+
+    press(conn, "body", "u")
+    assert_path(conn, "/options/services.nginx")
+
+    assert read(conn, "window.__survived") == true
   end
 
   test "u is inert at the options root", %{conn: conn} do
