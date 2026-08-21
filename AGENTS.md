@@ -9,8 +9,8 @@
   - Prefer no or very short commit body
   - Ticket ID in the body
   - Assisted-By line always included
-- *important* After committing, stop and get user approval for completion.
-- ticket marked complete once approved
+- ticket moved to in-review with a summary comment
+- stop for feedback and let the user move to Done
 
 ## Code conventions
 
