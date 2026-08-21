@@ -33,7 +33,7 @@ defmodule TrackerWeb.ChangeLive.Index do
       <button type="submit">Apply</button>
     </form>
 
-    <RowList.row_list id="changes" phx-update="stream" stacked>
+    <RowList.row_list id="changes" phx-update="stream" stacked reserve_meta>
       <RowList.row
         :for={{dom_id, change} <- @streams.changes}
         id={dom_id}
@@ -56,7 +56,7 @@ defmodule TrackerWeb.ChangeLive.Index do
             in {@lens_channel_name}
           </span>
         </:sublabel>
-        <:meta>{format_datetime(change.merged_at)}</:meta>
+        <:meta>{merged_on(change.merged_at)}</:meta>
         <:actions>
           <a
             href={change.url}
@@ -117,8 +117,8 @@ defmodule TrackerWeb.ChangeLive.Index do
     """
   end
 
-  defp format_datetime(nil), do: "-"
-  defp format_datetime(dt), do: Calendar.strftime(dt, "%Y-%m-%d %H:%M")
+  defp merged_on(nil), do: ""
+  defp merged_on(dt), do: "Merged on " <> Calendar.strftime(dt, "%Y-%m-%d %H:%M")
 
   @impl true
   def mount(_params, _session, socket) do

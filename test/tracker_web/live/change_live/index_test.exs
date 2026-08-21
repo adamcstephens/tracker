@@ -49,6 +49,25 @@ defmodule TrackerWeb.ChangeLive.IndexTest do
     assert Floki.find(doc, "#changes a.row-link a") == []
   end
 
+  test "labels the merged date and leaves unmerged changes without one", %{conn: conn} do
+    Tracker.Nixpkgs.Change.bulk_upsert_all([
+      %{
+        number: 5005,
+        title: "feat: still open",
+        state: :open,
+        author: "erin",
+        base_ref: "master",
+        url: "https://github.com/NixOS/nixpkgs/pull/5005"
+      }
+    ])
+
+    {:ok, _view, html} = live(conn, ~p"/changes")
+    metas = row_metas(html)
+
+    assert metas["#5001"] == "Merged on 2026-04-01 12:00"
+    assert metas["#5005"] == ""
+  end
+
   test "does not render an author column", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/changes")
 
@@ -296,6 +315,16 @@ defmodule TrackerWeb.ChangeLive.IndexTest do
   defp query_params(link) do
     [href] = Floki.attribute(link, "href")
     href |> URI.parse() |> Map.fetch!(:query) |> URI.decode_query()
+  end
+
+  defp row_metas(html) do
+    html
+    |> Floki.parse_document!()
+    |> Floki.find("#changes > li")
+    |> Map.new(fn li ->
+      {li |> Floki.find(".row-num") |> Floki.text() |> String.trim(),
+       li |> Floki.find(".row-meta") |> Floki.text() |> String.trim()}
+    end)
   end
 
   defp change_order(html) do

@@ -1144,6 +1144,12 @@ a.revision-link {
 	height: calc(1lh + 0.375rem);
 }
 
+/* Same contract for an optional :meta. Only the stacked layout gives meta a
+   line of its own, so only there does an empty one shorten its row. */
+.row-list--reserve-meta .row-meta {
+	min-height: 1lh;
+}
+
 .row-list summary.row-line {
 	list-style: none;
 	cursor: pointer;
@@ -1261,6 +1267,13 @@ a.revision-link {
 
 .row-list > li:has(> .row-actions--float) > .row-link {
 	padding-right: 3rem;
+}
+
+/* Floating actions centre on the whole row, so the meta beside them has to
+   leave the label's baseline and centre too — otherwise a two-line row shows
+   its date up on the first line and its icon halfway down. */
+.row-list > li:has(> .row-actions--float) .row-meta {
+	align-self: center;
 }
 
 .option-show .opt-type {
