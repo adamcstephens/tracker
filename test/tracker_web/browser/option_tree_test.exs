@@ -67,12 +67,16 @@ defmodule TrackerWeb.Browser.OptionTreeTest do
 
   defp path(conn), do: read(conn, "window.location.pathname")
 
-  test "u climbs to the parent prefix", %{conn: conn} do
-    conn = visit(conn, ~p"/options/services.nginx.virtualHosts")
+  for key <- ~w(u h) do
+    @key key
 
-    press(conn, "body", "u")
+    test "#{key} climbs to the parent prefix", %{conn: conn} do
+      conn = visit(conn, ~p"/options/services.nginx.virtualHosts")
 
-    assert path(conn) == "/options/services.nginx"
+      press(conn, "body", @key)
+
+      assert path(conn) == "/options/services.nginx"
+    end
   end
 
   test "u climbs from the shallowest prefix out to the options root", %{conn: conn} do

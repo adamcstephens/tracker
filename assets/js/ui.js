@@ -115,12 +115,14 @@ document.addEventListener("keydown", (event) => {
   window.open(link.href, "_blank", "noopener")
 })
 
-// "u" climbs the options prefix tree by clicking the parent link the pathbar
-// carries, so the key takes a crumb's exact path: live navigation under
+// "u" and "h" climb the options prefix tree by clicking the parent link the
+// pathbar carries, so the key takes a crumb's exact path: live navigation under
 // LiveView, a plain load without it. A page with no pathbar (the options root,
 // everywhere else) has nowhere to go.
+const UP_KEYS = ["u", "h"]
+
 document.addEventListener("keydown", (event) => {
-  if (event.key !== "u") return
+  if (!UP_KEYS.includes(event.key)) return
   if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return
   if (isEditable(event.target)) return
   if (document.querySelector("dialog[open]")) return

@@ -72,7 +72,7 @@ defmodule TrackerWeb.Layouts do
           %Shortcut{keys: ["g o"], label: "Options"},
           %Shortcut{keys: ["g c"], label: "Changes"},
           %Shortcut{keys: ["g n"], label: "Inbox"},
-          %Shortcut{keys: ["u"], label: "Up a level (options)"}
+          %Shortcut{keys: ["u", "h"], label: "Up a level (options)"}
         ]
       },
       %ShortcutGroup{
