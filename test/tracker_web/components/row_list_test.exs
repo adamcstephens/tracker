@@ -85,6 +85,52 @@ defmodule TrackerWeb.RowListTest do
 
       assert html =~ ~s(class="row-list row-list--stacked row-list--reserve-sublabel")
     end
+
+    test "lists with long labels opt into clipping them to the row" do
+      assigns = %{}
+
+      html =
+        rendered_to_string(~H"""
+        <RowList.row_list id="things" truncate_label>
+          <RowList.row mode={:plain}>
+            <:label>alpha</:label>
+          </RowList.row>
+        </RowList.row_list>
+        """)
+
+      assert html =~ ~s(class="row-list row-list--truncate-label")
+    end
+
+    test "lists without the flag leave their labels free to wrap" do
+      assigns = %{}
+
+      html =
+        rendered_to_string(~H"""
+        <RowList.row_list id="things">
+          <RowList.row mode={:plain}>
+            <:label>alpha</:label>
+          </RowList.row>
+        </RowList.row_list>
+        """)
+
+      refute html =~ "row-list--truncate-label"
+    end
+
+    test "every declared flag composes" do
+      assigns = %{}
+
+      html =
+        rendered_to_string(~H"""
+        <RowList.row_list id="things" stacked reserve_sublabel reserve_meta truncate_label>
+          <RowList.row mode={:plain}>
+            <:label>alpha</:label>
+          </RowList.row>
+        </RowList.row_list>
+        """)
+
+      assert html =~
+               ~s(class="row-list row-list--stacked row-list--reserve-sublabel row-list--reserve-meta row-list--truncate-label")
+    end
   end
 
   # ui.js walks rows with this selector. Asserting it here keeps the markup and

@@ -40,9 +40,12 @@ defmodule TrackerWeb.RowList do
   declares once that a part of its row is optional, and every page of it is
   the same height.
 
-  A `:label` is exempt — it can wrap, and a wrapped label does make its row
-  taller. It names the row, so truncating it would cost more than the drift
-  it saves.
+  A `:label` wraps by default — it names the row, and for a list of attribute
+  paths or package names losing the tail costs more than the drift it saves.
+  A list whose labels are prose, where the leading words carry the sense and
+  the length is arbitrary, passes `truncate_label` and gets them clipped to
+  the row with an ellipsis: one line, or two on a narrow screen, where a
+  stacked label owns the full width and one line would cut most of them.
   """
   use TrackerWeb, :html
 
@@ -73,24 +76,29 @@ defmodule TrackerWeb.RowList do
     default: false,
     doc: "this list's rows carry meta only sometimes — hold its line for the ones without"
 
+  attr :truncate_label, :boolean,
+    default: false,
+    doc: "this list's labels run long — clip them to the row rather than let them wrap"
+
   attr :rest, :global
 
   slot :inner_block, required: true
 
   def row_list(assigns) do
     ~H"""
-    <ul id={@id} class={row_list_class(@stacked, @reserve_sublabel, @reserve_meta)} {@rest}>
+    <ul id={@id} class={row_list_class(assigns)} {@rest}>
       {render_slot(@inner_block)}
     </ul>
     """
   end
 
-  defp row_list_class(stacked, reserve_sublabel, reserve_meta) do
+  defp row_list_class(assigns) do
     [
       "row-list",
-      stacked && "row-list--stacked",
-      reserve_sublabel && "row-list--reserve-sublabel",
-      reserve_meta && "row-list--reserve-meta"
+      assigns.stacked && "row-list--stacked",
+      assigns.reserve_sublabel && "row-list--reserve-sublabel",
+      assigns.reserve_meta && "row-list--reserve-meta",
+      assigns.truncate_label && "row-list--truncate-label"
     ]
     |> Enum.filter(& &1)
     |> Enum.join(" ")

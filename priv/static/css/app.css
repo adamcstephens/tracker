@@ -1150,6 +1150,18 @@ a.revision-link {
 	min-height: 1lh;
 }
 
+/* Same contract again for a label that runs long. A wrapped label is the last
+   thing left that can make one row taller than its neighbours, so a list whose
+   labels are prose — change titles — clips them to the row instead. Declared,
+   not derived: whether a list's labels run long is a property of the list, and
+   a page that happened to load short ones would otherwise opt itself out. */
+.row-list--truncate-label .row-label {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
 .row-list summary.row-line {
 	list-style: none;
 	cursor: pointer;
@@ -1503,6 +1515,18 @@ a.revision-link {
 		/* break inside a word only when it can't fit — attribute paths still
 		   wrap, but prose titles break at spaces */
 		overflow-wrap: anywhere;
+	}
+
+	/* Two lines here rather than one: the label owns the full width in a
+	   stacked list, and at this size most change titles overrun a single
+	   line, so clipping to one would hide the tail on the majority of rows.
+	   Two caps the drift at one line and still fits nearly all of them. */
+	.row-list--truncate-label .row-label {
+		display: -webkit-box;
+		-webkit-box-orient: vertical;
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
+		white-space: normal;
 	}
 
 	/* Collapse the page-prefix part of a row label to an ellipsis — the

@@ -68,6 +68,14 @@ defmodule TrackerWeb.ChangeLive.IndexTest do
     assert metas["#5005"] == ""
   end
 
+  test "clips long titles to the row instead of wrapping them", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/changes")
+    doc = Floki.parse_document!(html)
+
+    assert [list] = Floki.find(doc, "#changes")
+    assert "row-list--truncate-label" in String.split(hd(Floki.attribute(list, "class")))
+  end
+
   test "does not render an author column", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/changes")
 
