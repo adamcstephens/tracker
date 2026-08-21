@@ -4,6 +4,7 @@ defmodule TrackerWeb.PackageLive.Show do
   alias Tracker.Nixpkgs.PackageHistory.Removal
   alias Tracker.Nixpkgs.PackageHistory.VersionChange
   alias Tracker.Notifications.PackageSubscription
+  alias TrackerWeb.ChangeRow
   alias TrackerWeb.NotificationPresenter
   alias TrackerWeb.PageSearch
   alias TrackerWeb.Pagination
@@ -184,21 +185,9 @@ defmodule TrackerWeb.PackageLive.Show do
 
     <section :if={@recent_changes != []}>
       <SectionHeader.section_header title="Recent Changes" count={length(@recent_changes)} />
-      <RowList.row_list id="recent-changes" stacked>
-        <RowList.row
-          :for={change <- @recent_changes}
-          mode={:link}
-          navigate={~p"/changes/#{change.number}"}
-        >
-          <:label>
-            <span class="row-num">#{change.number}</span> {change.title}
-          </:label>
-          <:meta>
-            <span>{change.author}</span>
-            <span>{format_released_at(change.merged_at)}</span>
-          </:meta>
-        </RowList.row>
-      </RowList.row_list>
+      <ChangeRow.change_row_list id="recent-changes">
+        <ChangeRow.change_row :for={change <- @recent_changes} change={change} />
+      </ChangeRow.change_row_list>
     </section>
 
     <SectionHeader.section_header title="Revisions" count={@revision_count}>

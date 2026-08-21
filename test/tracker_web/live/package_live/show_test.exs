@@ -959,7 +959,9 @@ defmodule TrackerWeb.PackageLive.ShowTest do
           number: 70001,
           title: "in-lens change",
           state: :merged,
-          author: "alice"
+          author: "alice",
+          base_ref: "master",
+          url: "https://github.com/NixOS/nixpkgs/pull/70001"
         })
         |> Ash.create!()
 
@@ -1023,6 +1025,30 @@ defmodule TrackerWeb.PackageLive.ShowTest do
 
       assert html =~ "out-of-lens change"
       refute html =~ "in-lens change"
+    end
+
+    test "recent changes render the shared Change row", %{conn: conn, package: package} do
+      {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}")
+
+      document = Floki.parse_document!(html)
+      [list] = Floki.find(document, "#recent-changes")
+
+      assert [href] = Floki.attribute(Floki.find(list, "a.row-link"), "href")
+      assert href =~ "/changes/70001"
+      assert Floki.find(list, ".pill.pill-merged") != []
+      assert Floki.find(list, ~s(a.row-action[data-external-link])) != []
+
+      assert Floki.attribute(list, "class") == [
+               "row-list row-list--stacked row-list--reserve-meta row-list--truncate-label"
+             ]
+    end
+
+    test "the landed pill is redundant on a channel-scoped list", %{conn: conn, package: package} do
+      {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}")
+
+      [list] = Floki.find(Floki.parse_document!(html), "#recent-changes")
+
+      assert Floki.find(list, ".pill-landed") == []
     end
   end
 

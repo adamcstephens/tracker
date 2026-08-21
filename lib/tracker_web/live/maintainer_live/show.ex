@@ -1,6 +1,7 @@
 defmodule TrackerWeb.MaintainerLive.Show do
   use TrackerWeb, :live_view
 
+  alias TrackerWeb.ChangeRow
   alias TrackerWeb.PageSearch
   alias TrackerWeb.Pagination
   alias TrackerWeb.RowList
@@ -44,21 +45,9 @@ defmodule TrackerWeb.MaintainerLive.Show do
 
     <section :if={@recent_changes != []}>
       <SectionHeader.section_header title="Recent Changes" count={length(@recent_changes)} />
-      <RowList.row_list id="maintainer-recent-changes" stacked>
-        <RowList.row
-          :for={change <- @recent_changes}
-          mode={:link}
-          navigate={~p"/changes/#{change.number}"}
-        >
-          <:label>
-            <span class="row-num">#{change.number}</span> {change.title}
-          </:label>
-          <:meta>
-            <span>{change_role(change, @maintainer.github_id)}</span>
-            <span>{format_datetime(change.merged_at)}</span>
-          </:meta>
-        </RowList.row>
-      </RowList.row_list>
+      <ChangeRow.change_row_list id="maintainer-recent-changes">
+        <ChangeRow.change_row :for={change <- @recent_changes} change={change} />
+      </ChangeRow.change_row_list>
     </section>
 
     <SectionHeader.section_header title="Packages" count={@package_count}>
@@ -185,25 +174,6 @@ defmodule TrackerWeb.MaintainerLive.Show do
            "/maintainers/#{socket.assigns.maintainer.github}"
          )
      )}
-  end
-
-  defp format_datetime(nil), do: "-"
-  defp format_datetime(dt), do: Calendar.strftime(dt, "%Y-%m-%d %H:%M")
-
-  defp change_role(change, github_id) do
-    cond do
-      change.author_github_id == github_id and change.merged_by_github_id == github_id ->
-        "author & merger"
-
-      change.author_github_id == github_id ->
-        "author"
-
-      change.merged_by_github_id == github_id ->
-        "merger"
-
-      true ->
-        ""
-    end
   end
 
   defp reload_page_data(socket) do

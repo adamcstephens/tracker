@@ -1,9 +1,9 @@
 defmodule TrackerWeb.ChangeLive.Index do
   use TrackerWeb, :live_view
 
+  alias TrackerWeb.ChangeRow
   alias TrackerWeb.PageSearch
   alias TrackerWeb.Pagination
-  alias TrackerWeb.RowList
   alias TrackerWeb.TableParams
 
   @impl true
@@ -33,45 +33,14 @@ defmodule TrackerWeb.ChangeLive.Index do
       <button type="submit">Apply</button>
     </form>
 
-    <RowList.row_list id="changes" phx-update="stream" stacked reserve_meta truncate_label>
-      <RowList.row
+    <ChangeRow.change_row_list id="changes" phx-update="stream">
+      <ChangeRow.change_row
         :for={{dom_id, change} <- @streams.changes}
         id={dom_id}
-        mode={:link}
-        navigate={~p"/changes/#{change.number}"}
-      >
-        <:label>
-          <span class="row-num">#{change.number}</span> {change.title}
-        </:label>
-        <:sublabel>
-          <span class={"pill pill-#{change.state}"}>
-            <span class="dot" aria-hidden="true"></span>
-            {change.state}
-          </span>
-          <span>{change.base_ref}</span>
-          <span
-            :if={not @in_channel_filter? and landed_in_lens?(change, @lens_channel_name)}
-            class="pill pill-landed"
-          >
-            in {@lens_channel_name}
-          </span>
-        </:sublabel>
-        <:meta>{merged_on(change.merged_at)}</:meta>
-        <:actions>
-          <a
-            href={change.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            class="row-action"
-            title="Open on GitHub"
-            aria-label={"Open ##{change.number} on GitHub"}
-            data-external-link
-          >
-            <.external_icon />
-          </a>
-        </:actions>
-      </RowList.row>
-    </RowList.row_list>
+        change={change}
+        landed_in={lens_landing(change, @lens_channel_name, @in_channel_filter?)}
+      />
+    </ChangeRow.change_row_list>
 
     <Pagination.controls
       total_pages={@total_pages}
@@ -97,28 +66,6 @@ defmodule TrackerWeb.ChangeLive.Index do
     />
     """
   end
-
-  defp external_icon(assigns) do
-    ~H"""
-    <svg
-      class="icon-external"
-      aria-hidden="true"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.7"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    >
-      <path d="M14 4h6v6" />
-      <path d="M20 4 10 14" />
-      <path d="M19 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h6" />
-    </svg>
-    """
-  end
-
-  defp merged_on(nil), do: ""
-  defp merged_on(dt), do: "Merged on " <> Calendar.strftime(dt, "%Y-%m-%d %H:%M")
 
   @impl true
   def mount(_params, _session, socket) do
@@ -243,10 +190,13 @@ defmodule TrackerWeb.ChangeLive.Index do
   defp branch_loads(nil), do: []
   defp branch_loads(_channel_name), do: [:change_branches]
 
-  defp landed_in_lens?(_change, nil), do: false
+  defp lens_landing(_change, nil, _in_channel_filter?), do: nil
+  defp lens_landing(_change, _channel_name, true), do: nil
 
-  defp landed_in_lens?(change, channel_name) do
-    Enum.any?(change.change_branches, &(&1.branch_name == channel_name))
+  defp lens_landing(change, channel_name, false) do
+    if Enum.any?(change.change_branches, &(&1.branch_name == channel_name)) do
+      channel_name
+    end
   end
 
   defp load_base_refs do
