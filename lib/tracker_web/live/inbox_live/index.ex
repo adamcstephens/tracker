@@ -114,14 +114,6 @@ defmodule TrackerWeb.InboxLive.Index do
     |> reset_to_first_page()
   end
 
-  def handle_event("next-page", _params, socket) do
-    {:noreply, patch_to_page(socket, socket.assigns.table_params.page + 1)}
-  end
-
-  def handle_event("prev-page", _params, socket) do
-    {:noreply, patch_to_page(socket, max(socket.assigns.table_params.page - 1, 1))}
-  end
-
   def handle_event("mark-all-read", _params, socket) do
     user = socket.assigns.current_user
 
@@ -332,12 +324,14 @@ defmodule TrackerWeb.InboxLive.Index do
         Nothing matches these filters.
       </div>
 
-      <section :for={{{day, rows}, index} <- Enum.with_index(@groups)}>
-        <SectionHeader.section_header title={day} count={length(rows)} />
-        <RowList.row_list id={"inbox-day-#{index}"}>
-          <.row :for={n <- rows} n={n} now={@now} version_changes={@version_changes} />
-        </RowList.row_list>
-      </section>
+      <div id="inbox-groups">
+        <section :for={{{day, rows}, index} <- Enum.with_index(@groups)}>
+          <SectionHeader.section_header title={day} count={length(rows)} />
+          <RowList.row_list id={"inbox-day-#{index}"}>
+            <.row :for={n <- rows} n={n} now={@now} version_changes={@version_changes} />
+          </RowList.row_list>
+        </section>
+      </div>
 
       <Pagination.controls
         total_pages={@total_pages}
@@ -350,6 +344,7 @@ defmodule TrackerWeb.InboxLive.Index do
         next_path={
           TableParams.page_path(@table_params, @current_page + 1, "/inbox", extra_params(assigns))
         }
+        anchor="inbox-groups"
       />
     </div>
     """

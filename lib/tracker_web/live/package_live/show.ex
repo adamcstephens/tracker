@@ -253,6 +253,7 @@ defmodule TrackerWeb.PackageLive.Show do
           %{version: @version_filter, all_revisions: @all_revisions?}
         )
       }
+      anchor="revisions"
     />
 
     <p :if={@revisions == []}>
@@ -634,36 +635,6 @@ defmodule TrackerWeb.PackageLive.Show do
            version: version,
            all_revisions: all_revisions?
          })
-     )}
-  end
-
-  @impl true
-  def handle_event("next-page", _params, socket) do
-    tp = socket.assigns.table_params
-
-    {:noreply,
-     push_patch(socket,
-       to:
-         revisions_path(
-           socket.assigns.package.attribute,
-           %{tp | page: tp.page + 1},
-           extra_params(socket)
-         )
-     )}
-  end
-
-  @impl true
-  def handle_event("prev-page", _params, socket) do
-    tp = socket.assigns.table_params
-
-    {:noreply,
-     push_patch(socket,
-       to:
-         revisions_path(
-           socket.assigns.package.attribute,
-           %{tp | page: max(tp.page - 1, 1)},
-           extra_params(socket)
-         )
      )}
   end
 

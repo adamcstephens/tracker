@@ -63,6 +63,7 @@ defmodule TrackerWeb.ChangeLive.Index do
           filter_extras(@base_ref_filter, @in_channel_filter?)
         )
       }
+      anchor="changes"
     />
     """
   end
@@ -132,36 +133,6 @@ defmodule TrackerWeb.ChangeLive.Index do
       })
 
     {:noreply, socket}
-  end
-
-  @impl true
-  def handle_event("next-page", _params, socket) do
-    tp = socket.assigns.table_params
-
-    {:noreply,
-     push_patch(socket,
-       to:
-         TableParams.to_path(
-           %{tp | page: tp.page + 1},
-           "/changes",
-           filter_extras(socket.assigns.base_ref_filter, socket.assigns.in_channel_filter?)
-         )
-     )}
-  end
-
-  @impl true
-  def handle_event("prev-page", _params, socket) do
-    tp = socket.assigns.table_params
-
-    {:noreply,
-     push_patch(socket,
-       to:
-         TableParams.to_path(
-           %{tp | page: max(tp.page - 1, 1)},
-           "/changes",
-           filter_extras(socket.assigns.base_ref_filter, socket.assigns.in_channel_filter?)
-         )
-     )}
   end
 
   defp load_changes(socket) do

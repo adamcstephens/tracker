@@ -28,6 +28,7 @@ defmodule TrackerWeb.MaintainerLive.Index do
       has_next_page?={@has_next_page?}
       prev_path={TableParams.page_path(@table_params, @current_page - 1, "/maintainers")}
       next_path={TableParams.page_path(@table_params, @current_page + 1, "/maintainers")}
+      anchor="maintainers"
     />
     """
   end
@@ -74,24 +75,6 @@ defmodule TrackerWeb.MaintainerLive.Index do
       |> push_event("update-url", %{path: TableParams.to_path(tp, "/maintainers")})
 
     {:noreply, socket}
-  end
-
-  @impl true
-  def handle_event("next-page", _params, socket) do
-    tp = socket.assigns.table_params
-
-    {:noreply,
-     push_patch(socket, to: TableParams.to_path(%{tp | page: tp.page + 1}, "/maintainers"))}
-  end
-
-  @impl true
-  def handle_event("prev-page", _params, socket) do
-    tp = socket.assigns.table_params
-
-    {:noreply,
-     push_patch(socket,
-       to: TableParams.to_path(%{tp | page: max(tp.page - 1, 1)}, "/maintainers")
-     )}
   end
 
   defp load_maintainers(socket) do

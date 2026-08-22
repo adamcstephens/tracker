@@ -84,6 +84,7 @@ defmodule TrackerWeb.TeamLive.Show do
       next_path={
         TableParams.page_path(@table_params, @current_page + 1, "/teams/#{@team.short_name}")
       }
+      anchor="team-packages"
     />
     """
   end
@@ -119,34 +120,6 @@ defmodule TrackerWeb.TeamLive.Show do
     {:noreply,
      push_patch(socket,
        to: TableParams.to_path(tp, "/teams/#{socket.assigns.team.short_name}")
-     )}
-  end
-
-  @impl true
-  def handle_event("next-page", _params, socket) do
-    tp = socket.assigns.table_params
-
-    {:noreply,
-     push_patch(socket,
-       to:
-         TableParams.to_path(
-           %{tp | page: tp.page + 1},
-           "/teams/#{socket.assigns.team.short_name}"
-         )
-     )}
-  end
-
-  @impl true
-  def handle_event("prev-page", _params, socket) do
-    tp = socket.assigns.table_params
-
-    {:noreply,
-     push_patch(socket,
-       to:
-         TableParams.to_path(
-           %{tp | page: max(tp.page - 1, 1)},
-           "/teams/#{socket.assigns.team.short_name}"
-         )
      )}
   end
 

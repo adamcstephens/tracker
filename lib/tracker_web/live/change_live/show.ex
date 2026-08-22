@@ -222,6 +222,7 @@ defmodule TrackerWeb.ChangeLive.Show do
                     "/changes/#{@change.number}"
                   )
                 }
+                anchor="affected-packages"
               />
             <% end %>
           </section>
@@ -493,34 +494,6 @@ defmodule TrackerWeb.ChangeLive.Show do
       })
 
     {:noreply, socket}
-  end
-
-  @impl true
-  def handle_event("next-page", _params, socket) do
-    tp = socket.assigns.table_params
-
-    {:noreply,
-     push_patch(socket,
-       to:
-         TableParams.to_path(
-           %{tp | page: tp.page + 1},
-           "/changes/#{socket.assigns.change.number}"
-         )
-     )}
-  end
-
-  @impl true
-  def handle_event("prev-page", _params, socket) do
-    tp = socket.assigns.table_params
-
-    {:noreply,
-     push_patch(socket,
-       to:
-         TableParams.to_path(
-           %{tp | page: max(tp.page - 1, 1)},
-           "/changes/#{socket.assigns.change.number}"
-         )
-     )}
   end
 
   defp load_packages(socket, change_id) do

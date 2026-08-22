@@ -106,6 +106,7 @@ defmodule TrackerWeb.OptionLive.Show do
           has_next_page?={@has_next_page?}
           prev_path={TableParams.page_path(@table_params, @current_page - 1, show_path(@prefix))}
           next_path={TableParams.page_path(@table_params, @current_page + 1, show_path(@prefix))}
+          anchor="matching-options"
         />
       </section>
 

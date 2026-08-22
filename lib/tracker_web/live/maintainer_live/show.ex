@@ -101,6 +101,7 @@ defmodule TrackerWeb.MaintainerLive.Show do
           "/maintainers/#{@maintainer.github}"
         )
       }
+      anchor="maintainer-packages"
     />
     """
   end
@@ -145,34 +146,6 @@ defmodule TrackerWeb.MaintainerLive.Show do
     {:noreply,
      push_patch(socket,
        to: TableParams.to_path(tp, "/maintainers/#{socket.assigns.maintainer.github}")
-     )}
-  end
-
-  @impl true
-  def handle_event("next-page", _params, socket) do
-    tp = socket.assigns.table_params
-
-    {:noreply,
-     push_patch(socket,
-       to:
-         TableParams.to_path(
-           %{tp | page: tp.page + 1},
-           "/maintainers/#{socket.assigns.maintainer.github}"
-         )
-     )}
-  end
-
-  @impl true
-  def handle_event("prev-page", _params, socket) do
-    tp = socket.assigns.table_params
-
-    {:noreply,
-     push_patch(socket,
-       to:
-         TableParams.to_path(
-           %{tp | page: max(tp.page - 1, 1)},
-           "/maintainers/#{socket.assigns.maintainer.github}"
-         )
      )}
   end
 

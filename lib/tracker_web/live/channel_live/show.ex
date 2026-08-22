@@ -66,6 +66,7 @@ defmodule TrackerWeb.ChannelLive.Show do
         has_next_page?={@has_next_page?}
         prev_path={TableParams.page_path(@table_params, @current_page - 1, "/channels/#{@channel}")}
         next_path={TableParams.page_path(@table_params, @current_page + 1, "/channels/#{@channel}")}
+        anchor="revisions"
       />
 
       <button type="submit" style="margin-top: 1rem;">Compare selected</button>

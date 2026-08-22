@@ -2,15 +2,13 @@ defmodule TrackerWeb.Pagination do
   @moduledoc """
   Pagination controls for paged lists.
 
-  Emits `prev-page` and `next-page` events for the parent LiveView to handle,
-  or renders links when `prev_path`/`next_path` are given.
+  Renders prev/next links to `prev_path`/`next_path`, anchored at the list
+  they page through.
   """
   use TrackerWeb, :html
 
   @doc """
-  Renders pagination controls with prev/next buttons and page indicator.
-
-  Emits `prev-page` and `next-page` events for the parent LiveView to handle.
+  Renders pagination controls with prev/next links and a page indicator.
 
   ## Examples
 
@@ -19,6 +17,9 @@ defmodule TrackerWeb.Pagination do
         current_page={@current_page}
         has_prev_page?={@has_prev_page?}
         has_next_page?={@has_next_page?}
+        prev_path={~p"/packages?page=1"}
+        next_path={~p"/packages?page=3"}
+        anchor="packages"
       />
   """
   attr :total_pages, :integer,
@@ -28,24 +29,31 @@ defmodule TrackerWeb.Pagination do
   attr :current_page, :integer, required: true
   attr :has_prev_page?, :boolean, default: false
   attr :has_next_page?, :boolean, default: false
+  attr :prev_path, :string, required: true, doc: "URL for the previous page"
+  attr :next_path, :string, required: true, doc: "URL for the next page"
 
-  attr :prev_path, :string,
-    default: nil,
+  attr :anchor, :string,
+    required: true,
     doc:
-      "URL for the previous page (no-JS fallback). When set, renders an <a> instead of a button."
-
-  attr :next_path, :string,
-    default: nil,
-    doc: "URL for the next page (no-JS fallback). When set, renders an <a> instead of a button."
+      "DOM id of the list being paged. The fragment lands a full page load at the top of the list; the hook does the same for a LiveView patch."
 
   def controls(assigns) do
+    assigns =
+      assigns
+      |> assign(:prev_path, anchored(assigns.prev_path, assigns.anchor))
+      |> assign(:next_path, anchored(assigns.next_path, assigns.anchor))
+
     ~H"""
     <nav
       :if={show_pagination?(@total_pages, @has_prev_page?, @has_next_page?)}
+      id={"pagination-#{@anchor}"}
+      phx-hook="PageAnchor"
+      data-anchor={@anchor}
+      data-page={@current_page}
       style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-top: 1rem;"
     >
       <.link
-        :if={@prev_path && @has_prev_page?}
+        :if={@has_prev_page?}
         patch={@prev_path}
         role="button"
         class="outline secondary pagination-button"
@@ -53,21 +61,13 @@ defmodule TrackerWeb.Pagination do
         &larr;
       </.link>
       <span
-        :if={@prev_path && !@has_prev_page?}
+        :if={!@has_prev_page?}
         role="button"
         aria-disabled="true"
         class="outline secondary pagination-button"
       >
         &larr;
       </span>
-      <button
-        :if={!@prev_path}
-        class="outline secondary pagination-button"
-        phx-click="prev-page"
-        disabled={!@has_prev_page?}
-      >
-        &larr;
-      </button>
       <small :if={@total_pages}>
         Page {@current_page} of {@total_pages}
       </small>
@@ -75,7 +75,7 @@ defmodule TrackerWeb.Pagination do
         Page {@current_page}
       </small>
       <.link
-        :if={@next_path && @has_next_page?}
+        :if={@has_next_page?}
         patch={@next_path}
         role="button"
         class="outline secondary pagination-button"
@@ -83,24 +83,18 @@ defmodule TrackerWeb.Pagination do
         &rarr;
       </.link>
       <span
-        :if={@next_path && !@has_next_page?}
+        :if={!@has_next_page?}
         role="button"
         aria-disabled="true"
         class="outline secondary pagination-button"
       >
         &rarr;
       </span>
-      <button
-        :if={!@next_path}
-        class="outline secondary pagination-button"
-        phx-click="next-page"
-        disabled={!@has_next_page?}
-      >
-        &rarr;
-      </button>
     </nav>
     """
   end
+
+  defp anchored(path, anchor), do: path <> "#" <> anchor
 
   defp show_pagination?(nil, has_prev_page?, has_next_page?), do: has_prev_page? or has_next_page?
   defp show_pagination?(total_pages, _has_prev_page?, _has_next_page?), do: total_pages > 1

@@ -37,6 +37,21 @@ Hooks.UpdateURL = {
   }
 }
 
+Hooks.PageAnchor = {
+  mounted() {
+    this.page = this.el.dataset.page
+  },
+  updated() {
+    if (this.el.dataset.page === this.page) return
+    this.page = this.el.dataset.page
+    let list = document.getElementById(this.el.dataset.anchor)
+    if (!list) return
+    // A patch keeps the viewport where it was, which strands mobile readers at
+    // the end of the new page; the no-JS path gets this from the URL fragment.
+    requestAnimationFrame(() => list.scrollIntoView({block: "start"}))
+  }
+}
+
 Hooks.AnchorExpand = {
   mounted() {
     this.expandAfterRender()

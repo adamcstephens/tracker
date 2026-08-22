@@ -392,7 +392,7 @@ defmodule TrackerWeb.PackageLive.IndexTest do
 
       assert html =~ "Page 1"
       refute html =~ "Page 1 of"
-      assert html =~ ~s(href="/packages?page=2")
+      assert html =~ ~s(href="/packages?page=2#packages")
     end
 
     test "later pages keep prev/next without a total", %{conn: conn} do
