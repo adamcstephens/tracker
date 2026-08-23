@@ -101,6 +101,21 @@ defmodule TrackerWeb.RowListTest do
       assert html =~ ~s(class="row-list row-list--truncate-label")
     end
 
+    test "lists with single-token labels opt into clipping them to one line" do
+      assigns = %{}
+
+      html =
+        rendered_to_string(~H"""
+        <RowList.row_list id="things" clip_label>
+          <RowList.row mode={:plain}>
+            <:label>alpha</:label>
+          </RowList.row>
+        </RowList.row_list>
+        """)
+
+      assert html =~ ~s(class="row-list row-list--clip-label")
+    end
+
     test "lists without the flag leave their labels free to wrap" do
       assigns = %{}
 
@@ -121,7 +136,7 @@ defmodule TrackerWeb.RowListTest do
 
       html =
         rendered_to_string(~H"""
-        <RowList.row_list id="things" stacked reserve_sublabel reserve_meta truncate_label>
+        <RowList.row_list id="things" stacked reserve_sublabel reserve_meta truncate_label clip_label>
           <RowList.row mode={:plain}>
             <:label>alpha</:label>
           </RowList.row>
@@ -129,7 +144,7 @@ defmodule TrackerWeb.RowListTest do
         """)
 
       assert html =~
-               ~s(class="row-list row-list--stacked row-list--reserve-sublabel row-list--reserve-meta row-list--truncate-label")
+               ~s(class="row-list row-list--stacked row-list--reserve-sublabel row-list--reserve-meta row-list--truncate-label row-list--clip-label")
     end
   end
 

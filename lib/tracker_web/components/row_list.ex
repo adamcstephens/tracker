@@ -46,6 +46,14 @@ defmodule TrackerWeb.RowList do
   the length is arbitrary, passes `truncate_label` and gets them clipped to
   the row with an ellipsis: one line, or two on a narrow screen, where a
   stacked label owns the full width and one line would cut most of them.
+
+  A list whose labels are a single token behind a collapsible page prefix — an
+  option name under the path bar — passes `clip_label` instead. On a narrow
+  screen the prefix already collapses to an ellipsis, so a wrapped label only
+  ever spills a fragment of that one tail token onto a second line: pure drift,
+  no sense recovered. `clip_label` holds them to one line so every row is the
+  same height, and the full name stays on the row's copy button and its
+  expanded body.
   """
   use TrackerWeb, :html
 
@@ -80,6 +88,10 @@ defmodule TrackerWeb.RowList do
     default: false,
     doc: "this list's labels run long — clip them to the row rather than let them wrap"
 
+  attr :clip_label, :boolean,
+    default: false,
+    doc: "this list's labels are single tokens — clip them to one line rather than let them wrap"
+
   attr :rest, :global
 
   slot :inner_block, required: true
@@ -98,7 +110,8 @@ defmodule TrackerWeb.RowList do
       assigns.stacked && "row-list--stacked",
       assigns.reserve_sublabel && "row-list--reserve-sublabel",
       assigns.reserve_meta && "row-list--reserve-meta",
-      assigns.truncate_label && "row-list--truncate-label"
+      assigns.truncate_label && "row-list--truncate-label",
+      assigns.clip_label && "row-list--clip-label"
     ]
     |> Enum.filter(& &1)
     |> Enum.join(" ")

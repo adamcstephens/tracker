@@ -1162,6 +1162,17 @@ a.revision-link {
 	white-space: nowrap;
 }
 
+/* Single-token labels behind a collapsible prefix — option names. One line at
+   every width: a wrapped tail only spills a fragment of one token, so clipping
+   costs no sense and keeps rows uniform. Its specificity beats the narrow-screen
+   .row-label rule below that would otherwise let the tail wrap. */
+.row-list--clip-label .row-label {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
 .row-list summary.row-line {
 	list-style: none;
 	cursor: pointer;

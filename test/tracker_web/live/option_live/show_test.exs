@@ -184,9 +184,19 @@ defmodule TrackerWeb.OptionLive.ShowTest do
       {:ok, _view, html} = live(conn, ~p"/options/services.nginx")
 
       # One grouped card per section, no detached child cards
-      assert html =~ ~s(class="row-list")
+      assert html =~ ~s(class="row-list )
       refute html =~ "opt-children"
       refute html =~ "child-card"
+    end
+
+    test "both lists clip long attribute-path labels to one line", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/options/services.nginx")
+      doc = Floki.parse_document!(html)
+
+      for id <- ~w(option-children options-list) do
+        assert [list] = Floki.find(doc, "##{id}")
+        assert "row-list--clip-label" in String.split(hd(Floki.attribute(list, "class")))
+      end
     end
 
     test "children are link rows that navigate to the sub-group", %{conn: conn} do

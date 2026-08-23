@@ -65,7 +65,7 @@ defmodule TrackerWeb.OptionLive.Show do
 
       <section :if={@subgroups != []}>
         <SectionHeader.section_header title="Children" count={length(@subgroups)} />
-        <RowList.row_list id="option-children">
+        <RowList.row_list id="option-children" clip_label>
           <RowList.row
             :for={{group, count} <- @subgroups}
             mode={:link}
@@ -115,7 +115,7 @@ defmodule TrackerWeb.OptionLive.Show do
           title="Options at this prefix"
           count={length(@leaf_options)}
         />
-        <RowList.row_list id="options-list" phx-hook="AnchorExpand">
+        <RowList.row_list id="options-list" phx-hook="AnchorExpand" clip_label>
           <RowList.row
             :for={rev <- @leaf_options}
             id={"opt-#{rev.option.name}"}
