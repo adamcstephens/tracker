@@ -10,7 +10,8 @@ defmodule TrackerWeb.Endpoint do
     store: :cookie,
     key: "_tracker_key",
     signing_salt: "Pi4GBDAc",
-    same_site: "Lax"
+    same_site: "Lax",
+    max_age: 14 * 24 * 60 * 60
   ]
 
   socket "/live", Phoenix.LiveView.Socket,
