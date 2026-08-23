@@ -169,8 +169,12 @@ defmodule TrackerWeb.OptionLive.RootTest do
     {:ok, _view, html} = live(conn, ~p"/options?search=enable")
 
     assert html =~ "Matching options"
-    assert html =~ ~s(href="/options/services.nginx.enable?)
-    assert html =~ ~s(href="/options/programs.vim.enable?)
+    # A nested option lands on its parent group, focused on itself; a top-level
+    # option has no parent, so it still opens its own page.
+    assert html =~ ~s(href="/options/services.nginx?)
+    assert html =~ "#opt-services.nginx.enable"
+    assert html =~ ~s(href="/options/programs.vim?)
+    assert html =~ "#opt-programs.vim.enable"
     assert html =~ ~s(href="/options/enableDebugging?)
   end
 
@@ -183,8 +187,8 @@ defmodule TrackerWeb.OptionLive.RootTest do
   test "fuzzy search tolerates typos", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/options?search=nginxx")
 
-    assert html =~ ~s(href="/options/services.nginx.enable?)
-    refute html =~ ~s(href="/options/programs.vim.enable?)
+    assert html =~ "#opt-services.nginx.enable"
+    refute html =~ "#opt-programs.vim.enable"
   end
 
   test "dot-segment match outranks fuzzy substring matches", %{
@@ -247,12 +251,16 @@ defmodule TrackerWeb.OptionLive.RootTest do
     |> Floki.parse_document!()
     |> Floki.find("#matching-options a[href]")
     |> Enum.flat_map(&Floki.attribute(&1, "href"))
-    |> Enum.map(
-      &(&1
-        |> URI.parse()
-        |> Map.fetch!(:path)
-        |> String.replace_prefix("/options/", ""))
-    )
+    |> Enum.map(&option_name/1)
+  end
+
+  # A match links to its parent group with the option in the fragment; a
+  # top-level option has no parent, so its name is the whole path.
+  defp option_name(href) do
+    case URI.parse(href) do
+      %URI{fragment: "opt-" <> name} -> name
+      %URI{path: path} -> String.replace_prefix(path, "/options/", "")
+    end
   end
 
   test "shows message when channel has no options data", %{conn: conn} do

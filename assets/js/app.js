@@ -22,7 +22,7 @@ import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
 import topbar from "../vendor/topbar"
 // Socket-free behaviour, shared with the non-interactive ui.js bundle.
-import "./ui.js"
+import {expandHashTarget} from "./ui.js"
 
 let Hooks = {}
 
@@ -52,30 +52,14 @@ Hooks.PageAnchor = {
   }
 }
 
+// ui.js expands the hash target on a full load and hash change; the hook covers
+// a live navigation, which changes the URL without either firing.
 Hooks.AnchorExpand = {
   mounted() {
-    this.expandAfterRender()
-    this._onHashChange = () => this.expandAfterRender()
-    window.addEventListener("hashchange", this._onHashChange)
+    requestAnimationFrame(expandHashTarget)
   },
   updated() {
-    this.expandAfterRender()
-  },
-  destroyed() {
-    window.removeEventListener("hashchange", this._onHashChange)
-  },
-  expandAfterRender() {
-    requestAnimationFrame(() => {
-      let hash = window.location.hash
-      if (!hash) return
-      let target = document.getElementById(decodeURIComponent(hash.slice(1)))
-      if (!target) return
-      let details = target.tagName === "DETAILS" ? target : target.querySelector("details")
-      if (details) {
-        details.open = true
-        target.scrollIntoView({behavior: "smooth", block: "start"})
-      }
-    })
+    requestAnimationFrame(expandHashTarget)
   }
 }
 

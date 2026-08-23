@@ -12,6 +12,13 @@ defmodule TrackerWeb.Browser.OptionTreeTest do
       "readOnly" => false,
       "type" => "boolean"
     },
+    "services.nginx.user" => %{
+      "declarations" => ["nixos/modules/services/web-servers/nginx/default.nix"],
+      "description" => "User to run Nginx as.",
+      "loc" => ["services", "nginx", "user"],
+      "readOnly" => false,
+      "type" => "string"
+    },
     "services.nginx.virtualHosts.example.serverName" => %{
       "declarations" => ["nixos/modules/services/web-servers/nginx/vhost-options.nix"],
       "description" => "Server name for the vhost.",
@@ -132,5 +139,19 @@ defmodule TrackerWeb.Browser.OptionTreeTest do
     press(conn, "body", "u")
 
     assert path(conn) == "/options/services.nginx"
+  end
+
+  defp option_open?(conn, name) do
+    read(conn, ~s|document.getElementById("opt-#{name}").querySelector("details").open|)
+  end
+
+  # A search match takes the user to the parent group focused on the option, so
+  # the group page must open the option its fragment names — even on the
+  # socket-free page an anonymous visitor gets, where no LiveView hook runs.
+  test "a fragment-linked option opens on load, its siblings left closed", %{conn: conn} do
+    conn = visit(conn, "/options/services.nginx#opt-services.nginx.user")
+
+    assert option_open?(conn, "services.nginx.user")
+    refute option_open?(conn, "services.nginx.enable")
   end
 end

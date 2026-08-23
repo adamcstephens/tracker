@@ -576,7 +576,21 @@ defmodule TrackerWeb.OptionLive.ShowTest do
     {:ok, _view, html} = live(conn, ~p"/options/services.nginx?search=serverName")
 
     assert html =~ "Matching options"
-    assert html =~ ~s(href="/options/services.nginx.virtualHosts.example.serverName?)
+    assert html =~ ~s(href="/options/services.nginx.virtualHosts.example?)
+  end
+
+  test "clicking a match lands on its parent group, focused on the option", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/options/services.nginx?search=serverName")
+
+    document = Floki.parse_document!(html)
+    [row] = Floki.find(document, "#matching-options li")
+    [href] = Floki.attribute(Floki.find(row, "a.row-link"), "href")
+
+    # The row takes the user to the sibling context (the parent group), not the
+    # option's own single-option page, then focuses the clicked option via the
+    # fragment the AnchorExpand hook reads.
+    assert href =~ ~r{^/options/services\.nginx\.virtualHosts\.example\?}
+    assert String.ends_with?(href, "#opt-services.nginx.virtualHosts.example.serverName")
   end
 
   test "matching options render as shared row-list link rows", %{conn: conn} do
@@ -590,8 +604,10 @@ defmodule TrackerWeb.OptionLive.ShowTest do
 
     [row] = Floki.find(list, "li")
     name = "services.nginx.virtualHosts.example.serverName"
+    parent = "services.nginx.virtualHosts.example"
 
-    assert Floki.find(row, ~s(a.row-link[href^="/options/#{name}?"])) != []
+    assert Floki.find(row, ~s(a.row-link[href^="/options/#{parent}?"])) != []
+    assert Floki.find(row, ~s(a.row-link[href$="#opt-#{name}"])) != []
     # The parent group is context, not a second link inside the row link. It
     # rides in the body column: it's a full attribute path, so a trailing
     # column would crush the label on narrow screens.
@@ -671,7 +687,8 @@ defmodule TrackerWeb.OptionLive.ShowTest do
     view |> element("#page-search") |> render_change(%{"search" => "user"})
 
     assert_patch_ignoring_lens(view, ~p"/options?search=user")
-    assert render(view) =~ ~s(href="/options/services.nginx.user?)
+    assert render(view) =~ ~s(href="/options/services.nginx?)
+    assert render(view) =~ "#opt-services.nginx.user"
   end
 
   test "cancelling a search returns to the page it started from", %{conn: conn} do

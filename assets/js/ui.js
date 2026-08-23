@@ -293,6 +293,27 @@ function keepCursorOn(id) {
   setTimeout(() => observer.disconnect(), PATCH_MS)
 }
 
+// A closed <details> stays closed when a fragment link points inside it, so
+// open the option the hash names and bring it into view. Runs on every full
+// load and hash change here; the LiveView AnchorExpand hook reuses it to cover
+// live navigation, where no page load fires.
+export function expandHashTarget() {
+  let hash = window.location.hash
+  if (!hash) return
+
+  let target = document.getElementById(decodeURIComponent(hash.slice(1)))
+  if (!target) return
+
+  let details = target.tagName === "DETAILS" ? target : target.querySelector("details")
+  if (!details) return
+
+  details.open = true
+  requestAnimationFrame(() => target.scrollIntoView({block: "start"}))
+}
+
+expandHashTarget()
+window.addEventListener("hashchange", expandHashTarget)
+
 // Auto-submit the lens form on dropdown change so the channel applies without
 // clicking "Set". The form's phx-change is present in the markup either way but
 // inert without a socket, so liveSocket — not the attribute — is what says

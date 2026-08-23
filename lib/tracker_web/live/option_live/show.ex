@@ -89,7 +89,7 @@ defmodule TrackerWeb.OptionLive.Show do
           <RowList.row
             :for={rev <- @matches}
             mode={:link}
-            navigate={~p"/options/#{rev.option.name}"}
+            navigate={match_navigate(rev.option.name)}
           >
             <:label>{rev.option.name}</:label>
             <:sublabel :if={parent_prefix(rev.option.name)}>
@@ -649,6 +649,15 @@ defmodule TrackerWeb.OptionLive.Show do
     case String.split(name, ".") do
       [_only] -> nil
       parts -> parts |> Enum.drop(-1) |> Enum.join(".")
+    end
+  end
+
+  # Land on the parent group so siblings are in view, focusing the clicked
+  # option through the fragment that expandHashTarget opens and scrolls to.
+  defp match_navigate(name) do
+    case parent_prefix(name) do
+      nil -> ~p"/options/#{name}"
+      parent -> "#{~p"/options/#{parent}"}#opt-#{name}"
     end
   end
 
