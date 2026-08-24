@@ -511,6 +511,31 @@ defmodule TrackerWeb.InboxLive.IndexTest do
       assert view |> element("#inbox-icon .app-inbox__badge") |> render() =~ "1"
     end
 
+    test "the badge updates live on a non-inbox page when a notification arrives", %{conn: conn} do
+      user = register_user!()
+      conn = log_in(conn, user)
+
+      {:ok, view, _html} = live(conn, ~p"/packages")
+      refute has_element?(view, "#inbox-icon .app-inbox__badge")
+
+      published_notification!(user)
+
+      assert render(view) =~ "app-inbox__badge"
+    end
+
+    test "the badge updates live on a non-inbox page when read elsewhere", %{conn: conn} do
+      user = register_user!()
+      n = published_notification!(user)
+      conn = log_in(conn, user)
+
+      {:ok, view, _html} = live(conn, ~p"/packages")
+      assert view |> element("#inbox-icon .app-inbox__badge") |> render() =~ "1"
+
+      {:ok, _} = Notification.mark_read(n, actor: user)
+
+      refute render(view) =~ "app-inbox__badge"
+    end
+
     test "the badge is hidden at zero unread and the icon is active on the inbox page", %{
       conn: conn
     } do

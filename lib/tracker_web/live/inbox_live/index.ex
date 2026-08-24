@@ -33,10 +33,6 @@ defmodule TrackerWeb.InboxLive.Index do
   def mount(_params, _session, socket) do
     user = FeedLink.ensure_token(socket.assigns.current_user)
 
-    if connected?(socket) do
-      Phoenix.PubSub.subscribe(Tracker.PubSub, "notifications:#{user.id}")
-    end
-
     {:ok,
      socket
      |> assign(:current_user, user)
@@ -185,7 +181,6 @@ defmodule TrackerWeb.InboxLive.Index do
     |> assign(:groups, NotificationPresenter.group_by_day(page.results, now))
     |> assign(:now, now)
     |> assign(:unread_count, unread_count)
-    |> assign(:unread_notification_count, unread_count)
     |> assign(:total_count, count(socket, %{}))
     |> assign(:type_counts, type_counts(socket))
     |> assign(:has_prev_page?, pagination.has_prev_page?)
