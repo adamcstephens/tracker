@@ -24,6 +24,10 @@ if path = System.get_env("NIXPKGS_GIT_PATH") do
   config :tracker, Tracker.GitServer, path: path
 end
 
+if token = System.get_env("TRACKER_DISCORD_TOKEN") do
+  config :tracker, :discord_token, token
+end
+
 if System.get_env("TRACKER_S3_BUCKET") do
   s3_opts = [
     bucket: System.fetch_env!("TRACKER_S3_BUCKET"),

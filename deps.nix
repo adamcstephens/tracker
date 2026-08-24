@@ -446,6 +446,7 @@ let
             };
 
             beamDeps = [
+              certifi
               finch
               jose
               mint
@@ -520,6 +521,26 @@ let
         in
         drv.override (workarounds.elixirMake { } drv);
 
+      castle =
+        let
+          version = "0.3.1";
+          drv = buildMix {
+            inherit version;
+            name = "castle";
+
+            src = fetchHex {
+              inherit version;
+              pkg = "castle";
+              sha256 = "3ee9ca04b069280ab4197fe753562958729c83b3aa08125255116a989e133835";
+            };
+
+            beamDeps = [
+              forecastle
+            ];
+          };
+        in
+        drv;
+
       castore =
         let
           version = "1.0.21";
@@ -555,6 +576,22 @@ let
           };
         in
         drv.override (workarounds.elixirMake { } drv);
+
+      certifi =
+        let
+          version = "2.17.0";
+          drv = buildRebar3 {
+            inherit version;
+            name = "certifi";
+
+            src = fetchHex {
+              inherit version;
+              pkg = "certifi";
+              sha256 = "8122798a17f0293c80daada25d0f81c7f4d708c73fef782c7c9b1950e26e4d21";
+            };
+          };
+        in
+        drv;
 
       cinder =
         let
@@ -606,6 +643,22 @@ let
               inherit version;
               pkg = "conv_case";
               sha256 = "88f29a3d97d1742f9865f7e394ed3da011abb7c5e8cc104e676fdef6270d4b4a";
+            };
+          };
+        in
+        drv;
+
+      cowlib =
+        let
+          version = "2.19.0";
+          drv = buildRebar3 {
+            inherit version;
+            name = "cowlib";
+
+            src = fetchHex {
+              inherit version;
+              pkg = "cowlib";
+              sha256 = "6dc66e3135b229193ea4dcb14294e79520c923d391315c9c962ef0b4bea72356";
             };
           };
         in
@@ -897,6 +950,22 @@ let
         in
         drv;
 
+      forecastle =
+        let
+          version = "0.1.3";
+          drv = buildMix {
+            inherit version;
+            name = "forecastle";
+
+            src = fetchHex {
+              inherit version;
+              pkg = "forecastle";
+              sha256 = "07e1ffa79c56f3e0ead59f17c0163a747dafc210ca8f244a7e65a4bfa98dc96d";
+            };
+          };
+        in
+        drv;
+
       gettext =
         let
           version = "1.0.2";
@@ -929,6 +998,26 @@ let
               pkg = "glob_ex";
               sha256 = "2e2fac83f113514434c7eaf267b4c38af2f91766f1cab2c5db7053b7fc1ee0bb";
             };
+          };
+        in
+        drv;
+
+      gun =
+        let
+          version = "2.5.0";
+          drv = buildRebar3 {
+            inherit version;
+            name = "gun";
+
+            src = fetchHex {
+              inherit version;
+              pkg = "gun";
+              sha256 = "3839576181456f5553fc1be006fd95681576b916cc9ad68d422a287ed4a770dd";
+            };
+
+            beamDeps = [
+              cowlib
+            ];
           };
         in
         drv;
@@ -1276,6 +1365,30 @@ let
               pkg = "nimble_pool";
               sha256 = "af2e4e6b34197db81f7aad230c1118eac993acc0dae6bc83bac0126d4ae0813a";
             };
+          };
+        in
+        drv;
+
+      nostrum =
+        let
+          version = "0.10.4";
+          drv = buildMix {
+            inherit version;
+            name = "nostrum";
+
+            src = fetchHex {
+              inherit version;
+              pkg = "nostrum";
+              sha256 = "fcc2642bf5b09792865ec2c26c1a11c6aa5432bc623a65dd81141e1eab9f1b99";
+            };
+
+            beamDeps = [
+              castle
+              certifi
+              gun
+              jason
+              mime
+            ];
           };
         in
         drv;

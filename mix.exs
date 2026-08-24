@@ -60,6 +60,7 @@ defmodule Tracker.MixProject do
       {:jason, "~> 1.2"},
       {:lumis, "~> 0.7"},
       {:mdex, "~> 0.13.3"},
+      {:nostrum, "~> 0.10.4", runtime: false},
       {:jose, "~> 1.11"},
       {:oban, "~> 2.0"},
       {:oban_met, "~> 1.1"},

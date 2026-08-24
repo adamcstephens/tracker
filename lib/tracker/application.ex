@@ -34,6 +34,8 @@ defmodule Tracker.Application do
       {AshAuthentication.Supervisor, [otp_app: :tracker]}
     ]
 
+    children = children ++ discord_children()
+
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
     opts = [strategy: :one_for_one, name: Tracker.Supervisor]
@@ -46,5 +48,19 @@ defmodule Tracker.Application do
   def config_change(changed, _new, removed) do
     TrackerWeb.Endpoint.config_change(changed, removed)
     :ok
+  end
+
+  defp discord_children do
+    case Application.get_env(:tracker, :discord_token) do
+      token when is_binary(token) and token != "" ->
+        Application.put_env(:nostrum, :token, token)
+        Application.put_env(:nostrum, :ffmpeg, nil)
+        Application.put_env(:nostrum, :youtubedl, nil)
+        Application.put_env(:nostrum, :streamlink, nil)
+        [Nostrum.Application, Tracker.Discord.Consumer]
+
+      _ ->
+        []
+    end
   end
 end
