@@ -25,13 +25,7 @@ if path = System.get_env("NIXPKGS_GIT_PATH") do
 end
 
 if token = System.get_env("TRACKER_DISCORD_TOKEN") do
-  config :tracker, :discord_token, token
-
-  config :nostrum,
-    token: token,
-    ffmpeg: nil,
-    youtubedl: nil,
-    streamlink: nil
+  config :nostrum, token: token
 end
 
 if System.get_env("TRACKER_S3_BUCKET") do
