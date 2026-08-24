@@ -14,6 +14,7 @@
 - Use validations to validate changesets before execution
 - Prefer domain code interfaces to call actions instead of directly building queries/changesets and calling functions in the `Ash` module
 - A resource could be *only generic actions*. This can be useful when you are using a resource only to model behavior.
+- Instead of defining functions in the domain, you should be defining actions and exposing them through code interface calls in the domain. Use standard actions when they fit what you're doing and generic actions when you need arbitrary functionality.
 
 ## Error Handling
 
@@ -34,7 +35,7 @@ Validations ensure that data meets your business requirements before it gets pro
 
 Validations work on both changesets and queries. Built-in validations that support queries include:
 - `action_is`, `argument_does_not_equal`, `argument_equals`, `argument_in`
-- `compare`, `confirm`, `match`, `negate`, `one_of`, `present`, `string_length`
+- `byte_size`, `compare`, `confirm`, `match`, `negate`, `one_of`, `present`, `string_length`
 - Custom validations that implement the `supports/1` callback
 
 Common validation patterns:
