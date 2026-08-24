@@ -44,6 +44,7 @@ defmodule Tracker.Nixpkgs.OptionSpan do
     define :read
     define :at, args: [:channel_id, :at]
     define :at_for_options, args: [:channel_id, :at, :option_ids]
+    define :get_by_name_at, args: [:channel_id, :at, :name], not_found_error?: false
     define :by_option, args: [:option_id, {:optional, :channel_id}]
     define :current_for_options, args: [:option_ids]
 
@@ -131,6 +132,23 @@ defmodule Tracker.Nixpkgs.OptionSpan do
                channel_id == ^arg(:channel_id) and
                  option_id in ^arg(:option_ids) and
                  fragment("? @> ?::timestamptz", valid, ^arg(:at))
+             )
+    end
+
+    read :get_by_name_at do
+      description "An option span by exact option name at a channel revision."
+      get? true
+
+      argument :channel_id, :integer, allow_nil?: false
+      argument :at, :utc_datetime, allow_nil?: false
+      argument :name, :string, allow_nil?: false
+
+      prepare build(load: [:option])
+
+      filter expr(
+               channel_id == ^arg(:channel_id) and
+                 fragment("? @> ?::timestamptz", valid, ^arg(:at)) and
+                 option.name == ^arg(:name)
              )
     end
 
