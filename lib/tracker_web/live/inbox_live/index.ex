@@ -155,11 +155,6 @@ defmodule TrackerWeb.InboxLive.Index do
      |> push_event("update-url", %{path: inbox_path(socket)})}
   end
 
-  defp patch_to_page(socket, page) do
-    tp = %{socket.assigns.table_params | page: page}
-    push_patch(socket, to: TableParams.to_path(tp, "/inbox", extra_params(socket.assigns)))
-  end
-
   defp assign_page_search(socket) do
     tp = socket.assigns.table_params
 
