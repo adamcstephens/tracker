@@ -147,6 +147,8 @@ defmodule Tracker.Notifications.Notification do
     prefix "notifications"
 
     publish :create, [[:user_id, "any"]]
+    publish :mark_read, [[:user_id, "any"]]
+    publish :mark_unread, [[:user_id, "any"]]
   end
 
   attributes do

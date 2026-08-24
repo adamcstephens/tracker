@@ -218,6 +218,55 @@ defmodule TrackerWeb.InboxLive.IndexTest do
     assert has_element?(view, "#mark-all-read[disabled]")
   end
 
+  describe "cross-device sync" do
+    test "marking read on one session updates another", %{conn: conn} do
+      user = register_user!()
+      published_notification!(user)
+      conn = log_in(conn, user)
+
+      {:ok, phone, _} = live(conn, ~p"/inbox?filter=all")
+      {:ok, laptop, _} = live(conn, ~p"/inbox?filter=all")
+
+      assert has_element?(laptop, ".is-unread")
+
+      phone |> element("button[phx-click='toggle-read']") |> render_click()
+
+      refute render(laptop) =~ "is-unread"
+    end
+
+    test "marking unread on one session updates another", %{conn: conn} do
+      user = register_user!()
+      n = published_notification!(user)
+      {:ok, _} = Notification.mark_read(n, actor: user)
+      conn = log_in(conn, user)
+
+      {:ok, phone, _} = live(conn, ~p"/inbox?filter=all")
+      {:ok, laptop, _} = live(conn, ~p"/inbox?filter=all")
+
+      refute render(laptop) =~ "is-unread"
+
+      phone |> element("button[phx-click='toggle-read']") |> render_click()
+
+      assert has_element?(laptop, ".is-unread")
+    end
+
+    test "mark-all-read on one session updates another", %{conn: conn} do
+      user = register_user!()
+      published_notification!(user)
+      published_notification!(user)
+      conn = log_in(conn, user)
+
+      {:ok, phone, _} = live(conn, ~p"/inbox?filter=all")
+      {:ok, laptop, _} = live(conn, ~p"/inbox?filter=all")
+
+      assert has_element?(laptop, ".is-unread")
+
+      phone |> element("#mark-all-read") |> render_click()
+
+      refute render(laptop) =~ "is-unread"
+    end
+  end
+
   test "defaults to unread only and can widen to all", %{conn: conn} do
     user = register_user!()
     read = published_notification!(user)

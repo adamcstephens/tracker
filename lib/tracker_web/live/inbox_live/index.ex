@@ -122,8 +122,15 @@ defmodule TrackerWeb.InboxLive.Index do
       actor: user
     )
     |> case do
-      [] -> :ok
-      unread -> Ash.bulk_update!(unread, :mark_read, %{}, actor: user, return_records?: false)
+      [] ->
+        :ok
+
+      unread ->
+        Ash.bulk_update!(unread, :mark_read, %{},
+          actor: user,
+          return_records?: false,
+          notify?: true
+        )
     end
 
     {:noreply, load_notifications(socket)}

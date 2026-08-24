@@ -233,6 +233,20 @@ defmodule Tracker.Notifications.NotificationTest do
 
       assert {:error, _} = Notification.mark_read(n, actor: bob)
     end
+
+    test "broadcasts to the user's topic" do
+      user = register_user!()
+      :ok = Notification.fanout([row(user, %{})])
+      [n] = Notification.for_user!(actor: user)
+      Phoenix.PubSub.subscribe(Tracker.PubSub, "notifications:#{user.id}")
+
+      {:ok, _} = Notification.mark_read(n, actor: user)
+
+      assert_receive %Ash.Notifier.Notification{
+        resource: Notification,
+        action: %{name: :mark_read}
+      }
+    end
   end
 
   describe "mark_unread/2" do
@@ -254,6 +268,21 @@ defmodule Tracker.Notifications.NotificationTest do
       {:ok, n} = Notification.mark_read(n, actor: alice)
 
       assert {:error, _} = Notification.mark_unread(n, actor: bob)
+    end
+
+    test "broadcasts to the user's topic" do
+      user = register_user!()
+      :ok = Notification.fanout([row(user, %{})])
+      [n] = Notification.for_user!(actor: user)
+      {:ok, n} = Notification.mark_read(n, actor: user)
+      Phoenix.PubSub.subscribe(Tracker.PubSub, "notifications:#{user.id}")
+
+      {:ok, _} = Notification.mark_unread(n, actor: user)
+
+      assert_receive %Ash.Notifier.Notification{
+        resource: Notification,
+        action: %{name: :mark_unread}
+      }
     end
   end
 end
