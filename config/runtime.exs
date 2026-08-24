@@ -26,6 +26,12 @@ end
 
 if token = System.get_env("TRACKER_DISCORD_TOKEN") do
   config :tracker, :discord_token, token
+
+  config :nostrum,
+    token: token,
+    ffmpeg: nil,
+    youtubedl: nil,
+    streamlink: nil
 end
 
 if System.get_env("TRACKER_S3_BUCKET") do

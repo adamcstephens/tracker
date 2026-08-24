@@ -53,10 +53,6 @@ defmodule Tracker.Application do
   defp discord_children do
     case Application.get_env(:tracker, :discord_token) do
       token when is_binary(token) and token != "" ->
-        Application.put_env(:nostrum, :token, token)
-        Application.put_env(:nostrum, :ffmpeg, nil)
-        Application.put_env(:nostrum, :youtubedl, nil)
-        Application.put_env(:nostrum, :streamlink, nil)
         [Nostrum.Application, Tracker.Discord.Consumer]
 
       _ ->
