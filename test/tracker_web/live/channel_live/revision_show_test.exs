@@ -168,5 +168,29 @@ defmodule TrackerWeb.ChannelLive.RevisionShowTest do
     end
   end
 
+  test "offers a lens pin for the revision being viewed", %{conn: conn, cr2: cr2} do
+    {:ok, view, _html} =
+      live(conn, ~p"/channels/nixos-revshow/revisions/#{short(cr2)}")
+
+    assert view
+           |> element("a", "Use as lens")
+           |> render_click()
+
+    assert_redirect(
+      view,
+      "/channels/nixos-revshow/revisions/#{short(cr2)}?channel=nixos-revshow&rev=#{cr2.revision}"
+    )
+  end
+
+  test "drops the lens pin once the lens sits on this revision", %{conn: conn, cr2: cr2} do
+    {:ok, view, _html} =
+      live(
+        conn,
+        ~p"/channels/nixos-revshow/revisions/#{short(cr2)}?channel=nixos-revshow&rev=#{cr2.revision}"
+      )
+
+    refute has_element?(view, "a", "Use as lens")
+  end
+
   defp short(cr), do: String.slice(cr.revision, 0, 7)
 end

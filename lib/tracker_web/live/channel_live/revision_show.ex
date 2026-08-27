@@ -5,6 +5,7 @@ defmodule TrackerWeb.ChannelLive.RevisionShow do
 
   alias Tracker.Nixpkgs.ChannelRevision
   alias Tracker.Nixpkgs.ChannelRevision.RevisionDiff
+  alias TrackerWeb.Lens
   alias TrackerWeb.PageSearch
 
   @impl true
@@ -17,6 +18,15 @@ defmodule TrackerWeb.ChannelLive.RevisionShow do
         Released {@formatted_released_at} &middot;
         Result: {format_result(@revision.result)}
       </:subtitle>
+      <:actions>
+        <.link
+          :if={@lens_path}
+          navigate={@lens_path}
+          title="View the rest of the site through this channel and revision"
+        >
+          Use as lens
+        </.link>
+      </:actions>
     </.header>
 
     <section :if={@previous_revision}>
@@ -104,11 +114,21 @@ defmodule TrackerWeb.ChannelLive.RevisionShow do
      |> assign(:channel_id, channel.id)
      |> assign(:subscribed_channel_id, channel.id)
      |> assign(:lens, lens)
+     |> assign(:lens_path, lens_path(socket, lens, channel_name, revision))
      |> assign(:page_search, %PageSearch{
        mode: :inert,
        value: Map.get(params, "search", "")
      })
      |> assign_revision_data(revision)}
+  end
+
+  # The lens this page would set, or nil once it is already the lens in force.
+  defp lens_path(socket, lens, channel_name, revision) do
+    if Lens.canonical(lens) == {channel_name, revision.revision} do
+      nil
+    else
+      Lens.path_for(socket.assigns.current_path, channel_name, revision.revision)
+    end
   end
 
   @impl true
