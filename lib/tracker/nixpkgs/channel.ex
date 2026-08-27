@@ -204,8 +204,8 @@ defmodule Tracker.Nixpkgs.Channel do
   The `{system, url}` pairs for a package's hydra jobs in this channel's jobset.
 
   Only the systems hydra actually builds are linked, narrowed to the package's
-  own platforms. The NixOS jobsets build no darwin, and namespace every nixpkgs
-  job under a `nixpkgs.` prefix.
+  own platforms. The NixOS jobsets build no darwin and the darwin jobsets build
+  nothing else; NixOS also namespaces every nixpkgs job under a `nixpkgs.` prefix.
   """
   @spec hydra_job_links(t(), String.t(), [String.t()] | nil) :: [{String.t(), String.t()}]
   def hydra_job_links(
@@ -217,10 +217,20 @@ defmodule Tracker.Nixpkgs.Channel do
     job = if project == "nixos", do: "nixpkgs.#{attribute}", else: attribute
 
     @hydra_systems
-    |> Enum.reject(&(project == "nixos" and String.ends_with?(&1, "-darwin")))
     |> Enum.filter(&(&1 in platforms))
+    |> Enum.filter(&built_by?(&1, project, jobset))
     |> Enum.map(&{&1, "#{@hydra_base_url}/job/#{project}/#{jobset}/#{job}.#{&1}"})
   end
 
   def hydra_job_links(_channel, _attribute, _platforms), do: []
+
+  defp built_by?(system, project, jobset) do
+    darwin? = String.ends_with?(system, "-darwin")
+
+    cond do
+      project == "nixos" -> not darwin?
+      String.contains?(jobset, "darwin") -> darwin?
+      true -> true
+    end
+  end
 end

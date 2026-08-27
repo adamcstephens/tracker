@@ -408,6 +408,15 @@ defmodule Tracker.Nixpkgs.ChannelTest do
              ]
     end
 
+    test "links only darwin on a darwin jobset" do
+      channel = %Channel{hydra_project: "nixpkgs", hydra_jobset: "nixpkgs-26.05-darwin"}
+
+      assert Channel.hydra_job_links(channel, "hello", ["x86_64-linux", "aarch64-darwin"]) == [
+               {"aarch64-darwin",
+                "https://hydra.nixos.org/job/nixpkgs/nixpkgs-26.05-darwin/hello.aarch64-darwin"}
+             ]
+    end
+
     test "is empty without a jobset" do
       assert Channel.hydra_job_links(%Channel{}, "hello", ["x86_64-linux"]) == []
     end
