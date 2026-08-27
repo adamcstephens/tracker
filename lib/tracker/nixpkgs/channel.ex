@@ -62,7 +62,7 @@ defmodule Tracker.Nixpkgs.Channel do
     end
 
     read :nixos_channels do
-      filter expr(fragment("? LIKE 'nixos-%'", name))
+      filter expr(status != :retired and fragment("? LIKE 'nixos-%'", name))
       prepare build(sort: [:name])
     end
 

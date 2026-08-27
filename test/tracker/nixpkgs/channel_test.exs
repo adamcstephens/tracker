@@ -113,7 +113,14 @@ defmodule Tracker.Nixpkgs.ChannelTest do
   end
 
   describe "nixos_channels/0" do
-    test "returns only nixos-* channels sorted by name" do
+    test "returns only live nixos-* channels sorted by name" do
+      Channel.create!(%{
+        name: "nixos-chantest-old",
+        display_name: "NixOS Retired",
+        status: :retired,
+        is_stable: true
+      })
+
       Channel.create!(%{
         name: "nixpkgs-chantest",
         display_name: "Nixpkgs Unstable",
