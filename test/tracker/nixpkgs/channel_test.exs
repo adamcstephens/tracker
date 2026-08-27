@@ -112,43 +112,6 @@ defmodule Tracker.Nixpkgs.ChannelTest do
     end
   end
 
-  describe "nixos_channels/0" do
-    test "returns only live nixos-* channels sorted by name" do
-      Channel.create!(%{
-        name: "nixos-chantest-old",
-        display_name: "NixOS Retired",
-        status: :retired,
-        is_stable: true
-      })
-
-      Channel.create!(%{
-        name: "nixpkgs-chantest",
-        display_name: "Nixpkgs Unstable",
-        status: :active,
-        is_stable: false
-      })
-
-      Channel.create!(%{
-        name: "nixos-chantest",
-        display_name: "NixOS Unstable",
-        status: :active,
-        is_stable: false
-      })
-
-      Channel.create!(%{
-        name: "nixos-25.51",
-        display_name: "NixOS 25.11",
-        status: :active,
-        is_stable: true
-      })
-
-      channels = Channel.nixos_channels!()
-      names = Enum.map(channels, & &1.name)
-
-      assert names == ["nixos-25.51", "nixos-chantest"]
-    end
-  end
-
   describe "default_stable/0" do
     test "returns the highest-versioned active stable channel" do
       s = System.unique_integer([:positive])

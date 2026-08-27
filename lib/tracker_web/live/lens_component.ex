@@ -25,9 +25,9 @@ defmodule TrackerWeb.LensComponent do
   def update(assigns, socket) do
     channels =
       if connected?(socket) do
-        Channel.nixos_channels!()
+        Channel.active!()
       else
-        socket.assigns[:channels] || Channel.nixos_channels!()
+        socket.assigns[:channels] || Channel.active!()
       end
 
     {:ok,

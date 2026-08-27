@@ -21,7 +21,6 @@ defmodule Tracker.Nixpkgs.Channel do
     define :by_name, args: [:name]
     define :by_id, args: [:id]
     define :active
-    define :nixos_channels
     define :default_stable
     define :newest_nixos, not_found_error?: false
     define :update_hydra_status
@@ -58,11 +57,6 @@ defmodule Tracker.Nixpkgs.Channel do
 
     read :active do
       filter expr(status != :retired)
-      prepare build(sort: [:name])
-    end
-
-    read :nixos_channels do
-      filter expr(status != :retired and fragment("? LIKE 'nixos-%'", name))
       prepare build(sort: [:name])
     end
 

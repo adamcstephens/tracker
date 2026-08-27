@@ -39,6 +39,29 @@ defmodule TrackerWeb.LensComponentTest do
     assert html =~ ~s(id="lens")
   end
 
+  test "lists every live channel, not just the nixos-* ones", %{conn: conn} do
+    nixpkgs =
+      Channel.create!(%{
+        name: "nixpkgs-unstable-#{System.unique_integer([:positive])}",
+        display_name: "Nixpkgs Unstable",
+        status: :active,
+        is_stable: false
+      })
+
+    retired =
+      Channel.create!(%{
+        name: "nixos-retired-#{System.unique_integer([:positive])}",
+        display_name: "NixOS Retired",
+        status: :retired,
+        is_stable: true
+      })
+
+    {:ok, _view, html} = live(conn, ~p"/packages")
+
+    assert html =~ nixpkgs.name
+    refute html =~ retired.name
+  end
+
   test "the channel select carries the id the \"#\" shortcut focuses", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/packages")
 
