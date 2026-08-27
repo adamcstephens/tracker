@@ -202,4 +202,31 @@ defmodule Tracker.Nixpkgs.Channel do
   identities do
     identity :unique_name, [:name]
   end
+
+  @hydra_base_url "https://hydra.nixos.org"
+  @hydra_systems ["x86_64-linux", "aarch64-linux", "aarch64-darwin"]
+
+  @doc """
+  The `{system, url}` pairs for a package's hydra jobs in this channel's jobset.
+
+  Only the systems hydra actually builds are linked, narrowed to the package's
+  own platforms. The NixOS jobsets build no darwin, and namespace every nixpkgs
+  job under a `nixpkgs.` prefix.
+  """
+  @spec hydra_job_links(t(), String.t(), [String.t()] | nil) :: [{String.t(), String.t()}]
+  def hydra_job_links(
+        %__MODULE__{hydra_project: project, hydra_jobset: jobset},
+        attribute,
+        platforms
+      )
+      when is_binary(project) and is_binary(jobset) and is_list(platforms) do
+    job = if project == "nixos", do: "nixpkgs.#{attribute}", else: attribute
+
+    @hydra_systems
+    |> Enum.reject(&(project == "nixos" and String.ends_with?(&1, "-darwin")))
+    |> Enum.filter(&(&1 in platforms))
+    |> Enum.map(&{&1, "#{@hydra_base_url}/job/#{project}/#{jobset}/#{job}.#{&1}"})
+  end
+
+  def hydra_job_links(_channel, _attribute, _platforms), do: []
 end

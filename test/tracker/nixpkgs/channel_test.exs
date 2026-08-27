@@ -404,4 +404,48 @@ defmodule Tracker.Nixpkgs.ChannelTest do
       assert loaded.latest_release == ~U[2026-03-15 10:00:00Z]
     end
   end
+
+  describe "hydra_job_links/3" do
+    test "builds a link per hydra-built platform on a nixos jobset" do
+      channel = %Channel{hydra_project: "nixos", hydra_jobset: "unstable"}
+
+      assert Channel.hydra_job_links(channel, "hello", [
+               "x86_64-linux",
+               "aarch64-linux",
+               "riscv64-linux"
+             ]) == [
+               {"x86_64-linux",
+                "https://hydra.nixos.org/job/nixos/unstable/nixpkgs.hello.x86_64-linux"},
+               {"aarch64-linux",
+                "https://hydra.nixos.org/job/nixos/unstable/nixpkgs.hello.aarch64-linux"}
+             ]
+    end
+
+    test "omits darwin on a nixos jobset" do
+      channel = %Channel{hydra_project: "nixos", hydra_jobset: "release-26.05"}
+
+      assert Channel.hydra_job_links(channel, "hello", ["aarch64-darwin"]) == []
+    end
+
+    test "includes darwin and drops the nixpkgs prefix on a nixpkgs jobset" do
+      channel = %Channel{hydra_project: "nixpkgs", hydra_jobset: "unstable"}
+
+      assert Channel.hydra_job_links(channel, "hello", ["aarch64-darwin", "x86_64-linux"]) == [
+               {"x86_64-linux",
+                "https://hydra.nixos.org/job/nixpkgs/unstable/hello.x86_64-linux"},
+               {"aarch64-darwin",
+                "https://hydra.nixos.org/job/nixpkgs/unstable/hello.aarch64-darwin"}
+             ]
+    end
+
+    test "is empty without a jobset" do
+      assert Channel.hydra_job_links(%Channel{}, "hello", ["x86_64-linux"]) == []
+    end
+
+    test "is empty without platforms" do
+      channel = %Channel{hydra_project: "nixos", hydra_jobset: "unstable"}
+
+      assert Channel.hydra_job_links(channel, "hello", nil) == []
+    end
+  end
 end

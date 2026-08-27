@@ -1233,4 +1233,48 @@ defmodule TrackerWeb.PackageLive.ShowTest do
     |> revision_badges()
     |> Enum.map(fn {version, _added?} -> version end)
   end
+
+  describe "hydra links" do
+    setup %{cr1: cr1, channel_unstable: channel_unstable} do
+      Channel.update_hydra_status!(channel_unstable, %{
+        hydra_project: "nixos",
+        hydra_jobset: "unstable"
+      })
+
+      built =
+        Tracker.Nixpkgs.Package
+        |> Ash.Changeset.for_create(:create, %{attribute: "pkgshow-built"})
+        |> Ash.create!()
+
+      Tracker.Fixtures.apply_package_revision!(cr1, [
+        {built,
+         %{
+           version: "1.0",
+           platforms: ["x86_64-linux", "aarch64-darwin", "riscv64-linux"]
+         }}
+      ])
+
+      %{built: built}
+    end
+
+    test "links each hydra-built platform for the lens channel", %{conn: conn, built: built} do
+      {:ok, _view, html} =
+        live(conn, ~p"/packages/#{built.attribute}?channel=nixos-25.67")
+
+      assert html =~ "Hydra"
+
+      assert html =~
+               "https://hydra.nixos.org/job/nixos/unstable/nixpkgs.pkgshow-built.x86_64-linux"
+
+      refute html =~ "nixpkgs.pkgshow-built.aarch64-darwin"
+      refute html =~ "nixpkgs.pkgshow-built.riscv64-linux"
+    end
+
+    test "omits the section for a channel with no jobset", %{conn: conn, built: built} do
+      {:ok, _view, html} =
+        live(conn, ~p"/packages/#{built.attribute}?channel=nixos-24.66")
+
+      refute html =~ "hydra.nixos.org"
+    end
+  end
 end

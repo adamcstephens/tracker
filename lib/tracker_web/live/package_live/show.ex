@@ -123,6 +123,11 @@ defmodule TrackerWeb.PackageLive.Show do
       <:item :if={@package_meta.source_provenance} title="Source provenance">
         {Enum.join(@package_meta.source_provenance, ", ")}
       </:item>
+      <:item :if={@hydra_links != []} title="Hydra">
+        <span :for={{system, url} <- @hydra_links}>
+          <a href={url} target="_blank" rel="noopener noreferrer">{system}</a>
+        </span>
+      </:item>
     </.list>
 
     <details :if={@package_meta.platforms not in [nil, []]}>
@@ -707,6 +712,16 @@ defmodule TrackerWeb.PackageLive.Show do
     socket
     |> assign(:package_meta, meta)
     |> assign(:meta_revision, meta_revision(span, pinned_at))
+    |> assign(
+      :hydra_links,
+      hydra_links(socket.assigns.lens, socket.assigns.package, meta.platforms)
+    )
+  end
+
+  defp hydra_links(nil, _package, _platforms), do: []
+
+  defp hydra_links(lens, package, platforms) do
+    Tracker.Nixpkgs.Channel.hydra_job_links(lens.channel, package.attribute, platforms)
   end
 
   # The panel describes one channel at one instant, so its file link points at
