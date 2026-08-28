@@ -1324,6 +1324,30 @@ defmodule TrackerWeb.PackageLive.ShowTest do
          }}
       ])
 
+      channel_meta =
+        Channel.create!(%{
+          name: "nixos-unstable-small",
+          display_name: "NixOS Unstable Small",
+          status: :active,
+          is_stable: false
+        })
+
+      Channel.update_hydra_status!(channel_meta, %{
+        hydra_project: "nixos",
+        hydra_jobset: "unstable-small"
+      })
+
+      cr_meta =
+        Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
+          channel_id: channel_meta.id,
+          revision: "hydrameta11122233",
+          released_at: ~U[2026-03-18 10:00:00Z]
+        })
+
+      Tracker.Fixtures.apply_package_revision!(cr_meta, [
+        {built, %{version: "1.0", platforms: ["x86_64-linux"]}}
+      ])
+
       %{built: built}
     end
 
@@ -1345,6 +1369,14 @@ defmodule TrackerWeb.PackageLive.ShowTest do
         live(conn, ~p"/packages/#{built.attribute}?channel=nixos-24.66")
 
       refute html =~ "hydra.nixos.org"
+    end
+
+    test "links the metadata channel jobset under the all lens", %{conn: conn, built: built} do
+      {:ok, _view, html} =
+        live(conn, ~p"/packages/#{built.attribute}?channel=all")
+
+      assert html =~
+               "https://hydra.nixos.org/job/nixos/unstable-small/nixpkgs.pkgshow-built.x86_64-linux"
     end
   end
 end

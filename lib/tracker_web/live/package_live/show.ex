@@ -703,12 +703,11 @@ defmodule TrackerWeb.PackageLive.Show do
   # its own to describe; a selected channel shows its own span or nothing,
   # rather than passing another channel's data off as its own.
   defp assign_current_meta(socket, package_id, nil, pinned_at) do
+    channel = metadata_channel()
+    span = channel && meta_span(package_id, channel.id, pinned_at)
+
     socket
-    |> assign_meta(
-      metadata_channel_span(package_id, pinned_at),
-      pinned_at,
-      Tracker.Ingestion.StepGraph.metadata_channel()
-    )
+    |> assign_meta(span, pinned_at, channel, channel && channel.name)
     |> assign(:absent_from_lens_channel?, false)
   end
 
@@ -716,13 +715,13 @@ defmodule TrackerWeb.PackageLive.Show do
     span = meta_span(package_id, lens_channel_id, pinned_at)
 
     socket
-    |> assign_meta(span, pinned_at, nil)
+    |> assign_meta(span, pinned_at, socket.assigns.lens.channel, nil)
     |> assign(:absent_from_lens_channel?, is_nil(span) and is_nil(socket.assigns.removal))
   end
 
   # The version comes off the span directly: it is identity, not metadata, and
   # the browse tables sharing metadata_fields/0 have no use for it.
-  defp assign_meta(socket, span, pinned_at, version_channel) do
+  defp assign_meta(socket, span, pinned_at, meta_channel, version_channel) do
     meta =
       Map.new(
         Tracker.Nixpkgs.PackageHistory.metadata_fields(),
@@ -736,14 +735,17 @@ defmodule TrackerWeb.PackageLive.Show do
     |> assign(:meta_revision, meta_revision(span, pinned_at))
     |> assign(
       :hydra_links,
-      hydra_links(socket.assigns.lens, socket.assigns.package, meta.platforms)
+      hydra_links(meta_channel, socket.assigns.package, meta.platforms)
     )
   end
 
+  # The jobset linked is the one the metadata on this page came from, so the
+  # platforms listing the links and the jobset building them describe the same
+  # channel.
   defp hydra_links(nil, _package, _platforms), do: []
 
-  defp hydra_links(lens, package, platforms) do
-    Tracker.Nixpkgs.Channel.hydra_job_links(lens.channel, package.attribute, platforms)
+  defp hydra_links(channel, package, platforms) do
+    Tracker.Nixpkgs.Channel.hydra_job_links(channel, package.attribute, platforms)
   end
 
   # The panel describes one channel at one instant, so its file link points at
@@ -755,13 +757,6 @@ defmodule TrackerWeb.PackageLive.Show do
   defp meta_revision(span, pinned_at) do
     {:ok, revision} = Tracker.Nixpkgs.ChannelRevision.latest_at(span.channel_id, pinned_at)
     revision.revision
-  end
-
-  defp metadata_channel_span(package_id, pinned_at) do
-    case metadata_channel_id() do
-      nil -> nil
-      channel_id -> meta_span(package_id, channel_id, pinned_at)
-    end
   end
 
   defp meta_span(package_id, channel_id, nil) do
@@ -776,9 +771,9 @@ defmodule TrackerWeb.PackageLive.Show do
     |> Map.get(package_id)
   end
 
-  defp metadata_channel_id do
+  defp metadata_channel do
     case Tracker.Nixpkgs.Channel.by_name(Tracker.Ingestion.StepGraph.metadata_channel()) do
-      {:ok, channel} -> channel.id
+      {:ok, channel} -> channel
       _ -> nil
     end
   end
