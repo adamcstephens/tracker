@@ -335,6 +335,17 @@ defmodule Tracker.Nixpkgs.ChangeTest do
       end
     end
 
+    test "a two character token matches whole words but not substrings" do
+      word = merged_change!(%{number: 7501, title: "go_1_26: 1.26.6 -> 1.26.7"})
+      substring = merged_change!(%{number: 7502, title: "mongodb: 8.0.3 -> 8.0.4"})
+
+      page = Change.list!("go", nil, nil, page: [count: true])
+
+      numbers = Enum.map(page.results, & &1.number)
+      assert word.number in numbers
+      refute substring.number in numbers
+    end
+
     test "a single token search still matches on the author" do
       change = merged_change!(%{number: 7401, title: "hello: 1.0 -> 1.1", author: "nixpkgs-ci"})
 

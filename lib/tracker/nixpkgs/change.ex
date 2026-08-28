@@ -579,12 +579,17 @@ defmodule Tracker.Nixpkgs.Change do
     do: Ash.Query.do_filter(query, Ash.Expr.expr(exists(change_branches, branch_name == ^name)))
 
   defp matches_token(token) do
-    ci_token = Ash.CiString.new(token)
+    trigram =
+      Ash.Expr.expr(fragment("? <<% ?", ^token, title) or fragment("? <<% ?", ^token, author))
 
-    Ash.Expr.expr(
-      fragment("strict_word_similarity(?, ?) > 0.4", ^token, title) or
-        fragment("strict_word_similarity(?, ?) > 0.4", ^token, author) or
-        contains(title, ^ci_token) or contains(author, ^ci_token)
-    )
+    # a pattern shorter than a trigram holds no index key, so an infix match on
+    # it drags the whole disjunction into a sequential scan
+    if String.length(token) < 3 do
+      trigram
+    else
+      ci_token = Ash.CiString.new(token)
+
+      Ash.Expr.expr(^trigram or contains(title, ^ci_token) or contains(author, ^ci_token))
+    end
   end
 end
