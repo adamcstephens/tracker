@@ -175,6 +175,36 @@ defmodule TrackerWeb.ChangeLive.IndexTest do
     refute html =~ "5001"
   end
 
+  test "multi-word search ranks the closest title first", %{conn: conn} do
+    Tracker.Nixpkgs.Change.bulk_upsert_all([
+      %{
+        number: 5101,
+        title: "go_1_26: 1.26.6 -> 1.26.7",
+        state: :merged,
+        author: "carol",
+        base_ref: "master",
+        url: "https://github.com/NixOS/nixpkgs/pull/5101"
+      },
+      %{
+        number: 5102,
+        title: "gomarkdoc: restore checks on Go 1.26",
+        state: :merged,
+        author: "dave",
+        base_ref: "master",
+        url: "https://github.com/NixOS/nixpkgs/pull/5102"
+      }
+    ])
+
+    {:ok, view, _html} = live(conn, ~p"/changes")
+
+    html =
+      view
+      |> element("form.app-search")
+      |> render_change(%{"search" => "go 1.26.7"})
+
+    assert change_order(html) == ["#5101", "#5102"]
+  end
+
   test "base_ref dropdown filters by branch", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/changes?base_ref=release-25.11")
 

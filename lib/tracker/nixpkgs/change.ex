@@ -57,31 +57,24 @@ defmodule Tracker.Nixpkgs.Change do
         default_limit 15
       end
 
-      filter expr(
-               # an all-digit search is a PR number: exact match, ignoring lens/base_ref
-               if not is_nil(^arg(:search)) and
-                    fragment("?::text ~ '^[0-9]{1,9}$'", ^arg(:search)) do
-                 number == fragment("?::text::integer", ^arg(:search))
-               else
-                 if not is_nil(^arg(:search)) and ^arg(:search) != "" do
-                   fragment("strict_word_similarity(?, ?) > 0.4", ^arg(:search), title) or
-                     fragment("strict_word_similarity(?, ?) > 0.4", ^arg(:search), author) or
-                     contains(title, ^arg(:search)) or contains(author, ^arg(:search))
-                 else
-                   true
-                 end and
-                   if not is_nil(^arg(:base_ref)) and ^arg(:base_ref) != "" do
-                     base_ref == ^arg(:base_ref)
-                   else
-                     true
-                   end and
-                   if not is_nil(^arg(:channel_name)) do
-                     exists(change_branches, branch_name == ^arg(:channel_name))
-                   else
-                     true
-                   end
-               end
-             )
+      prepare fn query, _context ->
+        search = query |> Ash.Query.get_argument(:search) |> to_string() |> String.trim()
+
+        cond do
+          # an all-digit search is a PR number: exact match, ignoring lens/base_ref
+          search =~ ~r/^[0-9]{1,9}$/ ->
+            Ash.Query.do_filter(query, Ash.Expr.expr(number == ^String.to_integer(search)))
+
+          search == "" ->
+            scope_list(query)
+
+          true ->
+            search
+            |> String.split()
+            |> Enum.reduce(scope_list(query), &Ash.Query.do_filter(&2, matches_token(&1)))
+            |> Ash.Query.sort([search_rank: {%{search: search}, :desc}], prepend?: true)
+        end
+      end
     end
 
     read :by_package do
@@ -440,6 +433,22 @@ defmodule Tracker.Nixpkgs.Change do
     end
   end
 
+  calculations do
+    calculate :search_rank,
+              :float,
+              expr(
+                fragment(
+                  "greatest(strict_word_similarity(?, ?), strict_word_similarity(?, ?))",
+                  ^arg(:search),
+                  title,
+                  ^arg(:search),
+                  author
+                )
+              ) do
+      argument :search, :ci_string, allow_nil?: false
+    end
+  end
+
   identities do
     identity :unique_number, [:number]
     identity :unique_node_id, [:node_id], nils_distinct?: true
@@ -551,5 +560,31 @@ defmodule Tracker.Nixpkgs.Change do
 
       Map.merge(acc, Map.new(rows, fn %{id: id, number: number} -> {number, id} end))
     end)
+  end
+
+  defp scope_list(query) do
+    query
+    |> filter_base_ref(Ash.Query.get_argument(query, :base_ref))
+    |> filter_channel(Ash.Query.get_argument(query, :channel_name))
+  end
+
+  defp filter_base_ref(query, ref) when ref in [nil, ""], do: query
+
+  defp filter_base_ref(query, ref),
+    do: Ash.Query.do_filter(query, Ash.Expr.expr(base_ref == ^ref))
+
+  defp filter_channel(query, nil), do: query
+
+  defp filter_channel(query, name),
+    do: Ash.Query.do_filter(query, Ash.Expr.expr(exists(change_branches, branch_name == ^name)))
+
+  defp matches_token(token) do
+    ci_token = Ash.CiString.new(token)
+
+    Ash.Expr.expr(
+      fragment("strict_word_similarity(?, ?) > 0.4", ^token, title) or
+        fragment("strict_word_similarity(?, ?) > 0.4", ^token, author) or
+        contains(title, ^ci_token) or contains(author, ^ci_token)
+    )
   end
 end

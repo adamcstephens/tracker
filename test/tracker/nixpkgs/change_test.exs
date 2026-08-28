@@ -305,6 +305,45 @@ defmodule Tracker.Nixpkgs.ChangeTest do
     end
   end
 
+  describe "list/3 text search" do
+    setup do
+      %{
+        closest: merged_change!(%{number: 7101, title: "go_1_26: 1.26.6 -> 1.26.7"}),
+        looser: merged_change!(%{number: 7199, title: "gomarkdoc: restore checks on Go 1.26"}),
+        unrelated: [
+          merged_change!(%{number: 7301, title: "flashrom: 1.7.0 -> 1.8.0"}),
+          merged_change!(%{number: 7302, title: "go_1_25: 1.25.13 -> 1.25.14"}),
+          merged_change!(%{number: 7303, title: "berglas: 1.26.3 -> 1.26.6"})
+        ]
+      }
+    end
+
+    test "ranks the closest title first even when it has the lowest number" do
+      page =
+        Change.list!("go 1.26.7", nil, nil, query: [sort: [number: :desc]], page: [count: true])
+
+      assert [%{number: 7101}, %{number: 7199} | _] = page.results
+    end
+
+    test "requires every search token to match", %{unrelated: unrelated} do
+      page = Change.list!("go 1.26.7", nil, nil, page: [count: true])
+
+      numbers = Enum.map(page.results, & &1.number)
+
+      for change <- unrelated do
+        refute change.number in numbers
+      end
+    end
+
+    test "a single token search still matches on the author" do
+      change = merged_change!(%{number: 7401, title: "hello: 1.0 -> 1.1", author: "nixpkgs-ci"})
+
+      page = Change.list!("nixpkgs-ci", nil, nil, page: [count: true])
+
+      assert change.number in Enum.map(page.results, & &1.number)
+    end
+  end
+
   describe "PR lifecycle fields" do
     test "accepts :draft state" do
       id_map =
@@ -526,7 +565,7 @@ defmodule Tracker.Nixpkgs.ChangeTest do
       )
 
     Change.bulk_upsert_all([record])
-    Change.get_by_number!(number)
+    Change.get_by_number!(record.number)
   end
 
   defp record_branches!(change, branches) do
