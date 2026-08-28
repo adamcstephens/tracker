@@ -61,7 +61,7 @@ defmodule TrackerWeb.TeamLive.IndexTest do
   end
 
   test "fuzzy search tolerates typos on scope", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/teams?search=Pythen")
+    {:ok, _view, html} = live(conn, ~p"/teams?search=Pythonn")
 
     assert html =~ "Python ecosystem"
     refute html =~ "GNOME desktop"

@@ -189,19 +189,11 @@ defmodule Tracker.Nixpkgs.OptionSpan do
 
       prepare build(sort: [option_name: :asc], load: [:option])
       prepare Tracker.Nixpkgs.Preparations.OptionSpanSortByRelevance
+      prepare {Tracker.Nixpkgs.Preparations.TrigramSearch, fields: [{:option, :name}]}
 
       filter expr(
                channel_id == ^arg(:channel_id) and
                  fragment("? @> ?::timestamptz", valid, ^arg(:at))
-             )
-
-      filter expr(
-               if ^arg(:search) != "" do
-                 fragment("strict_word_similarity(?, ?) > 0.4", ^arg(:search), option.name) or
-                   contains(option.name, ^arg(:search))
-               else
-                 true
-               end
              )
 
       filter expr(

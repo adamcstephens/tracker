@@ -31,16 +31,7 @@ defmodule Tracker.Nixpkgs.Team do
       end
 
       prepare build(sort: :short_name)
-
-      filter expr(
-               if not is_nil(^arg(:search)) and ^arg(:search) != "" do
-                 fragment("strict_word_similarity(?, ?) > 0.4", ^arg(:search), short_name) or
-                   fragment("strict_word_similarity(?, ?) > 0.4", ^arg(:search), scope) or
-                   contains(short_name, ^arg(:search)) or contains(scope, ^arg(:search))
-               else
-                 true
-               end
-             )
+      prepare {Tracker.Nixpkgs.Preparations.TrigramSearch, fields: [:short_name, :scope]}
     end
 
     create :bulk_upsert do

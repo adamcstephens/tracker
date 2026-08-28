@@ -42,22 +42,17 @@ defmodule Tracker.Nixpkgs.Package do
       end
 
       prepare Tracker.Nixpkgs.Preparations.SortByRelevance
+      prepare {Tracker.Nixpkgs.Preparations.TrigramSearch, fields: [:attribute]}
 
       filter expr(
-               if not is_nil(^arg(:search)) and ^arg(:search) != "" do
-                 fragment("strict_word_similarity(?, ?) > 0.4", ^arg(:search), attribute) or
-                   contains(attribute, ^arg(:search))
+               if not is_nil(^arg(:channel_id)) do
+                 exists(
+                   spans,
+                   channel_id == ^arg(:channel_id) and fragment("upper_inf(?)", valid)
+                 )
                else
                  true
-               end and
-                 if not is_nil(^arg(:channel_id)) do
-                   exists(
-                     spans,
-                     channel_id == ^arg(:channel_id) and fragment("upper_inf(?)", valid)
-                   )
-                 else
-                   true
-                 end
+               end
              )
     end
 
@@ -76,15 +71,10 @@ defmodule Tracker.Nixpkgs.Package do
       end
 
       prepare build(sort: :attribute)
+      prepare {Tracker.Nixpkgs.Preparations.TrigramSearch, fields: [:attribute]}
 
       filter expr(
                exists(package_maintainers, maintainer_id == ^arg(:maintainer_id)) and
-                 if not is_nil(^arg(:search)) and ^arg(:search) != "" do
-                   fragment("strict_word_similarity(?, ?) > 0.4", ^arg(:search), attribute) or
-                     contains(attribute, ^arg(:search))
-                 else
-                   true
-                 end and
                  if not is_nil(^arg(:channel_id)) do
                    exists(
                      spans,
@@ -111,15 +101,10 @@ defmodule Tracker.Nixpkgs.Package do
       end
 
       prepare build(sort: :attribute)
+      prepare {Tracker.Nixpkgs.Preparations.TrigramSearch, fields: [:attribute]}
 
       filter expr(
                exists(package_teams, team_id == ^arg(:team_id)) and
-                 if not is_nil(^arg(:search)) and ^arg(:search) != "" do
-                   fragment("strict_word_similarity(?, ?) > 0.4", ^arg(:search), attribute) or
-                     contains(attribute, ^arg(:search))
-                 else
-                   true
-                 end and
                  if not is_nil(^arg(:channel_id)) do
                    exists(
                      spans,
@@ -172,16 +157,9 @@ defmodule Tracker.Nixpkgs.Package do
       end
 
       prepare build(sort: :attribute)
+      prepare {Tracker.Nixpkgs.Preparations.TrigramSearch, fields: [:attribute]}
 
-      filter expr(
-               exists(change_packages, change_id == ^arg(:change_id)) and
-                 if not is_nil(^arg(:search)) and ^arg(:search) != "" do
-                   fragment("strict_word_similarity(?, ?) > 0.4", ^arg(:search), attribute) or
-                     contains(attribute, ^arg(:search))
-                 else
-                   true
-                 end
-             )
+      filter expr(exists(change_packages, change_id == ^arg(:change_id)))
     end
 
     read :id_map do

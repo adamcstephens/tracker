@@ -296,7 +296,7 @@ defmodule TrackerWeb.PackageLive.IndexTest do
 
   describe "fuzzy matching" do
     setup do
-      for name <- ["python311", "python312", "numpy", "numpy-stubs"] do
+      for name <- ["python311", "python312", "numpy", "numpy-stubs", "go_1_26", "mongodb"] do
         Tracker.Nixpkgs.Package
         |> Ash.Changeset.for_create(:create, %{attribute: name})
         |> Ash.create!()
@@ -312,9 +312,16 @@ defmodule TrackerWeb.PackageLive.IndexTest do
     end
 
     test "typo finds intended attribute", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/packages?search=nuympy")
+      {:ok, _view, html} = live(conn, ~p"/packages?search=nummpy")
 
       assert html =~ "numpy"
+    end
+
+    test "a two character search matches whole words but not substrings", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/packages?search=go")
+
+      assert html =~ "go_1_26"
+      refute html =~ "mongodb"
     end
   end
 

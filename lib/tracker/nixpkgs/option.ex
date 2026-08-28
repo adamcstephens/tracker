@@ -27,15 +27,7 @@ defmodule Tracker.Nixpkgs.Option do
       end
 
       prepare build(sort: :name)
-
-      filter expr(
-               if not is_nil(^arg(:search)) and ^arg(:search) != "" do
-                 fragment("strict_word_similarity(?, ?) > 0.4", ^arg(:search), name) or
-                   contains(name, ^arg(:search))
-               else
-                 true
-               end
-             )
+      prepare {Tracker.Nixpkgs.Preparations.TrigramSearch, fields: [:name]}
     end
 
     read :id_map do

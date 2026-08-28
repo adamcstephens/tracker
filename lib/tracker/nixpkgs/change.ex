@@ -8,6 +8,8 @@ defmodule Tracker.Nixpkgs.Change do
   require Ash.Expr
   require Ash.Query
 
+  alias Tracker.Nixpkgs.Preparations.TrigramSearch
+
   postgres do
     table "changes"
     repo Tracker.Repo
@@ -71,7 +73,10 @@ defmodule Tracker.Nixpkgs.Change do
           true ->
             search
             |> String.split()
-            |> Enum.reduce(scope_list(query), &Ash.Query.do_filter(&2, matches_token(&1)))
+            |> Enum.reduce(
+              scope_list(query),
+              &Ash.Query.do_filter(&2, TrigramSearch.match(&1, [:title, :author]))
+            )
             |> Ash.Query.sort([search_rank: {%{search: search}, :desc}], prepend?: true)
         end
       end
@@ -577,19 +582,4 @@ defmodule Tracker.Nixpkgs.Change do
 
   defp filter_channel(query, name),
     do: Ash.Query.do_filter(query, Ash.Expr.expr(exists(change_branches, branch_name == ^name)))
-
-  defp matches_token(token) do
-    trigram =
-      Ash.Expr.expr(fragment("? <<% ?", ^token, title) or fragment("? <<% ?", ^token, author))
-
-    # a pattern shorter than a trigram holds no index key, so an infix match on
-    # it drags the whole disjunction into a sequential scan
-    if String.length(token) < 3 do
-      trigram
-    else
-      ci_token = Ash.CiString.new(token)
-
-      Ash.Expr.expr(^trigram or contains(title, ^ci_token) or contains(author, ^ci_token))
-    end
-  end
 end

@@ -34,15 +34,7 @@ defmodule Tracker.Nixpkgs.Maintainer do
       end
 
       prepare build(sort: :github)
-
-      filter expr(
-               if not is_nil(^arg(:search)) and ^arg(:search) != "" do
-                 fragment("strict_word_similarity(?, ?) > 0.4", ^arg(:search), github) or
-                   contains(github, ^arg(:search))
-               else
-                 true
-               end
-             )
+      prepare {Tracker.Nixpkgs.Preparations.TrigramSearch, fields: [:github]}
     end
 
     read :by_githubs do
