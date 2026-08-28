@@ -17,6 +17,14 @@ defmodule TrackerWeb.PackageLive.Show do
     ~H"""
     <.header>
       {@package.attribute}
+      <span
+        :if={@package_version}
+        id="current-version"
+        class="pkg-version"
+        title={version_title(@version_channel, @lens)}
+      >
+        {@package_version}<span :if={@version_channel} class="pkg-version__source">{" in #{@version_channel}"}</span>
+      </span>
       <span :if={@removal} class="pill pill-removed" title={removal_title(@removal, @lens)}>
         <span class="dot" aria-hidden="true"></span>{removal_label(@removal, @lens)}
       </span>
@@ -400,6 +408,19 @@ defmodule TrackerWeb.PackageLive.Show do
     end
   end
 
+  # Only the all-channels lens shows a version it cannot claim as its own, so it
+  # names the channel it borrowed from rather than passing it off as universal.
+  defp version_title(nil, lens) do
+    case TrackerWeb.Lens.pinned_at(lens) do
+      nil -> "Version in #{TrackerWeb.Lens.channel_name(lens)}"
+      _at -> "Version in #{TrackerWeb.Lens.channel_name(lens)} at this revision"
+    end
+  end
+
+  defp version_title(version_channel, _lens) do
+    "Version in #{version_channel}, which the all-channels view reports having no channel of its own."
+  end
+
   defp pinned_before?(removal, lens) do
     case TrackerWeb.Lens.pinned_at(lens) do
       nil -> false
@@ -690,7 +711,11 @@ defmodule TrackerWeb.PackageLive.Show do
   # rather than passing another channel's data off as its own.
   defp assign_current_meta(socket, package_id, nil, pinned_at) do
     socket
-    |> assign_meta(metadata_channel_span(package_id, pinned_at), pinned_at)
+    |> assign_meta(
+      metadata_channel_span(package_id, pinned_at),
+      pinned_at,
+      Tracker.Ingestion.StepGraph.metadata_channel()
+    )
     |> assign(:absent_from_lens_channel?, false)
   end
 
@@ -698,11 +723,13 @@ defmodule TrackerWeb.PackageLive.Show do
     span = meta_span(package_id, lens_channel_id, pinned_at)
 
     socket
-    |> assign_meta(span, pinned_at)
+    |> assign_meta(span, pinned_at, nil)
     |> assign(:absent_from_lens_channel?, is_nil(span) and is_nil(socket.assigns.removal))
   end
 
-  defp assign_meta(socket, span, pinned_at) do
+  # The version comes off the span directly: it is identity, not metadata, and
+  # the browse tables sharing metadata_fields/0 have no use for it.
+  defp assign_meta(socket, span, pinned_at, version_channel) do
     meta =
       Map.new(
         Tracker.Nixpkgs.PackageHistory.metadata_fields(),
@@ -711,6 +738,8 @@ defmodule TrackerWeb.PackageLive.Show do
 
     socket
     |> assign(:package_meta, meta)
+    |> assign(:package_version, span && span.version)
+    |> assign(:version_channel, span && version_channel)
     |> assign(:meta_revision, meta_revision(span, pinned_at))
     |> assign(
       :hydra_links,

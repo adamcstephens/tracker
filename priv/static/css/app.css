@@ -829,6 +829,23 @@ a.revision-link {
 	font-family: var(--mono);
 }
 
+/* Package show: the version beside the attribute in the page heading. Sized in
+   em so it tracks the h1 it sits in rather than the root. */
+.pkg-version {
+	font-family: var(--mono);
+	font-size: 0.5em;
+	font-weight: 600;
+	color: var(--text-2);
+}
+
+.pkg-version__source {
+	font-family: var(--sans);
+	font-size: 0.8em;
+	font-weight: 400;
+	color: var(--text-3);
+	white-space: nowrap;
+}
+
 /* Package revision filters */
 .revision-filters {
 	display: flex;

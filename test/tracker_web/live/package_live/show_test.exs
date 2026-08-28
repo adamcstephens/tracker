@@ -202,10 +202,11 @@ defmodule TrackerWeb.PackageLive.ShowTest do
 
       Tracker.Fixtures.remove_package!(cr_gone, gone)
 
-      {:ok, _view, html} = live(conn, ~p"/packages/#{gone.attribute}?channel=nixos-24.66")
+      {:ok, view, html} = live(conn, ~p"/packages/#{gone.attribute}?channel=nixos-24.66")
 
       assert html =~ "Removed from nixos-24.66 at gone111"
       refute html =~ "not in nixos-24.66"
+      refute has_element?(view, "#current-version")
     end
 
     test "a lens switch reloads metadata", %{
@@ -221,6 +222,75 @@ defmodule TrackerWeb.PackageLive.ShowTest do
 
       assert html =~ "Stable-channel description"
       refute html =~ "Meta-channel description"
+    end
+
+    test "the header states the lens channel's version", %{conn: conn, package: package} do
+      {:ok, view, _html} =
+        live(conn, ~p"/packages/#{package.attribute}?channel=nixos-24.66")
+
+      assert has_element?(view, "h1 #current-version", "2.13.0")
+      refute has_element?(view, "#current-version .pkg-version__source")
+    end
+
+    test "the header version names its channel", %{conn: conn, package: package} do
+      {:ok, view, _html} =
+        live(conn, ~p"/packages/#{package.attribute}?channel=nixos-24.66")
+
+      assert has_element?(view, "#current-version[title='Version in nixos-24.66']")
+    end
+
+    test "a pinned lens does not call the header version current", %{
+      conn: conn,
+      package: package
+    } do
+      {:ok, view, _html} =
+        live(conn, ~p"/packages/#{package.attribute}?channel=nixos-24.66&rev=stab111ccc222333")
+
+      assert has_element?(
+               view,
+               "#current-version[title='Version in nixos-24.66 at this revision']",
+               "2.13.0"
+             )
+    end
+
+    test "the all-channels lens attributes the header version to the metadata channel", %{
+      conn: conn,
+      package: package
+    } do
+      {:ok, view, _html} = live(conn, ~p"/packages/#{package.attribute}?channel=all")
+
+      assert has_element?(view, "h1 #current-version", "2.14.0")
+
+      assert has_element?(
+               view,
+               "#current-version .pkg-version__source",
+               "in nixos-unstable-small"
+             )
+    end
+
+    test "a metadata-less lens channel span still states its version", %{
+      conn: conn,
+      package: package
+    } do
+      {:ok, view, _html} =
+        live(conn, ~p"/packages/#{package.attribute}?channel=nixos-25.67")
+
+      assert has_element?(view, "h1 #current-version", "2.12.1")
+    end
+
+    test "a package absent from the lens channel states no version", %{
+      conn: conn,
+      cr_meta: cr_meta
+    } do
+      absent = Tracker.Fixtures.package!("pkgshow-versionless")
+
+      Tracker.Fixtures.apply_package_revision!(cr_meta, [
+        {absent, %{version: "9.9.9", description: "Meta-only description"}}
+      ])
+
+      {:ok, view, _html} = live(conn, ~p"/packages/#{absent.attribute}?channel=nixos-24.66")
+
+      refute has_element?(view, "#current-version")
     end
   end
 
