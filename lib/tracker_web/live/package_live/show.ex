@@ -535,13 +535,6 @@ defmodule TrackerWeb.PackageLive.Show do
     |> assign(:subscription_events, (subscription && subscription.events) || [])
   end
 
-  defp extra_params(socket, overrides \\ %{}) do
-    %{
-      version: Map.get(overrides, :version, socket.assigns.version_filter),
-      all_revisions: Map.get(overrides, :all_revisions, socket.assigns.all_revisions?)
-    }
-  end
-
   defp revisions_path(package_name, tp, extra_overrides) do
     extras =
       %{
