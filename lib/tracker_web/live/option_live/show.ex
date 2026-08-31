@@ -578,7 +578,7 @@ defmodule TrackerWeb.OptionLive.Show do
     {:noreply,
      socket
      |> assign(:search_origin, origin)
-     |> push_patch(to: options_path(socket, target_prefix, search))}
+     |> push_patch(to: options_path(socket, target_prefix, search), replace: true)}
   end
 
   # A search always lands on page 1; pagination links carry the page itself.

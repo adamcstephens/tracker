@@ -145,7 +145,8 @@ defmodule TrackerWeb.MaintainerLive.Show do
 
     {:noreply,
      push_patch(socket,
-       to: TableParams.to_path(tp, "/maintainers/#{socket.assigns.maintainer.github}")
+       to: TableParams.to_path(tp, "/maintainers/#{socket.assigns.maintainer.github}"),
+       replace: true
      )}
   end
 

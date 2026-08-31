@@ -119,7 +119,8 @@ defmodule TrackerWeb.TeamLive.Show do
 
     {:noreply,
      push_patch(socket,
-       to: TableParams.to_path(tp, "/teams/#{socket.assigns.team.short_name}")
+       to: TableParams.to_path(tp, "/teams/#{socket.assigns.team.short_name}"),
+       replace: true
      )}
   end
 

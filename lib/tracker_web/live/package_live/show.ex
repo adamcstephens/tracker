@@ -653,7 +653,8 @@ defmodule TrackerWeb.PackageLive.Show do
          revisions_path(socket.assigns.package.attribute, tp, %{
            version: version,
            all_revisions: all_revisions?
-         })
+         }),
+       replace: true
      )}
   end
 
