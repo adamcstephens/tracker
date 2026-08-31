@@ -170,6 +170,17 @@ const PATCH_MS = 1000
 
 let pendingJump = null
 
+// The chord lands on the same link the chrome offers, so a jump inherits
+// whatever the nav carries — the persisted search query, live navigation —
+// rather than reimplementing it. A page without the chrome still jumps.
+function jumpTo(destination) {
+  let link = [...document.querySelectorAll(".app-nav a[href], a.app-inbox[href]")]
+    .find((candidate) => new URL(candidate.href).pathname === destination)
+
+  if (link) link.click()
+  else window.location.assign(destination)
+}
+
 function clearPendingJump() {
   clearTimeout(pendingJump)
   pendingJump = null
@@ -211,7 +222,7 @@ document.addEventListener("keydown", (event) => {
     clearPendingJump()
     if (destination) {
       event.preventDefault()
-      window.location.assign(destination)
+      jumpTo(destination)
     }
     return
   }

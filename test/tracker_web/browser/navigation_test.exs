@@ -55,6 +55,16 @@ defmodule TrackerWeb.Browser.NavigationTest do
     end
   end
 
+  test "a jump carries the search query the nav links carry", %{conn: conn} do
+    conn = conn |> sign_in() |> visit(~p"/changes?search=hello")
+
+    press(conn, "body", "g")
+    press(conn, "body", "p")
+
+    assert_path(conn, "/packages")
+    assert read(conn, ~s|new URLSearchParams(location.search).get("search")|) == "hello"
+  end
+
   test "g then an unmapped key is swallowed and moves nothing", %{conn: conn} do
     conn = changes_page(conn)
 
