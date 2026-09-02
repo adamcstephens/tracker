@@ -1,16 +1,5 @@
 ## Agent Workflow
-- **IMPORTANT**: before you do anything else, invoke the cli `veans prime` and heed its output.
 - If generating a plan as part of a vean, you must write it to the description or comment of the associated vean before implementing.
-
-## Definition of done
-- formatting done, `just format`
-- tests pass, `just test`
-- code committed with all ticket changes included
-  - Prefer no or very short commit body
-  - Ticket ID in the body
-  - Assisted-By line always included
-- ticket moved to in-review with a summary comment
-- stop for feedback and let the user move to Done
 
 ## Code conventions
 
