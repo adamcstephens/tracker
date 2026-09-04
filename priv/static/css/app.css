@@ -180,6 +180,9 @@ h6 {
 
 html {
 	color-scheme: light dark;
+	/* Keep Safari from independently enlarging prose in individual result rows. */
+	-webkit-text-size-adjust: 100%;
+	text-size-adjust: 100%;
 	/* Keep centered content from shifting when the scrollbar comes and goes. */
 	scrollbar-gutter: stable;
 }
