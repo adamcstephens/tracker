@@ -35,7 +35,10 @@ defmodule Tracker.MixProject do
   # Type `mix help deps` for examples and options.
   defp deps do
     [
-      {:deps_nix, "~> 3.1", only: [:dev]},
+      {:deps_nix, "~> 3.1",
+       only: [:dev],
+       git: "https://github.com/code-supply/deps_nix.git",
+       ref: "8ecd7ff6ab480fb8ee10768d60c7bb8e08978c29"},
       {:usage_rules, "~> 1.0", only: [:dev]},
       {:tidewave, "~> 0.5", only: [:dev]},
       {:ash, "~> 3.0"},

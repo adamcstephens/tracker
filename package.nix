@@ -72,12 +72,14 @@ beamPackages.mixRelease rec {
           "lumis"
         ];
       };
+
       # 0.7.0 lock is broken
       lumis = _old: {
         cargoDeps = rustPlatform.importCargoLock { lockFile = ./nix/lumis_nif-Cargo.lock; };
         postPatch = "cp ${./nix/lumis_nif-Cargo.lock} Cargo.lock";
       };
     };
+
     overrides =
       _self: prev:
       let
@@ -93,6 +95,14 @@ beamPackages.mixRelease rec {
         mdex_native = withAppConfig prev.mdex_native;
         mime = withAppConfig prev.mime;
         spark = withAppConfig prev.spark;
+
+        nostrum = prev.nostrum.override {
+          postPatch = ''
+            # remove appup live reloading compile
+            substituteInPlace mix.exs --replace-fail 'compilers: Mix.compilers() ++ [:appup],' 'compilers: Mix.compilers(),'
+          '';
+        };
+
       };
   };
 

@@ -3,3 +3,4 @@ default_name = "tracker-dev"
 cpus = 6
 memory = 12288
 ports = ["6950:6950"]
+mounts = ["~/.local/state/paseo/tracker-dev:~/.local/state/paseo"]

@@ -1,9 +1,8 @@
 {
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nixpkgs.url = "https://channels.nixos.org/nixos-unstable/nixexprs.tar.zst";
     flake-parts.url = "github:hercules-ci/flake-parts";
-    sower.url = "git+https://tangled.org/adam.robins.wtf/sower";
-
+    sower.url = "git+https://tangled.org/did:plc:nj2d7jcn7eadgln47fqn6xtn";
   };
 
   outputs =
@@ -31,7 +30,7 @@
           ...
         }:
         let
-          beamPackages = pkgs.beamMinimal29Packages.extend (
+          beamPackages = pkgs.beamMinimal29Packages.overrideScope (
             _: prev: {
               elixir = prev.elixir_1_20;
             }

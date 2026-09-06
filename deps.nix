@@ -11,6 +11,7 @@
   rustlerPrecompiledOverrides ? { },
   stdenv,
   pkg-config,
+  sqlite,
   vips,
   writeText,
 }:
@@ -1181,7 +1182,7 @@ let
             inherit version;
             name = "lazy_html";
 
-            nativeBuildInputs = [
+            buildInputs = [
               lexbor
             ];
 
@@ -1286,7 +1287,7 @@ let
 
       mint =
         let
-          version = "1.9.3";
+          version = "1.10.0";
           drv = buildMix {
             inherit version;
             name = "mint";
@@ -1294,7 +1295,7 @@ let
             src = fetchHex {
               inherit version;
               pkg = "mint";
-              sha256 = "5f7c9342480c069dbbc4eeac3490303c9e01870ff01a7f1d29b6107054fc1e74";
+              sha256 = "8b16fb72aaa7531d206a1f05e4cc85509ba531ccec7a17a22736c9c95cbb24d1";
             };
 
             beamDeps = [
