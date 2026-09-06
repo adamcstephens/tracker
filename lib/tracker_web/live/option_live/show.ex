@@ -403,7 +403,7 @@ defmodule TrackerWeb.OptionLive.Show do
     tp = TableParams.from_params(params)
     search = tp.search
     lens = socket.assigns.lens
-    default_channel = if lens, do: lens.channel.name, else: ""
+    default_channel = if lens && !lens.all?, do: lens.channel.name, else: ""
     default_rev = if lens && lens.revision, do: lens.revision.revision, else: ""
     channel = Map.get(params, "channel", default_channel)
     rev = Map.get(params, "rev", default_rev)

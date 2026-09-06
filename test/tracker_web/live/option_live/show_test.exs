@@ -79,6 +79,15 @@ defmodule TrackerWeb.OptionLive.ShowTest do
     %{channel: channel, channel_revision: cr}
   end
 
+  test "all-channels lens prompts to select a channel", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/options/services.nginx?channel=all")
+
+    assert html =~
+             "Options are channel-specific. Select a channel from the picker above to browse them."
+
+    refute html =~ "Enable Nginx."
+  end
+
   test "renders the prefix as a breadcrumb path bar heading", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/options/services.nginx")
 

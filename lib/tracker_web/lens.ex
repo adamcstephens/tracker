@@ -27,7 +27,7 @@ defmodule TrackerWeb.Lens do
   @ambient_key :tracker_lens
 
   typedstruct do
-    field :channel, Channel.t(), enforce: true
+    field :channel, Channel.t() | nil
     field :revision, ChannelRevision.t() | nil
     field :disabled?, boolean(), default: false
     field :all?, boolean(), default: false
@@ -40,12 +40,7 @@ defmodule TrackerWeb.Lens do
   or not found.
   """
   @spec resolve(String.t() | nil, String.t() | nil) :: t() | nil
-  def resolve("all", _rev_hash) do
-    case default_channel() do
-      nil -> nil
-      channel -> %__MODULE__{channel: channel, all?: true}
-    end
-  end
+  def resolve("all", _rev_hash), do: %__MODULE__{all?: true}
 
   def resolve(channel_name, rev_hash) do
     case resolve_channel(channel_name) do

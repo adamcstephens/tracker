@@ -64,17 +64,17 @@ defmodule TrackerWeb.LensTest do
       assert lens.channel.name == stable.name
     end
 
-    test "resolves 'all' to all-channels lens with default stable fallback", %{stable: stable} do
+    test "resolves 'all' to a channel-less all-channels lens" do
       lens = Lens.resolve("all", nil)
       assert lens.all? == true
-      assert lens.channel.name == stable.name
+      assert lens.channel == nil
       assert lens.revision == nil
     end
 
-    test "resolves 'all' ignores revision", %{stable: stable} do
+    test "resolves 'all' without a channel when a revision is supplied" do
       lens = Lens.resolve("all", "abc1234")
       assert lens.all? == true
-      assert lens.channel.name == stable.name
+      assert lens.channel == nil
       assert lens.revision == nil
     end
   end
@@ -279,7 +279,7 @@ defmodule TrackerWeb.LensTest do
       assert rev == nil
     end
 
-    test "cookie round-trips 'all' lens", %{stable: stable} do
+    test "cookie round-trips 'all' lens" do
       lens = Lens.resolve("all", nil)
       assert Lens.cookie_value(lens) == "all"
 
@@ -289,7 +289,7 @@ defmodule TrackerWeb.LensTest do
 
       round_tripped = Lens.resolve(name, rev)
       assert round_tripped.all? == true
-      assert round_tripped.channel.name == stable.name
+      assert round_tripped.channel == nil
     end
   end
 
