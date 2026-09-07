@@ -73,7 +73,7 @@ beamPackages.mixRelease rec {
         ];
       };
 
-      # 0.7.0 lock is broken
+      # 0.8.0 lock is broken
       lumis = _old: {
         cargoDeps = rustPlatform.importCargoLock { lockFile = ./nix/lumis_nif-Cargo.lock; };
         postPatch = "cp ${./nix/lumis_nif-Cargo.lock} Cargo.lock";

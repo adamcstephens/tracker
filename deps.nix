@@ -1203,7 +1203,7 @@ let
 
       lumis =
         let
-          version = "0.7.0";
+          version = "0.8.0";
           drv = buildMix {
             inherit version;
             name = "lumis";
@@ -1211,7 +1211,7 @@ let
             src = fetchHex {
               inherit version;
               pkg = "lumis";
-              sha256 = "614d8869b188a763e1a41a5ce6ddb8b54068f66c670576de34051b9d5b08977b";
+              sha256 = "d5b71a5b082f32fc1d007d02f03922db95b9caec335b03a1985edb726c59f63e";
             };
 
             beamDeps = [
