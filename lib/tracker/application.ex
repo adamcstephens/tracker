@@ -23,7 +23,6 @@ defmodule Tracker.Application do
        )},
       GitHub.Auth.Cache,
       TrackerWeb.Telemetry,
-      {DNSCluster, query: Application.get_env(:tracker, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Tracker.PubSub},
       # Start the Finch HTTP client for sending emails
       {Finch, name: Tracker.Finch},
