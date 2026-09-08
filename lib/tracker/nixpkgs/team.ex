@@ -8,6 +8,7 @@ defmodule Tracker.Nixpkgs.Team do
 
   code_interface do
     define :read
+    define :destroy
     define :list, args: [{:optional, :search}]
     define :bulk_upsert
     define :get_by_short_name, action: :read, get_by: [:short_name]
@@ -15,7 +16,7 @@ defmodule Tracker.Nixpkgs.Team do
   end
 
   actions do
-    defaults [:read]
+    defaults [:read, :destroy]
 
     read :id_map do
       prepare build(select: [:short_name])

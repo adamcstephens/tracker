@@ -11,6 +11,10 @@
 - You must get permission to use raw SQL.
 - Always use typedstruct structs instead of maps
 
+## Project norms
+
+- Channel ingestion must always happen in chronological order. Do not allow or support out of order ingestion, and do not protect against out of order ingestion.
+
 ## Testing
 
 - You can access the dev server live over tidewave project_eval, allowing for introspection of a live environment.

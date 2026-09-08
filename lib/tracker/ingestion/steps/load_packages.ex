@@ -44,7 +44,7 @@ defmodule Tracker.Ingestion.Steps.LoadPackages do
   @impl true
   def run(%Tracker.Ingestion.StepContext{pipeline: pipeline, channel_revision: channel_revision}) do
     compressed = ChannelFetcher.fetch_packages_compressed(pipeline.base_url)
-    channel = Ash.get!(Tracker.Nixpkgs.Channel, pipeline.channel_id)
+    channel = Tracker.Nixpkgs.Channel.by_id!(pipeline.channel_id)
     metadata_channel? = channel.name == StepGraph.metadata_channel()
 
     # stream_packages/2 is a synchronous DirtyCpu NIF that blocks its caller
@@ -64,7 +64,15 @@ defmodule Tracker.Ingestion.Steps.LoadPackages do
     id_map = load_packages(extracted, channel_revision)
 
     if metadata_channel? do
-      load_maintainers_and_teams(id_map, maint_data, team_data, joins)
+      Tracker.Nixpkgs.Channel.reconcile_metadata!(
+        channel.id,
+        %Tracker.Nixpkgs.MetadataSnapshot{
+          package_ids: id_map,
+          maintainers: maint_data,
+          teams: team_data,
+          joins: joins
+        }
+      )
     end
 
     :ok
@@ -143,14 +151,10 @@ defmodule Tracker.Ingestion.Steps.LoadPackages do
       team_names = Enum.map(teams, &String.downcase(&1[:short_name]))
 
       joins =
-        if maintainer_ids != [] or team_names != [] do
-          Map.put(joins, attr, %{
-            maintainer_github_ids: maintainer_ids,
-            team_short_names: team_names
-          })
-        else
-          joins
-        end
+        Map.put(joins, attr, %{
+          maintainer_github_ids: maintainer_ids,
+          team_short_names: team_names
+        })
 
       {Map.put(pkgs, attr, entry), maint_acc, team_acc, joins}
     end)
@@ -236,84 +240,5 @@ defmodule Tracker.Ingestion.Steps.LoadPackages do
     )
 
     id_map
-  end
-
-  # -- Maintainer/team loading --
-
-  defp load_maintainers_and_teams(id_map, maintainer_data, team_data, package_joins) do
-    maintainer_task =
-      Task.async(fn ->
-        maintainer_data |> Map.values() |> Tracker.Nixpkgs.Maintainer.bulk_upsert_all()
-
-        maintainer_id_map()
-      end)
-
-    team_task =
-      Task.async(fn ->
-        team_data
-        |> Map.values()
-        |> Enum.map(&Map.delete(&1, :member_github_ids))
-        |> Tracker.Nixpkgs.Team.bulk_upsert_all()
-
-        team_id_map()
-      end)
-
-    maintainer_id_map = Task.await(maintainer_task, :timer.minutes(5))
-    team_id_map = Task.await(team_task, :timer.minutes(5))
-
-    team_member_task =
-      Task.async(fn ->
-        team_data
-        |> Enum.flat_map(fn {short_name, team} ->
-          team_id = Map.fetch!(team_id_map, short_name)
-
-          Enum.map(team.member_github_ids, fn github_id ->
-            %{team_id: team_id, maintainer_id: Map.fetch!(maintainer_id_map, github_id)}
-          end)
-        end)
-        |> Tracker.Nixpkgs.TeamMember.bulk_create_all()
-      end)
-
-    pkg_maintainer_task =
-      Task.async(fn ->
-        package_joins
-        |> Enum.flat_map(fn {attr, joins} ->
-          package_id = Map.fetch!(id_map, attr)
-
-          joins.maintainer_github_ids
-          |> Enum.uniq()
-          |> Enum.map(fn github_id ->
-            %{package_id: package_id, maintainer_id: Map.fetch!(maintainer_id_map, github_id)}
-          end)
-        end)
-        |> Tracker.Nixpkgs.PackageMaintainer.bulk_create_all()
-      end)
-
-    pkg_team_task =
-      Task.async(fn ->
-        package_joins
-        |> Enum.flat_map(fn {attr, joins} ->
-          package_id = Map.fetch!(id_map, attr)
-
-          Enum.map(joins.team_short_names, fn short_name ->
-            %{package_id: package_id, team_id: Map.fetch!(team_id_map, short_name)}
-          end)
-        end)
-        |> Tracker.Nixpkgs.PackageTeam.bulk_create_all()
-      end)
-
-    Task.await_many([team_member_task, pkg_maintainer_task, pkg_team_task], :timer.minutes(5))
-
-    :ok
-  end
-
-  defp maintainer_id_map do
-    Tracker.Nixpkgs.Maintainer.id_map!()
-    |> Map.new(&{&1.github_id, &1.id})
-  end
-
-  defp team_id_map do
-    Tracker.Nixpkgs.Team.id_map!()
-    |> Map.new(&{to_string(&1.short_name), &1.id})
   end
 end

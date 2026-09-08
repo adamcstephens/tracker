@@ -26,6 +26,7 @@ defmodule Tracker.Nixpkgs.Channel do
     define :update_hydra_status
     define :update_status
     define :put_pointer
+    define :reconcile_metadata, args: [:channel_id, :snapshot]
   end
 
   actions do
@@ -90,6 +91,16 @@ defmodule Tracker.Nixpkgs.Channel do
 
     update :update_status do
       accept [:status]
+    end
+
+    action :reconcile_metadata, :atom do
+      argument :channel_id, :integer, allow_nil?: false
+
+      argument :snapshot, :struct,
+        allow_nil?: false,
+        constraints: [instance_of: Tracker.Nixpkgs.MetadataSnapshot]
+
+      run Tracker.Nixpkgs.ReconcileMetadata
     end
 
     update :put_pointer do

@@ -4,6 +4,7 @@ defmodule Tracker.Ingestion.Steps.LoadPackagesTest do
   alias Tracker.Ingestion.StepContext
   alias Tracker.Ingestion.Steps.LoadPackages
   alias Tracker.Nixpkgs.{Channel, PackageSpan, S3Cache}
+  alias Tracker.Nixpkgs.{Maintainer, Package, PackageMaintainer, PackageTeam, Team, TeamMember}
 
   @base_url "http://upstream.test/release"
 
@@ -189,5 +190,91 @@ defmodule Tracker.Ingestion.Steps.LoadPackagesTest do
 
     teams = Tracker.Nixpkgs.Team.id_map!()
     assert Enum.any?(teams, &(to_string(&1.short_name) == "nixos-team"))
+  end
+
+  test "reconciles all metadata relations without rewriting retained rows" do
+    channel = run_step!(Tracker.Ingestion.StepGraph.metadata_channel())
+    package = Package.get_by_attribute!("with_maintainers")
+    retained = relation_rows()
+    team = Team.get_by_short_name!("nixos-team")
+
+    fixture = Tracker.PackageStreamFixtures.json()
+    entry = fixture["packages"]["with_maintainers"]
+    changed = put_in(fixture, ["packages", "another"], entry)
+    stub_fixture(changed)
+    run_revision!(channel, "second", ~U[2026-07-02 10:00:00Z])
+
+    for {resource, rows} <- retained do
+      assert Enum.all?(rows, &(&1 in resource.read!(query: [sort: :id])))
+    end
+
+    assert Team.get_by_short_name!("nixos-team") == team
+
+    changed = put_in(changed, ["packages", "with_maintainers", "meta"], %{})
+    stub_fixture(changed)
+    run_revision!(channel, "third", ~U[2026-07-03 10:00:00Z])
+    assert Package.get_by_attribute!(package.attribute, load: [:maintainers]).maintainers == []
+    assert Package.get_by_attribute!(package.attribute, load: [:teams]).teams == []
+    assert Team.get_by_short_name!("nixos-team").id == team.id
+    assert length(TeamMember.read!()) == 1
+    assert length(PackageMaintainer.read!()) == 1
+    assert length(PackageTeam.read!()) == 1
+
+    unchanged = relation_rows()
+    run_revision!(channel, "third", ~U[2026-07-03 10:00:00Z])
+    assert relation_rows() == unchanged
+
+    stub_fixture(put_in(changed, ["packages"], %{}))
+    run_revision!(channel, "empty", ~U[2026-07-04 10:00:00Z])
+    assert relation_rows() == [{PackageMaintainer, []}, {TeamMember, []}, {PackageTeam, []}]
+    assert Team.read!() == []
+    assert Maintainer.get_by_github!("alice").id
+    assert Maintainer.get_by_github!("bob").id
+    assert Package.get_by_attribute!(package.attribute).id == package.id
+  end
+
+  test "updates teams in place and clears removed members and optional metadata" do
+    channel = run_step!(Tracker.Ingestion.StepGraph.metadata_channel())
+    team = Team.get_by_short_name!("nixos-team")
+    [join] = PackageTeam.read!()
+
+    Tracker.PackageStreamFixtures.json()
+    |> put_in(["packages", "with_maintainers", "meta", "teams"], [
+      %{"shortName" => "NIXOS-TEAM", "members" => []}
+    ])
+    |> stub_fixture()
+
+    run_revision!(channel, "second", ~U[2026-07-02 10:00:00Z])
+    updated = Team.get_by_short_name!("nixos-team")
+    assert updated.id == team.id
+    assert updated.scope == nil
+    assert updated.github == nil
+    assert updated.github_id == nil
+    assert TeamMember.read!() == []
+    assert PackageTeam.read!() == [join]
+    assert Maintainer.get_by_github!("bob").id
+  end
+
+  test "a failed parse leaves committed metadata unchanged" do
+    channel = run_step!(Tracker.Ingestion.StepGraph.metadata_channel())
+    before = {relation_rows(), Team.read!(), Maintainer.read!(), Channel.by_id!(channel.id)}
+    stub_packages_body(ExBrotli.compress!("{"))
+
+    assert_raise RuntimeError, ~r/PackageStream/, fn ->
+      run_revision!(channel, "bad", ~U[2026-07-02 10:00:00Z])
+    end
+
+    assert {relation_rows(), Team.read!(), Maintainer.read!(), Channel.by_id!(channel.id)} ==
+             before
+  end
+
+  defp stub_fixture(fixture) do
+    fixture |> Jason.encode!() |> ExBrotli.compress!() |> stub_packages_body()
+  end
+
+  defp relation_rows do
+    for resource <- [PackageMaintainer, TeamMember, PackageTeam] do
+      {resource, resource.read!(query: [sort: :id])}
+    end
   end
 end

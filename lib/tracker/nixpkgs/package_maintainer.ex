@@ -9,10 +9,16 @@ defmodule Tracker.Nixpkgs.PackageMaintainer do
   code_interface do
     define :read
     define :load
+    define :relation_keys
+    define :destroy
   end
 
   actions do
-    defaults [:read]
+    defaults [:read, :destroy]
+
+    read :relation_keys do
+      prepare build(select: [:package_id, :maintainer_id])
+    end
 
     create :load do
       accept [:package_id, :maintainer_id]
