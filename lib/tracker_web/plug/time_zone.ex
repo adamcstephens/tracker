@@ -20,7 +20,9 @@ defmodule TrackerWeb.Plug.TimeZone do
   def resolve(%{time_zone: time_zone}, _cookie) when is_binary(time_zone), do: time_zone
 
   def resolve(_user, cookie) when is_binary(cookie) do
-    if TimeZone.valid?(cookie), do: cookie, else: TimeZone.default()
+    time_zone = URI.decode(cookie)
+
+    if TimeZone.valid?(time_zone), do: time_zone, else: TimeZone.default()
   end
 
   def resolve(_user, _cookie), do: TimeZone.default()

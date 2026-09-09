@@ -8,12 +8,15 @@ defmodule TrackerWeb.TimeZoneIntegrationTest do
 
   @merged_at ~U[2026-07-01 16:05:00Z]
 
-  test "anonymous visitors with a valid time zone cookie receive localized initial HTML", %{
+  test "anonymous visitors with an encoded time zone cookie receive localized initial HTML", %{
     conn: conn
   } do
     change!(nil, %{merged_at: @merged_at})
 
-    conn = conn |> put_req_cookie("_tracker_time_zone", "America/New_York") |> get(~p"/changes")
+    conn =
+      conn
+      |> put_req_cookie("_tracker_time_zone", "America%2FNew_York")
+      |> get(~p"/changes")
 
     assert html_response(conn, 200) =~ "Merged on 2026-07-01 12:05 EDT"
   end
