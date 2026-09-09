@@ -89,7 +89,7 @@ defmodule TrackerWeb.ChannelLive.ShowTest do
              |> Floki.parse_document!()
              |> Floki.find(~s(a[href^="/channels/nixos-chanshow/revisions/shw222bbb444555"]))
 
-    assert html =~ "2026-03-15 10:00"
+    assert html =~ "2026-03-15 10:00 UTC"
   end
 
   test "rows are not whole-row links, so the compare checkbox stays clickable", %{conn: conn} do

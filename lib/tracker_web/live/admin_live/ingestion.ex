@@ -3,6 +3,7 @@ defmodule TrackerWeb.AdminLive.Ingestion do
 
   alias Tracker.Ingestion.{Pipeline, PipelineStarter}
   alias TrackerWeb.RowList
+  alias TrackerWeb.Time
   alias TrackerWeb.SectionHeader
 
   @impl Phoenix.LiveView
@@ -38,7 +39,7 @@ defmodule TrackerWeb.AdminLive.Ingestion do
           </:label>
           <:sublabel>
             <span>{p.status} at {p.failed_step}</span>
-            <span>released {format_datetime(p.released_at)}</span>
+            <span>released {format_datetime(p.released_at, @time_zone)}</span>
             <span>retries {p.retry_count}/{Pipeline.max_auto_retries()}</span>
             <span data-blocked-count={p.channel.pending_pipeline_count}>
               {p.channel.pending_pipeline_count} blocked behind it
@@ -96,6 +97,6 @@ defmodule TrackerWeb.AdminLive.Ingestion do
     "/dev/oban/jobs?args=pipeline_id%2B%2B#{pipeline.id}&state=discarded"
   end
 
-  defp format_datetime(nil), do: "—"
-  defp format_datetime(dt), do: Calendar.strftime(dt, "%Y-%m-%d %H:%M UTC")
+  defp format_datetime(nil, _time_zone), do: "—"
+  defp format_datetime(dt, time_zone), do: Time.format_datetime(dt, time_zone)
 end

@@ -178,7 +178,10 @@ defmodule TrackerWeb.InboxLive.Index do
     socket
     |> assign(:notifications, page.results)
     |> assign(:version_changes, NotificationPresenter.version_changes(page.results))
-    |> assign(:groups, NotificationPresenter.group_by_day(page.results, now))
+    |> assign(
+      :groups,
+      NotificationPresenter.group_by_day(page.results, now, socket.assigns.time_zone)
+    )
     |> assign(:now, now)
     |> assign(:unread_count, unread_count)
     |> assign(:total_count, count(socket, %{}))
@@ -325,7 +328,13 @@ defmodule TrackerWeb.InboxLive.Index do
         <section :for={{{day, rows}, index} <- Enum.with_index(@groups)}>
           <SectionHeader.section_header title={day} count={length(rows)} />
           <RowList.row_list id={"inbox-day-#{index}"}>
-            <.row :for={n <- rows} n={n} now={@now} version_changes={@version_changes} />
+            <.row
+              :for={n <- rows}
+              n={n}
+              now={@now}
+              time_zone={@time_zone}
+              version_changes={@version_changes}
+            />
           </RowList.row_list>
         </section>
       </div>
@@ -375,6 +384,7 @@ defmodule TrackerWeb.InboxLive.Index do
   attr :n, :map, required: true
   attr :now, :any, required: true
   attr :version_changes, :map, required: true
+  attr :time_zone, :string, required: true
 
   defp row(assigns) do
     assigns =
@@ -427,7 +437,7 @@ defmodule TrackerWeb.InboxLive.Index do
           </span>
         <% end %>
         <span class="ibx-dot-sep">·</span>
-        <time class="ibx-time" title={NotificationPresenter.clock_utc(@n.occurred_at)}>
+        <time class="ibx-time" title={NotificationPresenter.clock(@n.occurred_at, @time_zone)}>
           {NotificationPresenter.relative_time(@n.occurred_at, @now)}
         </time>
       </:sublabel>

@@ -18,6 +18,8 @@ defmodule TrackerWeb.NotificationPresenter do
   use TrackerWeb, :verified_routes
 
   alias Tracker.Nixpkgs.PackageHistory
+  alias Tracker.TimeZone
+  alias TrackerWeb.Time
   alias TrackerWeb.NotificationPresenter.TypeMeta
 
   # Display order for filters and summaries.
@@ -155,11 +157,14 @@ defmodule TrackerWeb.NotificationPresenter do
     end
   end
 
-  @doc "The absolute UTC clock time, used as the relative time's tooltip."
-  def clock_utc(occurred_at), do: Calendar.strftime(occurred_at, "%H:%M UTC")
+  @doc "The absolute clock time used as the relative time's tooltip."
+  def clock(occurred_at, time_zone), do: Time.format_datetime(occurred_at, time_zone)
 
   @doc ~S(The day-group label for a timestamp: "Today", "Yesterday", or "Friday, Jun 5".)
-  def day_bucket(occurred_at, now) do
+  def day_bucket(occurred_at, now, time_zone) do
+    now = TimeZone.shift!(now, time_zone)
+    occurred_at = TimeZone.shift!(occurred_at, time_zone)
+
     case Date.diff(DateTime.to_date(now), DateTime.to_date(occurred_at)) do
       diff when diff <= 0 -> "Today"
       1 -> "Yesterday"
@@ -168,10 +173,12 @@ defmodule TrackerWeb.NotificationPresenter do
   end
 
   @doc "Groups notifications into `{day_label, notifications}` pairs, preserving order."
-  def group_by_day(notifications, now) do
+  def group_by_day(notifications, now, time_zone) do
     notifications
-    |> Enum.chunk_by(&day_bucket(&1.occurred_at, now))
-    |> Enum.map(fn [first | _] = group -> {day_bucket(first.occurred_at, now), group} end)
+    |> Enum.chunk_by(&day_bucket(&1.occurred_at, now, time_zone))
+    |> Enum.map(fn [first | _] = group ->
+      {day_bucket(first.occurred_at, now, time_zone), group}
+    end)
   end
 
   @doc """

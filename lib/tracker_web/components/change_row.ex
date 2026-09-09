@@ -9,6 +9,7 @@ defmodule TrackerWeb.ChangeRow do
   """
   use TrackerWeb, :html
 
+  alias TrackerWeb.Time
   alias TrackerWeb.RowList
 
   @doc """
@@ -30,6 +31,7 @@ defmodule TrackerWeb.ChangeRow do
 
   @doc "Renders one change."
   attr :id, :string, default: nil
+  attr :time_zone, :string, default: "Etc/UTC"
   attr :change, :map, required: true
   attr :landed_in, :string, default: nil, doc: "channel this row is marked as having reached"
 
@@ -49,7 +51,7 @@ defmodule TrackerWeb.ChangeRow do
           in {@landed_in}
         </span>
       </:sublabel>
-      <:meta>{merged_on(@change.merged_at)}</:meta>
+      <:meta>{merged_on(@change.merged_at, @time_zone)}</:meta>
       <:actions>
         <a
           href={@change.url}
@@ -86,6 +88,6 @@ defmodule TrackerWeb.ChangeRow do
     """
   end
 
-  defp merged_on(nil), do: ""
-  defp merged_on(dt), do: "Merged on " <> Calendar.strftime(dt, "%Y-%m-%d %H:%M")
+  defp merged_on(nil, _time_zone), do: ""
+  defp merged_on(dt, time_zone), do: "Merged on " <> Time.format_datetime(dt, time_zone)
 end

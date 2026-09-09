@@ -49,7 +49,7 @@ defmodule TrackerWeb.ChangeRowTest do
       assert html =~ "python3Packages.numpy: 2.0.0 -&gt; 2.1.0"
       assert html =~ ~s(class="pill pill-merged")
       assert html =~ "master"
-      assert html =~ "Merged on 2026-04-01 10:00"
+      assert html =~ "Merged on 2026-04-01 10:00 UTC"
       assert html =~ ~s(href="https://github.com/NixOS/nixpkgs/pull/4242")
       assert html =~ ~s(aria-label="Open #4242 on GitHub")
     end

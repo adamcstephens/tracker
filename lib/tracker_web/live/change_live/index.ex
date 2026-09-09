@@ -38,6 +38,7 @@ defmodule TrackerWeb.ChangeLive.Index do
         :for={{dom_id, change} <- @streams.changes}
         id={dom_id}
         change={change}
+        time_zone={@time_zone}
         landed_in={lens_landing(change, @lens_channel_name, @in_channel_filter?)}
       />
     </ChangeRow.change_row_list>

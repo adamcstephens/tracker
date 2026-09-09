@@ -3,6 +3,7 @@ defmodule TrackerWeb.ChannelLive.Index do
 
   alias Tracker.Nixpkgs.Channel
   alias TrackerWeb.PageSearch
+  alias TrackerWeb.Time
   alias TrackerWeb.RowList
 
   @row_loads [:build_problem?, :revision_count, :latest_release]
@@ -25,7 +26,7 @@ defmodule TrackerWeb.ChannelLive.Index do
         </:label>
         <:meta>
           <span>{channel.count} revisions</span>
-          <span>{format_date(channel.latest_release)}</span>
+          <span>{format_date(channel.latest_release, @time_zone)}</span>
         </:meta>
         <:actions>
           <span class="arrow" aria-hidden="true">→</span>
@@ -35,8 +36,8 @@ defmodule TrackerWeb.ChannelLive.Index do
     """
   end
 
-  defp format_date(nil), do: "-"
-  defp format_date(dt), do: Calendar.strftime(dt, "%Y-%m-%d %H:%M")
+  defp format_date(nil, _time_zone), do: "-"
+  defp format_date(dt, time_zone), do: Time.format_datetime(dt, time_zone)
 
   @impl true
   def mount(_params, _session, socket) do

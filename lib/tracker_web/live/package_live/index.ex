@@ -4,6 +4,7 @@ defmodule TrackerWeb.PackageLive.Index do
   alias TrackerWeb.PageSearch
   alias TrackerWeb.Pagination
   alias TrackerWeb.RowList
+  alias TrackerWeb.Time
   alias TrackerWeb.TableParams
 
   @impl true
@@ -18,7 +19,7 @@ defmodule TrackerWeb.PackageLive.Index do
       >
         <:label>{package.attribute}</:label>
         <:sublabel :if={package.description}>{package.description}</:sublabel>
-        <:meta>{format_datetime(package.inserted_at)}</:meta>
+        <:meta>{format_datetime(package.inserted_at, @time_zone)}</:meta>
       </RowList.row>
     </RowList.row_list>
 
@@ -34,8 +35,8 @@ defmodule TrackerWeb.PackageLive.Index do
     """
   end
 
-  defp format_datetime(nil), do: "-"
-  defp format_datetime(dt), do: Calendar.strftime(dt, "%Y-%m-%d %H:%M")
+  defp format_datetime(nil, _time_zone), do: "-"
+  defp format_datetime(dt, time_zone), do: Time.format_datetime(dt, time_zone)
 
   @impl true
   def mount(_params, _session, socket) do

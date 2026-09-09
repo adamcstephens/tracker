@@ -76,7 +76,7 @@ defmodule TrackerWeb.ChannelLive.IndexTest do
     {:ok, _view, html} = live(conn, ~p"/channels")
 
     assert html =~ "2 revisions"
-    assert html =~ "2026-03-15 10:00"
+    assert html =~ "2026-03-15 10:00 UTC"
   end
 
   test "column sorting is gone", %{conn: conn} do

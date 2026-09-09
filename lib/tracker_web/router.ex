@@ -22,6 +22,7 @@ defmodule TrackerWeb.Router do
     plug :put_secure_browser_headers
     plug :load_from_session
     plug TrackerWeb.Plug.StoreReturnTo
+    plug TrackerWeb.Plug.TimeZone
     plug TrackerWeb.Plug.InteractiveUI
     plug TrackerWeb.Plug.Lens
   end
@@ -64,6 +65,7 @@ defmodule TrackerWeb.Router do
       ash_authentication_live_session :account_routes,
         on_mount: [
           {TrackerWeb.LiveUserAuth, :live_user_required},
+          TrackerWeb.TimeZone,
           TrackerWeb.InboxBadgeHook
         ] do
         live "/tokens", AccountLive.Tokens, :index
@@ -74,6 +76,7 @@ defmodule TrackerWeb.Router do
     ash_authentication_live_session :authenticated_routes,
       on_mount: [
         {TrackerWeb.LiveUserAuth, :live_user_optional},
+        TrackerWeb.TimeZone,
         {TrackerWeb.Plug.InteractiveUI, :default},
         {TrackerWeb.Lens, :default},
         TrackerWeb.InboxBadgeHook
@@ -175,6 +178,7 @@ defmodule TrackerWeb.Router do
     ash_authentication_live_session :admin_routes,
       on_mount: [
         {TrackerWeb.LiveUserAuth, :admin_only},
+        TrackerWeb.TimeZone,
         TrackerWeb.InboxBadgeHook
       ] do
       live "/", AdminLive.Ingestion, :index

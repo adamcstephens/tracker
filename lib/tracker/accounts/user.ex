@@ -55,6 +55,7 @@ defmodule Tracker.Accounts.User do
     define :grant_admin
     define :get_by_github_username, args: [:github_username]
     define :set_live_ui
+    define :set_time_zone
     define :set_auto_subscribe
     define :rotate_feed_token
     define :by_feed_token, args: [:feed_token], not_found_error?: false
@@ -125,6 +126,24 @@ defmodule Tracker.Accounts.User do
       accept [:live_ui]
     end
 
+    update :set_time_zone do
+      require_atomic? false
+      accept [:time_zone]
+
+      change fn changeset, _ ->
+        time_zone = Ash.Changeset.get_attribute(changeset, :time_zone)
+
+        if Tracker.TimeZone.valid?(time_zone) do
+          changeset
+        else
+          Ash.Changeset.add_error(changeset,
+            field: :time_zone,
+            message: "must be a valid IANA time zone"
+          )
+        end
+      end
+    end
+
     update :set_auto_subscribe do
       description "Toggle either change auto-subscribe preference; omitted flags keep their value."
       require_atomic? false
@@ -193,6 +212,10 @@ defmodule Tracker.Accounts.User do
       authorize_if expr(id == ^actor(:id))
     end
 
+    bypass action(:set_time_zone) do
+      authorize_if expr(id == ^actor(:id))
+    end
+
     bypass action(:set_auto_subscribe) do
       authorize_if expr(id == ^actor(:id))
     end
@@ -234,6 +257,11 @@ defmodule Tracker.Accounts.User do
 
     attribute :live_ui, :boolean do
       default true
+      allow_nil? false
+    end
+
+    attribute :time_zone, :string do
+      default "Etc/UTC"
       allow_nil? false
     end
 

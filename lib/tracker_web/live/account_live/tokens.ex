@@ -4,6 +4,7 @@ defmodule TrackerWeb.AccountLive.Tokens do
   alias Tracker.Accounts.ApiToken
   alias TrackerWeb.RowList
   alias TrackerWeb.SectionHeader
+  alias TrackerWeb.Time
 
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
@@ -52,8 +53,8 @@ defmodule TrackerWeb.AccountLive.Tokens do
         <:label>{label_for(t)}</:label>
         <:sublabel>
           <code>{t.jti}</code>
-          <span>issued {format_datetime(t.inserted_at)}</span>
-          <span>expires {format_datetime(t.expires_at)}</span>
+          <span>issued {format_datetime(t.inserted_at, @time_zone)}</span>
+          <span>expires {format_datetime(t.expires_at, @time_zone)}</span>
         </:sublabel>
         <:meta>{status_for(t)}</:meta>
         <:actions>
@@ -145,5 +146,5 @@ defmodule TrackerWeb.AccountLive.Tokens do
   defp status_for(%{revoked_at: nil}), do: "active"
   defp status_for(%{revoked_at: %DateTime{}}), do: "revoked"
 
-  defp format_datetime(dt), do: Calendar.strftime(dt, "%Y-%m-%d %H:%M UTC")
+  defp format_datetime(dt, time_zone), do: Time.format_datetime(dt, time_zone)
 end

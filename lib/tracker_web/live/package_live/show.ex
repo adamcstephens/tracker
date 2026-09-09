@@ -25,7 +25,11 @@ defmodule TrackerWeb.PackageLive.Show do
       >
         {@package_version}<span :if={@version_channel} class="pkg-version__source">{" in #{@version_channel}"}</span>
       </span>
-      <span :if={@removal} class="pill pill-removed" title={removal_title(@removal, @lens)}>
+      <span
+        :if={@removal}
+        class="pill pill-removed"
+        title={removal_title(@removal, @lens, @time_zone)}
+      >
         <span class="dot" aria-hidden="true"></span>{removal_label(@removal, @lens)}
       </span>
       <span
@@ -199,7 +203,7 @@ defmodule TrackerWeb.PackageLive.Show do
     <section :if={@recent_changes != []}>
       <SectionHeader.section_header title="Recent Changes" count={length(@recent_changes)} />
       <ChangeRow.change_row_list id="recent-changes">
-        <ChangeRow.change_row :for={change <- @recent_changes} change={change} />
+        <ChangeRow.change_row :for={change <- @recent_changes} change={change} time_zone={@time_zone} />
       </ChangeRow.change_row_list>
     </section>
 
@@ -242,7 +246,7 @@ defmodule TrackerWeb.PackageLive.Show do
         <:sublabel>{rev_channel(rev)}</:sublabel>
         <:meta>
           <.revision_link revision={rev_revision(rev)} channel={rev_channel(rev)} />
-          <span>{format_released_at(rev_released_at(rev))}</span>
+          <span>{format_released_at(rev_released_at(rev), @time_zone)}</span>
         </:meta>
       </RowList.row>
     </RowList.row_list>
@@ -377,9 +381,9 @@ defmodule TrackerWeb.PackageLive.Show do
     if pinned_before?(removal, lens), do: "removed later", else: "removed"
   end
 
-  defp removal_title(removal, lens) do
+  defp removal_title(removal, lens, time_zone) do
     sentence =
-      "Removed from #{removal.channel_name} at #{String.slice(removal.revision, 0, 7)} on #{format_released_at(removal.released_at)}"
+      "Removed from #{removal.channel_name} at #{String.slice(removal.revision, 0, 7)} on #{format_released_at(removal.released_at, time_zone)}"
 
     if pinned_before?(removal, lens),
       do: sentence <> ", after the revision this page is pinned to.",
@@ -428,8 +432,8 @@ defmodule TrackerWeb.PackageLive.Show do
     end
   end
 
-  defp format_released_at(nil), do: "-"
-  defp format_released_at(dt), do: Calendar.strftime(dt, "%Y-%m-%d %H:%M")
+  defp format_released_at(nil, _time_zone), do: "-"
+  defp format_released_at(dt, time_zone), do: TrackerWeb.Time.format_datetime(dt, time_zone)
 
   @impl true
   def mount(_params, _session, socket) do

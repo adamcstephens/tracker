@@ -6,6 +6,7 @@ defmodule TrackerWeb.ChannelLive.Show do
   alias TrackerWeb.Pagination
   alias TrackerWeb.RowList
   alias TrackerWeb.SectionHeader
+  alias TrackerWeb.Time
   alias TrackerWeb.TableParams
 
   @impl true
@@ -55,7 +56,7 @@ defmodule TrackerWeb.ChannelLive.Show do
             <input type="checkbox" name="compare[]" value={rev.revision} />
             <.revision_link revision={rev.revision} channel={@channel} />
           </:label>
-          <:meta>{format_date(rev.released_at)}</:meta>
+          <:meta>{format_date(rev.released_at, @time_zone)}</:meta>
         </RowList.row>
       </RowList.row_list>
 
@@ -90,8 +91,8 @@ defmodule TrackerWeb.ChannelLive.Show do
     """
   end
 
-  defp format_date(nil), do: "-"
-  defp format_date(dt), do: Calendar.strftime(dt, "%Y-%m-%d %H:%M")
+  defp format_date(nil, _time_zone), do: "-"
+  defp format_date(dt, time_zone), do: Time.format_datetime(dt, time_zone)
 
   @impl true
   def mount(_params, _session, socket) do

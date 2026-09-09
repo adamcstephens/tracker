@@ -13,6 +13,7 @@ defmodule TrackerWeb.AccountLive.Settings do
      |> assign(:current_user, user)
      |> assign(:page_title, "Account settings")
      |> assign(:live_ui, user.live_ui)
+     |> assign(:time_zone, user.time_zone)
      |> assign(:auto_subscribe_authored, user.auto_subscribe_authored_changes)
      |> assign(:auto_subscribe_merged, user.auto_subscribe_merged_changes)
      |> assign(:feed_path, FeedLink.path(user))
@@ -47,6 +48,12 @@ defmodule TrackerWeb.AccountLive.Settings do
           value="true"
           checked={@live_ui}
         /> Use LiveView
+      </label>
+
+      <h2>Time zone</h2>
+      <p>Use an IANA time zone name, such as <code>America/New_York</code>.</p>
+      <label>
+        Time zone <input id="time-zone" type="text" name="settings[time_zone]" value={@time_zone} />
       </label>
 
       <h2>Change subscriptions</h2>
@@ -137,6 +144,8 @@ defmodule TrackerWeb.AccountLive.Settings do
   def handle_event("save", %{"settings" => settings}, socket) do
     user = socket.assigns.current_user
 
+    time_zone = Map.get(settings, "time_zone", user.time_zone)
+
     auto_subscribe = %{
       auto_subscribe_authored_changes: checked?(settings, "auto_subscribe_authored_changes"),
       auto_subscribe_merged_changes: checked?(settings, "auto_subscribe_merged_changes")
@@ -144,12 +153,14 @@ defmodule TrackerWeb.AccountLive.Settings do
 
     with {:ok, user} <-
            User.set_live_ui(user, %{live_ui: checked?(settings, "live_ui")}, actor: user),
-         {:ok, updated} <- User.set_auto_subscribe(user, auto_subscribe, actor: user) do
+         {:ok, user} <- User.set_auto_subscribe(user, auto_subscribe, actor: user),
+         {:ok, updated} <- User.set_time_zone(user, %{time_zone: time_zone}, actor: user) do
       {:noreply,
        socket
        |> assign(:current_user, updated)
        |> assign(:live_ui, updated.live_ui)
        |> assign(:auto_subscribe_authored, updated.auto_subscribe_authored_changes)
+       |> assign(:time_zone, updated.time_zone)
        |> assign(:auto_subscribe_merged, updated.auto_subscribe_merged_changes)
        |> assign(:saved?, true)}
     else

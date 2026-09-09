@@ -31,6 +31,13 @@ with nothing ingested yet the task says so and seeds nothing.
 The route only exists when `dev_routes` is enabled, so it is never compiled
 into a production build.
 
+## Time zones
+
+Absolute times use your configured IANA time zone. New accounts and visitors
+without a preference see UTC; browsers save an anonymous preference for future
+requests. Change the signed-in preference in Account settings. Deployments need
+an IANA zoneinfo database; the NixOS module configures `TZDIR` from `tzdata`.
+
 ## Service accounts and API tokens
 
 Tracker supports long-lived API bearer tokens for non-human callers. Service

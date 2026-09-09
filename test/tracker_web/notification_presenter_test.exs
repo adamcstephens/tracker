@@ -323,10 +323,23 @@ defmodule TrackerWeb.NotificationPresenterTest do
       assert NotificationPresenter.relative_time(~U[2026-06-08 12:00:00Z], @now) == "2d ago"
     end
 
-    test "day_bucket/2" do
-      assert NotificationPresenter.day_bucket(~U[2026-06-10 00:01:00Z], @now) == "Today"
-      assert NotificationPresenter.day_bucket(~U[2026-06-09 23:59:00Z], @now) == "Yesterday"
-      assert NotificationPresenter.day_bucket(~U[2026-06-05 09:00:00Z], @now) == "Friday, Jun 5"
+    test "day_bucket/3 uses the requested local date" do
+      assert NotificationPresenter.day_bucket(~U[2026-06-10 00:01:00Z], @now, "Etc/UTC") ==
+               "Today"
+
+      assert NotificationPresenter.day_bucket(~U[2026-06-09 23:59:00Z], @now, "Etc/UTC") ==
+               "Yesterday"
+
+      assert NotificationPresenter.day_bucket(
+               ~U[2026-06-10 00:01:00Z],
+               @now,
+               "America/New_York"
+             ) == "Yesterday"
+    end
+
+    test "clock/2 includes the local zone abbreviation" do
+      assert NotificationPresenter.clock(~U[2026-07-01 16:05:00Z], "America/New_York") ==
+               "2026-07-01 12:05 EDT"
     end
   end
 end

@@ -37,6 +37,7 @@ defmodule TrackerWeb.ChangeLive.Show do
   alias TrackerWeb.RowList
   alias TrackerWeb.SectionHeader
   alias TrackerWeb.TableParams
+  alias TrackerWeb.Time
   alias Tracker.Nixpkgs.Propagation
   alias Tracker.Notifications.ChangeSubscription
 
@@ -279,11 +280,11 @@ defmodule TrackerWeb.ChangeLive.Show do
             </div>
             <div :if={@change.gh_created_at}>
               <dt>Created</dt>
-              <dd>{format_datetime(@change.gh_created_at)} <small>UTC</small></dd>
+              <dd>{format_datetime(@change.gh_created_at, @time_zone)}</dd>
             </div>
             <div :if={@change.merged_at}>
               <dt>Merged</dt>
-              <dd>{format_datetime(@change.merged_at)} <small>UTC</small></dd>
+              <dd>{format_datetime(@change.merged_at, @time_zone)}</dd>
             </div>
             <div>
               <dt>Base branch</dt>
@@ -330,7 +331,7 @@ defmodule TrackerWeb.ChangeLive.Show do
   defp relative(s) when s < 86_400 * 365, do: "#{div(s, 86_400 * 30)}mo ago"
   defp relative(s), do: "#{div(s, 86_400 * 365)}y ago"
 
-  defp format_datetime(dt), do: Calendar.strftime(dt, "%Y-%m-%d %H:%M")
+  defp format_datetime(dt, time_zone), do: Time.format_datetime(dt, time_zone)
 
   defp pluralize_namespaces(1), do: "namespace"
   defp pluralize_namespaces(_), do: "namespaces"

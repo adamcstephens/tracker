@@ -141,6 +141,7 @@ defmodule TrackerWeb.InboxLive.Subscriptions do
           events={sub.events}
           at={sub.inserted_at}
           now={@now}
+          time_zone={@time_zone}
         />
       </.section>
 
@@ -158,6 +159,7 @@ defmodule TrackerWeb.InboxLive.Subscriptions do
           label={sub.channel.name}
           at={sub.inserted_at}
           now={@now}
+          time_zone={@time_zone}
         />
       </.section>
 
@@ -177,6 +179,7 @@ defmodule TrackerWeb.InboxLive.Subscriptions do
           propagated?={sub.propagated?}
           at={sub.inserted_at}
           now={@now}
+          time_zone={@time_zone}
         />
       </.section>
     </div>
@@ -210,6 +213,7 @@ defmodule TrackerWeb.InboxLive.Subscriptions do
   attr :propagated?, :boolean, default: false
   attr :at, :any, required: true
   attr :now, :any, required: true
+  attr :time_zone, :string, required: true
 
   defp sub_row(assigns) do
     assigns = assign(assigns, :type_color, Map.fetch!(@type_colors, assigns.kind))
@@ -235,7 +239,7 @@ defmodule TrackerWeb.InboxLive.Subscriptions do
           {NotificationPresenter.type_filter_label(event)}
         </span>
         <span :if={@scope} class="ibx-dot-sep">·</span>
-        <time class="ibx-time" title={NotificationPresenter.clock_utc(@at)}>
+        <time class="ibx-time" title={NotificationPresenter.clock(@at, @time_zone)}>
           subscribed {NotificationPresenter.relative_time(@at, @now)}
         </time>
       </:sublabel>

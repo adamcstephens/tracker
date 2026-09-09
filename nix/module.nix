@@ -137,6 +137,7 @@ in
         RELEASE_TMP = "/run/tracker";
         RELEASE_DISTRIBUTION = "none";
         RELEASE_COOKIE = "tracker";
+        TZDIR = "${pkgs.tzdata}/share/zoneinfo";
         NIXPKGS_GIT_PATH = cfg.nixpkgsGitPath;
         TRACKER_GITHUB_CLIENT_ID = cfg.github.clientId;
         TRACKER_GITHUB_CLIENT_SECRET_FILE = toString cfg.github.clientSecretFile;

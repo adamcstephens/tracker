@@ -46,7 +46,7 @@ defmodule TrackerWeb.MaintainerLive.Show do
     <section :if={@recent_changes != []}>
       <SectionHeader.section_header title="Recent Changes" count={length(@recent_changes)} />
       <ChangeRow.change_row_list id="maintainer-recent-changes">
-        <ChangeRow.change_row :for={change <- @recent_changes} change={change} />
+        <ChangeRow.change_row :for={change <- @recent_changes} change={change} time_zone={@time_zone} />
       </ChangeRow.change_row_list>
     </section>
 

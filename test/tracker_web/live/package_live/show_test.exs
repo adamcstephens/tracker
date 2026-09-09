@@ -722,7 +722,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
   test "displays when each revision was released", %{conn: conn, package: package} do
     {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}")
 
-    assert html =~ "2026-03-01 10:00"
+    assert html =~ "2026-03-01 10:00 UTC"
   end
 
   test "revisions are listed most recently released first", %{conn: conn, package: package} do

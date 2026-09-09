@@ -53,6 +53,22 @@ defmodule TrackerWeb.AccountLive.SettingsTest do
     end
   end
 
+  describe "time zone preference" do
+    test "saves an IANA time zone", %{conn: conn} do
+      user = register_via_github!()
+      conn = log_in(conn, user)
+
+      {:ok, view, _html} = live(conn, ~p"/account/settings")
+
+      view
+      |> form("#settings-form", settings: %{time_zone: "America/New_York"})
+      |> render_submit()
+
+      assert Ash.get!(User, user.id, authorize?: false).time_zone == "America/New_York"
+      assert view |> element("#time-zone") |> render() =~ ~s(value="America/New_York")
+    end
+  end
+
   describe "change auto-subscribe preferences" do
     test "both checkboxes start unchecked", %{conn: conn} do
       user = register_via_github!()

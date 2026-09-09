@@ -86,7 +86,8 @@ defmodule Tracker.MixProject do
       {:rustler, "~> 0.38.0", runtime: false},
       {:typedstruct,
        git: "https://github.com/saleyn/typedstruct.git",
-       ref: "a5939bb210619cd9c362b87094ee343c55494ec3"}
+       ref: "a5939bb210619cd9c362b87094ee343c55494ec3"},
+      {:zoneinfo, "~> 0.1.9"}
     ]
   end
 

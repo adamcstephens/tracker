@@ -7,6 +7,8 @@
 # General application configuration
 import Config
 
+config :elixir, :time_zone_database, Zoneinfo.TimeZoneDatabase
+
 config :tracker, Oban,
   engine: Oban.Engines.Basic,
   notifier: Oban.Notifiers.Postgres,

@@ -7,6 +7,7 @@ defmodule TrackerWeb.ChannelLive.RevisionShow do
   alias Tracker.Nixpkgs.ChannelRevision.RevisionDiff
   alias TrackerWeb.Lens
   alias TrackerWeb.PageSearch
+  alias TrackerWeb.Time
 
   @impl true
   def render(assigns) do
@@ -169,7 +170,10 @@ defmodule TrackerWeb.ChannelLive.RevisionShow do
     |> assign(:page_title, "#{channel_name} — #{String.slice(revision.revision, 0, 7)}")
     |> assign(:revision, revision)
     |> assign(:previous_revision, previous_revision)
-    |> assign(:formatted_released_at, Calendar.strftime(revision.released_at, "%Y-%m-%d %H:%M"))
+    |> assign(
+      :formatted_released_at,
+      Time.format_datetime(revision.released_at, socket.assigns.time_zone)
+    )
     |> assign(:diff, diff)
   end
 end

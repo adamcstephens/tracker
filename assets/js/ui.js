@@ -1,6 +1,20 @@
 // Behaviour that needs no LiveView socket. Bundled into app.js for interactive
 // pages and served on its own to everyone else, so it lives in one place.
 
+
+const TIME_ZONE_COOKIE = "_tracker_time_zone"
+const TIME_ZONE_COOKIE_MAX_AGE = 365 * 24 * 60 * 60
+
+function browserTimeZone() {
+  if (document.cookie.match(/(?:^|;\s*)_tracker_time_zone=/)) return
+
+  let timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
+  if (!timeZone) return
+
+  document.cookie = `${TIME_ZONE_COOKIE}=${encodeURIComponent(timeZone)}; path=/; max-age=${TIME_ZONE_COOKIE_MAX_AGE}; samesite=lax`
+}
+
+browserTimeZone()
 function isTextEntry(target) {
   return !!target && (target.isContentEditable ||
     target.tagName === "INPUT" ||

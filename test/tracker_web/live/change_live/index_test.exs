@@ -64,7 +64,7 @@ defmodule TrackerWeb.ChangeLive.IndexTest do
     {:ok, _view, html} = live(conn, ~p"/changes")
     metas = row_metas(html)
 
-    assert metas["#5001"] == "Merged on 2026-04-01 12:00"
+    assert metas["#5001"] == "Merged on 2026-04-01 12:00 UTC"
     assert metas["#5005"] == ""
   end
 

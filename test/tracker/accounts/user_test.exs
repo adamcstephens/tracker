@@ -242,6 +242,37 @@ defmodule Tracker.Accounts.UserTest do
     end
   end
 
+  describe "time zone preference" do
+    test "defaults to UTC on registration" do
+      user = register_via_github!()
+
+      assert user.time_zone == "Etc/UTC"
+    end
+
+    test "set_time_zone changes the user's preference" do
+      user = register_via_github!()
+
+      updated = User.set_time_zone!(user, %{time_zone: "America/New_York"}, actor: user)
+
+      assert updated.time_zone == "America/New_York"
+    end
+
+    test "set_time_zone rejects an unknown zone" do
+      user = register_via_github!()
+
+      assert {:error, %Ash.Error.Invalid{}} =
+               User.set_time_zone(user, %{time_zone: "Not/A_Zone"}, actor: user)
+    end
+
+    test "set_time_zone forbids another user from changing your preference" do
+      user = register_via_github!()
+      other = register_via_github!()
+
+      assert {:error, %Ash.Error.Forbidden{}} =
+               User.set_time_zone(user, %{time_zone: "America/New_York"}, actor: other)
+    end
+  end
+
   defp register_via_github!(overrides \\ %{}) do
     user_info =
       Map.merge(
