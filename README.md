@@ -33,10 +33,10 @@ into a production build.
 
 ## Time zones
 
-Absolute times use your configured IANA time zone. New accounts and visitors
-without a preference see UTC; browsers save an anonymous preference for future
-requests. Change the signed-in preference in Account settings. Deployments need
-an IANA zoneinfo database; the NixOS module configures `TZDIR` from `tzdata`.
+Absolute times use the browser's IANA time zone when available, otherwise UTC.
+Signed-in users can select an explicit override from Account settings and reset
+back to Browser timezone at any time. Deployments need an IANA zoneinfo
+database; the NixOS module configures `TZDIR` from `tzdata`.
 
 ## Service accounts and API tokens
 
