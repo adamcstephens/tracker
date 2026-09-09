@@ -133,7 +133,7 @@ defmodule Tracker.Accounts.User do
       change fn changeset, _ ->
         time_zone = Ash.Changeset.get_attribute(changeset, :time_zone)
 
-        if Tracker.TimeZone.valid?(time_zone) do
+        if is_nil(time_zone) or Tracker.TimeZone.valid?(time_zone) do
           changeset
         else
           Ash.Changeset.add_error(changeset,
@@ -260,10 +260,7 @@ defmodule Tracker.Accounts.User do
       allow_nil? false
     end
 
-    attribute :time_zone, :string do
-      default "Etc/UTC"
-      allow_nil? false
-    end
+    attribute :time_zone, :string
 
     attribute :auto_subscribe_authored_changes, :boolean do
       description "Automatically subscribe this user to changes they authored, as they are discovered."

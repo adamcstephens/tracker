@@ -67,6 +67,38 @@ defmodule TrackerWeb.AccountLive.SettingsTest do
       assert Ash.get!(User, user.id, authorize?: false).time_zone == "America/New_York"
       assert view |> element("#time-zone") |> render() =~ ~s(value="America/New_York")
     end
+
+    test "selecting Browser timezone clears the override", %{conn: conn} do
+      user =
+        register_via_github!()
+        |> then(&User.set_time_zone!(&1, %{time_zone: "America/New_York"}, actor: &1))
+
+      conn = log_in(conn, user)
+
+      {:ok, view, _html} = live(conn, ~p"/account/settings")
+
+      view
+      |> form("#settings-form", settings: %{time_zone: ""})
+      |> render_submit()
+
+      assert is_nil(Ash.get!(User, user.id, authorize?: false).time_zone)
+      assert view |> element("#time-zone") |> render() =~ "Browser timezone"
+    end
+
+    test "reset button clears the override", %{conn: conn} do
+      user =
+        register_via_github!()
+        |> then(&User.set_time_zone!(&1, %{time_zone: "America/New_York"}, actor: &1))
+
+      conn = log_in(conn, user)
+
+      {:ok, view, _html} = live(conn, ~p"/account/settings")
+
+      view |> element("#reset-time-zone") |> render_click()
+
+      assert is_nil(Ash.get!(User, user.id, authorize?: false).time_zone)
+      assert view |> element("#time-zone") |> render() =~ "Browser timezone"
+    end
   end
 
   describe "change auto-subscribe preferences" do

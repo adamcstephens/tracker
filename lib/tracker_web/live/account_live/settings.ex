@@ -1,6 +1,7 @@
 defmodule TrackerWeb.AccountLive.Settings do
   use TrackerWeb, :live_view
 
+  alias Tracker.TimeZone
   alias Tracker.Accounts.User
   alias TrackerWeb.FeedLink
 
@@ -14,6 +15,7 @@ defmodule TrackerWeb.AccountLive.Settings do
      |> assign(:page_title, "Account settings")
      |> assign(:live_ui, user.live_ui)
      |> assign(:time_zone, user.time_zone)
+     |> assign(:time_zones, TimeZone.options())
      |> assign(:auto_subscribe_authored, user.auto_subscribe_authored_changes)
      |> assign(:auto_subscribe_merged, user.auto_subscribe_merged_changes)
      |> assign(:feed_path, FeedLink.path(user))
@@ -51,10 +53,19 @@ defmodule TrackerWeb.AccountLive.Settings do
       </label>
 
       <h2>Time zone</h2>
-      <p>Use an IANA time zone name, such as <code>America/New_York</code>.</p>
+      <p>Your browser's timezone is used unless you choose an override.</p>
       <label>
-        Time zone <input id="time-zone" type="text" name="settings[time_zone]" value={@time_zone} />
+        Time zone
+        <select id="time-zone" name="settings[time_zone]">
+          <option value="" selected={is_nil(@time_zone)}>Browser timezone</option>
+          <option :for={time_zone <- @time_zones} value={time_zone} selected={time_zone == @time_zone}>
+            {time_zone}
+          </option>
+        </select>
       </label>
+      <button id="reset-time-zone" type="button" phx-click="reset-time-zone">
+        Reset to browser timezone
+      </button>
 
       <h2>Change subscriptions</h2>
       <p>
@@ -144,7 +155,11 @@ defmodule TrackerWeb.AccountLive.Settings do
   def handle_event("save", %{"settings" => settings}, socket) do
     user = socket.assigns.current_user
 
-    time_zone = Map.get(settings, "time_zone", user.time_zone)
+    time_zone =
+      case Map.get(settings, "time_zone", user.time_zone) do
+        "" -> nil
+        time_zone -> time_zone
+      end
 
     auto_subscribe = %{
       auto_subscribe_authored_changes: checked?(settings, "auto_subscribe_authored_changes"),
@@ -167,6 +182,17 @@ defmodule TrackerWeb.AccountLive.Settings do
       {:error, error} ->
         {:noreply, put_flash(socket, :error, "Failed: #{inspect(error)}")}
     end
+  end
+
+  def handle_event("reset-time-zone", _params, socket) do
+    user = socket.assigns.current_user
+    {:ok, updated} = User.set_time_zone(user, %{time_zone: nil}, actor: user)
+
+    {:noreply,
+     socket
+     |> assign(:current_user, updated)
+     |> assign(:time_zone, updated.time_zone)
+     |> assign(:saved?, true)}
   end
 
   def handle_event("regenerate-feed-token", _params, socket) do

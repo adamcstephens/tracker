@@ -243,10 +243,10 @@ defmodule Tracker.Accounts.UserTest do
   end
 
   describe "time zone preference" do
-    test "defaults to UTC on registration" do
+    test "defaults to the browser time zone on registration" do
       user = register_via_github!()
 
-      assert user.time_zone == "Etc/UTC"
+      assert is_nil(user.time_zone)
     end
 
     test "set_time_zone changes the user's preference" do
@@ -255,6 +255,16 @@ defmodule Tracker.Accounts.UserTest do
       updated = User.set_time_zone!(user, %{time_zone: "America/New_York"}, actor: user)
 
       assert updated.time_zone == "America/New_York"
+    end
+
+    test "set_time_zone clears the user's override" do
+      user =
+        register_via_github!()
+        |> then(&User.set_time_zone!(&1, %{time_zone: "America/New_York"}, actor: &1))
+
+      updated = User.set_time_zone!(user, %{time_zone: nil}, actor: user)
+
+      assert is_nil(updated.time_zone)
     end
 
     test "set_time_zone rejects an unknown zone" do

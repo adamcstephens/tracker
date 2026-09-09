@@ -44,6 +44,19 @@ defmodule TrackerWeb.TimeZoneIntegrationTest do
     assert html_response(conn, 200) =~ "Merged on 2026-07-01 18:05 CEST"
   end
 
+  test "a signed-in user without a preference uses the browser cookie", %{conn: conn} do
+    change!(nil, %{merged_at: @merged_at})
+    user = register_user!()
+
+    conn =
+      conn
+      |> log_in(user)
+      |> put_req_cookie("_tracker_time_zone", "America%2FNew_York")
+      |> get(~p"/changes")
+
+    assert html_response(conn, 200) =~ "Merged on 2026-07-01 12:05 EDT"
+  end
+
   defp log_in(conn, user) do
     conn
     |> Plug.Test.init_test_session(%{})
