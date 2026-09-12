@@ -1,16 +1,12 @@
 defmodule Tracker.Nixpkgs.ChangeArtifactReconcileWorker do
   @moduledoc """
-  Drains the backlog of merged Changes whose artifacts haven't been
-  processed yet.
-
-  Catches the case where a PR merged faster than discovery could see it
-  as open/draft first — the row is upserted already in state `:merged`,
-  no transition fires in `ChangeRefreshWorker`, and nothing enqueues the
-  artifact refresh. This worker periodically selects such rows and
-  enqueues `ChangeArtifactRefreshWorker(reason: "merged")` for each,
-  relying on Oban uniqueness to deduplicate.
+  Recovers pending and transiently failed artifact ingestion for merged,
+  open, and draft Changes. Matching incomplete jobs are excluded before
+  limiting the backlog so in-flight work cannot consume the batch.
   """
   use Oban.Worker, queue: :changes, max_attempts: 3
+
+  import Ecto.Query
 
   require Logger
 
@@ -36,19 +32,48 @@ defmodule Tracker.Nixpkgs.ChangeArtifactReconcileWorker do
   end
 
   @doc """
-  Selects pending-merged Changes and enqueues a refresh for each.
-  Returns `{:ok, enqueued_count}`.
+  Enqueues up to 50 eligible artifact refreshes.
+  Returns `{:ok, enqueued_count}`, excluding uniqueness conflicts.
   """
   def run do
-    backlog = Change.pending_merged_backlog!()
+    worker = Oban.Worker.to_string(ChangeArtifactRefreshWorker)
+    states = Enum.map(Oban.Job.unique_states(:incomplete), &to_string/1)
 
-    Enum.each(backlog, fn change ->
-      %{"number" => change.number, "reason" => "merged"}
-      |> ChangeArtifactRefreshWorker.new()
-      |> Oban.insert!()
-    end)
+    {merged, head} =
+      Tracker.Repo.all(
+        from job in Oban.Job,
+          where: job.worker == ^worker and job.state in ^states,
+          where: job.args["reason"] in ^["merged", "head_sha_changed"],
+          select: job.args
+      )
+      |> Enum.split_with(&(&1["reason"] == "merged"))
 
-    {:ok, length(backlog)}
+    backlog =
+      Change.artifact_backlog!(
+        Enum.map(merged, & &1["number"]),
+        Enum.map(head, & &1["number"])
+      )
+
+    count =
+      Enum.reduce(backlog, 0, fn change, count ->
+        reason = if change.state == :merged, do: "merged", else: "head_sha_changed"
+
+        job =
+          %{"number" => change.number, "reason" => reason}
+          |> ChangeArtifactRefreshWorker.new(
+            unique: [
+              fields: [:worker, :args],
+              keys: [:number, :reason],
+              period: :infinity,
+              states: :incomplete
+            ]
+          )
+          |> Oban.insert!()
+
+        if job.conflict?, do: count, else: count + 1
+      end)
+
+    {:ok, count}
   end
 
   defp summarize({:ok, count}), do: {:ok, count}

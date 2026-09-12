@@ -35,7 +35,7 @@ defmodule Tracker.Nixpkgs.Change do
     define :max_number
     define :numbers_in_range, args: [:lo, :hi]
     define :stalest_unfinished
-    define :pending_merged_backlog
+    define :artifact_backlog, args: [:merged_in_flight, :head_in_flight]
     define :in_flight_propagation
     define :for_channel_link, args: [:branch_name]
     define :updated_since, args: [:since, {:optional, :states}]
@@ -196,10 +196,17 @@ defmodule Tracker.Nixpkgs.Change do
       filter expr(state in [:draft, :open] and not is_nil(node_id) and polling_status == :active)
     end
 
-    read :pending_merged_backlog do
-      prepare build(sort: [merged_at: :asc_nils_first], limit: 50)
+    read :artifact_backlog do
+      argument :merged_in_flight, {:array, :integer}, allow_nil?: false
+      argument :head_in_flight, {:array, :integer}, allow_nil?: false
 
-      filter expr(state == :merged and processing_status == :pending)
+      prepare build(sort: [merged_at: :asc_nils_first, number: :asc], limit: 50)
+
+      filter expr(
+               processing_status in [:pending, :failed] and
+                 ((state == :merged and number not in ^arg(:merged_in_flight)) or
+                    (state in [:open, :draft] and number not in ^arg(:head_in_flight)))
+             )
     end
 
     read :in_flight_propagation do

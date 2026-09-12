@@ -21,7 +21,7 @@ config :tracker, Oban,
      crontab: [
        {"* * * * *", Tracker.Nixpkgs.ChangeDiscoveryWorker},
        {"*/3 * * * *", Tracker.Nixpkgs.ChangeRefreshWorker},
-       {"*/2 * * * *", Tracker.Nixpkgs.ChangeArtifactReconcileWorker},
+       {"*/15 * * * *", Tracker.Nixpkgs.ChangeArtifactReconcileWorker},
        {"15 * * * *", Tracker.Nixpkgs.ChangeReconcileWorker},
        {"*/5 * * * *", Tracker.Nixpkgs.HydraStatusFetcher},
        {"*/5 * * * *", Tracker.Ingestion.CronWorker, queue: :ingestion}
