@@ -8,7 +8,8 @@ defmodule TrackerWeb.LensComponent do
 
   Progressive enhancement: wraps the channel `<select>` in a form that POSTs
   to `/lens` for no-JS fallback. With JS, `phx-change` navigates to the same URL
-  with the lens params rewritten.
+  with the lens params rewritten. Form recovery is disabled because reconnecting
+  must restore the lens from the URL, not replay a navigation.
 
   The signed cookie value rides on `data-lens` for the `LensCookie` hook to
   write, so the preference records the lens the page actually rendered rather
@@ -55,6 +56,7 @@ defmodule TrackerWeb.LensComponent do
         method="post"
         action="/lens"
         phx-change="set_lens"
+        phx-auto-recover="ignore"
         phx-target={@myself}
         class={["lens__form", @lens.disabled? && "lens--disabled"]}
       >

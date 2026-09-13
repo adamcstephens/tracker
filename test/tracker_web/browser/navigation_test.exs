@@ -65,6 +65,46 @@ defmodule TrackerWeb.Browser.NavigationTest do
     assert read(conn, ~s|new URLSearchParams(location.search).get("search")|) == "hello"
   end
 
+  test "reconnecting with a disabled lens keeps the channels page usable", %{conn: conn} do
+    conn = conn |> sign_in() |> visit(~p"/channels")
+    assert_has(conn, "[data-phx-main].phx-connected")
+    assert_has(conn, "#lens-channel[disabled]")
+
+    evaluate(
+      conn,
+      """
+      new Promise((resolve, reject) => {
+        window.liveSocket.disconnect(() => {
+          const root = document.querySelector("[data-phx-main]")
+          const observer = new MutationObserver(() => {
+            if (root.classList.contains("phx-connected")) {
+              observer.disconnect()
+              window.removeEventListener("phx:page-loading-start", onError)
+              resolve(true)
+            }
+          })
+          const onError = event => {
+            if (event.detail.errorKind === "server") {
+              observer.disconnect()
+              window.removeEventListener("phx:page-loading-start", onError)
+              reject(new Error("LiveView crashed during reconnect"))
+            }
+          }
+          observer.observe(root, {attributes: true, attributeFilter: ["class"]})
+          window.addEventListener("phx:page-loading-start", onError)
+          window.liveSocket.connect()
+        })
+      })
+      """,
+      fn connected? -> assert connected? end
+    )
+
+    assert_path(conn, "/channels")
+    click_link(conn, ".app-nav a[href^='/packages']", "Packages")
+    assert_path(conn, "/packages")
+    assert_has(conn, "#lens-channel:not([disabled])")
+  end
+
   test "g then an unmapped key is swallowed and moves nothing", %{conn: conn} do
     conn = changes_page(conn)
 
