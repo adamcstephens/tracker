@@ -1,9 +1,9 @@
 defmodule TrackerWeb.InboxLive.Index do
   @moduledoc """
   The per-user in-app inbox. A triage view over durable notifications:
-  unread/all segment, multi-select type filter chips, chrome search over
+  unread/all/saved segment, multi-select type filter chips, chrome search over
   the package, channel, change and branch a row references, day-grouped
-  rows with per-row read/unread toggling. Updates live as new ones are
+  rows with independent read/unread and saved toggles. Updates live as new ones are
   inserted, and doubles as the "everything affected" view when filtered
   to a single channel revision.
 
@@ -50,7 +50,7 @@ defmodule TrackerWeb.InboxLive.Index do
 
     tp = TableParams.from_params(params, page_size: 25)
 
-    unread_filter = if params["filter"] == "all", do: :all, else: :unread
+    filter = parse_filter(params["filter"])
     active_types = parse_types(params["types"])
     lens = socket.assigns.lens && %{socket.assigns.lens | disabled?: true}
 
@@ -58,7 +58,7 @@ defmodule TrackerWeb.InboxLive.Index do
      socket
      |> assign(:channel_revision_id, channel_revision_id)
      |> assign(:table_params, tp)
-     |> assign(:unread_filter, unread_filter)
+     |> assign(:filter, filter)
      |> assign(:active_types, active_types)
      |> assign(:lens, lens)
      |> assign_page_search()
@@ -84,15 +84,33 @@ defmodule TrackerWeb.InboxLive.Index do
     end
   end
 
+  def handle_event("toggle-saved", %{"id" => id}, socket) do
+    id = String.to_integer(id)
+    user = socket.assigns.current_user
+
+    case Enum.find(socket.assigns.notifications, &(&1.id == id)) do
+      nil ->
+        {:noreply, socket}
+
+      %Notification{saved: true} = notification ->
+        {:ok, _} = Notification.unsave(notification, actor: user)
+        {:noreply, load_notifications(socket)}
+
+      %Notification{} = notification ->
+        {:ok, _} = Notification.save(notification, actor: user)
+        {:noreply, load_notifications(socket)}
+    end
+  end
+
   def handle_event("search", %{"search" => search}, socket) do
     socket
     |> update(:table_params, &%{&1 | search: search})
     |> reset_to_first_page()
   end
 
-  def handle_event("set-unread-filter", %{"filter" => filter}, socket) do
+  def handle_event("set-filter", %{"filter" => filter}, socket) do
     socket
-    |> assign(:unread_filter, if(filter == "unread", do: :unread, else: :all))
+    |> assign(:filter, parse_filter(filter))
     |> reset_to_first_page()
   end
 
@@ -114,7 +132,7 @@ defmodule TrackerWeb.InboxLive.Index do
     user = socket.assigns.current_user
 
     Notification.for_user!(
-      %{channel_revision_id: socket.assigns.channel_revision_id, unread_only: true},
+      Map.put(query_args(socket), :unread_only, true),
       actor: user
     )
     |> case do
@@ -171,7 +189,23 @@ defmodule TrackerWeb.InboxLive.Index do
         actor: user
       )
 
-    pagination = TableParams.apply_pagination(tp, page, :notifications)
+    last_page = max(1, div(page.count + tp.page_size - 1, tp.page_size))
+
+    if tp.page > last_page do
+      socket =
+        socket
+        |> assign(:table_params, %{tp | page: last_page, offset: (last_page - 1) * tp.page_size})
+        |> assign_page_search()
+        |> load_notifications()
+
+      push_event(socket, "update-url", %{path: inbox_path(socket)})
+    else
+      assign_notifications(socket, page)
+    end
+  end
+
+  defp assign_notifications(socket, %Ash.Page.Offset{} = page) do
+    pagination = TableParams.apply_pagination(socket.assigns.table_params, page, :notifications)
     unread_count = count(socket, %{unread_only: true})
     now = DateTime.utc_now()
 
@@ -185,6 +219,11 @@ defmodule TrackerWeb.InboxLive.Index do
     |> assign(:now, now)
     |> assign(:unread_count, unread_count)
     |> assign(:total_count, count(socket, %{}))
+    |> assign(:saved_count, count(socket, %{saved_only: true}))
+    |> assign(
+      :matching_unread_count,
+      count(socket, Map.put(query_args(socket), :unread_only, true))
+    )
     |> assign(:type_counts, type_counts(socket))
     |> assign(:has_prev_page?, pagination.has_prev_page?)
     |> assign(:has_next_page?, pagination.has_next_page?)
@@ -200,7 +239,8 @@ defmodule TrackerWeb.InboxLive.Index do
     Map.new(NotificationPresenter.type_order(), fn type ->
       {type,
        count(socket, %{
-         unread_only: socket.assigns.unread_filter == :unread,
+         unread_only: socket.assigns.filter == :unread,
+         saved_only: socket.assigns.filter == :saved,
          search: search,
          types: [type]
        })}
@@ -221,11 +261,16 @@ defmodule TrackerWeb.InboxLive.Index do
 
     %{
       channel_revision_id: socket.assigns.channel_revision_id,
-      unread_only: socket.assigns.unread_filter == :unread,
+      unread_only: socket.assigns.filter == :unread,
+      saved_only: socket.assigns.filter == :saved,
       types: if(MapSet.size(active_types) == 0, do: nil, else: MapSet.to_list(active_types)),
       search: tp.search
     }
   end
+
+  defp parse_filter("all"), do: :all
+  defp parse_filter("saved"), do: :saved
+  defp parse_filter(_filter), do: :unread
 
   defp parse_types(nil), do: MapSet.new()
 
@@ -239,7 +284,7 @@ defmodule TrackerWeb.InboxLive.Index do
 
     %{
       channel_revision_id: assigns.channel_revision_id,
-      filter: assigns.unread_filter == :all && "all",
+      filter: assigns.filter != :unread && Atom.to_string(assigns.filter),
       types: active_types |> Enum.sort() |> Enum.map_join(",", &Atom.to_string/1)
     }
   end
@@ -254,12 +299,13 @@ defmodule TrackerWeb.InboxLive.Index do
     <div class="ibx">
       <div class="ibx-toolbar">
         <.view_nav active={:inbox} />
-        <div class="ibx-seg" role="group" aria-label="Read state filter">
+        <div class="ibx-seg" role="group" aria-label="Notification filter">
           <button
             id="filter-unread"
             type="button"
-            class={@unread_filter == :unread && "is-active"}
-            phx-click="set-unread-filter"
+            class={@filter == :unread && "is-active"}
+            aria-pressed={to_string(@filter == :unread)}
+            phx-click="set-filter"
             phx-value-filter="unread"
           >
             Unread <span class="n">{@unread_count}</span>
@@ -267,11 +313,22 @@ defmodule TrackerWeb.InboxLive.Index do
           <button
             id="filter-all"
             type="button"
-            class={@unread_filter == :all && "is-active"}
-            phx-click="set-unread-filter"
+            class={@filter == :all && "is-active"}
+            aria-pressed={to_string(@filter == :all)}
+            phx-click="set-filter"
             phx-value-filter="all"
           >
             All <span class="n">{@total_count}</span>
+          </button>
+          <button
+            id="filter-saved"
+            type="button"
+            class={@filter == :saved && "is-active"}
+            aria-pressed={to_string(@filter == :saved)}
+            phx-click="set-filter"
+            phx-value-filter="saved"
+          >
+            Saved <span class="n">{@saved_count}</span>
           </button>
         </div>
 
@@ -281,7 +338,7 @@ defmodule TrackerWeb.InboxLive.Index do
             type="button"
             class="ibx-btn ibx-btn--primary"
             phx-click="mark-all-read"
-            disabled={@unread_count == 0}
+            disabled={@matching_unread_count == 0}
           >
             <.icon name="check" /> Mark all read
           </button>
@@ -318,9 +375,15 @@ defmodule TrackerWeb.InboxLive.Index do
         Showing notifications for one revision. <.link navigate={~p"/inbox"}>Show all</.link>
       </p>
 
-      <p :if={@total_count == 0} id="inbox-empty" class="ibx-empty">No notifications yet.</p>
+      <p :if={@filter == :saved && @groups == []} id="inbox-saved-empty" class="ibx-empty">
+        No saved notifications match these filters.
+      </p>
 
-      <div :if={@total_count > 0 && @groups == []} class="ibx-empty">
+      <p :if={@filter != :saved && @total_count == 0} id="inbox-empty" class="ibx-empty">
+        No notifications yet.
+      </p>
+
+      <div :if={@filter != :saved && @total_count > 0 && @groups == []} class="ibx-empty">
         Nothing matches these filters.
       </div>
 
@@ -443,6 +506,17 @@ defmodule TrackerWeb.InboxLive.Index do
       </:sublabel>
       <:actions>
         <span :if={is_nil(@n.read_at)} class="ibx-unread-dot" title="Unread"></span>
+        <button
+          type="button"
+          class={["ibx-act", "ibx-save", @n.saved && "is-saved"]}
+          phx-click="toggle-saved"
+          phx-value-id={@n.id}
+          title={if @n.saved, do: "Remove from saved", else: "Save for later"}
+          aria-label={if @n.saved, do: "Remove from saved", else: "Save for later"}
+          aria-pressed={to_string(@n.saved)}
+        >
+          <.icon name="saved" />
+        </button>
         <div class="ibx-row-acts">
           <button
             type="button"
@@ -484,6 +558,8 @@ defmodule TrackerWeb.InboxLive.Index do
       stroke-linejoin="round"
     >
       <%= case @name do %>
+        <% "saved" -> %>
+          <path d="M6 4h12v17l-6-4-6 4z" />
         <% "update" -> %>
           <path d="M21 12a9 9 0 1 1-3-6.7" /><path d="M21 4v5h-5" />
         <% "add" -> %>

@@ -115,4 +115,85 @@ defmodule TrackerWeb.Browser.InboxCursorTest do
 
     assert read_states(user) == [true, true, false]
   end
+
+  test "save controls are reachable by Tab and activate with Enter and Space without navigating",
+       %{
+         conn: conn,
+         user: user
+       } do
+    pkg = package!()
+
+    n =
+      notification!(user, %{
+        type: :package_added,
+        package_id: pkg.id,
+        occurred_at: DateTime.add(DateTime.utc_now(:second), 1, :minute)
+      })
+
+    conn = inbox(conn, user)
+    row = "#notification-#{n.id}"
+    save = "#{row} button[aria-label='Save for later'][aria-pressed='false']"
+    remove = "#{row} button[aria-label='Remove from saved'][aria-pressed='true']"
+    focused_save = ~s|document.activeElement.matches("#{save}")|
+
+    press(conn, "#{row} > .row-line", "Tab")
+
+    Enum.reduce_while(1..5, conn, fn _, conn ->
+      if read(conn, focused_save) do
+        {:halt, conn}
+      else
+        {:cont, press(conn, ":focus", "Tab")}
+      end
+    end)
+
+    assert read(conn, focused_save)
+    press(conn, ":focus", "Enter")
+
+    assert_has(conn, remove)
+    assert_path(conn, "/inbox")
+    assert %Notification{saved: true, read_at: nil} = Ash.get!(Notification, n.id, actor: user)
+
+    press(conn, remove, "Space")
+
+    assert_has(conn, save)
+    assert_path(conn, "/inbox")
+    assert %Notification{saved: false, read_at: nil} = Ash.get!(Notification, n.id, actor: user)
+
+    press(conn, "#{row} .row-label a", "Enter")
+    assert_path(conn, "/packages/#{pkg.attribute}")
+  end
+
+  test "Saved keeps j and k navigation and m changes only read state without dropping the row", %{
+    conn: conn,
+    user: user
+  } do
+    for n <- Notification.for_user!(actor: user), do: Notification.save!(n, actor: user)
+
+    conn = inbox(conn, user)
+    click(conn, "#filter-saved")
+    [first, second, third] = read(conn, @rows)
+
+    press(conn, "##{first} > .row-line", "j")
+    assert read(conn, @cursor) == second
+
+    press(conn, "##{second} > .row-line", "k")
+    assert read(conn, @cursor) == first
+
+    press(conn, "##{first} > .row-line", "m")
+
+    assert_has(conn, "##{first} button[aria-label='Mark as unread']")
+    assert_has(conn, "##{first} button[aria-label='Remove from saved'][aria-pressed='true']")
+    assert eventually(conn, @cursor, first) == first
+    assert read(conn, @rows) == [first, second, third]
+    assert read_states(user) == [true, false, false]
+    assert Enum.all?(Notification.for_user!(actor: user), & &1.saved)
+    assert_path(conn, "/inbox")
+
+    press(conn, "##{first} > .row-line", "m")
+
+    assert_has(conn, "##{first} button[aria-label='Mark as read']")
+    assert_has(conn, "##{first} button[aria-label='Remove from saved'][aria-pressed='true']")
+    assert eventually(conn, @cursor, first) == first
+    assert read_states(user) == [false, false, false]
+  end
 end

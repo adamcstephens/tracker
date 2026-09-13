@@ -5,6 +5,7 @@ defmodule Tracker.Notifications.Notification do
   Notifications are references plus a `type`; the full detail is rendered on
   read from the linked source records. Each row carries a unique `dedup_key`
   so worker retries and reconciliation reruns are no-ops.
+  Saved state is independent of whether the notification has been read.
   """
 
   use Ash.Resource,
@@ -42,6 +43,8 @@ defmodule Tracker.Notifications.Notification do
     define :for_user
     define :mark_read
     define :mark_unread
+    define :save
+    define :unsave
     define :destroy
   end
 
@@ -69,10 +72,11 @@ defmodule Tracker.Notifications.Notification do
     end
 
     read :for_user do
-      description "List the actor's notifications, newest first, filtered by read state, type, search and revision."
+      description "List the actor's notifications, newest first, filtered by read state, saved state, type, search and revision."
 
       argument :channel_revision_id, :integer
       argument :unread_only, :boolean, default: false
+      argument :saved_only, :boolean, default: false
       argument :types, {:array, :atom}
       argument :search, :ci_string
 
@@ -105,6 +109,11 @@ defmodule Tracker.Notifications.Notification do
                  else
                    true
                  end and
+                 if ^arg(:saved_only) do
+                   saved
+                 else
+                   true
+                 end and
                  if not is_nil(^arg(:types)) do
                    type in ^arg(:types)
                  else
@@ -133,6 +142,18 @@ defmodule Tracker.Notifications.Notification do
       accept []
       change set_attribute(:read_at, nil)
     end
+
+    update :save do
+      description "Save a notification for later without changing its read state."
+      accept []
+      change set_attribute(:saved, true)
+    end
+
+    update :unsave do
+      description "Remove a notification from saved without changing its read state."
+      accept []
+      change set_attribute(:saved, false)
+    end
   end
 
   policies do
@@ -149,6 +170,8 @@ defmodule Tracker.Notifications.Notification do
     publish :create, [[:user_id, "any"]]
     publish :mark_read, [[:user_id, "any"]]
     publish :mark_unread, [[:user_id, "any"]]
+    publish :save, [[:user_id, "any"]]
+    publish :unsave, [[:user_id, "any"]]
   end
 
   attributes do
@@ -162,6 +185,7 @@ defmodule Tracker.Notifications.Notification do
 
     attribute :occurred_at, :utc_datetime, allow_nil?: false, public?: true
     attribute :read_at, :utc_datetime, public?: true
+    attribute :saved, :boolean, default: false, allow_nil?: false, public?: true
     attribute :dedup_key, :string, allow_nil?: false, public?: true
 
     timestamps()

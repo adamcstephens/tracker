@@ -3634,6 +3634,30 @@ a.revision-link {
 	height: 0.9375rem;
 }
 
+.ibx-save.is-saved {
+	color: var(--accent);
+}
+
+.ibx-save.is-saved .ibx-icon {
+	fill: currentColor;
+}
+
+.ibx-act:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+@media (pointer: coarse), (max-width: 719px) {
+	.ibx-act {
+		width: 2.75rem;
+		height: 2.75rem;
+	}
+
+	.ibx-row-acts {
+		opacity: 1;
+	}
+}
+
 .ibx-empty {
 	text-align: center;
 	color: var(--text-3);
@@ -3683,10 +3707,6 @@ a.revision-link {
 		grid-column: 1 / -1;
 		justify-content: flex-end;
 		margin-top: 0.25rem;
-	}
-
-	.ibx-row-acts {
-		opacity: 1;
 	}
 }
 

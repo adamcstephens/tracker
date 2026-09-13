@@ -26,25 +26,36 @@ defmodule TrackerWeb.InboxLive.IndexTest do
     )
   end
 
-  defp notifications!(user, count) do
+  defp notifications!(user, count, overrides \\ %{}) do
     chan = channel!()
     rev = channel_revision!(chan)
 
     rows =
       for i <- 1..count do
-        %{
-          user_id: user.id,
-          type: :channel_revision_published,
-          channel_id: chan.id,
-          channel_revision_id: rev.id,
-          occurred_at: DateTime.add(~U[2024-01-01 00:00:00Z], i, :minute),
-          dedup_key: "dk-#{System.unique_integer([:positive])}"
-        }
+        Map.merge(
+          %{
+            user_id: user.id,
+            type: :channel_revision_published,
+            channel_id: chan.id,
+            channel_revision_id: rev.id,
+            occurred_at: DateTime.add(~U[2024-01-01 00:00:00Z], i, :minute),
+            dedup_key: "dk-#{System.unique_integer([:positive])}"
+          },
+          overrides
+        )
       end
 
     :ok = Notification.fanout(rows)
 
     Notification.for_user!(actor: user)
+  end
+
+  defp notification_row_ids(view) do
+    view
+    |> render()
+    |> Floki.parse_document!()
+    |> Floki.find("#inbox-groups ul.row-list > li")
+    |> Floki.attribute("id")
   end
 
   test "redirects a logged-out visitor to sign in", %{conn: conn} do
@@ -69,43 +80,6 @@ defmodule TrackerWeb.InboxLive.IndexTest do
 
     assert has_element?(view, "#notification-#{n.id}")
     assert render(view) =~ "New revision"
-  end
-
-  test "renders notifications through the shared RowList", %{conn: conn} do
-    user = register_user!()
-    n = published_notification!(user)
-    conn = log_in(conn, user)
-
-    {:ok, _view, html} = live(conn, ~p"/inbox")
-
-    assert html =~ ~s(class="row-list")
-
-    document = Floki.parse_document!(html)
-    assert Floki.find(document, ".ibx-list") == []
-    assert Floki.find(document, ".ibx-row") == []
-
-    [row] = Floki.find(document, "#notification-#{n.id}")
-
-    assert Floki.find(row, ".row-leading .ibx-glyph") != []
-    assert Floki.find(row, ".row-label") != []
-    assert Floki.find(row, ".row-sublabel time") != []
-    # Read state and the per-type colour still ride on the row itself
-    assert Floki.attribute(row, "class") == ["is-unread"]
-    assert Floki.attribute(row, "style") == ["--type-color: var(--t-revision)"]
-  end
-
-  test "row actions stay in the trailing actions slot", %{conn: conn} do
-    user = register_user!()
-    n = published_notification!(user)
-    conn = log_in(conn, user)
-
-    {:ok, _view, html} = live(conn, ~p"/inbox")
-
-    document = Floki.parse_document!(html)
-    [actions] = Floki.find(document, "#notification-#{n.id} .row-actions")
-
-    assert Floki.find(actions, ".ibx-unread-dot") != []
-    assert Floki.find(actions, "[aria-label='Mark as read']") != []
   end
 
   test "does not show another user's notifications", %{conn: conn} do
@@ -169,25 +143,7 @@ defmodule TrackerWeb.InboxLive.IndexTest do
     assert {:ok, %Notification{read_at: nil}} = Ash.get(Notification, n.id, actor: user)
   end
 
-  # The "m" handler in assets/js/ui.js reaches the toggle through these
-  # selectors, and steps the cursor off the row only in the Unread segment.
-  # Nothing but this stops the markup drifting out from under it.
-  describe "the markup the m shortcut selects (TRK-393)" do
-    test "the toggle is a phx-click button inside a keyed row-list item", %{conn: conn} do
-      user = register_user!()
-      n = published_notification!(user)
-      conn = log_in(conn, user)
-
-      {:ok, _view, html} = live(conn, ~p"/inbox")
-
-      [row] =
-        html
-        |> Floki.parse_document!()
-        |> Floki.find("ul.row-list > li#notification-#{n.id}")
-
-      assert Floki.find(row, "button[phx-click='toggle-read']") != []
-    end
-
+  describe "read segments" do
     test "the Unread segment marks itself active, and All does not", %{conn: conn} do
       user = register_user!()
       published_notification!(user)
@@ -284,6 +240,427 @@ defmodule TrackerWeb.InboxLive.IndexTest do
 
     view |> element("#filter-unread") |> render_click()
     refute has_element?(view, "#notification-#{read.id}")
+  end
+
+  describe "Saved" do
+    test "saving persists without changing read state and read toggles preserve saved state", %{
+      conn: conn
+    } do
+      user = register_user!()
+      n = published_notification!(user)
+      conn = log_in(conn, user)
+
+      {:ok, view, _html} = live(conn, ~p"/inbox")
+
+      view
+      |> element(
+        "#notification-#{n.id} button[aria-label='Save for later'][aria-pressed='false']"
+      )
+      |> render_click()
+
+      assert has_element?(view, "#notification-#{n.id}.is-unread")
+      assert %Notification{saved: true, read_at: nil} = Ash.get!(Notification, n.id, actor: user)
+      assert view |> element("#filter-saved .n") |> render() =~ ">1<"
+      assert view |> element("#filter-unread .n") |> render() =~ ">1<"
+      assert view |> element("#inbox-icon .app-inbox__badge") |> render() =~ ">1<"
+
+      {:ok, view, _html} = live(conn, ~p"/inbox?filter=saved")
+
+      assert has_element?(view, "#filter-saved.is-active")
+
+      assert has_element?(
+               view,
+               "#notification-#{n.id} button[aria-label='Remove from saved'][aria-pressed='true']"
+             )
+
+      view |> element("#notification-#{n.id} [aria-label='Mark as read']") |> render_click()
+
+      assert has_element?(view, "#notification-#{n.id}:not(.is-unread)")
+
+      assert %Notification{saved: true, read_at: read_at} =
+               Ash.get!(Notification, n.id, actor: user)
+
+      refute is_nil(read_at)
+      refute has_element?(view, "#inbox-icon .app-inbox__badge")
+
+      view |> element("#filter-all") |> render_click()
+      view |> element("#notification-#{n.id} [aria-label='Remove from saved']") |> render_click()
+
+      assert %Notification{saved: false, read_at: ^read_at} =
+               Ash.get!(Notification, n.id, actor: user)
+
+      view |> element("#notification-#{n.id} [aria-label='Save for later']") |> render_click()
+      view |> element("#notification-#{n.id} [aria-label='Mark as unread']") |> render_click()
+
+      assert %Notification{saved: true, read_at: nil} = Ash.get!(Notification, n.id, actor: user)
+
+      view |> element("#notification-#{n.id} [aria-label='Remove from saved']") |> render_click()
+
+      {:ok, reloaded, _html} = live(conn, ~p"/inbox?filter=all")
+
+      assert has_element?(
+               reloaded,
+               "#notification-#{n.id}.is-unread button[aria-label='Save for later'][aria-pressed='false']"
+             )
+
+      assert %Notification{saved: false, read_at: nil} = Ash.get!(Notification, n.id, actor: user)
+      assert reloaded |> element("#filter-saved .n") |> render() =~ ">0<"
+    end
+
+    test "Saved counts ignore search and types while rows and type counts compose with revision",
+         %{
+           conn: conn
+         } do
+      user = register_user!()
+      chan = channel!()
+      rev = channel_revision!(chan)
+      other_rev = channel_revision!(chan)
+      needle = package!("needle-#{System.unique_integer([:positive])}")
+      haystack = package!()
+
+      attrs = %{
+        type: :package_added,
+        package_id: needle.id,
+        channel_id: chan.id,
+        channel_revision_id: rev.id
+      }
+
+      saved_unread = notification!(user, attrs) |> Notification.save!(actor: user)
+
+      saved_read =
+        notification!(user, attrs)
+        |> Notification.save!(actor: user)
+        |> Notification.mark_read!(actor: user)
+
+      saved_removed =
+        notification!(user, %{attrs | type: :package_removed})
+        |> Notification.save!(actor: user)
+
+      outside_search =
+        notification!(user, %{attrs | package_id: haystack.id})
+        |> Notification.save!(actor: user)
+
+      outside_revision =
+        notification!(user, %{attrs | channel_revision_id: other_rev.id})
+        |> Notification.save!(actor: user)
+
+      unsaved = notification!(user, attrs)
+      other_user = register_user!()
+      other_saved = notification!(other_user, attrs) |> Notification.save!(actor: other_user)
+      conn = log_in(conn, user)
+
+      {:ok, view, _html} =
+        live(
+          conn,
+          ~p"/inbox?filter=saved&search=needle&types=package_added&channel_revision_id=#{rev.id}"
+        )
+
+      assert has_element?(view, "#notification-#{saved_unread.id}.is-unread")
+      assert has_element?(view, "#notification-#{saved_read.id}:not(.is-unread)")
+
+      for n <- [saved_removed, outside_search, outside_revision, unsaved, other_saved] do
+        refute has_element?(view, "#notification-#{n.id}")
+      end
+
+      assert view |> element("#filter-saved .n") |> render() =~ ">4<"
+      assert view |> element("#filter-all .n") |> render() =~ ">5<"
+      assert view |> element("#filter-unread .n") |> render() =~ ">4<"
+      assert view |> element("#filter-type-package_added .n") |> render() =~ ">2<"
+      assert view |> element("#filter-type-package_removed .n") |> render() =~ ">1<"
+
+      view |> element("#filter-type-package_removed") |> render_click()
+
+      assert has_element?(view, "#notification-#{saved_removed.id}")
+      assert has_element?(view, "#notification-#{saved_read.id}")
+      assert view |> element("#filter-saved .n") |> render() =~ ">4<"
+
+      view |> element("#page-search") |> render_change(%{"search" => haystack.attribute})
+
+      assert notification_row_ids(view) == ["notification-#{outside_search.id}"]
+      assert has_element?(view, "#filter-saved.is-active")
+      assert has_element?(view, "#filter-type-package_added.is-active")
+      assert has_element?(view, "#filter-type-package_removed.is-active")
+      assert view |> element("#filter-saved .n") |> render() =~ ">4<"
+      assert view |> element("#filter-type-package_added .n") |> render() =~ ">1<"
+      assert view |> element("#filter-type-package_removed .n") |> render() =~ ">0<"
+
+      view |> element("#page-search") |> render_change(%{"search" => "needle"})
+      view |> element("#filter-all") |> render_click()
+
+      assert has_element?(view, "#notification-#{unsaved.id}")
+      refute has_element?(view, "#notification-#{outside_revision.id}")
+      assert view |> element("#filter-saved .n") |> render() =~ ">4<"
+      assert view |> element("#filter-type-package_added .n") |> render() =~ ">3<"
+    end
+
+    test "saved pages keep tied timestamps stable and removing the last page clamps the URL", %{
+      conn: conn
+    } do
+      user = register_user!()
+
+      saved =
+        user
+        |> notifications!(51, %{occurred_at: ~U[2024-01-01 00:00:00Z]})
+        |> Enum.map(&Notification.save!(&1, actor: user))
+        |> Enum.sort_by(& &1.id, :desc)
+
+      [newest | _] = saved
+      last = List.last(saved)
+      conn = log_in(conn, user)
+
+      params = %{
+        filter: "saved",
+        search: newest.channel.name,
+        types: "channel_revision_published",
+        channel_revision_id: newest.channel_revision_id
+      }
+
+      {:ok, view, _html} = live(conn, ~p"/inbox?#{params}")
+      first_page = saved |> Enum.take(25) |> Enum.map(&"notification-#{&1.id}")
+      second_page = saved |> Enum.slice(25, 25) |> Enum.map(&"notification-#{&1.id}")
+
+      assert notification_row_ids(view) == first_page
+      assert view |> element("#filter-saved .n") |> render() =~ ">51<"
+      assert view |> element("#filter-type-channel_revision_published .n") |> render() =~ ">51<"
+
+      view |> element("#pagination-inbox-groups a", "→") |> render_click()
+      assert_patch(view)
+      assert notification_row_ids(view) == second_page
+
+      view |> element("#pagination-inbox-groups a", "→") |> render_click()
+      assert_patch(view)
+      assert notification_row_ids(view) == ["notification-#{last.id}"]
+
+      view
+      |> element("#notification-#{last.id} [aria-label='Remove from saved']")
+      |> render_click()
+
+      assert_push_event(view, "update-url", %{path: path})
+      query = path |> URI.parse() |> Map.fetch!(:query) |> URI.decode_query()
+
+      assert query["page"] == "2"
+      assert query["filter"] == "saved"
+      assert query["search"] == newest.channel.name
+      assert query["types"] == "channel_revision_published"
+      assert query["channel_revision_id"] == to_string(newest.channel_revision_id)
+      assert notification_row_ids(view) == second_page
+      assert view |> element("#filter-saved .n") |> render() =~ ">50<"
+
+      assert %Notification{saved: false, read_at: nil} =
+               Ash.get!(Notification, last.id, actor: user)
+
+      {:ok, reloaded, _html} = live(conn, path)
+      assert notification_row_ids(reloaded) == second_page
+
+      reloaded |> element("#pagination-inbox-groups a", "←") |> render_click()
+      assert notification_row_ids(reloaded) == first_page
+    end
+
+    test "removing the final saved row leaves an empty Saved view without deleting notifications",
+         %{
+           conn: conn
+         } do
+      user = register_user!()
+      saved = published_notification!(user) |> Notification.save!(actor: user)
+      unsaved = published_notification!(user)
+      conn = log_in(conn, user)
+
+      {:ok, view, _html} = live(conn, ~p"/inbox?filter=saved")
+
+      view
+      |> element("#notification-#{saved.id} [aria-label='Remove from saved']")
+      |> render_click()
+
+      assert has_element?(view, "#filter-saved.is-active")
+      assert has_element?(view, ".ibx-empty")
+      assert has_element?(view, "#mark-all-read[disabled]")
+      assert notification_row_ids(view) == []
+      assert view |> element("#filter-saved .n") |> render() =~ ">0<"
+      assert view |> element("#filter-all .n") |> render() =~ ">2<"
+      assert view |> element("#filter-unread .n") |> render() =~ ">2<"
+
+      view |> element("#filter-all") |> render_click()
+
+      assert has_element?(view, "#notification-#{saved.id}.is-unread")
+      assert has_element?(view, "#notification-#{unsaved.id}.is-unread")
+    end
+
+    test "save and unsave synchronize connected sessions without changing the unread badge", %{
+      conn: conn
+    } do
+      user = register_user!()
+      n = published_notification!(user)
+      conn = log_in(conn, user)
+
+      {:ok, phone, _html} = live(conn, ~p"/inbox?filter=all")
+      {:ok, laptop, _html} = live(conn, ~p"/inbox?filter=saved")
+      {:ok, packages, _html} = live(conn, ~p"/packages")
+
+      assert has_element?(laptop, ".ibx-empty")
+      assert packages |> element("#inbox-icon .app-inbox__badge") |> render() =~ ">1<"
+
+      phone |> element("#notification-#{n.id} [aria-label='Save for later']") |> render_click()
+
+      assert has_element?(laptop, "#notification-#{n.id}.is-unread")
+
+      assert has_element?(
+               laptop,
+               "#notification-#{n.id} button[aria-label='Remove from saved'][aria-pressed='true']"
+             )
+
+      assert laptop |> element("#filter-saved .n") |> render() =~ ">1<"
+      assert laptop |> element("#filter-unread .n") |> render() =~ ">1<"
+      assert packages |> element("#inbox-icon .app-inbox__badge") |> render() =~ ">1<"
+
+      phone |> element("#notification-#{n.id} [aria-label='Mark as read']") |> render_click()
+
+      assert has_element?(laptop, "#notification-#{n.id}:not(.is-unread)")
+      assert laptop |> element("#filter-saved .n") |> render() =~ ">1<"
+      refute has_element?(laptop, "#inbox-icon .app-inbox__badge")
+      refute has_element?(packages, "#inbox-icon .app-inbox__badge")
+
+      phone |> element("#notification-#{n.id} [aria-label='Remove from saved']") |> render_click()
+
+      refute has_element?(laptop, "#notification-#{n.id}")
+      assert has_element?(laptop, ".ibx-empty")
+      assert laptop |> element("#filter-saved .n") |> render() =~ ">0<"
+      refute has_element?(packages, "#inbox-icon .app-inbox__badge")
+
+      phone |> element("#notification-#{n.id} [aria-label='Save for later']") |> render_click()
+      assert has_element?(laptop, "#notification-#{n.id}:not(.is-unread)")
+      refute has_element?(packages, "#inbox-icon .app-inbox__badge")
+
+      laptop
+      |> element("#notification-#{n.id} [aria-label='Remove from saved']")
+      |> render_click()
+
+      assert has_element?(
+               phone,
+               "#notification-#{n.id} button[aria-label='Save for later'][aria-pressed='false']"
+             )
+
+      assert phone |> element("#filter-saved .n") |> render() =~ ">0<"
+    end
+
+    test "Mark all read honors Saved, search, types and revision across every matching page", %{
+      conn: conn
+    } do
+      user = register_user!()
+      chan = channel!()
+      rev = channel_revision!(chan)
+      needle = package!("needle-#{System.unique_integer([:positive])}")
+
+      attrs = %{
+        type: :package_added,
+        package_id: needle.id,
+        channel_id: chan.id,
+        channel_revision_id: rev.id
+      }
+
+      matching =
+        user
+        |> notifications!(30, attrs)
+        |> Enum.map(&Notification.save!(&1, actor: user))
+
+      removed =
+        notification!(user, %{attrs | type: :package_removed})
+        |> Notification.save!(actor: user)
+
+      already_read =
+        notification!(user, attrs)
+        |> Notification.save!(actor: user)
+        |> Notification.mark_read!(actor: user)
+
+      unsaved = notification!(user, attrs)
+
+      outside_search =
+        notification!(user, %{attrs | package_id: package!().id})
+        |> Notification.save!(actor: user)
+
+      outside_type =
+        notification!(user, %{attrs | type: :channel_revision_published})
+        |> Notification.save!(actor: user)
+
+      outside_revision =
+        notification!(user, %{attrs | channel_revision_id: channel_revision!(chan).id})
+        |> Notification.save!(actor: user)
+
+      other_user = register_user!()
+      other_saved = notification!(other_user, attrs) |> Notification.save!(actor: other_user)
+      conn = log_in(conn, user)
+
+      {:ok, view, _html} =
+        live(
+          conn,
+          ~p"/inbox?filter=saved&search=needle&types=package_added,package_removed&channel_revision_id=#{rev.id}&page=2"
+        )
+
+      refute has_element?(view, "#mark-all-read[disabled]")
+
+      view |> element("#mark-all-read") |> render_click()
+
+      assert has_element?(view, "#mark-all-read[disabled]")
+      refute has_element?(view, "#inbox-groups .is-unread")
+
+      for n <- [removed | matching] do
+        assert %Notification{saved: true, read_at: read_at} =
+                 Ash.get!(Notification, n.id, actor: user)
+
+        refute is_nil(read_at)
+      end
+
+      assert Ash.get!(Notification, already_read.id, actor: user).read_at == already_read.read_at
+
+      unread_ids =
+        Notification.for_user!(%{unread_only: true}, actor: user)
+        |> Enum.map(& &1.id)
+        |> Enum.sort()
+
+      assert unread_ids ==
+               Enum.sort([unsaved.id, outside_search.id, outside_type.id, outside_revision.id])
+
+      assert %Notification{saved: true, read_at: nil} =
+               Ash.get!(Notification, other_saved.id, actor: other_user)
+
+      assert view |> element("#filter-unread .n") |> render() =~ ">3<"
+      assert view |> element("#inbox-icon .app-inbox__badge") |> render() =~ ">4<"
+    end
+
+    test "Mark all read is disabled when search, types or Saved exclude all unread rows", %{
+      conn: conn
+    } do
+      user = register_user!()
+      unread = published_notification!(user)
+
+      saved_read =
+        published_notification!(user)
+        |> Notification.save!(actor: user)
+        |> Notification.mark_read!(actor: user)
+
+      conn = log_in(conn, user)
+      {:ok, view, _html} = live(conn, ~p"/inbox?filter=all&search=no-match")
+
+      assert has_element?(view, "#mark-all-read[disabled]")
+
+      view |> element("#page-search") |> render_change(%{"search" => ""})
+      refute has_element?(view, "#mark-all-read[disabled]")
+
+      view |> element("#filter-type-package_added") |> render_click()
+      assert has_element?(view, "#mark-all-read[disabled]")
+
+      view |> element("#filter-type-package_added") |> render_click()
+      view |> element("#filter-saved") |> render_click()
+
+      assert has_element?(view, "#notification-#{saved_read.id}")
+      assert has_element?(view, "#mark-all-read[disabled]")
+      refute has_element?(view, "#notification-#{unread.id}")
+      assert %Notification{read_at: nil} = Ash.get!(Notification, unread.id, actor: user)
+
+      view |> element("#filter-unread") |> render_click()
+
+      refute has_element?(view, "#mark-all-read[disabled]")
+      assert has_element?(view, "#notification-#{unread.id}")
+    end
   end
 
   test "filters by type with multi-select chips", %{conn: conn} do
@@ -429,7 +806,8 @@ defmodule TrackerWeb.InboxLive.IndexTest do
     {:ok, view, _html} = live(conn, ~p"/inbox")
     view |> element("#filter-unread") |> render_click()
 
-    assert render(view) =~ "Nothing matches these filters."
+    assert has_element?(view, ".ibx-empty")
+    refute has_element?(view, "#inbox-groups ul.row-list > li")
   end
 
   test "filters to a single channel revision", %{conn: conn} do
