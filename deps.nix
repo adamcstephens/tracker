@@ -2332,6 +2332,22 @@ let
         in
         drv;
 
+      zoneinfo =
+        let
+          version = "0.1.9";
+          drv = buildMix {
+            inherit version;
+            name = "zoneinfo";
+
+            src = fetchHex {
+              inherit version;
+              pkg = "zoneinfo";
+              sha256 = "8bc3266afe79ab668de4fb2a7f182152c90f610bdd8519528e8ea1af70e0dea8";
+            };
+          };
+        in
+        drv;
+
     };
 in
 self

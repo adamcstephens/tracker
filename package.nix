@@ -11,6 +11,7 @@
   rustc,
   rustPlatform,
   stdenvNoCC,
+  tzdata,
 }:
 let
   # Lumis fetches tree-sitter grammars from npm the first time it highlights,
@@ -124,6 +125,7 @@ beamPackages.mixRelease rec {
     PGDATABASE = "tracker_test";
     # prevent mix from trying to download binaries
     ESBUILD_PATH = lib.getExe esbuild;
+    TZDIR = "${tzdata}/share/zoneinfo";
   };
   nativeCheckInputs = [
     postgresql
