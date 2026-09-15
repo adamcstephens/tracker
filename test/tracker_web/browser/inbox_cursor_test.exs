@@ -116,6 +116,23 @@ defmodule TrackerWeb.Browser.InboxCursorTest do
     assert read_states(user) == [true, true, false]
   end
 
+  test "Enter opens the highlighted notification", %{conn: conn, user: user} do
+    pkg = package!()
+
+    notification!(user, %{
+      type: :package_added,
+      package_id: pkg.id,
+      occurred_at: DateTime.add(DateTime.utc_now(:second), 1, :minute)
+    })
+
+    conn = inbox(conn, user)
+
+    press(conn, "body", "j")
+    press(conn, ":focus", "Enter")
+
+    assert_path(conn, "/packages/#{pkg.attribute}")
+  end
+
   test "save controls are reachable by Tab and activate with Enter and Space without navigating",
        %{
          conn: conn,

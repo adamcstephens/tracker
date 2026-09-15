@@ -256,6 +256,22 @@ document.addEventListener("keydown", (event) => {
   if (moveRow(step)) event.preventDefault()
 })
 
+// Enter follows the highlighted inbox row's explicit Open action. Restrict the
+// shortcut to the row focus target so native Enter behavior still owns links
+// and buttons reached with Tab.
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") return
+  if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return
+  if (document.querySelector("dialog[open]")) return
+  if (!event.target.matches?.("#inbox-groups ul.row-list > li > .row-line")) return
+
+  let link = event.target.closest("li")?.querySelector("a[aria-label='Open']")
+  if (!link) return
+
+  event.preventDefault()
+  link.click()
+})
+
 // "m" files the focused inbox row by driving the row's own read/unread button,
 // so the key and the mouse take one path to the server. Rows elsewhere carry no
 // such button and the key is inert on them: only the inbox has a read state.
