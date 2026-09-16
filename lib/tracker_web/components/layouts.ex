@@ -81,7 +81,8 @@ defmodule TrackerWeb.Layouts do
           %Shortcut{keys: ["j", "↓"], label: "Next row"},
           %Shortcut{keys: ["k", "↑"], label: "Previous row"},
           %Shortcut{keys: ["Enter"], label: "Open the focused row"},
-          %Shortcut{keys: ["m"], label: "Toggle read (inbox)"}
+          %Shortcut{keys: ["m"], label: "Toggle read (inbox)"},
+          %Shortcut{keys: ["s"], label: "Toggle save (inbox)"}
         ]
       },
       %ShortcutGroup{

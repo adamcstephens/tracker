@@ -272,34 +272,39 @@ document.addEventListener("keydown", (event) => {
   link.click()
 })
 
-// "m" files the focused inbox row by driving the row's own read/unread button,
-// so the key and the mouse take one path to the server. Rows elsewhere carry no
-// such button and the key is inert on them: only the inbox has a read state.
+// "m" and "s" drive the focused inbox row's own read and save controls, so
+// keyboard and mouse input take one path to the server. Rows elsewhere carry
+// neither control and leave the keys inert.
+const ROW_TOGGLES = {
+  m: {click: "toggle-read", filteredBy: "#filter-unread.is-active"},
+  s: {click: "toggle-saved", filteredBy: "#filter-saved.is-active"}
+}
+
 document.addEventListener("keydown", (event) => {
-  if (event.key !== "m") return
+  let toggle = ROW_TOGGLES[event.key]
+  if (!toggle) return
   if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return
   if (isEditable(event.target)) return
   if (document.querySelector("dialog[open]")) return
 
   let row = event.target.closest?.("ul.row-list > li")
-  let button = row?.querySelector("button[phx-click='toggle-read']")
+  let button = row?.querySelector(`button[phx-click='${toggle.click}']`)
   if (!button) return
 
   event.preventDefault()
-  keepCursorOn(cursorTarget(row))
+  keepCursorOn(cursorTarget(row, toggle.filteredBy))
   button.click()
 })
 
-// Which row the cursor belongs on once the toggle lands. The Unread segment
-// holds only unread rows, so the toggle always drops this one and the cursor
-// takes its neighbour — the next row, or the previous one at the end of the
-// list. Under All the row stays, and so does the cursor.
+// Which row the cursor belongs on once a toggle lands. A segment that filters
+// on the toggled state drops this row, so the cursor takes its neighbour — the
+// next row, or the previous one at the end. Otherwise the row and cursor stay.
 //
 // Nothing is focused here. Moving the cursor ahead of the round trip only
 // splits one action into two visible steps; leaving it lets the cursor arrive
 // with the row it belongs to.
-function cursorTarget(row) {
-  if (!document.querySelector("#filter-unread.is-active")) return row.id
+function cursorTarget(row, activeFilterSelector) {
+  if (!document.querySelector(activeFilterSelector)) return row.id
 
   let rows = keynavRows()
   let index = rows.findIndex((line) => line.closest("ul.row-list > li") === row)

@@ -5,6 +5,7 @@ defmodule TrackerWeb.Browser.KeyboardGuardsTest do
   window.__consumed = null
   window.__opened = null
   window.__toggles = 0
+  window.__savedToggles = 0
 
   if (!window.__probed) {
     window.__probed = true
@@ -28,6 +29,16 @@ defmodule TrackerWeb.Browser.KeyboardGuardsTest do
       e.preventDefault()
     }, true)
   })
+
+  document.querySelectorAll("button[phx-click='toggle-saved']").forEach((button) => {
+    if (button.dataset.counted) return
+    button.dataset.counted = "1"
+    button.addEventListener("click", (e) => {
+      window.__savedToggles++
+      e.stopPropagation()
+      e.preventDefault()
+    }, true)
+  })
   """
 
   @reset """
@@ -37,6 +48,7 @@ defmodule TrackerWeb.Browser.KeyboardGuardsTest do
   window.__consumed = null
   window.__opened = null
   window.__toggles = 0
+  window.__savedToggles = 0
   """
 
   @row "ul.row-list > li:nth-child(2) > .row-line"
@@ -87,7 +99,10 @@ defmodule TrackerWeb.Browser.KeyboardGuardsTest do
     %{name: "ArrowUp", key: "ArrowUp", from: "body", survives: [], fires: @cursor_moved}
   ]
 
-  @on_inbox [%{name: "m", key: "m", from: @row, survives: [], fires: "window.__toggles > 0"}]
+  @on_inbox [
+    %{name: "m", key: "m", from: @row, survives: [], fires: "window.__toggles > 0"},
+    %{name: "s", key: "s", from: @row, survives: [], fires: "window.__savedToggles > 0"}
+  ]
 
   setup do
     path = Path.join(System.tmp_dir!(), "dev-login-#{System.unique_integer([:positive])}.json")

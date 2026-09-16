@@ -116,6 +116,32 @@ defmodule TrackerWeb.Browser.InboxCursorTest do
     assert read_states(user) == [true, true, false]
   end
 
+  test "s toggles the focused row's saved state without changing read state", %{
+    conn: conn,
+    user: user
+  } do
+    conn = inbox(conn, user)
+    [_first, second, _third] = read(conn, @rows)
+    row = "##{second}"
+    id = second |> String.replace_prefix("notification-", "") |> String.to_integer()
+
+    press(conn, "#{row} > .row-line", "s")
+
+    assert_has(conn, "#{row} button[aria-label='Remove from saved'][aria-pressed='true']")
+    assert eventually(conn, @cursor, second) == second
+
+    assert %Notification{saved: true, read_at: nil} =
+             Ash.get!(Notification, id, actor: user)
+
+    press(conn, "#{row} > .row-line", "s")
+
+    assert_has(conn, "#{row} button[aria-label='Save for later'][aria-pressed='false']")
+    assert eventually(conn, @cursor, second) == second
+
+    assert %Notification{saved: false, read_at: nil} =
+             Ash.get!(Notification, id, actor: user)
+  end
+
   test "Enter opens the highlighted notification", %{conn: conn, user: user} do
     pkg = package!()
 
