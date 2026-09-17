@@ -259,27 +259,29 @@ defmodule TrackerWeb.ChangeLive.Show do
         </div>
 
         <div class="m3-panel m3-panel-info">
-          <section id="package-linking-status" class="change-section">
-            <SectionHeader.section_header title="Package linking" count={@package_count} />
-            <dl class="change-meta">
-              <div>
-                <dt>Processing status</dt>
-                <dd data-processing-status={@change.processing_status}>
-                  {status_label(@change.processing_status)}
-                </dd>
-              </div>
-              <div>
-                <dt>Linked packages</dt>
-                <dd data-linked-package-count={@package_count}>{@package_count}</dd>
-              </div>
-            </dl>
-            <p :if={@change.processing_status == :failed} id="package-linking-failure">
-              Package linking failed. An administrator can inspect the refresh job and retry it.
-            </p>
-          </section>
+          <p
+            :if={package_linking_attention?(@change, @package_count)}
+            id="package-linking-status"
+            class="muted"
+          >
+            <strong>Package linking:</strong>
+            <span data-processing-status={@change.processing_status}>
+              {status_label(@change.processing_status)}
+            </span>
+            ·
+            <span data-linked-package-count={@package_count}>
+              {@package_count} packages linked
+            </span>
+            <span :if={@change.processing_status == :failed} id="package-linking-failure">
+              · Package linking failed.
+            </span>
+          </p>
 
           <section
-            :if={@admin? and @package_linking_job}
+            :if={
+              @admin? and not is_nil(@package_linking_job) and
+                package_linking_attention?(@change, @package_count)
+            }
             id="package-linking-job"
             class="change-section"
           >
@@ -419,6 +421,10 @@ defmodule TrackerWeb.ChangeLive.Show do
 
   defp pluralize_namespaces(1), do: "namespace"
   defp pluralize_namespaces(_), do: "namespaces"
+
+  defp package_linking_attention?(change, package_count) do
+    change.processing_status != :processed or package_count == 0
+  end
 
   defp status_label(status) when is_atom(status), do: status |> Atom.to_string() |> status_label()
 

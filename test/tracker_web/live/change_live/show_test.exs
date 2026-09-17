@@ -323,6 +323,58 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
   end
 
   describe "package linking diagnostics" do
+    test "hides package-linking status after successful linking", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/changes/6001")
+
+      refute has_element?(view, "#package-linking-status")
+      refute has_element?(view, "#package-linking-job")
+    end
+
+    test "hides historical job details from administrators after successful linking", %{
+      conn: conn
+    } do
+      insert_refresh_job!(6001, "resolved upstream response")
+
+      {:ok, view, _html} = conn |> log_in(admin!()) |> live(~p"/changes/6001")
+
+      refute has_element?(view, "#package-linking-status")
+      refute has_element?(view, "#package-linking-job")
+    end
+
+    test "shows one brief public status line when processing succeeded without links", %{
+      conn: conn
+    } do
+      Tracker.Nixpkgs.Change.bulk_upsert_all([
+        %{
+          number: 46_822,
+          title: "no linked packages",
+          state: :merged,
+          author: "showauthor",
+          url: "https://github.com/NixOS/nixpkgs/pull/46822",
+          base_ref: "master",
+          package_count: 0,
+          processing_status: :processed
+        }
+      ])
+
+      {:ok, view, _html} = live(conn, ~p"/changes/46822")
+
+      assert has_element?(
+               view,
+               "p#package-linking-status [data-processing-status=\"processed\"]",
+               "Processed"
+             )
+
+      assert has_element?(
+               view,
+               "p#package-linking-status [data-linked-package-count=\"0\"]",
+               "0 packages linked"
+             )
+
+      refute has_element?(view, "#package-linking-status .section-header")
+      refute has_element?(view, "#package-linking-status dl")
+    end
+
     test "shows normalized failure information without raw job details to visitors", %{conn: conn} do
       insert_failed_change_with_job!(46_820, "private upstream response")
 
@@ -330,13 +382,13 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
 
       assert has_element?(
                view,
-               "#package-linking-status [data-processing-status=\"failed\"]",
+               "p#package-linking-status [data-processing-status=\"failed\"]",
                "Failed"
              )
 
       assert has_element?(
                view,
-               "#package-linking-status [data-linked-package-count=\"0\"]",
+               "p#package-linking-status [data-linked-package-count=\"0\"]",
                "0"
              )
 
@@ -344,6 +396,8 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
       refute has_element?(view, "#package-linking-job")
       refute has_element?(view, "#retry-package-linking")
       refute render(view) =~ "private upstream response"
+      refute has_element?(view, "#package-linking-status .section-header")
+      refute has_element?(view, "#package-linking-status dl")
     end
 
     test "shows raw job details to administrators and refreshes state after retry", %{conn: conn} do
@@ -739,6 +793,10 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
       }
     ])
 
+    insert_refresh_job!(number, error)
+  end
+
+  defp insert_refresh_job!(number, error) do
     now = DateTime.utc_now()
 
     %{"number" => number, "reason" => "merged"}
