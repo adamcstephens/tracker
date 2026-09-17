@@ -30,6 +30,8 @@ defmodule TrackerWeb.ChangeLive.Show do
 
   use TrackerWeb, :live_view
 
+  alias Tracker.Accounts.User
+  alias Tracker.Nixpkgs.ChangeArtifactRefresh
   alias TrackerWeb.PageSearch
   alias TrackerWeb.Pagination
   alias TrackerWeb.PropagationDag
@@ -257,6 +259,88 @@ defmodule TrackerWeb.ChangeLive.Show do
         </div>
 
         <div class="m3-panel m3-panel-info">
+          <section id="package-linking-status" class="change-section">
+            <SectionHeader.section_header title="Package linking" count={@package_count} />
+            <dl class="change-meta">
+              <div>
+                <dt>Processing status</dt>
+                <dd data-processing-status={@change.processing_status}>
+                  {status_label(@change.processing_status)}
+                </dd>
+              </div>
+              <div>
+                <dt>Linked packages</dt>
+                <dd data-linked-package-count={@package_count}>{@package_count}</dd>
+              </div>
+            </dl>
+            <p :if={@change.processing_status == :failed} id="package-linking-failure">
+              Package linking failed. An administrator can inspect the refresh job and retry it.
+            </p>
+          </section>
+
+          <section
+            :if={@admin? and @package_linking_job}
+            id="package-linking-job"
+            class="change-section"
+          >
+            <h2>Package linking job</h2>
+            <dl class="change-meta">
+              <div>
+                <dt>Reason</dt>
+                <dd data-job-reason={@package_linking_job.reason}>
+                  {status_label(@package_linking_job.reason)}
+                </dd>
+              </div>
+              <div>
+                <dt>State</dt>
+                <dd data-job-state={@package_linking_job.state}>
+                  {status_label(@package_linking_job.state)}
+                </dd>
+              </div>
+              <div>
+                <dt>Attempts</dt>
+                <dd>{@package_linking_job.attempt}/{@package_linking_job.max_attempts}</dd>
+              </div>
+              <div>
+                <dt>Queued</dt>
+                <dd>{format_datetime(@package_linking_job.inserted_at, @time_zone)}</dd>
+              </div>
+              <div>
+                <dt>Scheduled</dt>
+                <dd>{format_datetime(@package_linking_job.scheduled_at, @time_zone)}</dd>
+              </div>
+              <div :if={@package_linking_job.attempted_at}>
+                <dt>Attempted</dt>
+                <dd>{format_datetime(@package_linking_job.attempted_at, @time_zone)}</dd>
+              </div>
+              <div :if={@package_linking_job.completed_at}>
+                <dt>Completed</dt>
+                <dd>{format_datetime(@package_linking_job.completed_at, @time_zone)}</dd>
+              </div>
+              <div :if={@package_linking_job.discarded_at}>
+                <dt>Discarded</dt>
+                <dd>{format_datetime(@package_linking_job.discarded_at, @time_zone)}</dd>
+              </div>
+              <div :if={@package_linking_job.cancelled_at}>
+                <dt>Cancelled</dt>
+                <dd>{format_datetime(@package_linking_job.cancelled_at, @time_zone)}</dd>
+              </div>
+              <div :if={@package_linking_job.initiated_by_github_username}>
+                <dt>Initiated by</dt>
+                <dd>{@package_linking_job.initiated_by_github_username}</dd>
+              </div>
+            </dl>
+            <pre :if={@package_linking_job.raw_error} id="package-linking-raw-error"><code>{@package_linking_job.raw_error}</code></pre>
+            <button
+              :if={@change.state in [:merged, :open, :draft]}
+              id="retry-package-linking"
+              type="button"
+              phx-click="retry-package-linking"
+            >
+              Retry package linking
+            </button>
+          </section>
+
           <dl class="change-meta">
             <div>
               <dt>Link</dt>
@@ -336,6 +420,14 @@ defmodule TrackerWeb.ChangeLive.Show do
   defp pluralize_namespaces(1), do: "namespace"
   defp pluralize_namespaces(_), do: "namespaces"
 
+  defp status_label(status) when is_atom(status), do: status |> Atom.to_string() |> status_label()
+
+  defp status_label(status) when is_binary(status) do
+    status
+    |> String.replace("_", " ")
+    |> String.capitalize()
+  end
+
   defp processing_status_explanation(:pending, _),
     do: "This change hasn't been processed yet."
 
@@ -385,7 +477,10 @@ defmodule TrackerWeb.ChangeLive.Show do
     {:ok,
      socket
      |> assign_new(:current_user, fn -> nil end)
-     |> assign(:subscribed?, false)}
+     |> assign(:subscribed?, false)
+     |> assign(:admin?, false)
+     |> assign(:package_linking_job, nil)
+     |> assign(:package_linking_job_timer, nil)}
   end
 
   @impl true
@@ -426,10 +521,12 @@ defmodule TrackerWeb.ChangeLive.Show do
       end
 
     channels_enabled? = change.state == :merged and lifecycle_dag.nodes != []
+    admin? = admin?(socket.assigns[:current_user])
 
     socket
     |> assign(:page_title, "##{change.number} #{change.title}")
     |> assign(:change, change)
+    |> assign(:admin?, admin?)
     |> assign(:subscribed?, change_subscribed?(socket.assigns[:current_user], change.id))
     |> assign(:author_maintainer, author_maintainer)
     |> assign(:merger_maintainer, merger_maintainer)
@@ -441,6 +538,7 @@ defmodule TrackerWeb.ChangeLive.Show do
     |> assign(:channels_enabled?, channels_enabled?)
     |> load_packages(change.id)
     |> load_options(change.id)
+    |> load_package_linking_job(change.number)
   end
 
   defp change_subscribed?(nil, _change_id), do: false
@@ -464,6 +562,35 @@ defmodule TrackerWeb.ChangeLive.Show do
     end
   end
 
+  defp admin?(%User{} = user), do: User.has_role?(user, :admin)
+  defp admin?(_user), do: false
+
+  defp load_package_linking_job(%{assigns: %{admin?: true}} = socket, number) do
+    assign_package_linking_job(socket, ChangeArtifactRefresh.latest(number))
+  end
+
+  defp load_package_linking_job(socket, _number), do: assign_package_linking_job(socket, nil)
+
+  defp assign_package_linking_job(socket, job) do
+    socket = cancel_package_linking_job_timer(socket)
+    socket = assign(socket, :package_linking_job, job)
+
+    if (connected?(socket) and job) && job.incomplete? do
+      timer = Process.send_after(self(), {:refresh_package_linking_job, job.id}, 1_000)
+      assign(socket, :package_linking_job_timer, timer)
+    else
+      socket
+    end
+  end
+
+  defp cancel_package_linking_job_timer(socket) do
+    if timer = socket.assigns[:package_linking_job_timer] do
+      Process.cancel_timer(timer)
+    end
+
+    assign(socket, :package_linking_job_timer, nil)
+  end
+
   @impl true
   def handle_event("toggle-subscription", _params, socket) do
     %{current_user: user, change: change} = socket.assigns
@@ -480,6 +607,33 @@ defmodule TrackerWeb.ChangeLive.Show do
       end
 
     {:noreply, assign(socket, :subscribed?, subscribed?)}
+  end
+
+  @impl true
+  def handle_event("retry-package-linking", _params, socket) do
+    case ChangeArtifactRefresh.retry(socket.assigns.change, socket.assigns[:current_user]) do
+      {:ok, :enqueued, job} ->
+        {:noreply,
+         socket
+         |> assign_package_linking_job(job)
+         |> put_flash(:info, "Package linking retry queued.")}
+
+      {:ok, :existing, job} ->
+        {:noreply,
+         socket
+         |> assign_package_linking_job(job)
+         |> put_flash(:info, "Package linking is already queued or running.")}
+
+      {:error, :forbidden} ->
+        {:noreply, put_flash(socket, :error, "Only administrators can retry package linking.")}
+
+      {:error, :unsupported_change_state} ->
+        {:noreply,
+         put_flash(socket, :error, "This change cannot be retried in its current state.")}
+
+      {:error, _reason} ->
+        {:noreply, put_flash(socket, :error, "Package linking retry could not be queued.")}
+    end
   end
 
   @impl true
@@ -605,6 +759,18 @@ defmodule TrackerWeb.ChangeLive.Show do
     case Tracker.Nixpkgs.Maintainer.get_by_github_id(github_id) do
       {:ok, maintainer} -> maintainer
       _ -> nil
+    end
+  end
+
+  @impl true
+  def handle_info({:refresh_package_linking_job, job_id}, socket) do
+    if get_in(socket.assigns.package_linking_job.id) == job_id do
+      {:noreply,
+       socket
+       |> assign(:package_linking_job_timer, nil)
+       |> load_package_linking_job(socket.assigns.change.number)}
+    else
+      {:noreply, socket}
     end
   end
 

@@ -1,7 +1,15 @@
 defmodule TrackerWeb.ChangeLive.ShowTest do
   use TrackerWeb.ConnCase, async: true
+  use Oban.Testing, repo: Tracker.Repo
+
+  import Ecto.Query
 
   import Phoenix.LiveViewTest
+
+  alias AshAuthentication.Plug.Helpers
+  alias Tracker.Accounts.User
+  alias Tracker.Nixpkgs.ChangeArtifactRefresh
+  alias Tracker.Nixpkgs.ChangeArtifactRefreshWorker
 
   setup do
     maintainer =
@@ -312,6 +320,93 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
     {:ok, _view, html} = live(conn, ~p"/changes/6001")
 
     assert html =~ "https://github.com/NixOS/nixpkgs/commit/abc123def456"
+  end
+
+  describe "package linking diagnostics" do
+    test "shows normalized failure information without raw job details to visitors", %{conn: conn} do
+      insert_failed_change_with_job!(46_820, "private upstream response")
+
+      {:ok, view, _html} = live(conn, ~p"/changes/46820")
+
+      assert has_element?(
+               view,
+               "#package-linking-status [data-processing-status=\"failed\"]",
+               "Failed"
+             )
+
+      assert has_element?(
+               view,
+               "#package-linking-status [data-linked-package-count=\"0\"]",
+               "0"
+             )
+
+      assert has_element?(view, "#package-linking-failure", "Package linking failed.")
+      refute has_element?(view, "#package-linking-job")
+      refute has_element?(view, "#retry-package-linking")
+      refute render(view) =~ "private upstream response"
+    end
+
+    test "shows raw job details to administrators and refreshes state after retry", %{conn: conn} do
+      insert_failed_change_with_job!(46_821, "private upstream response")
+      admin = admin!()
+
+      {:ok, view, _html} = conn |> log_in(admin) |> live(~p"/changes/46821")
+
+      assert has_element?(
+               view,
+               "#package-linking-job [data-job-state=\"discarded\"]",
+               "Discarded"
+             )
+
+      assert has_element?(view, "#package-linking-job", "private upstream response")
+      assert has_element?(view, "#retry-package-linking")
+
+      view
+      |> element("#retry-package-linking")
+      |> render_click()
+
+      assert has_element?(
+               view,
+               "#package-linking-job [data-job-state=\"available\"]",
+               "Available"
+             )
+
+      diagnostics = ChangeArtifactRefresh.latest(46_821)
+      assert diagnostics.initiated_by_user_id == admin.id
+      assert diagnostics.initiated_by_github_username == admin.github_username
+
+      view
+      |> element("#retry-package-linking")
+      |> render_click()
+
+      assert render(view) =~ "Package linking is already queued or running."
+      assert ChangeArtifactRefresh.latest(46_821).id == diagnostics.id
+
+      attempted_at = DateTime.utc_now()
+
+      Tracker.Repo.update_all(
+        from(job in Oban.Job, where: job.id == ^diagnostics.id),
+        set: [state: "executing", attempt: 1, attempted_at: attempted_at]
+      )
+
+      send(view.pid, {:refresh_package_linking_job, diagnostics.id})
+
+      assert has_element?(
+               view,
+               "#package-linking-job [data-job-state=\"executing\"]",
+               "Executing"
+             )
+    end
+
+    test "rejects a forged retry event from a non-administrator", %{conn: conn} do
+      user = register_via_github!()
+      {:ok, view, _html} = conn |> log_in(user) |> live(~p"/changes/6001")
+
+      render_click(view, "retry-package-linking")
+
+      assert render(view) =~ "Only administrators can retry package linking."
+      refute_enqueued(worker: ChangeArtifactRefreshWorker)
+    end
   end
 
   describe "propagation lifecycle section" do
@@ -628,5 +723,68 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
       assert html =~ ~r/<li[^>]*class="[^"]*is-mine[^"]*"[^>]*data-branch="nixos-unstable"/
       refute html =~ ~r/<li[^>]*class="[^"]*is-mine[^"]*"[^>]*data-branch="nixpkgs-unstable"/
     end
+  end
+
+  defp insert_failed_change_with_job!(number, error) do
+    Tracker.Nixpkgs.Change.bulk_upsert_all([
+      %{
+        number: number,
+        title: "failed package linking",
+        state: :merged,
+        author: "showauthor",
+        url: "https://github.com/NixOS/nixpkgs/pull/#{number}",
+        base_ref: "master",
+        package_count: 0,
+        processing_status: :failed
+      }
+    ])
+
+    now = DateTime.utc_now()
+
+    %{"number" => number, "reason" => "merged"}
+    |> ChangeArtifactRefreshWorker.new()
+    |> Ecto.Changeset.change(
+      state: "discarded",
+      attempt: 10,
+      errors: [%{"attempt" => 10, "at" => now, "error" => error}],
+      attempted_at: now,
+      discarded_at: now
+    )
+    |> Tracker.Repo.insert!()
+  end
+
+  defp admin! do
+    user = register_via_github!()
+
+    Tracker.Repo.update_all(
+      from(record in "users", where: record.github_id == ^user.github_id),
+      set: [roles: ["user", "admin"]]
+    )
+
+    register_via_github!(%{"id" => user.github_id, "login" => user.github_username})
+  end
+
+  defp log_in(conn, user) do
+    conn
+    |> Plug.Test.init_test_session(%{})
+    |> Helpers.store_in_session(user)
+  end
+
+  defp register_via_github!(overrides \\ %{}) do
+    user_info =
+      Map.merge(
+        %{
+          "id" => System.unique_integer([:positive]),
+          "login" => "user_#{System.unique_integer([:positive])}"
+        },
+        overrides
+      )
+
+    User
+    |> Ash.Changeset.for_create(:register_with_github,
+      user_info: user_info,
+      oauth_tokens: %{"access_token" => "tok"}
+    )
+    |> Ash.create!(authorize?: false)
   end
 end
