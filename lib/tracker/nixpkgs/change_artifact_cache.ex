@@ -60,11 +60,11 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCache do
   @doc """
   Caches the comparison artifact from a workflow run in S3.
 
-  Checks the meta.etf sidecar first — if the cached run_id matches,
-  the comparison is assumed present and no download occurs. On a miss
-  or run_id mismatch, downloads and stores the run's `comparison`
-  artifact, then writes updated metadata. The run's other artifacts
-  are never read by anything and are not cached.
+  Checks the meta.etf sidecar and comparison object first — if the cached
+  run_id matches and the comparison is present, no download occurs. On a miss
+  or run_id mismatch, downloads and stores the run's `comparison` artifact,
+  then writes updated metadata. The run's other artifacts are never read by
+  anything and are not cached.
 
   Each artifact map must have `:name` and `:archive_download_url` keys.
 
@@ -78,24 +78,24 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCache do
   """
   def cache_run_artifacts(pr_number, run_id, artifacts, token, opts \\ []) do
     m_key = meta_key(pr_number)
+    comparison_key = cache_key(pr_number, "comparison")
     source = Keyword.get(opts, :source, :merge)
 
     cond do
-      run_cached?(m_key, run_id) ->
+      run_cached?(m_key, comparison_key, run_id) ->
         Logger.debug(msg: "comparison artifact cached", pr_number: pr_number, run_id: run_id)
         :ok
 
       comparison = Enum.find(artifacts, &(&1.name == "comparison")) ->
         Logger.debug(msg: "caching comparison artifact", pr_number: pr_number, run_id: run_id)
 
-        case download_artifact(comparison.archive_download_url, token, opts) do
-          {:ok, zip_body} ->
-            store_in_cache(cache_key(pr_number, "comparison"), zip_body)
-            store_meta(m_key, %Meta{run_id: run_id, source: source})
-            :ok
-
-          {:error, _} = error ->
-            error
+        with {:ok, zip_body} <- download_artifact(comparison.archive_download_url, token, opts),
+             :ok <- store_in_cache(comparison_key, zip_body),
+             :ok <- store_meta(m_key, %Meta{run_id: run_id, source: source}) do
+          :ok
+        else
+          {:error, _} = error -> error
+          :error -> :error
         end
 
       true ->
@@ -223,7 +223,7 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCache do
     end
   end
 
-  defp run_cached?(meta_key, run_id) do
+  defp run_cached?(meta_key, comparison_key, run_id) do
     case S3Cache.config() do
       nil ->
         false
@@ -232,7 +232,9 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCache do
         case S3Cache.get_object(config, meta_key) do
           {:ok, meta_binary} ->
             %Meta{run_id: cached_run_id} = :erlang.binary_to_term(meta_binary)
-            cached_run_id == run_id
+
+            cached_run_id == run_id and
+              match?({:ok, _comparison}, S3Cache.get_object(config, comparison_key))
 
           :miss ->
             false

@@ -38,9 +38,10 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCacheTest do
     }
   end
 
-  defp stub_s3_store do
+  defp stub_s3_store(opts \\ []) do
     store = :ets.new(:s3_store, [:set, :public])
     test_pid = self()
+    failed_put_suffix = Keyword.get(opts, :failed_put_suffix)
 
     Req.Test.stub(__MODULE__.S3, fn conn ->
       s3_key = conn.request_path
@@ -54,9 +55,14 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCacheTest do
           end
 
         "PUT" ->
-          :ets.insert(store, {s3_key, body})
           send(test_pid, {:s3_put, s3_key})
-          Plug.Conn.send_resp(conn, 200, "")
+
+          if failed_put_suffix && String.ends_with?(s3_key, failed_put_suffix) do
+            Plug.Conn.send_resp(conn, 500, "write failed")
+          else
+            :ets.insert(store, {s3_key, body})
+            Plug.Conn.send_resp(conn, 200, "")
+          end
 
         "DELETE" ->
           :ets.delete(store, s3_key)
@@ -170,6 +176,85 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCacheTest do
       assert_received {:s3_put, "/test-bucket/" <> ^meta_key}
 
       refute_received {:s3_put, _}
+    end
+
+    test "returns an error and does not write metadata when the comparison write fails" do
+      pr_number = System.unique_integer([:positive])
+      run_id = 99001
+      _store = stub_s3_store(failed_put_suffix: "/comparison.zip")
+      artifacts = fake_artifacts(@all_artifact_names)
+
+      Req.Test.stub(__MODULE__.GitHub, fn conn ->
+        Plug.Conn.send_resp(conn, 200, build_comparison_zip())
+      end)
+
+      assert :error =
+               ChangeArtifactCache.cache_run_artifacts(
+                 pr_number,
+                 run_id,
+                 artifacts,
+                 "fake-token",
+                 req_options: [plug: {Req.Test, __MODULE__.GitHub}]
+               )
+
+      comparison_key = ChangeArtifactCache.cache_key(pr_number, "comparison")
+      assert_received {:s3_put, "/test-bucket/" <> ^comparison_key}
+
+      meta_key = ChangeArtifactCache.meta_key(pr_number)
+      refute_received {:s3_put, "/test-bucket/" <> ^meta_key}
+    end
+
+    test "returns an error when the metadata write fails", %{config: config} do
+      pr_number = System.unique_integer([:positive])
+      run_id = 99001
+      _store = stub_s3_store(failed_put_suffix: "/meta.etf")
+      artifacts = fake_artifacts(@all_artifact_names)
+
+      Req.Test.stub(__MODULE__.GitHub, fn conn ->
+        Plug.Conn.send_resp(conn, 200, build_comparison_zip())
+      end)
+
+      assert :error =
+               ChangeArtifactCache.cache_run_artifacts(
+                 pr_number,
+                 run_id,
+                 artifacts,
+                 "fake-token",
+                 req_options: [plug: {Req.Test, __MODULE__.GitHub}]
+               )
+
+      comparison_key = ChangeArtifactCache.cache_key(pr_number, "comparison")
+      assert {:ok, _zip_body} = S3Cache.get_object(config, comparison_key)
+
+      meta_key = ChangeArtifactCache.meta_key(pr_number)
+      assert :miss = S3Cache.get_object(config, meta_key)
+    end
+
+    test "re-downloads when matching metadata exists without a comparison", %{config: config} do
+      pr_number = System.unique_integer([:positive])
+      run_id = 99001
+      store = stub_s3_store()
+      populate_cache(store, config, pr_number, run_id, [])
+      artifacts = fake_artifacts(@all_artifact_names)
+
+      Req.Test.stub(__MODULE__.GitHub, fn conn ->
+        Plug.Conn.send_resp(conn, 200, build_comparison_zip())
+      end)
+
+      assert :ok =
+               ChangeArtifactCache.cache_run_artifacts(
+                 pr_number,
+                 run_id,
+                 artifacts,
+                 "fake-token",
+                 req_options: [plug: {Req.Test, __MODULE__.GitHub}]
+               )
+
+      comparison_key = ChangeArtifactCache.cache_key(pr_number, "comparison")
+      assert_received {:s3_put, "/test-bucket/" <> ^comparison_key}
+
+      meta_key = ChangeArtifactCache.meta_key(pr_number)
+      assert_received {:s3_put, "/test-bucket/" <> ^meta_key}
     end
 
     test "returns comparison_not_in_run when the run lacks a comparison artifact" do
