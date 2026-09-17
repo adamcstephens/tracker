@@ -68,6 +68,34 @@ defmodule Tracker.Nixpkgs.ChangeArtifactReconcileWorkerTest do
       end
     end
 
+    test "reserves batch capacity for merged Changes when more than 50 heads are eligible" do
+      for i <- 1..51 do
+        insert_change!(
+          number: 8100 + i,
+          state: Enum.at([:open, :draft], rem(i, 2)),
+          processing_status: :failed
+        )
+      end
+
+      insert_change!(
+        number: 8999,
+        state: :merged,
+        processing_status: :failed,
+        merged_at: ~U[2026-04-01 00:00:00Z]
+      )
+
+      assert {:ok, 50} = ChangeArtifactReconcileWorker.run()
+
+      assert_enqueued(
+        worker: ChangeArtifactRefreshWorker,
+        args: %{"number" => 8999, "reason" => "merged"}
+      )
+
+      assert 49 ==
+               all_enqueued(worker: ChangeArtifactRefreshWorker)
+               |> Enum.count(&(&1.args["reason"] == "head_sha_changed"))
+    end
+
     test "does not enqueue another refresh while matching work is incomplete" do
       insert_change!(number: 9001, state: :merged, processing_status: :pending)
 

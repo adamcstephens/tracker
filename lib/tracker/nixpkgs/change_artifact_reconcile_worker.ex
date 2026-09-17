@@ -1,10 +1,13 @@
 defmodule Tracker.Nixpkgs.ChangeArtifactReconcileWorker do
   @moduledoc """
   Recovers pending and transiently failed artifact ingestion for merged,
-  open, and draft Changes. Matching incomplete jobs are excluded before
-  limiting the backlog so in-flight work cannot consume the batch.
+  open, and draft Changes. Each batch reserves capacity for merged and
+  head refreshes after excluding matching incomplete jobs.
   """
   use Oban.Worker, queue: :changes, max_attempts: 3
+
+  @batch_size 50
+  @reserved_per_category div(@batch_size, 2)
 
   import Ecto.Query
 
@@ -48,11 +51,17 @@ defmodule Tracker.Nixpkgs.ChangeArtifactReconcileWorker do
       )
       |> Enum.split_with(&(&1["reason"] == "merged"))
 
-    backlog =
-      Change.artifact_backlog!(
-        Enum.map(merged, & &1["number"]),
-        Enum.map(head, & &1["number"])
-      )
+    merged_backlog =
+      merged
+      |> Enum.map(& &1["number"])
+      |> Change.merged_artifact_backlog!()
+
+    head_backlog =
+      head
+      |> Enum.map(& &1["number"])
+      |> Change.head_artifact_backlog!()
+
+    backlog = balance_backlog(merged_backlog, head_backlog)
 
     count =
       Enum.reduce(backlog, 0, fn change, count ->
@@ -74,6 +83,17 @@ defmodule Tracker.Nixpkgs.ChangeArtifactReconcileWorker do
       end)
 
     {:ok, count}
+  end
+
+  defp balance_backlog(merged, head) do
+    {selected_merged, remaining_merged} = Enum.split(merged, @reserved_per_category)
+    {selected_head, remaining_head} = Enum.split(head, @reserved_per_category)
+
+    remaining_capacity =
+      @batch_size - length(selected_merged) - length(selected_head)
+
+    selected_merged ++
+      selected_head ++ Enum.take(remaining_merged ++ remaining_head, remaining_capacity)
   end
 
   defp summarize({:ok, count}), do: {:ok, count}
