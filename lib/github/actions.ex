@@ -31,15 +31,30 @@ defmodule GitHub.Actions do
   end
 
   @doc """
-  Lists artifacts for a workflow run, under `:artifacts`.
+  Lists all artifacts for a workflow run, under `:artifacts`.
+  Fetches pages of 100 artifacts and propagates errors without returning partial results.
   """
   @spec list_workflow_run_artifacts(String.t(), String.t(), integer(), keyword()) ::
           {:ok, %{artifacts: [Artifact.t()]}} | {:error, GitHub.Error.t()}
   def list_workflow_run_artifacts(owner, repo, run_id, opts \\ []) do
     url = "/repos/#{owner}/#{repo}/actions/runs/#{run_id}/artifacts"
+    list_artifact_pages(url, opts, 1, [])
+  end
+
+  defp list_artifact_pages(url, opts, page, acc) do
+    opts = Keyword.merge(opts, page: page, per_page: 100)
 
     with {:ok, json} <- Client.get(url, Client.to_request_opts(opts)) do
-      {:ok, %{artifacts: Enum.map(json["artifacts"] || [], &artifact/1)}}
+      artifacts = Map.fetch!(json, "artifacts")
+      acc = Enum.reduce(artifacts, acc, fn item, acc -> [artifact(item) | acc] end)
+
+      if length(artifacts) == 100 do
+        list_artifact_pages(url, opts, page + 1, acc)
+      else
+        {:ok, %{artifacts: Enum.reverse(acc)}}
+      end
+    else
+      {:error, _} = error -> error
     end
   end
 

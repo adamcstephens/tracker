@@ -155,6 +155,43 @@ defmodule Tracker.Nixpkgs.ChangeArtifactReconcileWorkerTest do
       refute_enqueued(worker: ChangeArtifactRefreshWorker)
     end
 
+    for {state, attempt} <- [merged: 1, open: 10] do
+      test "missing comparison stops fresh reconciliation jobs for #{state} PRs" do
+        state = unquote(state)
+        reason = unquote(if state == :merged, do: "merged", else: "head_sha_changed")
+        insert_change!(number: 102, state: state, processing_status: :failed)
+        args = %{"number" => 102, "reason" => reason}
+        table = :missing_comparison_reconcile_rate_limit
+        Tracker.GitHub.RateLimitCache.new(table)
+
+        args
+        |> ChangeArtifactRefreshWorker.new()
+        |> Ecto.Changeset.change(state: "discarded", attempt: 10)
+        |> Tracker.Repo.insert!()
+
+        assert {:ok, 1} = ChangeArtifactReconcileWorker.run()
+        [job] = all_enqueued(worker: ChangeArtifactRefreshWorker)
+
+        assert :ok =
+                 ChangeArtifactRefreshWorker.run(
+                   %{number: 102, reason: reason},
+                   attempt: unquote(attempt),
+                   max_attempts: 10,
+                   rate_limit_table: table,
+                   attrdiff_fetcher: fn _ -> {:error, {:comparison_not_in_run, []}} end
+                 )
+
+        assert Change.get_by_number!(102).processing_status == :no_comparison_artifact
+
+        job
+        |> Ecto.Changeset.change(state: "completed")
+        |> Tracker.Repo.update!()
+
+        assert {:ok, 0} = ChangeArtifactReconcileWorker.run()
+        refute_enqueued(worker: ChangeArtifactRefreshWorker)
+      end
+    end
+
     for state <- [:merged, :open, :draft] do
       test "recovers exhausted network failures for #{state} PRs" do
         state = unquote(state)

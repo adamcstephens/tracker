@@ -11,6 +11,12 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
       PR's "PR" workflow run (event `pull_request_target`) keyed by
       `head_sha`. Run each time the head_sha advances so the link set
       stays current while the PR is in flight.
+
+  Missing workflow runs retry until the final job attempt, then set
+  `processing_status` to `:no_workflow_run`. A later head SHA transition
+  can enqueue fresh processing.
+  Completed successful runs without a comparison artifact are terminal
+  `:no_comparison_artifact` outcomes, preserving any existing package links.
   """
   use Oban.Worker,
     queue: :changes,
@@ -138,7 +144,8 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
             Logger.warning(msg: "artifact refresh rate limited, snoozing", seconds: snooze)
             {{:snooze, snooze}, %{outcome: :rate_limited, snooze_seconds: snooze}}
 
-          {:error, :no_workflow_run} when reason == "head_sha_changed" ->
+          {:error, :no_workflow_run}
+          when reason == "head_sha_changed" and attempt < max_attempts ->
             Logger.info(
               msg: "PR run not yet present, retrying artifact refresh",
               number: number
@@ -155,6 +162,18 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
             )
 
             {{:error, :no_workflow_run}, %{outcome: :error, status: :no_workflow_run_retry}}
+
+          {:error, {:comparison_not_in_run, names}} ->
+            Logger.warning(
+              msg: "terminal artifact refresh outcome",
+              number: number,
+              reason: :no_comparison_artifact,
+              artifact_names: inspect(names)
+            )
+
+            Change.update_processing_status!(change, %{processing_status: :no_comparison_artifact})
+
+            {:ok, %{outcome: :ok, status: :no_comparison_artifact}}
 
           {:error, terminal}
           when terminal in ~w(artifact_expired no_workflow_run no_comparison_artifact failed_workflow_run)a ->

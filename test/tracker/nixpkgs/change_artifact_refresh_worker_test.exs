@@ -140,6 +140,36 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorkerTest do
       end
     end
 
+    test "missing comparison preserves existing package links and count", %{
+      rate_limit_table: table
+    } do
+      change = insert_change!(number: 9045, state: :merged, package_count: 1)
+      package = insert_package!("retained-package")
+      insert_change_package!(change.id, package.id, :changed)
+
+      assert :ok =
+               ChangeArtifactRefreshWorker.run(
+                 %{reason: "merged", number: change.number},
+                 attempt: 1,
+                 max_attempts: 10,
+                 rate_limit_table: table,
+                 attrdiff_fetcher: fn _ ->
+                   {:error, {:comparison_not_in_run, ["diff-x86_64-linux"]}}
+                 end
+               )
+
+      refreshed = Change.get_by_number!(change.number)
+      assert refreshed.processing_status == :no_comparison_artifact
+      assert refreshed.package_count == 1
+
+      assert [{package.id, :changed}] ==
+               Tracker.Repo.all(
+                 from cp in ChangePackage,
+                   where: cp.change_id == ^change.id,
+                   select: {cp.package_id, cp.type}
+               )
+    end
+
     test ":no_workflow_run is retryable before the final attempt", %{rate_limit_table: table} do
       insert_change!(number: 9015, state: :merged, merge_commit_sha: "sha9015")
 
@@ -412,7 +442,7 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorkerTest do
       end
     end
 
-    test ":no_workflow_run returns {:error, _} and leaves processing_status untouched", %{
+    test ":no_workflow_run retries before the final attempt without changing status", %{
       rate_limit_table: table
     } do
       insert_change!(number: 9213, state: :open, head_sha: "sha9213")
@@ -421,12 +451,75 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorkerTest do
                ChangeArtifactRefreshWorker.run(
                  %{reason: "head_sha_changed", number: 9213},
                  rate_limit_table: table,
+                 attempt: 9,
+                 max_attempts: 10,
                  attrdiff_fetcher: fn _ -> {:error, :no_workflow_run} end
                )
 
       {:ok, refreshed} = Change.get_by_number(9213)
-      refute refreshed.processing_status == :no_workflow_run
-      refute refreshed.processing_status == :failed
+      assert refreshed.processing_status == :pending
+    end
+
+    for {error, status} <- [
+          {:no_workflow_run, :no_workflow_run},
+          {{:comparison_not_in_run, []}, :no_comparison_artifact}
+        ],
+        state <- [:open, :draft] do
+      test "#{state} head #{status} becomes terminal and recovers on a new head", %{
+        rate_limit_table: table
+      } do
+        state = unquote(state)
+        insert_change!(number: 9214, state: state, head_sha: "old-head", node_id: "pr_9214")
+
+        assert :ok =
+                 ChangeArtifactRefreshWorker.run(
+                   %{reason: "head_sha_changed", number: 9214},
+                   rate_limit_table: table,
+                   attempt: 10,
+                   max_attempts: 10,
+                   attrdiff_fetcher: fn _ -> {:error, unquote(Macro.escape(error))} end
+                 )
+
+        assert Change.get_by_number!(9214).processing_status == unquote(status)
+        assert {:ok, 0} = Tracker.Nixpkgs.ChangeArtifactReconcileWorker.run()
+        refute_enqueued(worker: ChangeArtifactRefreshWorker)
+
+        assert {:ok, 1} =
+                 Tracker.Nixpkgs.ChangeRefreshWorker.run(
+                   rate_limit_table: table,
+                   fetcher: fn ["pr_9214"] ->
+                     {:ok,
+                      %{
+                        "pr_9214" => %Tracker.GitHub.GraphQL.PullRequest{
+                          node_id: "pr_9214",
+                          number: 9214,
+                          title: "new head",
+                          updated_at: ~U[2026-09-18 00:00:00Z],
+                          state: state,
+                          head_sha: "new-head",
+                          base_ref: "master"
+                        }
+                      }}
+                   end
+                 )
+
+        assert_enqueued(
+          worker: ChangeArtifactRefreshWorker,
+          args: %{"number" => 9214, "reason" => "head_sha_changed"}
+        )
+
+        assert :ok =
+                 ChangeArtifactRefreshWorker.run(
+                   %{reason: "head_sha_changed", number: 9214},
+                   rate_limit_table: table,
+                   attrdiff_fetcher: fn %Change{head_sha: "new-head"} ->
+                     {:ok, %{"added" => ["recovered-package"]}}
+                   end,
+                   files_fetcher: fn _ -> {:ok, []} end
+                 )
+
+        assert Change.get_by_number!(9214).processing_status == :processed
+      end
     end
 
     test "fetcher generic error sets :failed and returns {:error, reason}", %{

@@ -71,10 +71,13 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshTest do
     refute_enqueued(worker: ChangeArtifactRefreshWorker)
   end
 
-  test "enqueues one administrator retry and reports the matching incomplete job", %{
+  test "administrator retry recovers terminal absence and suppresses duplicate work", %{
     change: change
   } do
     actor = %User{id: Ecto.UUID.generate(), github_username: "operator", roles: [:user, :admin]}
+
+    change =
+      Change.update_processing_status!(change, %{processing_status: :no_comparison_artifact})
 
     assert {:ok, :enqueued, first} = ChangeArtifactRefresh.retry(change, actor)
     assert {:ok, :existing, second} = ChangeArtifactRefresh.retry(change, actor)
@@ -91,6 +94,19 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshTest do
     )
 
     assert [_job] = all_enqueued(worker: ChangeArtifactRefreshWorker)
+
+    table = :manual_absence_retry_rate_limit
+    Tracker.GitHub.RateLimitCache.new(table)
+
+    assert :ok =
+             ChangeArtifactRefreshWorker.run(
+               %{number: change.number, reason: "merged"},
+               rate_limit_table: table,
+               attrdiff_fetcher: fn _ -> {:ok, %{"added" => ["recovered-manually"]}} end,
+               files_fetcher: fn _ -> {:ok, []} end
+             )
+
+    assert Change.get_by_number!(change.number).processing_status == :processed
   end
 
   for state <- [:open, :draft] do
