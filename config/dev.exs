@@ -67,8 +67,8 @@ config :tracker, TrackerWeb.Endpoint,
 # Enable dev routes for dashboard and mailbox
 config :tracker, dev_routes: true, token_signing_secret: "iEtxXCDdKH8S1eph6t+eqXLbQvDpZmX7"
 
-# Do not include metadata nor timestamps in development logs
-config :logger, :console, format: "[$level] $message\n"
+# Include date and time without metadata in development logs
+config :logger, :console, format: "$date $time [$level] $message\n"
 
 # Set a higher stacktrace during development. Avoid configuring such
 # in production as building large stacktraces may be expensive.
