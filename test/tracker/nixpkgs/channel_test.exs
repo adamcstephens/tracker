@@ -421,10 +421,15 @@ defmodule Tracker.Nixpkgs.ChannelTest do
       assert Channel.hydra_job_links(%Channel{}, "hello", ["x86_64-linux"]) == []
     end
 
-    test "is empty without platforms" do
+    test "treats missing platforms as unrestricted" do
       channel = %Channel{hydra_project: "nixos", hydra_jobset: "unstable"}
 
-      assert Channel.hydra_job_links(channel, "hello", nil) == []
+      assert Channel.hydra_job_links(channel, "mobilizon", nil) == [
+               {"x86_64-linux",
+                "https://hydra.nixos.org/job/nixos/unstable/nixpkgs.mobilizon.x86_64-linux"},
+               {"aarch64-linux",
+                "https://hydra.nixos.org/job/nixos/unstable/nixpkgs.mobilizon.aarch64-linux"}
+             ]
     end
   end
 end

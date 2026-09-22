@@ -215,8 +215,10 @@ defmodule Tracker.Nixpkgs.Channel do
   The `{system, url}` pairs for a package's hydra jobs in this channel's jobset.
 
   Only the systems hydra actually builds are linked, narrowed to the package's
-  own platforms. The NixOS jobsets build no darwin and the darwin jobsets build
-  nothing else; NixOS also namespaces every nixpkgs job under a `nixpkgs.` prefix.
+  own platforms when explicitly restricted. Missing platform metadata is
+  unrestricted for this lookup. NixOS jobsets build no darwin and darwin
+  jobsets build nothing else; NixOS also namespaces every nixpkgs job under a
+  `nixpkgs.` prefix.
   """
   @spec hydra_job_links(t(), String.t(), [String.t()] | nil) :: [{String.t(), String.t()}]
   def hydra_job_links(
@@ -224,7 +226,9 @@ defmodule Tracker.Nixpkgs.Channel do
         attribute,
         platforms
       )
-      when is_binary(project) and is_binary(jobset) and is_list(platforms) do
+      when is_binary(project) and is_binary(jobset) and
+             (is_list(platforms) or is_nil(platforms)) do
+    platforms = platforms || @hydra_systems
     job = if project == "nixos", do: "nixpkgs.#{attribute}", else: attribute
 
     @hydra_systems
