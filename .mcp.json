@@ -3,6 +3,10 @@
     "tidewave": {
       "type": "http",
       "url": "http://127.0.0.1:6950/tidewave/mcp"
+    },
+    "doop": {
+      "type": "http",
+      "url": "https://doop.junco.dev/mcp"
     }
   }
 }

@@ -663,6 +663,24 @@ defmodule TrackerWeb.PackageLive.ShowTest do
     assert has_element?(view, ".section-header:has(#revision-filters) .n", "1")
   end
 
+  test "groups package details into the designed identity, content, and facts panels", %{
+    conn: conn,
+    package: package
+  } do
+    {:ok, view, _html} = live(conn, ~p"/packages/#{package.attribute}")
+
+    assert has_element?(view, ".package-show")
+    assert has_element?(view, ".package-show__identity h1", package.attribute)
+    assert has_element?(view, ".package-show__content #revisions")
+    assert has_element?(view, ".package-show__facts")
+  end
+
+  test "uses the facts two-column layout for related metadata", %{conn: conn, package: package} do
+    {:ok, view, _html} = live(conn, ~p"/packages/#{package.attribute}")
+
+    assert has_element?(view, ".package-show__related dl")
+  end
+
   test "the feed link sits with the page actions, not in the revision filters", %{
     conn: conn,
     package: package

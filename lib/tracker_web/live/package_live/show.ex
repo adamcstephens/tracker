@@ -15,267 +15,287 @@ defmodule TrackerWeb.PackageLive.Show do
   @impl true
   def render(assigns) do
     ~H"""
-    <.header>
-      {@package.attribute}
-      <span
-        :if={@package_version}
-        id="current-version"
-        class="pkg-version"
-        title={version_title(@version_channel, @lens)}
-      >
-        {@package_version}<span :if={@version_channel} class="pkg-version__source">{" in #{@version_channel}"}</span>
-      </span>
-      <span
-        :if={@removal}
-        class="pill pill-removed"
-        title={removal_title(@removal, @lens, @time_zone)}
-      >
-        <span class="dot" aria-hidden="true"></span>{removal_label(@removal, @lens)}
-      </span>
-      <span
-        :if={@absent_from_lens_channel?}
-        class="pill pill-removed"
-        title={absent_title(@lens)}
-      >
-        <span class="dot" aria-hidden="true"></span>{absent_label(@lens)}
-      </span>
-      <span
-        :if={@absent_from_live_channels?}
-        class="pill pill-removed"
-        title="Gone from every channel still taking revisions. It may still be present in a retired one."
-      >
-        <span class="dot" aria-hidden="true"></span>not in any current channel
-      </span>
-      <:actions>
-        <a
-          id="feed-link"
-          href={"/feeds/packages/#{@package.attribute}"}
-          phx-hook="CopyLink"
-          title="Copy the Atom feed URL"
-          style="display: flex; align-items: center;"
+    <div class="package-show">
+      <.header class="package-show__identity">
+        {@package.attribute}
+        <span
+          :if={@package_version}
+          id="current-version"
+          class="pkg-version"
+          title={version_title(@version_channel, @lens)}
         >
-          <img src="/images/feed.svg" alt="Atom feed" width="20" height="20" />
-        </a>
-        <button
-          :if={@current_user}
-          id="subscribe-toggle"
-          type="button"
-          phx-click="toggle-subscription"
+          {@package_version}<span :if={@version_channel} class="pkg-version__source">{" in #{@version_channel}"}</span>
+        </span>
+        <span
+          :if={@removal}
+          class="pill pill-removed"
+          title={removal_title(@removal, @lens, @time_zone)}
         >
-          {if @subscribed?, do: "Unsubscribe", else: "Subscribe"}
-        </button>
-      </:actions>
-    </.header>
-
-    <form
-      :if={@subscribed?}
-      id="subscription-events"
-      class="sub-events"
-      phx-change="set-subscription-events"
-    >
-      <span class="sub-events__label">Notify me about</span>
-      <label :for={type <- NotificationPresenter.package_type_order()}>
-        <input
-          type="checkbox"
-          name="events[]"
-          value={type}
-          checked={type in @subscription_events}
-        />
-        {NotificationPresenter.type_filter_label(type)}
-      </label>
-    </form>
-
-    <p :if={@package_meta.description}>{@package_meta.description}</p>
-
-    <p :if={availability_flags(@package_meta) != []}>
-      <mark :for={flag <- availability_flags(@package_meta)}>{flag}</mark>
-    </p>
-
-    <ul :if={@package_meta.known_vulnerabilities not in [nil, []]}>
-      <li :for={vuln <- @package_meta.known_vulnerabilities}><mark>{vuln}</mark></li>
-    </ul>
-
-    <p :if={@package_meta.long_description} style="white-space: pre-line;">
-      {@package_meta.long_description}
-    </p>
-
-    <.list>
-      <:item title="Attribute">{@package.attribute}</:item>
-      <:item :if={@package_meta.homepage} title="Homepage">
-        <span :for={url <- @package_meta.homepage}>
-          <a href={url} target="_blank" rel="noopener noreferrer">
-            {url}
+          <span class="dot" aria-hidden="true"></span>{removal_label(@removal, @lens)}
+        </span>
+        <span
+          :if={@absent_from_lens_channel?}
+          class="pill pill-removed"
+          title={absent_title(@lens)}
+        >
+          <span class="dot" aria-hidden="true"></span>{absent_label(@lens)}
+        </span>
+        <span
+          :if={@absent_from_live_channels?}
+          class="pill pill-removed"
+          title="Gone from every channel still taking revisions. It may still be present in a retired one."
+        >
+          <span class="dot" aria-hidden="true"></span>not in any current channel
+        </span>
+        <:subtitle :if={@package_meta.description}>{@package_meta.description}</:subtitle>
+        <:actions>
+          <a
+            id="feed-link"
+            href={"/feeds/packages/#{@package.attribute}"}
+            phx-hook="CopyLink"
+            title="Copy the Atom feed URL"
+          >
+            <img src="/images/feed.svg" alt="" width="20" height="20" />
+            <span>Copy Atom feed URL</span>
           </a>
-        </span>
-      </:item>
-      <:item :if={@package_meta.position} title="Position">
-        <.nixpkgs_position position={@package_meta.position} revision={@meta_revision} />
-      </:item>
-      <:item :if={@package_meta.licenses} title="License">
-        {Enum.join(@package_meta.licenses, ", ")}
-      </:item>
-      <:item :if={@package_meta.main_program} title="Main program">
-        <code>{@package_meta.main_program}</code>
-      </:item>
-      <:item :if={@package_meta.outputs} title="Outputs">
-        {Enum.join(@package_meta.outputs, ", ")}<span :if={@package_meta.default_output}> (default: {@package_meta.default_output})</span>
-      </:item>
-      <:item :if={@package_meta.changelog} title="Changelog">
-        <span :for={url <- @package_meta.changelog}>
-          <a href={url} target="_blank" rel="noopener noreferrer">
-            {url}
-          </a>
-        </span>
-      </:item>
-      <:item :if={@package_meta.download_page} title="Download page">
-        <a href={@package_meta.download_page} target="_blank" rel="noopener noreferrer">
-          {@package_meta.download_page}
-        </a>
-      </:item>
-      <:item :if={@package_meta.source_provenance} title="Source provenance">
-        {Enum.join(@package_meta.source_provenance, ", ")}
-      </:item>
-      <:item :if={@hydra_links != []} title="Hydra">
-        <span :for={{system, url} <- @hydra_links}>
-          <a href={url} target="_blank" rel="noopener noreferrer">{system}</a>
-        </span>
-      </:item>
-    </.list>
+          <button
+            :if={@current_user}
+            id="subscribe-toggle"
+            type="button"
+            phx-click="toggle-subscription"
+          >
+            {if @subscribed?, do: "Unsubscribe", else: "Subscribe"}
+          </button>
+        </:actions>
+      </.header>
 
-    <details :if={@package_meta.platforms not in [nil, []]}>
-      <summary>Platforms ({length(@package_meta.platforms)})</summary>
-      <p>{Enum.join(@package_meta.platforms, ", ")}</p>
-    </details>
-
-    <details :if={@package_meta.bad_platforms not in [nil, []]}>
-      <summary>Bad platforms ({length(@package_meta.bad_platforms)})</summary>
-      <p>{Enum.join(@package_meta.bad_platforms, ", ")}</p>
-    </details>
-
-    <dl :if={@package.teams != []}>
-      <dt><strong>Teams</strong></dt>
-      <dd :for={t <- @package.teams}>
-        <.link navigate={~p"/teams/#{t.short_name}"}>{t.short_name}</.link>
-        <span :if={t.scope}>{t.scope}</span>
-      </dd>
-    </dl>
-
-    <dl :if={@package.maintainers != []}>
-      <dt><strong>Maintainers</strong></dt>
-      <dd :for={m <- @package.maintainers}>
-        <.maintainer_link maintainer={m} />
-      </dd>
-    </dl>
-
-    <dl :if={@family_siblings != []}>
-      <dt><strong>Also available in</strong></dt>
-      <dd :for={sibling <- @family_siblings}>
-        <.link navigate={~p"/packages/#{sibling.attribute}"}>
-          {sibling.package_set || sibling.attribute}
-        </.link>
-        <span :if={sibling.set_version}> ({sibling.set_version})</span>
-      </dd>
-    </dl>
-
-    <dl :if={@variant_siblings != []}>
-      <dt><strong>Variants</strong></dt>
-      <dd :for={variant <- @variant_siblings}>
-        <.link navigate={~p"/packages/#{variant.attribute}"}>
-          {variant.attribute}
-        </.link>
-      </dd>
-    </dl>
-
-    <section :if={@linked_options != []}>
-      <h2>NixOS Options</h2>
-      <ul>
-        <li :for={opt <- @linked_options}>
-          <.link navigate={~p"/options/#{opt.name}"}>{opt.name}</.link>
-          <% rev = Map.get(@option_revisions, opt.id) %>
-          <small :if={rev}>
-            <span :if={rev.type}> ({rev.type})</span>
-            <span :if={rev.description}>{rev.description}</span>
-          </small>
-        </li>
-      </ul>
-    </section>
-
-    <section :if={@recent_changes != []}>
-      <SectionHeader.section_header title="Recent Changes" count={length(@recent_changes)} />
-      <ChangeRow.change_row_list id="recent-changes">
-        <ChangeRow.change_row :for={change <- @recent_changes} change={change} time_zone={@time_zone} />
-      </ChangeRow.change_row_list>
-    </section>
-
-    <SectionHeader.section_header title="Revisions" count={@revision_count}>
-      <:controls>
-        <form
-          id="revision-filters"
-          method="get"
-          action={~p"/packages/#{@package.attribute}"}
-          phx-change="filter"
-          phx-submit="filter"
-          class="revision-filters"
-        >
+      <form
+        :if={@subscribed?}
+        id="subscription-events"
+        class="sub-events"
+        phx-change="set-subscription-events"
+      >
+        <span class="sub-events__label">Notify me about</span>
+        <label :for={type <- NotificationPresenter.package_type_order()}>
           <input
-            type="text"
-            name="version"
-            value={@version_filter}
-            placeholder="Filter by version..."
-            phx-debounce="300"
+            type="checkbox"
+            name="events[]"
+            value={type}
+            checked={type in @subscription_events}
           />
-          <label>
-            <input type="hidden" name="all_revisions" value="false" />
-            <input
-              type="checkbox"
-              name="all_revisions"
-              value="true"
-              checked={@all_revisions?}
-            /> All revisions
-          </label>
-          <button type="submit">Filter</button>
-        </form>
-      </:controls>
-    </SectionHeader.section_header>
+          {NotificationPresenter.type_filter_label(type)}
+        </label>
+      </form>
 
-    <RowList.row_list :if={@revisions != []} id="revisions" stacked>
-      <RowList.row :for={rev <- @revisions}>
-        <:label>
-          <.revision_row_label rev={rev} />
-        </:label>
-        <:sublabel>{rev_channel(rev)}</:sublabel>
-        <:meta>
-          <.revision_link revision={rev_revision(rev)} channel={rev_channel(rev)} />
-          <span>{format_released_at(rev_released_at(rev), @time_zone)}</span>
-        </:meta>
-      </RowList.row>
-    </RowList.row_list>
+      <div class="package-show__grid">
+        <aside class="package-show__facts">
+          <p :if={availability_flags(@package_meta) != []}>
+            <mark :for={flag <- availability_flags(@package_meta)}>{flag}</mark>
+          </p>
 
-    <Pagination.controls
-      total_pages={@total_pages}
-      current_page={@current_page}
-      has_prev_page?={@has_prev_page?}
-      has_next_page?={@has_next_page?}
-      prev_path={
-        revisions_path(
-          @package.attribute,
-          %{@table_params | page: @current_page - 1},
-          %{version: @version_filter, all_revisions: @all_revisions?}
-        )
-      }
-      next_path={
-        revisions_path(
-          @package.attribute,
-          %{@table_params | page: @current_page + 1},
-          %{version: @version_filter, all_revisions: @all_revisions?}
-        )
-      }
-      anchor="revisions"
-    />
+          <ul :if={@package_meta.known_vulnerabilities not in [nil, []]}>
+            <li :for={vuln <- @package_meta.known_vulnerabilities}><mark>{vuln}</mark></li>
+          </ul>
 
-    <p :if={@revisions == []}>
-      No revisions found.
-    </p>
+          <p :if={@package_meta.long_description} style="white-space: pre-line;">
+            {@package_meta.long_description}
+          </p>
+
+          <h2 class="package-show__panel-title">Package facts</h2>
+          <.list>
+            <:item title="Attribute">{@package.attribute}</:item>
+            <:item :if={@package_meta.homepage} title="Homepage">
+              <span :for={url <- @package_meta.homepage}>
+                <a href={url} target="_blank" rel="noopener noreferrer">
+                  {url}
+                </a>
+              </span>
+            </:item>
+            <:item :if={@package_meta.position} title="Position">
+              <.nixpkgs_position position={@package_meta.position} revision={@meta_revision} />
+            </:item>
+            <:item :if={@package_meta.licenses} title="License">
+              {Enum.join(@package_meta.licenses, ", ")}
+            </:item>
+            <:item :if={@package_meta.main_program} title="Main program">
+              <code>{@package_meta.main_program}</code>
+            </:item>
+            <:item :if={@package_meta.outputs} title="Outputs">
+              {Enum.join(@package_meta.outputs, ", ")}<span :if={@package_meta.default_output}> (default: {@package_meta.default_output})</span>
+            </:item>
+            <:item :if={@package_meta.changelog} title="Changelog">
+              <span :for={url <- @package_meta.changelog}>
+                <a href={url} target="_blank" rel="noopener noreferrer">
+                  {url}
+                </a>
+              </span>
+            </:item>
+            <:item :if={@package_meta.download_page} title="Download page">
+              <a href={@package_meta.download_page} target="_blank" rel="noopener noreferrer">
+                {@package_meta.download_page}
+              </a>
+            </:item>
+            <:item :if={@package_meta.source_provenance} title="Source provenance">
+              {Enum.join(@package_meta.source_provenance, ", ")}
+            </:item>
+            <:item :if={@hydra_links != []} title="Hydra">
+              <span :for={{system, url} <- @hydra_links}>
+                <a href={url} target="_blank" rel="noopener noreferrer">{system}</a>
+              </span>
+            </:item>
+          </.list>
+
+          <details :if={@package_meta.platforms not in [nil, []]}>
+            <summary>Platforms ({length(@package_meta.platforms)})</summary>
+            <p>{Enum.join(@package_meta.platforms, ", ")}</p>
+          </details>
+
+          <details :if={@package_meta.bad_platforms not in [nil, []]}>
+            <summary>Bad platforms ({length(@package_meta.bad_platforms)})</summary>
+            <p>{Enum.join(@package_meta.bad_platforms, ", ")}</p>
+          </details>
+
+          <section class="package-show__related">
+            <h2>Related</h2>
+            <dl>
+              <div :if={@package.teams != []}>
+                <dt><strong>Teams</strong></dt>
+                <dd>
+                  <span :for={t <- @package.teams}>
+                    <.link navigate={~p"/teams/#{t.short_name}"}>{t.short_name}</.link>
+                    <span :if={t.scope}>{t.scope}</span>
+                  </span>
+                </dd>
+              </div>
+              <div :if={@package.maintainers != []}>
+                <dt><strong>Maintainers</strong></dt>
+                <dd>
+                  <span :for={m <- @package.maintainers}><.maintainer_link maintainer={m} /></span>
+                </dd>
+              </div>
+              <div :if={@family_siblings != []}>
+                <dt><strong>Also available in</strong></dt>
+                <dd>
+                  <span :for={sibling <- @family_siblings}>
+                    <.link navigate={~p"/packages/#{sibling.attribute}"}>
+                      {sibling.package_set || sibling.attribute}
+                    </.link>
+                    <span :if={sibling.set_version}> ({sibling.set_version})</span>
+                  </span>
+                </dd>
+              </div>
+              <div :if={@variant_siblings != []}>
+                <dt><strong>Variants</strong></dt>
+                <dd>
+                  <span :for={variant <- @variant_siblings}>
+                    <.link navigate={~p"/packages/#{variant.attribute}"}>{variant.attribute}</.link>
+                  </span>
+                </dd>
+              </div>
+              <div :if={@linked_options != []}>
+                <dt><strong>NixOS Options</strong></dt>
+                <dd>
+                  <ul>
+                    <li :for={opt <- @linked_options}>
+                      <.link navigate={~p"/options/#{opt.name}"}>{opt.name}</.link>
+                      <% rev = Map.get(@option_revisions, opt.id) %>
+                      <small :if={rev}>
+                        <span :if={rev.type}> ({rev.type})</span>
+                        <span :if={rev.description}>{rev.description}</span>
+                      </small>
+                    </li>
+                  </ul>
+                </dd>
+              </div>
+            </dl>
+          </section>
+        </aside>
+        <div class="package-show__content">
+          <section :if={@recent_changes != []}>
+            <SectionHeader.section_header title="Recent Changes" count={length(@recent_changes)} />
+            <ChangeRow.change_row_list id="recent-changes">
+              <ChangeRow.change_row
+                :for={change <- @recent_changes}
+                change={change}
+                time_zone={@time_zone}
+              />
+            </ChangeRow.change_row_list>
+          </section>
+
+          <section class="package-show__revisions">
+            <SectionHeader.section_header title="Revisions" count={@revision_count}>
+              <:controls>
+                <form
+                  id="revision-filters"
+                  method="get"
+                  action={~p"/packages/#{@package.attribute}"}
+                  phx-change="filter"
+                  phx-submit="filter"
+                  class="revision-filters"
+                >
+                  <input
+                    type="text"
+                    name="version"
+                    value={@version_filter}
+                    placeholder="Filter by version..."
+                    phx-debounce="300"
+                  />
+                  <label>
+                    <input type="hidden" name="all_revisions" value="false" />
+                    <input
+                      type="checkbox"
+                      name="all_revisions"
+                      value="true"
+                      checked={@all_revisions?}
+                    /> All revisions
+                  </label>
+                  <button type="submit">Filter</button>
+                </form>
+              </:controls>
+            </SectionHeader.section_header>
+
+            <RowList.row_list :if={@revisions != []} id="revisions" stacked>
+              <RowList.row :for={rev <- @revisions}>
+                <:label>
+                  <.revision_row_label rev={rev} />
+                </:label>
+                <:sublabel>{rev_channel(rev)}</:sublabel>
+                <:meta>
+                  <.revision_link revision={rev_revision(rev)} channel={rev_channel(rev)} />
+                  <span>{format_released_at(rev_released_at(rev), @time_zone)}</span>
+                </:meta>
+              </RowList.row>
+            </RowList.row_list>
+
+            <Pagination.controls
+              total_pages={@total_pages}
+              current_page={@current_page}
+              has_prev_page?={@has_prev_page?}
+              has_next_page?={@has_next_page?}
+              prev_path={
+                revisions_path(
+                  @package.attribute,
+                  %{@table_params | page: @current_page - 1},
+                  %{version: @version_filter, all_revisions: @all_revisions?}
+                )
+              }
+              next_path={
+                revisions_path(
+                  @package.attribute,
+                  %{@table_params | page: @current_page + 1},
+                  %{version: @version_filter, all_revisions: @all_revisions?}
+                )
+              }
+              anchor="revisions"
+            />
+
+            <p :if={@revisions == []}>
+              No revisions found.
+            </p>
+          </section>
+        </div>
+      </div>
+    </div>
     """
   end
 
