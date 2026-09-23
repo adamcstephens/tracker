@@ -950,80 +950,29 @@ a.revision-link {
 	gap: 0;
 }
 
-.package-show__meta > :is(.package-show__panel-title, dl, details) {
-	margin: 0;
-	padding: 1rem 1.125rem;
-	border: 1px solid var(--line);
-	background: var(--bg);
-}
-
-.package-show__meta > :first-child {
-	border-radius: var(--radius) var(--radius) 0 0;
-	border-bottom: 0;
-}
-
-.package-show__meta > dl {
-	border-top: 0;
-	border-bottom: 0;
-}
-
-.package-show__meta > :is(details, dl):last-child,
-.package-show__meta > :is(details, dl):has(+ .package-show__related) {
-	border-radius: 0 0 var(--radius) var(--radius);
-	border-bottom: 1px solid var(--line);
-}
-
-.package-show__panel-title {
-	font-size: 1rem;
-	border-bottom: 0;
-}
-
-.package-show__meta > details + .package-show__panel-title {
-	border-top: 0;
-}
-
-.package-show__meta > dl > div {
-	display: grid;
-	grid-template-columns: 7rem minmax(0, 1fr);
-	gap: 0.875rem;
-	padding: 0.6875rem 0;
-	position: relative;
-}
-
-.package-show__meta > dl > div:first-child {
-	padding-top: 0;
-}
-
-.package-show__meta > dl > div:last-child {
-	padding-bottom: 0;
-}
-
-.package-show__meta > dl dd {
-	margin: 0;
-	overflow-wrap: anywhere;
-}
-
-.package-show__meta > .package-show__related {
+.package-show__meta > .package-show__panel + .package-show__panel {
 	margin-top: 1.125rem;
+}
+
+.package-show__panel {
 	border: 1px solid var(--line);
 	border-radius: var(--radius);
 	background: var(--bg);
 	overflow: hidden;
 }
 
-.package-show__related > h2 {
+.package-show__panel > .package-show__panel-header {
 	margin: 0;
 	padding: 1rem 1.125rem;
 	border-bottom: 1px solid var(--line);
-	font-size: 1rem;
 }
 
-.package-show__related > dl {
+.package-show__panel > dl {
 	margin: 0;
 	padding: 0 1.125rem;
 }
 
-.package-show__related dl > div {
+.package-show__panel > dl > div {
 	display: grid;
 	grid-template-columns: 7rem minmax(0, 1fr);
 	gap: 0.875rem;
@@ -1031,8 +980,7 @@ a.revision-link {
 	position: relative;
 }
 
-.package-show__meta > dl > div:not(:last-child)::after,
-.package-show__related dl > div:not(:last-child)::after {
+.package-show__panel > dl > div:not(:last-child)::after {
 	content: "";
 	position: absolute;
 	right: -1.125rem;
@@ -1042,22 +990,26 @@ a.revision-link {
 	background: var(--line-soft);
 }
 
-.package-show__related dd {
+.package-show__panel > dl dd {
 	margin: 0;
 	overflow-wrap: anywhere;
 }
 
-.package-show__related dd > span {
+.package-show__panel > dl dd > span {
 	margin-right: 0.375rem;
 }
 
-.package-show__related ul {
+.package-show__panel > dl ul {
 	margin: 0;
 	padding: 0;
 	list-style: none;
 }
 
-
+.package-show__panel > details {
+	margin: 0;
+	padding: 1rem 1.125rem;
+	border-top: 1px solid var(--line);
+}
 .package-show__content > section {
 	margin: 0;
 	padding: 0;

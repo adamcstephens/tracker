@@ -736,10 +736,23 @@ defmodule TrackerWeb.PackageLive.ShowTest do
     assert has_element?(view, ".package-show__meta")
   end
 
-  test "keeps related packages in a separate metadata list", %{conn: conn, package: package} do
+  test "uses shared markup for separate package panels", %{conn: conn, package: package} do
     {:ok, view, _html} = live(conn, ~p"/packages/#{package.attribute}")
 
-    assert has_element?(view, "div.package-show__related > h2 + dl")
+    assert has_element?(
+             view,
+             ".package-show__meta > .package-show__panel:nth-of-type(1) h2",
+             "Metadata"
+           )
+
+    assert has_element?(
+             view,
+             ".package-show__meta > .package-show__panel:nth-of-type(2) h2",
+             "Related"
+           )
+
+    refute has_element?(view, ".package-show__related")
+    refute has_element?(view, ".package-show__panel-header .n")
   end
 
   test "puts maintainers and teams in metadata instead of related", %{
@@ -765,10 +778,29 @@ defmodule TrackerWeb.PackageLive.ShowTest do
 
     {:ok, view, _html} = live(conn, ~p"/packages/#{package.attribute}")
 
-    assert has_element?(view, ".package-show__meta > dl", "Maintainers")
-    assert has_element?(view, ".package-show__meta > dl", "Teams")
-    refute has_element?(view, ".package-show__related", "Maintainers")
-    refute has_element?(view, ".package-show__related", "Teams")
+    assert has_element?(
+             view,
+             ".package-show__meta > .package-show__panel:nth-of-type(1) dl",
+             "Maintainers"
+           )
+
+    assert has_element?(
+             view,
+             ".package-show__meta > .package-show__panel:nth-of-type(1) dl",
+             "Teams"
+           )
+
+    refute has_element?(
+             view,
+             ".package-show__meta > .package-show__panel:nth-of-type(2)",
+             "Maintainers"
+           )
+
+    refute has_element?(
+             view,
+             ".package-show__meta > .package-show__panel:nth-of-type(2)",
+             "Teams"
+           )
   end
 
   test "the feed link sits with the page actions, not in the revision filters", %{

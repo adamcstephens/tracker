@@ -93,72 +93,74 @@ defmodule TrackerWeb.PackageLive.Show do
             {@package_meta.long_description}
           </p>
 
-          <h2 class="package-show__panel-title">Metadata</h2>
-          <.list>
-            <:item :if={@package_meta.homepage} title="Homepage">
-              <span :for={url <- @package_meta.homepage}>
-                <a href={url} target="_blank" rel="noopener noreferrer">
-                  {url}
+          <div class="package-show__panel">
+            <SectionHeader.section_header title="Metadata" class="package-show__panel-header" />
+            <.list>
+              <:item :if={@package_meta.homepage} title="Homepage">
+                <span :for={url <- @package_meta.homepage}>
+                  <a href={url} target="_blank" rel="noopener noreferrer">
+                    {url}
+                  </a>
+                </span>
+              </:item>
+              <:item :if={@package_meta.position} title="Position">
+                <.nixpkgs_position position={@package_meta.position} revision={@meta_revision} />
+              </:item>
+              <:item :if={@package_meta.licenses} title="License">
+                {Enum.join(@package_meta.licenses, ", ")}
+              </:item>
+              <:item :if={@package_meta.main_program} title="Main program">
+                <code>{@package_meta.main_program}</code>
+              </:item>
+              <:item :if={@package_meta.outputs} title="Outputs">
+                {Enum.join(@package_meta.outputs, ", ")}<span :if={@package_meta.default_output}> (default: {@package_meta.default_output})</span>
+              </:item>
+              <:item :if={@package_meta.changelog} title="Changelog">
+                <span :for={url <- @package_meta.changelog}>
+                  <a href={url} target="_blank" rel="noopener noreferrer">
+                    {url}
+                  </a>
+                </span>
+              </:item>
+              <:item :if={@package_meta.download_page} title="Download page">
+                <a href={@package_meta.download_page} target="_blank" rel="noopener noreferrer">
+                  {@package_meta.download_page}
                 </a>
-              </span>
-            </:item>
-            <:item :if={@package_meta.position} title="Position">
-              <.nixpkgs_position position={@package_meta.position} revision={@meta_revision} />
-            </:item>
-            <:item :if={@package_meta.licenses} title="License">
-              {Enum.join(@package_meta.licenses, ", ")}
-            </:item>
-            <:item :if={@package_meta.main_program} title="Main program">
-              <code>{@package_meta.main_program}</code>
-            </:item>
-            <:item :if={@package_meta.outputs} title="Outputs">
-              {Enum.join(@package_meta.outputs, ", ")}<span :if={@package_meta.default_output}> (default: {@package_meta.default_output})</span>
-            </:item>
-            <:item :if={@package_meta.changelog} title="Changelog">
-              <span :for={url <- @package_meta.changelog}>
-                <a href={url} target="_blank" rel="noopener noreferrer">
-                  {url}
-                </a>
-              </span>
-            </:item>
-            <:item :if={@package_meta.download_page} title="Download page">
-              <a href={@package_meta.download_page} target="_blank" rel="noopener noreferrer">
-                {@package_meta.download_page}
-              </a>
-            </:item>
-            <:item :if={@package_meta.source_provenance} title="Source provenance">
-              {Enum.join(@package_meta.source_provenance, ", ")}
-            </:item>
-            <:item :if={@package.maintainers != []} title="Maintainers">
-              <span :for={maintainer <- @package.maintainers}>
-                <.maintainer_link maintainer={maintainer} />
-              </span>
-            </:item>
-            <:item :if={@package.teams != []} title="Teams">
-              <span :for={team <- @package.teams}>
-                <.link navigate={~p"/teams/#{team.short_name}"}>{team.short_name}</.link>
-                <span :if={team.scope}>{team.scope}</span>
-              </span>
-            </:item>
-            <:item :if={@hydra_links != []} title="Hydra">
-              <span :for={{system, url} <- @hydra_links}>
-                <a href={url} target="_blank" rel="noopener noreferrer">{system}</a>
-              </span>
-            </:item>
-          </.list>
+              </:item>
+              <:item :if={@package_meta.source_provenance} title="Source provenance">
+                {Enum.join(@package_meta.source_provenance, ", ")}
+              </:item>
+              <:item :if={@package.maintainers != []} title="Maintainers">
+                <span :for={maintainer <- @package.maintainers}>
+                  <.maintainer_link maintainer={maintainer} />
+                </span>
+              </:item>
+              <:item :if={@package.teams != []} title="Teams">
+                <span :for={team <- @package.teams}>
+                  <.link navigate={~p"/teams/#{team.short_name}"}>{team.short_name}</.link>
+                  <span :if={team.scope}>{team.scope}</span>
+                </span>
+              </:item>
+              <:item :if={@hydra_links != []} title="Hydra">
+                <span :for={{system, url} <- @hydra_links}>
+                  <a href={url} target="_blank" rel="noopener noreferrer">{system}</a>
+                </span>
+              </:item>
+            </.list>
 
-          <details :if={@package_meta.platforms not in [nil, []]}>
-            <summary>Platforms ({length(@package_meta.platforms)})</summary>
-            <p>{Enum.join(@package_meta.platforms, ", ")}</p>
-          </details>
+            <details :if={@package_meta.platforms not in [nil, []]}>
+              <summary>Platforms ({length(@package_meta.platforms)})</summary>
+              <p>{Enum.join(@package_meta.platforms, ", ")}</p>
+            </details>
 
-          <details :if={@package_meta.bad_platforms not in [nil, []]}>
-            <summary>Bad platforms ({length(@package_meta.bad_platforms)})</summary>
-            <p>{Enum.join(@package_meta.bad_platforms, ", ")}</p>
-          </details>
+            <details :if={@package_meta.bad_platforms not in [nil, []]}>
+              <summary>Bad platforms ({length(@package_meta.bad_platforms)})</summary>
+              <p>{Enum.join(@package_meta.bad_platforms, ", ")}</p>
+            </details>
+          </div>
 
-          <div class="package-show__related">
-            <h2>Related</h2>
+          <div class="package-show__panel">
+            <SectionHeader.section_header title="Related" class="package-show__panel-header" />
             <.list>
               <:item :if={@family_siblings != []} title="Also available in">
                 <span :for={sibling <- @family_siblings}>

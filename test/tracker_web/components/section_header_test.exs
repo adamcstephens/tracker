@@ -21,6 +21,18 @@ defmodule TrackerWeb.SectionHeaderTest do
       assert html =~ ~s(<span class="n">3</span>)
     end
 
+    test "renders without a count" do
+      assigns = %{}
+
+      html =
+        rendered_to_string(~H"""
+        <SectionHeader.section_header title="Metadata" class="package-show__panel-header" />
+        """)
+
+      assert html =~ ~s(class="section-header package-show__panel-header")
+      refute html =~ ~s(class="n")
+    end
+
     test "renders controls between the rule and the count" do
       assigns = %{}
 

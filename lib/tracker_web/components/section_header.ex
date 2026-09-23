@@ -21,17 +21,18 @@ defmodule TrackerWeb.SectionHeader do
       </RowList.row_list>
   """
   attr :title, :string, required: true
-  attr :count, :integer, required: true
+  attr :count, :integer, default: nil
+  attr :class, :string, default: nil
 
   slot :controls, doc: "affordances for the list — a filter form, a toggle, a link"
 
   def section_header(assigns) do
     ~H"""
-    <div class="section-header">
+    <div class={if @class in [nil, ""], do: "section-header", else: "section-header #{@class}"}>
       <h2>{@title}</h2>
       <span class="rule"></span>
       <span :if={@controls != []} class="section-controls">{render_slot(@controls)}</span>
-      <span class="n">{@count}</span>
+      <span :if={!is_nil(@count)} class="n">{@count}</span>
     </div>
     """
   end
