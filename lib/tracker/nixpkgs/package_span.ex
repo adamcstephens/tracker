@@ -55,6 +55,7 @@ defmodule Tracker.Nixpkgs.PackageSpan do
     define :by_package, args: [:package_id, {:optional, :channel_id}]
     define :current_for_packages, args: [:channel_id, :package_ids]
     define :open_in_channels, args: [:package_id, :channel_ids], not_found_error?: false
+    define :current_for_package_in_channels, args: [:package_id, :channel_ids]
   end
 
   @payload_columns [
@@ -178,6 +179,19 @@ defmodule Tracker.Nixpkgs.PackageSpan do
       filter expr(
                channel_id == ^arg(:channel_id) and
                  package_id in ^arg(:package_ids) and
+                 fragment("upper_inf(?)", valid)
+             )
+    end
+
+    read :current_for_package_in_channels do
+      description "Open (current) spans for one package across the given channels."
+      argument :package_id, :integer, allow_nil?: false
+      argument :channel_ids, {:array, :integer}, allow_nil?: false
+
+      prepare build(select: [:channel_id, :version])
+
+      filter expr(
+               package_id == ^arg(:package_id) and channel_id in ^arg(:channel_ids) and
                  fragment("upper_inf(?)", valid)
              )
     end

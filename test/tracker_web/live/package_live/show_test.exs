@@ -224,61 +224,49 @@ defmodule TrackerWeb.PackageLive.ShowTest do
       refute html =~ "Meta-channel description"
     end
 
-    test "the header states the lens channel's version", %{conn: conn, package: package} do
-      {:ok, view, _html} =
-        live(conn, ~p"/packages/#{package.attribute}?channel=nixos-24.66")
-
-      assert has_element?(view, "h1 #current-version", "2.13.0")
-      refute has_element?(view, "#current-version .pkg-version__source")
-    end
-
-    test "the header version names its channel", %{conn: conn, package: package} do
-      {:ok, view, _html} =
-        live(conn, ~p"/packages/#{package.attribute}?channel=nixos-24.66")
-
-      assert has_element?(view, "#current-version[title='Version in nixos-24.66']")
-    end
-
-    test "a pinned lens does not call the header version current", %{
+    test "the current versions panel lists every active channel and marks the selected one", %{
       conn: conn,
       package: package
     } do
       {:ok, view, _html} =
-        live(conn, ~p"/packages/#{package.attribute}?channel=nixos-24.66&rev=stab111ccc222333")
+        live(conn, ~p"/packages/#{package.attribute}?channel=nixos-24.66")
+
+      assert has_element?(view, "#current-versions .section-header h2", "Current versions")
+      assert has_element?(view, "#current-versions .section-header .n", "3")
+      assert has_element?(view, "#current-versions li[data-channel='nixos-24.66']", "2.13.0")
+      assert has_element?(view, "#current-versions li[data-channel='nixos-25.67']", "2.12.1")
 
       assert has_element?(
                view,
-               "#current-version[title='Version in nixos-24.66 at this revision']",
-               "2.13.0"
+               "#current-versions li[data-channel='nixos-24.66'] .current-versions__selected",
+               "selected"
              )
+
+      refute has_element?(view, "h1 #current-version")
     end
 
-    test "the all-channels lens attributes the header version to the metadata channel", %{
+    test "the all-channels lens keeps every row without a selected marker", %{
       conn: conn,
       package: package
     } do
       {:ok, view, _html} = live(conn, ~p"/packages/#{package.attribute}?channel=all")
 
-      assert has_element?(view, "h1 #current-version", "2.14.0")
-
-      assert has_element?(
-               view,
-               "#current-version .pkg-version__source",
-               "in nixos-unstable-small"
-             )
+      assert has_element?(view, "#current-versions li[data-channel='nixos-24.66']", "2.13.0")
+      assert has_element?(view, "#current-versions li[data-channel='nixos-25.67']", "2.12.1")
+      refute has_element?(view, "#current-versions .current-versions__selected")
     end
 
-    test "a metadata-less lens channel span still states its version", %{
+    test "a metadata-less lens channel span still appears in current versions", %{
       conn: conn,
       package: package
     } do
       {:ok, view, _html} =
         live(conn, ~p"/packages/#{package.attribute}?channel=nixos-25.67")
 
-      assert has_element?(view, "h1 #current-version", "2.12.1")
+      assert has_element?(view, "#current-versions li[data-channel='nixos-25.67']", "2.12.1")
     end
 
-    test "a package absent from the lens channel states no version", %{
+    test "a package absent from the lens channel retains current versions elsewhere", %{
       conn: conn,
       cr_meta: cr_meta
     } do
@@ -290,7 +278,70 @@ defmodule TrackerWeb.PackageLive.ShowTest do
 
       {:ok, view, _html} = live(conn, ~p"/packages/#{absent.attribute}?channel=nixos-24.66")
 
-      refute has_element?(view, "#current-version")
+      assert has_element?(view, "#current-versions .section-header .n", "1")
+
+      assert has_element?(
+               view,
+               "#current-versions li[data-channel='nixos-unstable-small']",
+               "9.9.9"
+             )
+
+      assert has_element?(view, ".pill-removed", "not in nixos-24.66")
+    end
+
+    test "includes pre-release channels and excludes retired channels", %{
+      conn: conn,
+      package: package
+    } do
+      pre_release =
+        Channel.create!(%{
+          name: "nixos-25.68pre",
+          display_name: "NixOS 25.68 Pre-release",
+          status: :pre_release
+        })
+
+      retired =
+        Channel.create!(%{
+          name: "nixos-23.11",
+          display_name: "NixOS 23.11",
+          status: :retired
+        })
+
+      pre_release_revision =
+        Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
+          channel_id: pre_release.id,
+          revision: "pre111aaa222333",
+          released_at: ~U[2026-03-21 10:00:00Z]
+        })
+
+      retired_revision =
+        Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
+          channel_id: retired.id,
+          revision: "ret111aaa222333",
+          released_at: ~U[2026-03-21 10:00:00Z]
+        })
+
+      Tracker.Fixtures.apply_package_revision!(pre_release_revision, [{package, "2.15.0-pre"}])
+      Tracker.Fixtures.apply_package_revision!(retired_revision, [{package, "1.99.0"}])
+
+      {:ok, view, _html} = live(conn, ~p"/packages/#{package.attribute}?channel=all")
+
+      assert has_element?(
+               view,
+               "#current-versions li[data-channel='nixos-25.68pre']",
+               "2.15.0-pre"
+             )
+
+      refute has_element?(view, "#current-versions li[data-channel='nixos-23.11']")
+    end
+
+    test "keeps an empty current versions panel for a package with no open spans", %{conn: conn} do
+      package = Tracker.Fixtures.package!("pkgshow-no-current-versions")
+
+      {:ok, view, _html} = live(conn, ~p"/packages/#{package.attribute}?channel=all")
+
+      assert has_element?(view, "#current-versions .section-header .n", "0")
+      assert has_element?(view, "#current-versions .current-versions__empty")
     end
   end
 
@@ -416,6 +467,17 @@ defmodule TrackerWeb.PackageLive.ShowTest do
 
       assert html =~ "Pinned-era description"
       refute html =~ "Present-day description"
+    end
+
+    test "keeps current versions current and separates the pinned version", %{
+      conn: conn,
+      pinned: pinned
+    } do
+      {:ok, view, _html} =
+        live(conn, ~p"/packages/#{pinned.attribute}?channel=nixos-25.67&rev=pina11aaa222333")
+
+      assert has_element?(view, "#current-versions li[data-channel='nixos-25.67']", "2.0")
+      assert has_element?(view, "#current-versions .current-versions__pinned", "1.0")
     end
 
     test "the position link targets the pinned ref", %{conn: conn, pinned: pinned} do
@@ -626,14 +688,15 @@ defmodule TrackerWeb.PackageLive.ShowTest do
     end
   end
 
-  test "updates when a revision result is recorded for the lens channel", %{
+  test "updates current versions after a non-selected channel ingestion completes", %{
     conn: conn,
     package: package,
     channel_unstable: channel_unstable
   } do
-    {:ok, view, html} = live(conn, ~p"/packages/#{package.attribute}")
+    {:ok, view, _html} = live(conn, ~p"/packages/#{package.attribute}?channel=nixos-24.66")
 
-    refute html =~ "3.0.0"
+    assert has_element?(view, "#current-versions li[data-channel='nixos-25.67']", "2.12.1")
+    refute has_element?(view, "#current-versions li[data-channel='nixos-25.67']", "3.0.0")
 
     cr3 =
       Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
@@ -643,11 +706,9 @@ defmodule TrackerWeb.PackageLive.ShowTest do
       })
 
     Tracker.Fixtures.apply_package_revision!(cr3, [{package, "3.0.0"}])
-
     Tracker.Nixpkgs.ChannelRevision.record_result!(cr3, %{result: :success})
 
-    html = render(view)
-    assert html =~ "3.0.0"
+    assert has_element?(view, "#current-versions li[data-channel='nixos-25.67']", "3.0.0")
   end
 
   test "displays package attribute as heading", %{conn: conn, package: package} do
@@ -672,13 +733,42 @@ defmodule TrackerWeb.PackageLive.ShowTest do
     assert has_element?(view, ".package-show")
     assert has_element?(view, ".package-show__identity h1", package.attribute)
     assert has_element?(view, ".package-show__content #revisions")
-    assert has_element?(view, ".package-show__facts")
+    assert has_element?(view, ".package-show__meta")
   end
 
-  test "uses the facts two-column layout for related metadata", %{conn: conn, package: package} do
+  test "keeps related packages in a separate metadata list", %{conn: conn, package: package} do
     {:ok, view, _html} = live(conn, ~p"/packages/#{package.attribute}")
 
-    assert has_element?(view, ".package-show__related dl")
+    assert has_element?(view, "div.package-show__related > h2 + dl")
+  end
+
+  test "puts maintainers and teams in metadata instead of related", %{
+    conn: conn,
+    package: package
+  } do
+    maintainer =
+      Tracker.Nixpkgs.Maintainer.bulk_upsert!(%{github_id: 12_345, github: "metadata-maintainer"})
+
+    team =
+      Tracker.Nixpkgs.Team.bulk_upsert!(%{
+        short_name: "metadata-team",
+        scope: "metadata scope",
+        github_id: 54_321
+      })
+
+    Tracker.Nixpkgs.PackageMaintainer.load!(%{
+      package_id: package.id,
+      maintainer_id: maintainer.id
+    })
+
+    Tracker.Nixpkgs.PackageTeam.load!(%{package_id: package.id, team_id: team.id})
+
+    {:ok, view, _html} = live(conn, ~p"/packages/#{package.attribute}")
+
+    assert has_element?(view, ".package-show__meta > dl", "Maintainers")
+    assert has_element?(view, ".package-show__meta > dl", "Teams")
+    refute has_element?(view, ".package-show__related", "Maintainers")
+    refute has_element?(view, ".package-show__related", "Teams")
   end
 
   test "the feed link sits with the page actions, not in the revision filters", %{
@@ -795,17 +885,15 @@ defmodule TrackerWeb.PackageLive.ShowTest do
     package: package,
     channel_stable: channel_stable
   } do
-    {:ok, view, html} = live(conn, ~p"/packages/#{package.attribute}")
+    {:ok, view, _html} = live(conn, ~p"/packages/#{package.attribute}")
 
-    # Default lens shows nixos-25.67 (2.12.1)
-    assert html =~ "2.12.1"
-    refute html =~ "2.13.0"
+    assert has_element?(view, "#revisions", "2.12.1")
+    refute has_element?(view, "#revisions", "2.13.0")
 
-    # Switch lens to nixos-24.66
-    {:ok, _view, html} = switch_lens(conn, view, channel_stable.name)
+    {:ok, switched_view, _html} = switch_lens(conn, view, channel_stable.name)
 
-    assert html =~ "2.13.0"
-    refute html =~ "2.12.1"
+    assert has_element?(switched_view, "#revisions", "2.13.0")
+    refute has_element?(switched_view, "#revisions", "2.12.1")
   end
 
   test "no duplicate channel dropdown", %{conn: conn, package: package} do
@@ -815,10 +903,12 @@ defmodule TrackerWeb.PackageLive.ShowTest do
     refute html =~ ~s(aria-label="Filter by channel")
   end
 
-  test "filter by version via URL param", %{conn: conn, package: package} do
-    {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}?version=2.12")
+  test "revision filters do not filter current versions", %{conn: conn, package: package} do
+    {:ok, view, _html} = live(conn, ~p"/packages/#{package.attribute}?version=2.12")
 
-    assert html =~ "2.12.1"
+    assert has_element?(view, "#revisions", "2.12.1")
+    assert has_element?(view, "#current-versions li[data-channel='nixos-25.67']", "2.12.1")
+    assert has_element?(view, "#current-versions li[data-channel='nixos-24.66']", "2.13.0")
   end
 
   test "shows family siblings when package has a family", %{conn: conn} do

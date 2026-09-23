@@ -19,14 +19,6 @@ defmodule TrackerWeb.PackageLive.Show do
       <.header class="package-show__identity">
         {@package.attribute}
         <span
-          :if={@package_version}
-          id="current-version"
-          class="pkg-version"
-          title={version_title(@version_channel, @lens)}
-        >
-          {@package_version}<span :if={@version_channel} class="pkg-version__source">{" in #{@version_channel}"}</span>
-        </span>
-        <span
           :if={@removal}
           class="pill pill-removed"
           title={removal_title(@removal, @lens, @time_zone)}
@@ -56,7 +48,7 @@ defmodule TrackerWeb.PackageLive.Show do
             title="Copy the Atom feed URL"
           >
             <img src="/images/feed.svg" alt="" width="20" height="20" />
-            <span>Copy Atom feed URL</span>
+            <span>Atom</span>
           </a>
           <button
             :if={@current_user}
@@ -88,7 +80,7 @@ defmodule TrackerWeb.PackageLive.Show do
       </form>
 
       <div class="package-show__grid">
-        <aside class="package-show__facts">
+        <aside class="package-show__meta">
           <p :if={availability_flags(@package_meta) != []}>
             <mark :for={flag <- availability_flags(@package_meta)}>{flag}</mark>
           </p>
@@ -101,9 +93,8 @@ defmodule TrackerWeb.PackageLive.Show do
             {@package_meta.long_description}
           </p>
 
-          <h2 class="package-show__panel-title">Package facts</h2>
+          <h2 class="package-show__panel-title">Metadata</h2>
           <.list>
-            <:item title="Attribute">{@package.attribute}</:item>
             <:item :if={@package_meta.homepage} title="Homepage">
               <span :for={url <- @package_meta.homepage}>
                 <a href={url} target="_blank" rel="noopener noreferrer">
@@ -138,6 +129,17 @@ defmodule TrackerWeb.PackageLive.Show do
             <:item :if={@package_meta.source_provenance} title="Source provenance">
               {Enum.join(@package_meta.source_provenance, ", ")}
             </:item>
+            <:item :if={@package.maintainers != []} title="Maintainers">
+              <span :for={maintainer <- @package.maintainers}>
+                <.maintainer_link maintainer={maintainer} />
+              </span>
+            </:item>
+            <:item :if={@package.teams != []} title="Teams">
+              <span :for={team <- @package.teams}>
+                <.link navigate={~p"/teams/#{team.short_name}"}>{team.short_name}</.link>
+                <span :if={team.scope}>{team.scope}</span>
+              </span>
+            </:item>
             <:item :if={@hydra_links != []} title="Hydra">
               <span :for={{system, url} <- @hydra_links}>
                 <a href={url} target="_blank" rel="noopener noreferrer">{system}</a>
@@ -155,62 +157,66 @@ defmodule TrackerWeb.PackageLive.Show do
             <p>{Enum.join(@package_meta.bad_platforms, ", ")}</p>
           </details>
 
-          <section class="package-show__related">
+          <div class="package-show__related">
             <h2>Related</h2>
-            <dl>
-              <div :if={@package.teams != []}>
-                <dt><strong>Teams</strong></dt>
-                <dd>
-                  <span :for={t <- @package.teams}>
-                    <.link navigate={~p"/teams/#{t.short_name}"}>{t.short_name}</.link>
-                    <span :if={t.scope}>{t.scope}</span>
-                  </span>
-                </dd>
-              </div>
-              <div :if={@package.maintainers != []}>
-                <dt><strong>Maintainers</strong></dt>
-                <dd>
-                  <span :for={m <- @package.maintainers}><.maintainer_link maintainer={m} /></span>
-                </dd>
-              </div>
-              <div :if={@family_siblings != []}>
-                <dt><strong>Also available in</strong></dt>
-                <dd>
-                  <span :for={sibling <- @family_siblings}>
-                    <.link navigate={~p"/packages/#{sibling.attribute}"}>
-                      {sibling.package_set || sibling.attribute}
-                    </.link>
-                    <span :if={sibling.set_version}> ({sibling.set_version})</span>
-                  </span>
-                </dd>
-              </div>
-              <div :if={@variant_siblings != []}>
-                <dt><strong>Variants</strong></dt>
-                <dd>
-                  <span :for={variant <- @variant_siblings}>
-                    <.link navigate={~p"/packages/#{variant.attribute}"}>{variant.attribute}</.link>
-                  </span>
-                </dd>
-              </div>
-              <div :if={@linked_options != []}>
-                <dt><strong>NixOS Options</strong></dt>
-                <dd>
-                  <ul>
-                    <li :for={opt <- @linked_options}>
-                      <.link navigate={~p"/options/#{opt.name}"}>{opt.name}</.link>
-                      <% rev = Map.get(@option_revisions, opt.id) %>
-                      <small :if={rev}>
-                        <span :if={rev.type}> ({rev.type})</span>
-                        <span :if={rev.description}>{rev.description}</span>
-                      </small>
-                    </li>
-                  </ul>
-                </dd>
-              </div>
-            </dl>
-          </section>
+            <.list>
+              <:item :if={@family_siblings != []} title="Also available in">
+                <span :for={sibling <- @family_siblings}>
+                  <.link navigate={~p"/packages/#{sibling.attribute}"}>
+                    {sibling.package_set || sibling.attribute}
+                  </.link>
+                  <span :if={sibling.set_version}> ({sibling.set_version})</span>
+                </span>
+              </:item>
+              <:item :if={@variant_siblings != []} title="Variants">
+                <span :for={variant <- @variant_siblings}>
+                  <.link navigate={~p"/packages/#{variant.attribute}"}>{variant.attribute}</.link>
+                </span>
+              </:item>
+              <:item :if={@linked_options != []} title="NixOS Options">
+                <ul>
+                  <li :for={opt <- @linked_options}>
+                    <.link navigate={~p"/options/#{opt.name}"}>{opt.name}</.link>
+                    <% rev = Map.get(@option_revisions, opt.id) %>
+                    <small :if={rev}>
+                      <span :if={rev.type}> ({rev.type})</span>
+                      <span :if={rev.description}>{rev.description}</span>
+                    </small>
+                  </li>
+                </ul>
+              </:item>
+            </.list>
+          </div>
         </aside>
         <div class="package-show__content">
+          <section id="current-versions">
+            <SectionHeader.section_header title="Current versions" count={length(@current_versions)} />
+            <RowList.row_list :if={@current_versions != []} id="current-version-list">
+              <RowList.row
+                :for={{channel, version} <- @current_versions}
+                data-channel={channel.name}
+                class={current_version_class(channel, @lens)}
+              >
+                <:label>
+                  {channel.name}
+                  <span :if={selected_channel?(channel, @lens)} class="current-versions__selected">
+                    selected
+                  </span>
+                </:label>
+                <:meta><code>{version}</code></:meta>
+              </RowList.row>
+            </RowList.row_list>
+            <p :if={@current_versions == []} class="current-versions__empty">
+              Not currently available in any channel.
+            </p>
+            <p :if={@pinned_version} class="current-versions__pinned">
+              At this revision in {@lens.channel.name}: <code>{@pinned_version}</code>
+            </p>
+            <p :if={@pinned_absent?} class="current-versions__pinned">
+              At this revision: not in {@lens.channel.name}.
+            </p>
+          </section>
+
           <section :if={@recent_changes != []}>
             <SectionHeader.section_header title="Recent Changes" count={length(@recent_changes)} />
             <ChangeRow.change_row_list id="recent-changes">
@@ -432,19 +438,6 @@ defmodule TrackerWeb.PackageLive.Show do
     end
   end
 
-  # Only the all-channels lens shows a version it cannot claim as its own, so it
-  # names the channel it borrowed from rather than passing it off as universal.
-  defp version_title(nil, lens) do
-    case TrackerWeb.Lens.pinned_at(lens) do
-      nil -> "Version in #{TrackerWeb.Lens.channel_name(lens)}"
-      _at -> "Version in #{TrackerWeb.Lens.channel_name(lens)} at this revision"
-    end
-  end
-
-  defp version_title(version_channel, _lens) do
-    "Version in #{version_channel}, which the all-channels view reports having no channel of its own."
-  end
-
   defp pinned_before?(removal, lens) do
     case TrackerWeb.Lens.pinned_at(lens) do
       nil -> false
@@ -460,6 +453,7 @@ defmodule TrackerWeb.PackageLive.Show do
     {:ok,
      socket
      |> assign_new(:current_user, fn -> nil end)
+     |> assign(:live_updates_subscribed?, false)
      |> assign_subscription_state(nil)}
   end
 
@@ -495,20 +489,6 @@ defmodule TrackerWeb.PackageLive.Show do
     version_filter = params["version"] || ""
     all_revisions? = params["all_revisions"] == "true"
 
-    if connected?(socket) do
-      Phoenix.PubSub.subscribe(Tracker.PubSub, "changes:updated")
-
-      if socket.assigns.lens do
-        scope =
-          if socket.assigns.lens.all?, do: "any", else: socket.assigns.lens.channel.id
-
-        Phoenix.PubSub.subscribe(
-          Tracker.PubSub,
-          "channel_revisions:#{scope}:completed"
-        )
-      end
-    end
-
     {:noreply,
      socket
      |> assign(:page_title, package.attribute)
@@ -526,6 +506,7 @@ defmodule TrackerWeb.PackageLive.Show do
        action: "/packages",
        value: Map.get(params, "search", "")
      })
+     |> subscribe_to_live_updates()
      |> load_revision_data()}
   end
 
@@ -543,6 +524,19 @@ defmodule TrackerWeb.PackageLive.Show do
         socket
       ) do
     {:noreply, load_revision_data(socket)}
+  end
+
+  defp subscribe_to_live_updates(%{assigns: %{live_updates_subscribed?: true}} = socket),
+    do: socket
+
+  defp subscribe_to_live_updates(socket) do
+    if connected?(socket) do
+      Phoenix.PubSub.subscribe(Tracker.PubSub, "changes:updated")
+      Phoenix.PubSub.subscribe(Tracker.PubSub, "channel_revisions:any:completed")
+      assign(socket, :live_updates_subscribed?, true)
+    else
+      socket
+    end
   end
 
   defp assign_subscription(socket, nil, _package_id),
@@ -609,6 +603,7 @@ defmodule TrackerWeb.PackageLive.Show do
     total_pages = ceil(total_count / tp.page_size)
 
     socket
+    |> assign(:current_versions, current_versions(package_id))
     |> assign_removal_status(package_id, channel_id)
     |> assign_current_meta(package_id, channel_id, TrackerWeb.Lens.pinned_at(socket.assigns.lens))
     |> assign(:recent_changes, recent_changes)
@@ -732,7 +727,8 @@ defmodule TrackerWeb.PackageLive.Show do
     span = channel && meta_span(package_id, channel.id, pinned_at)
 
     socket
-    |> assign_meta(span, pinned_at, channel, channel && channel.name)
+    |> assign_meta(span, pinned_at, channel)
+    |> assign_pinned_context(nil, nil)
     |> assign(:absent_from_lens_channel?, false)
   end
 
@@ -740,13 +736,14 @@ defmodule TrackerWeb.PackageLive.Show do
     span = meta_span(package_id, lens_channel_id, pinned_at)
 
     socket
-    |> assign_meta(span, pinned_at, socket.assigns.lens.channel, nil)
+    |> assign_meta(span, pinned_at, socket.assigns.lens.channel)
+    |> assign_pinned_context(span, pinned_at)
     |> assign(:absent_from_lens_channel?, is_nil(span) and is_nil(socket.assigns.removal))
   end
 
   # The version comes off the span directly: it is identity, not metadata, and
   # the browse tables sharing metadata_fields/0 have no use for it.
-  defp assign_meta(socket, span, pinned_at, meta_channel, version_channel) do
+  defp assign_meta(socket, span, pinned_at, meta_channel) do
     meta =
       Map.new(
         Tracker.Nixpkgs.PackageHistory.metadata_fields(),
@@ -755,13 +752,29 @@ defmodule TrackerWeb.PackageLive.Show do
 
     socket
     |> assign(:package_meta, meta)
-    |> assign(:package_version, span && span.version)
-    |> assign(:version_channel, span && version_channel)
     |> assign(:meta_revision, meta_revision(span, pinned_at))
     |> assign(
       :hydra_links,
       hydra_links(meta_channel, socket.assigns.package, meta.platforms)
     )
+  end
+
+  defp assign_pinned_context(socket, _span, nil) do
+    socket
+    |> assign(:pinned_version, nil)
+    |> assign(:pinned_absent?, false)
+  end
+
+  defp assign_pinned_context(socket, nil, _pinned_at) do
+    socket
+    |> assign(:pinned_version, nil)
+    |> assign(:pinned_absent?, true)
+  end
+
+  defp assign_pinned_context(socket, span, _pinned_at) do
+    socket
+    |> assign(:pinned_version, span.version)
+    |> assign(:pinned_absent?, false)
   end
 
   # The jobset linked is the one the metadata on this page came from, so the
@@ -801,6 +814,37 @@ defmodule TrackerWeb.PackageLive.Show do
       {:ok, channel} -> channel
       _ -> nil
     end
+  end
+
+  defp current_versions(package_id) do
+    channels = Tracker.Nixpkgs.Channel.active!()
+
+    spans =
+      case channels do
+        [] ->
+          []
+
+        _ ->
+          Tracker.Nixpkgs.PackageSpan.current_for_package_in_channels!(
+            package_id,
+            Enum.map(channels, & &1.id)
+          )
+      end
+
+    channels_by_id = Map.new(channels, &{&1.id, &1})
+
+    spans
+    |> Enum.map(&{Map.fetch!(channels_by_id, &1.channel_id), &1.version})
+    |> Enum.sort_by(fn {channel, _version} -> channel.name end)
+  end
+
+  defp selected_channel?(channel, %{all?: false, channel: selected_channel}),
+    do: channel.id == selected_channel.id
+
+  defp selected_channel?(_channel, _lens), do: false
+
+  defp current_version_class(channel, lens) do
+    if selected_channel?(channel, lens), do: "current-versions__row--selected"
   end
 
   defp load_variant_siblings(%{package_variant_group_id: nil}), do: []

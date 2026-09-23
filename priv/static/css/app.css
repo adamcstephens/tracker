@@ -832,23 +832,6 @@ a.revision-link {
 	font-family: var(--mono);
 }
 
-/* Package show: the version beside the attribute in the page heading. Sized in
-   em so it tracks the h1 it sits in rather than the root. */
-.pkg-version {
-	font-family: var(--mono);
-	font-size: 0.5em;
-	font-weight: 600;
-	color: var(--text-2);
-}
-
-.pkg-version__source {
-	font-family: var(--sans);
-	font-size: 0.8em;
-	font-weight: 400;
-	color: var(--text-3);
-	white-space: nowrap;
-}
-
 /* Package revision filters */
 .revision-filters {
 	display: flex;
@@ -961,42 +944,45 @@ a.revision-link {
 	gap: 1.125rem;
 }
 
-.package-show__facts {
+.package-show__meta {
 	display: grid;
 	grid-area: facts;
 	gap: 0;
 }
 
-.package-show__facts > :is(.package-show__panel-title, dl, details, section) {
+.package-show__meta > :is(.package-show__panel-title, dl, details) {
 	margin: 0;
 	padding: 1rem 1.125rem;
 	border: 1px solid var(--line);
 	background: var(--bg);
 }
 
-.package-show__facts > :first-child {
+.package-show__meta > :first-child {
 	border-radius: var(--radius) var(--radius) 0 0;
 	border-bottom: 0;
 }
 
-.package-show__facts > dl {
+.package-show__meta > dl {
 	border-top: 0;
 	border-bottom: 0;
 }
 
-.package-show__facts > details:last-of-type,
-.package-show__facts > section:last-child,
-.package-show__facts > dl:last-child {
+.package-show__meta > :is(details, dl):last-child,
+.package-show__meta > :is(details, dl):has(+ .package-show__related) {
 	border-radius: 0 0 var(--radius) var(--radius);
 	border-bottom: 1px solid var(--line);
 }
 
-.package-show__panel-title,
-.package-show__related > h2 {
+.package-show__panel-title {
 	font-size: 1rem;
+	border-bottom: 0;
 }
 
-.package-show__facts > dl > div {
+.package-show__meta > details + .package-show__panel-title {
+	border-top: 0;
+}
+
+.package-show__meta > dl > div {
 	display: grid;
 	grid-template-columns: 7rem minmax(0, 1fr);
 	gap: 0.875rem;
@@ -1004,24 +990,26 @@ a.revision-link {
 	border-bottom: 1px solid var(--line-soft);
 }
 
-.package-show__facts > dl > div:first-child {
+.package-show__meta > dl > div:first-child {
 	padding-top: 0;
 }
 
-.package-show__facts > dl > div:last-child {
+.package-show__meta > dl > div:last-child {
 	padding-bottom: 0;
 	border-bottom: 0;
 }
 
-.package-show__facts > dl dd {
+.package-show__meta > dl dd {
 	margin: 0;
 	overflow-wrap: anywhere;
 }
 
-.package-show__facts > .package-show__related {
+.package-show__meta > .package-show__related {
 	margin-top: 1.125rem;
-	padding: 0;
+	border: 1px solid var(--line);
 	border-radius: var(--radius);
+	background: var(--bg);
+	overflow: hidden;
 }
 
 .package-show__related > h2 {
@@ -1031,7 +1019,7 @@ a.revision-link {
 	font-size: 1rem;
 }
 
-.package-show__related dl {
+.package-show__related > dl {
 	margin: 0;
 	padding: 0 1.125rem;
 }
@@ -1048,7 +1036,6 @@ a.revision-link {
 	border-bottom: 0;
 }
 
-
 .package-show__related dd {
 	margin: 0;
 	overflow-wrap: anywhere;
@@ -1063,6 +1050,7 @@ a.revision-link {
 	padding: 0;
 	list-style: none;
 }
+
 
 .package-show__content > section {
 	margin: 0;
@@ -1088,6 +1076,38 @@ a.revision-link {
 	padding: 0 1.125rem 1rem;
 }
 
+.current-versions__selected {
+	margin-left: 0.375rem;
+	color: var(--accent);
+	font-size: 0.75rem;
+	font-weight: 600;
+}
+
+.current-versions__row--selected {
+	background: var(--accent-soft);
+}
+
+#current-versions code {
+	background: transparent;
+	border-radius: 0;
+	padding: 0;
+}
+
+#current-versions .row-meta code {
+	font-weight: 700;
+}
+
+.current-versions__empty,
+.current-versions__pinned {
+	margin: 0;
+	padding: 1rem 1.125rem;
+	color: var(--text-2);
+}
+
+.current-versions__pinned {
+	border-top: 1px solid var(--line);
+}
+
 .package-show__revisions > p {
 	margin: 0;
 	padding: 1rem 1.125rem;
@@ -1111,15 +1131,14 @@ a.revision-link {
 	.package-show__grid {
 		grid-template-columns: 1fr;
 		grid-template-areas:
-			"facts"
-			"content";
+			"content"
+			"facts";
 	}
 
-	.package-show__facts > dl > div {
+	.package-show__meta > dl > div {
 		grid-template-columns: 6.5rem minmax(0, 1fr);
 	}
 }
-
 
 /* Sign-in page styling */
 .sign-in-banner {
