@@ -987,7 +987,7 @@ a.revision-link {
 	grid-template-columns: 7rem minmax(0, 1fr);
 	gap: 0.875rem;
 	padding: 0.6875rem 0;
-	border-bottom: 1px solid var(--line-soft);
+	position: relative;
 }
 
 .package-show__meta > dl > div:first-child {
@@ -996,7 +996,6 @@ a.revision-link {
 
 .package-show__meta > dl > div:last-child {
 	padding-bottom: 0;
-	border-bottom: 0;
 }
 
 .package-show__meta > dl dd {
@@ -1029,11 +1028,18 @@ a.revision-link {
 	grid-template-columns: 7rem minmax(0, 1fr);
 	gap: 0.875rem;
 	padding: 0.6875rem 0;
-	border-bottom: 1px solid var(--line-soft);
+	position: relative;
 }
 
-.package-show__related dl > div:last-child {
-	border-bottom: 0;
+.package-show__meta > dl > div:not(:last-child)::after,
+.package-show__related dl > div:not(:last-child)::after {
+	content: "";
+	position: absolute;
+	right: -1.125rem;
+	bottom: 0;
+	left: -1.125rem;
+	height: 1px;
+	background: var(--line-soft);
 }
 
 .package-show__related dd {
