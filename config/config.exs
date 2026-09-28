@@ -24,6 +24,7 @@ config :tracker, Oban,
        {"*/15 * * * *", Tracker.Nixpkgs.ChangeArtifactReconcileWorker},
        {"15 * * * *", Tracker.Nixpkgs.ChangeReconcileWorker},
        {"*/5 * * * *", Tracker.Nixpkgs.HydraStatusFetcher},
+       {"0 */4 * * *", Tracker.Nixpkgs.UpdateLogPageWorker},
        {"*/5 * * * *", Tracker.Ingestion.CronWorker, queue: :ingestion}
      ]}
   ]

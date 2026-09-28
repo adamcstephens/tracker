@@ -636,6 +636,51 @@ defmodule TrackerWeb.PackageLive.ShowTest do
       assert html =~ ~s|href="https://example.com/download"|
     end
 
+    test "shows matching update-log links in metadata with the exact attribute first", %{
+      conn: conn,
+      package: package
+    } do
+      base = "https://nixpkgs-update-logs.nix-community.org"
+      Tracker.Nixpkgs.UpdateLogPage.upsert!("pkgshow-hello-full", "#{base}/pkgshow-hello-full/")
+      Tracker.Nixpkgs.UpdateLogPage.upsert!("pkgshow-hello", "#{base}/pkgshow-hello/")
+      Tracker.Nixpkgs.UpdateLogPage.upsert!("pkgshow-other", "#{base}/pkgshow-other/")
+
+      {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}")
+
+      row =
+        html
+        |> Floki.parse_document!()
+        |> Floki.find(".package-show__meta > .package-show__panel:first-of-type dl > div")
+        |> Enum.find(&(Floki.find(&1, "dt") |> Floki.text() == "Update logs"))
+
+      assert row
+
+      assert Enum.map(Floki.find(row, "a"), fn link ->
+               {String.trim(Floki.text(link)), Floki.attribute(link, "href")}
+             end) == [
+               {"pkgshow-hello", ["#{base}/pkgshow-hello/"]},
+               {"pkgshow-hello-full", ["#{base}/pkgshow-hello-full/"]}
+             ]
+    end
+
+    test "omits the update-log metadata row when there are no matching pages", %{
+      conn: conn,
+      rich: rich
+    } do
+      Tracker.Nixpkgs.UpdateLogPage.upsert!(
+        "unrelated-package",
+        "https://nixpkgs-update-logs.nix-community.org/unrelated-package/"
+      )
+
+      {:ok, view, _html} = live(conn, ~p"/packages/#{rich.attribute}")
+
+      refute has_element?(
+               view,
+               ".package-show__meta > .package-show__panel:first-of-type dl",
+               "Update logs"
+             )
+    end
+
     test "shows source provenance", %{conn: conn, rich: rich} do
       {:ok, _view, html} = live(conn, ~p"/packages/#{rich.attribute}")
 

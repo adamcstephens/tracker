@@ -31,6 +31,17 @@ with nothing ingested yet the task says so and seeds nothing.
 The route only exists when `dev_routes` is enabled, so it is never compiled
 into a production build.
 
+## Package update logs
+
+An independent Oban job polls the root index at
+`https://nixpkgs-update-logs.nix-community.org/` every four hours. Package
+pages display discovered directory links in Metadata, labelled with their
+original source attributes. Matching recognizes exact attributes, terminal
+`-full`/`Full`/`-minimal`/`Minimal` package-name variants, and recognized
+package-set ecosystems (such as BEAM versions). Unknown dotted namespaces
+and distinct package version suffixes remain separate. A failed index fetch
+or parse leaves the previously discovered links intact.
+
 ## Time zones
 
 Absolute times use the browser's IANA time zone when available, otherwise UTC.

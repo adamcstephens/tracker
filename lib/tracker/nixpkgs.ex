@@ -16,6 +16,7 @@ defmodule Tracker.Nixpkgs do
     resource Tracker.Nixpkgs.PackageFamily
     resource Tracker.Nixpkgs.PackageVariantGroup
     resource Tracker.Nixpkgs.Package
+    resource Tracker.Nixpkgs.UpdateLogPage
     resource Tracker.Nixpkgs.PackageSpan
     resource Tracker.Nixpkgs.ChannelRevision
     resource Tracker.Nixpkgs.Maintainer

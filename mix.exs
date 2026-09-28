@@ -55,7 +55,7 @@ defmodule Tracker.MixProject do
       {:esbuild, "~> 0.8", runtime: Mix.env() == :dev},
       {:ex_brotli, "~> 0.6.0"},
       {:finch, "~> 0.23"},
-      {:floki, ">= 0.30.0", only: :test},
+      {:floki, ">= 0.30.0"},
       {:lazy_html, ">= 0.1.0", only: :test},
       {:gettext, "~> 1.0"},
       {:igniter, "~> 0.5", only: [:dev, :test]},

@@ -146,6 +146,13 @@ defmodule TrackerWeb.PackageLive.Show do
                   <a href={url} target="_blank" rel="noopener noreferrer">{system}</a>
                 </span>
               </:item>
+              <:item :if={@log_pages != []} title="Update logs">
+                <span :for={page <- @log_pages}>
+                  <a href={page.url} target="_blank" rel="noopener noreferrer">
+                    {page.attribute}
+                  </a>
+                </span>
+              </:item>
             </.list>
 
             <details :if={@package_meta.platforms not in [nil, []]}>
@@ -496,6 +503,7 @@ defmodule TrackerWeb.PackageLive.Show do
      |> assign(:page_title, package.attribute)
      |> assign(:package, package)
      |> assign_subscription(socket.assigns.current_user, package.id)
+     |> assign(:log_pages, Tracker.Nixpkgs.Package.log_pages!(package.attribute))
      |> assign(:family_siblings, family_siblings)
      |> assign(:variant_siblings, variant_siblings)
      |> assign(:linked_options, linked_options)

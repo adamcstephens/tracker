@@ -1,4 +1,15 @@
 defmodule Tracker.Nixpkgs.Package do
+  alias Tracker.Nixpkgs.{UpdateLogKey, UpdateLogPage}
+
+  def log_pages!(attribute) do
+    {namespace, package_name} = UpdateLogKey.for_attribute(attribute)
+
+    namespace
+    |> UpdateLogPage.by_key!(package_name)
+    |> Enum.sort_by(fn page -> {page.attribute != attribute, page.attribute} end)
+    |> Enum.uniq_by(& &1.url)
+  end
+
   use Ash.Resource, otp_app: :tracker, domain: Tracker.Nixpkgs, data_layer: AshPostgres.DataLayer
 
   postgres do
