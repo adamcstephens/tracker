@@ -129,9 +129,9 @@ defmodule TrackerWeb.ChangeLive.Index do
       |> assign(:in_channel_filter?, in_channel?)
       |> assign(:page_search, page_search(tp, base_ref, in_channel?))
       |> load_changes()
-      |> push_event("update-url", %{
-        path: TableParams.to_path(tp, "/changes", filter_extras(base_ref, in_channel?))
-      })
+      |> TrackerWeb.Lens.update_url(
+        TableParams.to_path(tp, "/changes", filter_extras(base_ref, in_channel?))
+      )
 
     {:noreply, socket}
   end

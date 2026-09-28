@@ -650,9 +650,9 @@ defmodule TrackerWeb.ChangeLive.Show do
       socket
       |> assign(:table_params, tp)
       |> load_packages(socket.assigns.change.id)
-      |> push_event("update-url", %{
-        path: TableParams.to_path(tp, "/changes/#{socket.assigns.change.number}")
-      })
+      |> TrackerWeb.Lens.update_url(
+        TableParams.to_path(tp, "/changes/#{socket.assigns.change.number}")
+      )
 
     {:noreply, socket}
   end

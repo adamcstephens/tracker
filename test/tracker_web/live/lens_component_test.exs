@@ -143,6 +143,58 @@ defmodule TrackerWeb.LensComponentTest do
       assert params["channel"] == unstable.name
     end
 
+    test "keeps a search entered after mount when switching channels", %{
+      conn: conn,
+      stable: stable,
+      unstable: unstable
+    } do
+      {:ok, view, _html} = live(conn, ~p"/packages?channel=#{stable.name}")
+
+      render_change(view, "search", %{"search" => "hello & nix"})
+
+      redirect = switch_to(view, unstable.name)
+      assert {:error, {:live_redirect, %{to: to}}} = redirect
+
+      assert URI.decode_query(URI.parse(to).query) == %{
+               "channel" => unstable.name,
+               "search" => "hello & nix"
+             }
+
+      {:ok, _next, html} = follow_redirect(redirect, conn)
+      assert selected_channel(html) == unstable.name
+
+      assert ["hello & nix"] =
+               html |> Floki.parse_document!() |> Floki.attribute("#page-search-input", "value")
+    end
+
+    test "keeps the latest replacement search when switching to all channels", %{
+      conn: conn,
+      stable: stable
+    } do
+      {:ok, view, _html} = live(conn, ~p"/packages?channel=#{stable.name}&search=old")
+
+      render_change(view, "search", %{"search" => "new/term?x=1"})
+
+      assert {:error, {:live_redirect, %{to: to}}} = switch_to(view, "all")
+
+      assert URI.decode_query(URI.parse(to).query) == %{
+               "channel" => "all",
+               "search" => "new/term?x=1"
+             }
+    end
+
+    test "does not restore a search cleared after mount", %{
+      conn: conn,
+      unstable: unstable
+    } do
+      {:ok, view, _html} = live(conn, ~p"/packages?search=old")
+
+      render_change(view, "search", %{"search" => ""})
+
+      assert {:error, {:live_redirect, %{to: to}}} = switch_to(view, unstable.name)
+      refute URI.decode_query(URI.parse(to).query)["search"]
+    end
+
     test "replaces a previously pinned revision", %{conn: conn, unstable: unstable} do
       {:ok, view, _html} = live(conn, ~p"/packages?channel=nixos-old&rev=deadbeef")
 

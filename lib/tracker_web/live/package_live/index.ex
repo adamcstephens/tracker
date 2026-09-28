@@ -72,7 +72,7 @@ defmodule TrackerWeb.PackageLive.Index do
         %{ps | value: tp.search, hidden: TableParams.to_hidden_inputs(tp)}
       end)
       |> load_packages()
-      |> push_event("update-url", %{path: TableParams.to_path(tp, "/packages")})
+      |> TrackerWeb.Lens.update_url(TableParams.to_path(tp, "/packages"))
 
     {:noreply, socket}
   end

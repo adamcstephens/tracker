@@ -72,7 +72,7 @@ defmodule TrackerWeb.MaintainerLive.Index do
         %{ps | value: tp.search, hidden: TableParams.to_hidden_inputs(tp)}
       end)
       |> load_maintainers()
-      |> push_event("update-url", %{path: TableParams.to_path(tp, "/maintainers")})
+      |> TrackerWeb.Lens.update_url(TableParams.to_path(tp, "/maintainers"))
 
     {:noreply, socket}
   end

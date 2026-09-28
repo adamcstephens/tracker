@@ -66,7 +66,7 @@ defmodule TrackerWeb.TeamLive.Index do
         %{ps | value: tp.search, hidden: TableParams.to_hidden_inputs(tp)}
       end)
       |> load_teams()
-      |> push_event("update-url", %{path: TableParams.to_path(tp, "/teams")})
+      |> TrackerWeb.Lens.update_url(TableParams.to_path(tp, "/teams"))
 
     {:noreply, socket}
   end

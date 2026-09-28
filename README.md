@@ -31,6 +31,13 @@ with nothing ingested yet the task says so and seeds nothing.
 The route only exists when `dev_routes` is enabled, so it is never compiled
 into a production build.
 
+## Channel lens and search
+
+The channel lens scopes supported lists without changing their search query.
+Search updates the URL as you type; changing the channel keeps the latest
+search term, and the resulting URL can be bookmarked or reloaded. Selecting
+another channel clears a pinned revision but preserves the search.
+
 ## Small-channel Hydra links
 
 Package pages show small-channel Hydra links only for attributes selected by

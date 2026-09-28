@@ -99,6 +99,12 @@ defmodule TrackerWeb.Lens do
     URI.to_string(%{uri | query: query})
   end
 
+  def update_url(socket, path) do
+    socket
+    |> Phoenix.Component.assign(:current_path, path)
+    |> Phoenix.LiveView.push_event("update-url", %{path: path})
+  end
+
   @doc """
   Stores the lens for the current process, where `decorate/1` can reach it.
 
