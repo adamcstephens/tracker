@@ -48,6 +48,34 @@ defmodule Tracker.Nixpkgs.ChannelRevisionTest do
       assert r1.id == r2.id
       assert r2.released_at == ~U[2026-04-02 10:00:00Z]
     end
+
+    test "recreating the same revision retains its extracted selection" do
+      channel = create_channel!(Fixtures.channel_name())
+
+      revision =
+        ChannelRevision.create!(%{
+          channel_id: channel.id,
+          revision: "abc123",
+          released_at: ~U[2026-04-01 10:00:00Z]
+        })
+
+      assert revision.hydra_package_attributes == nil
+
+      ChannelRevision.record_hydra_package_attributes!(revision, %{
+        hydra_package_attributes: ["hello", "foo"]
+      })
+
+      updated =
+        ChannelRevision.create!(%{
+          channel_id: channel.id,
+          revision: "abc123",
+          released_at: ~U[2026-04-02 10:00:00Z]
+        })
+
+      assert updated.id == revision.id
+      assert updated.hydra_package_attributes == ["hello", "foo"]
+      assert updated.released_at == ~U[2026-04-02 10:00:00Z]
+    end
   end
 
   describe "by_channel/1" do

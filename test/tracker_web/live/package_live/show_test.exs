@@ -1529,11 +1529,14 @@ defmodule TrackerWeb.PackageLive.ShowTest do
           released_at: ~U[2026-03-18 10:00:00Z]
         })
 
+      excluded = Tracker.Fixtures.package!("pkgshow-excluded")
+
       Tracker.Fixtures.apply_package_revision!(cr_meta, [
-        {built, %{version: "1.0", platforms: ["x86_64-linux"]}}
+        {built, %{version: "1.0", platforms: ["x86_64-linux"]}},
+        {excluded, %{version: "1.0", platforms: ["x86_64-linux"]}}
       ])
 
-      %{built: built}
+      %{built: built, excluded: excluded, cr_meta: cr_meta}
     end
 
     test "links each hydra-built platform for the lens channel", %{conn: conn, built: built} do
@@ -1556,12 +1559,76 @@ defmodule TrackerWeb.PackageLive.ShowTest do
       refute html =~ "hydra.nixos.org"
     end
 
-    test "links the metadata channel jobset under the all lens", %{conn: conn, built: built} do
-      {:ok, _view, html} =
-        live(conn, ~p"/packages/#{built.attribute}?channel=all")
+    test "small-channel links require the selected attribute from its persisted revision", %{
+      conn: conn,
+      built: built,
+      excluded: excluded,
+      cr_meta: cr_meta
+    } do
+      {:ok, _view, pending} = live(conn, ~p"/packages/#{built.attribute}?channel=all")
+      refute pending =~ "hydra.nixos.org"
 
-      assert html =~
+      Tracker.Nixpkgs.ChannelRevision.record_hydra_package_attributes!(cr_meta, %{
+        hydra_package_attributes: ["pkgshow-built"]
+      })
+
+      {:ok, _view, included} = live(conn, ~p"/packages/#{built.attribute}?channel=all")
+
+      assert included =~
                "https://hydra.nixos.org/job/nixos/unstable-small/nixpkgs.pkgshow-built.x86_64-linux"
+
+      {:ok, _view, omitted} = live(conn, ~p"/packages/#{excluded.attribute}?channel=all")
+      refute omitted =~ "hydra.nixos.org"
+    end
+
+    test "a pinned small-channel lens uses its own revision selection, not the latest", %{
+      conn: conn,
+      built: built,
+      excluded: excluded,
+      cr_meta: cr_meta
+    } do
+      Tracker.Nixpkgs.ChannelRevision.record_hydra_package_attributes!(cr_meta, %{
+        hydra_package_attributes: ["pkgshow-built"]
+      })
+
+      later =
+        Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
+          channel_id: cr_meta.channel_id,
+          revision: "hydrameta44455566",
+          released_at: ~U[2026-03-19 10:00:00Z]
+        })
+
+      {:ok, _view, pending} = live(conn, ~p"/packages/#{built.attribute}?channel=all")
+      refute pending =~ "hydra.nixos.org"
+
+      Tracker.Nixpkgs.ChannelRevision.record_hydra_package_attributes!(later, %{
+        hydra_package_attributes: ["pkgshow-excluded"]
+      })
+
+      {:ok, _view, no_longer_selected} = live(conn, ~p"/packages/#{built.attribute}?channel=all")
+      refute no_longer_selected =~ "hydra.nixos.org"
+
+      {:ok, _view, newly_selected} = live(conn, ~p"/packages/#{excluded.attribute}?channel=all")
+
+      assert newly_selected =~
+               "https://hydra.nixos.org/job/nixos/unstable-small/nixpkgs.pkgshow-excluded.x86_64-linux"
+
+      {:ok, _view, included} =
+        live(
+          conn,
+          ~p"/packages/#{built.attribute}?channel=nixos-unstable-small&rev=#{cr_meta.revision}"
+        )
+
+      assert included =~
+               "https://hydra.nixos.org/job/nixos/unstable-small/nixpkgs.pkgshow-built.x86_64-linux"
+
+      {:ok, _view, not_selected_at_pin} =
+        live(
+          conn,
+          ~p"/packages/#{excluded.attribute}?channel=nixos-unstable-small&rev=#{cr_meta.revision}"
+        )
+
+      refute not_selected_at_pin =~ "hydra.nixos.org"
     end
   end
 end

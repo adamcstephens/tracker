@@ -31,6 +31,20 @@ with nothing ingested yet the task says so and seeds nothing.
 The route only exists when `dev_routes` is enabled, so it is never compiled
 into a production build.
 
+## Small-channel Hydra links
+
+Package pages show small-channel Hydra links only for attributes selected by
+the matching nixpkgs revision's `nixos/release-small.nix`. Selection names are
+extracted lazily from the local bare clone during revision ingestion and stored
+with that revision; missing selection suppresses links rather than guessing.
+Full channels retain their existing platform-based links. Selection does not
+guarantee that Hydra has evaluated a job successfully.
+
+To populate selections for already-ingested revisions, run
+`Tracker.Ingestion.Steps.ExtractHydraPackages.backfill("nixos-unstable-small")`
+in an IEx session. It processes revisions chronologically and skips those
+already populated.
+
 ## Package update logs
 
 An independent Oban job polls the root index at

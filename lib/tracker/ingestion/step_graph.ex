@@ -5,11 +5,10 @@ defmodule Tracker.Ingestion.StepGraph do
 
   The graph:
 
-      create_revision ─┬─ load_packages ──┐
-                       │              │   │
-                       └─ load_options ┼── link_options
-                       (nixos-* only)  │
-                                       └─ finalize (all active done)
+      create_revision ─┬─ load_packages ────────┐
+                       ├─ load_options ─────────┤ link_options (nixos-* only)
+                       └─ extract_hydra_packages (nixos-*-small only)
+      finalize waits for every active step (including link_options).
 
   Package and option added/removed/version-change events are derived from span
   boundaries on read, so there is no event-detection step for either.
@@ -19,6 +18,7 @@ defmodule Tracker.Ingestion.StepGraph do
 
   @graph %{
     create_revision: [],
+    extract_hydra_packages: [:create_revision],
     load_packages: [:create_revision],
     load_options: [:create_revision],
     link_options: [:load_packages, :load_options],
@@ -27,6 +27,7 @@ defmodule Tracker.Ingestion.StepGraph do
 
   @step_modules %{
     create_revision: Tracker.Ingestion.Steps.CreateRevision,
+    extract_hydra_packages: Tracker.Ingestion.Steps.ExtractHydraPackages,
     load_packages: Tracker.Ingestion.Steps.LoadPackages,
     load_options: Tracker.Ingestion.Steps.LoadOptions,
     link_options: Tracker.Ingestion.Steps.LinkOptions,
@@ -35,16 +36,22 @@ defmodule Tracker.Ingestion.StepGraph do
 
   @doc """
   Returns the list of active steps for a given channel.
-
   All channels get: create_revision, load_packages, finalize.
   Channels starting with "nixos-" additionally get: load_options, link_options.
+  Small NixOS channels also extract their release-small package selection.
   """
   @spec steps_for(String.t()) :: [atom()]
   def steps_for(channel) do
     base = [:create_revision, :load_packages, :finalize]
 
     if String.starts_with?(channel, "nixos-") do
-      base ++ [:load_options, :link_options]
+      steps = base ++ [:load_options, :link_options]
+
+      if String.ends_with?(channel, "-small") do
+        steps ++ [:extract_hydra_packages]
+      else
+        steps
+      end
     else
       base
     end

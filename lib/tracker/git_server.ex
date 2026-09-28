@@ -130,6 +130,24 @@ defmodule Tracker.GitServer do
     Map.new(refs, fn ref -> {ref, ancestor?(sha, ref, state)} end)
   end
 
+  @doc """
+  Reads a single file from the immutable commit in the bare clone without
+  materializing a working tree. The caller supplies an existing state snapshot.
+  """
+  def show_file(_sha, _file, %State{ready: false}), do: {:error, :not_ready}
+
+  def show_file(sha, file, %State{path: path})
+      when is_binary(sha) and is_binary(file) do
+    if String.match?(sha, ~r/\A[0-9a-f]{40}\z/) do
+      case System.cmd("git", ["-C", path, "show", "#{sha}:#{file}"], stderr_to_stdout: true) do
+        {contents, 0} -> {:ok, contents}
+        {message, status} -> {:error, {:git_show_failed, status, String.trim(message)}}
+      end
+    else
+      {:error, :invalid_revision}
+    end
+  end
+
   # GenServer callbacks
 
   @impl GenServer

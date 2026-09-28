@@ -760,12 +760,19 @@ defmodule TrackerWeb.PackageLive.Show do
         &{&1, span && Map.get(span, &1)}
       )
 
+    revision = meta_revision(span, pinned_at)
+
     socket
     |> assign(:package_meta, meta)
-    |> assign(:meta_revision, meta_revision(span, pinned_at))
+    |> assign(:meta_revision, revision && revision.revision)
     |> assign(
       :hydra_links,
-      hydra_links(meta_channel, socket.assigns.package, meta.platforms)
+      hydra_links(
+        meta_channel,
+        socket.assigns.package,
+        meta.platforms,
+        revision && revision.hydra_package_attributes
+      )
     )
   end
 
@@ -787,13 +794,17 @@ defmodule TrackerWeb.PackageLive.Show do
     |> assign(:pinned_absent?, false)
   end
 
-  # The jobset linked is the one the metadata on this page came from, so the
-  # platforms listing the links and the jobset building them describe the same
-  # channel.
-  defp hydra_links(nil, _package, _platforms), do: []
+  # The jobset and its selected package attributes belong to the same channel
+  # revision supplying the metadata at this point in the lens.
+  defp hydra_links(nil, _package, _platforms, _selected_attributes), do: []
 
-  defp hydra_links(channel, package, platforms) do
-    Tracker.Nixpkgs.Channel.hydra_job_links(channel, package.attribute, platforms)
+  defp hydra_links(channel, package, platforms, selected_attributes) do
+    Tracker.Nixpkgs.Channel.hydra_job_links(
+      channel,
+      package.attribute,
+      platforms,
+      selected_attributes
+    )
   end
 
   # The panel describes one channel at one instant, so its file link points at
@@ -804,7 +815,7 @@ defmodule TrackerWeb.PackageLive.Show do
 
   defp meta_revision(span, pinned_at) do
     {:ok, revision} = Tracker.Nixpkgs.ChannelRevision.latest_at(span.channel_id, pinned_at)
-    revision.revision
+    revision
   end
 
   defp meta_span(package_id, channel_id, nil) do

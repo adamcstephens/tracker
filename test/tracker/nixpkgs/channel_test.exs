@@ -375,7 +375,7 @@ defmodule Tracker.Nixpkgs.ChannelTest do
     end
   end
 
-  describe "hydra_job_links/3" do
+  describe "hydra_job_links/3 and /4" do
     test "builds a link per hydra-built platform on a nixos jobset" do
       channel = %Channel{hydra_project: "nixos", hydra_jobset: "unstable"}
 
@@ -430,6 +430,47 @@ defmodule Tracker.Nixpkgs.ChannelTest do
                {"aarch64-linux",
                 "https://hydra.nixos.org/job/nixos/unstable/nixpkgs.mobilizon.aarch64-linux"}
              ]
+    end
+
+    test "small channels require an extracted exact attribute, then retain platform filtering" do
+      channel = %Channel{
+        name: "nixos-unstable-small",
+        hydra_project: "nixos",
+        hydra_jobset: "unstable-small"
+      }
+
+      assert Channel.hydra_job_links(channel, "hello", ["x86_64-linux"], nil) == []
+      assert Channel.hydra_job_links(channel, "hello", ["x86_64-linux"], []) == []
+      assert Channel.hydra_job_links(channel, "hello", ["x86_64-linux"], ["hello-tools"]) == []
+
+      assert Channel.hydra_job_links(channel, "hello-tools", ["x86_64-linux"], ["hello"]) ==
+               []
+
+      assert Channel.hydra_job_links(
+               channel,
+               "hello",
+               ["x86_64-linux", "aarch64-darwin"],
+               ["hello", "hello-tools"]
+             ) == [
+               {"x86_64-linux",
+                "https://hydra.nixos.org/job/nixos/unstable-small/nixpkgs.hello.x86_64-linux"}
+             ]
+    end
+
+    test "full channels ignore unavailable or unrelated small-channel selections" do
+      channel = %Channel{
+        name: "nixos-unstable",
+        hydra_project: "nixos",
+        hydra_jobset: "unstable"
+      }
+
+      expected = [
+        {"x86_64-linux", "https://hydra.nixos.org/job/nixos/unstable/nixpkgs.hello.x86_64-linux"}
+      ]
+
+      assert Channel.hydra_job_links(channel, "hello", ["x86_64-linux"], nil) == expected
+      assert Channel.hydra_job_links(channel, "hello", ["x86_64-linux"], []) == expected
+      assert Channel.hydra_job_links(channel, "hello", ["x86_64-linux"], ["other"]) == expected
     end
   end
 end

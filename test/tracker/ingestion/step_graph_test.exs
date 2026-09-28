@@ -24,6 +24,16 @@ defmodule Tracker.Ingestion.StepGraphTest do
       assert :link_options in steps
     end
 
+    test "small NixOS channels alone extract the release selection" do
+      for name <- ["nixos-unstable-small", "nixos-25.11-small"] do
+        assert :extract_hydra_packages in StepGraph.steps_for(name)
+      end
+
+      for name <- ["nixos-unstable", "nixos-25.11", "nixpkgs-unstable"] do
+        refute :extract_hydra_packages in StepGraph.steps_for(name)
+      end
+    end
+
     test "nixos-unstable-small gets options steps" do
       steps = StepGraph.steps_for("nixos-unstable-small")
 
@@ -49,6 +59,16 @@ defmodule Tracker.Ingestion.StepGraphTest do
       assert :load_packages in ready
       assert :load_options in ready
       refute :finalize in ready
+    end
+
+    test "small-channel extraction waits for revision creation and blocks finalization" do
+      active = StepGraph.steps_for("nixos-unstable-small")
+      assert StepGraph.ready_steps(active, []) == [:create_revision]
+      assert :extract_hydra_packages in StepGraph.ready_steps(active, [:create_revision])
+
+      completed = active -- [:extract_hydra_packages, :finalize]
+      refute :finalize in StepGraph.ready_steps(active, completed)
+      assert StepGraph.ready_steps(active, [:extract_hydra_packages | completed]) == [:finalize]
     end
 
     test "after load_packages alone, link_options is not yet ready" do

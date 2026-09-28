@@ -219,25 +219,42 @@ defmodule Tracker.Nixpkgs.Channel do
   unrestricted for this lookup. NixOS jobsets build no darwin and darwin
   jobsets build nothing else; NixOS also namespaces every nixpkgs job under a
   `nixpkgs.` prefix.
+
+  Small NixOS channels additionally require exact membership in the selected
+  package attributes stored on the displayed channel revision. A missing
+  selection suppresses links until extraction completes.
   """
-  @spec hydra_job_links(t(), String.t(), [String.t()] | nil) :: [{String.t(), String.t()}]
+  def hydra_job_links(channel, attribute, platforms, selected_attributes \\ nil)
+
   def hydra_job_links(
-        %__MODULE__{hydra_project: project, hydra_jobset: jobset},
+        %__MODULE__{hydra_project: project, hydra_jobset: jobset} = channel,
         attribute,
-        platforms
+        platforms,
+        selected_attributes
       )
       when is_binary(project) and is_binary(jobset) and
              (is_list(platforms) or is_nil(platforms)) do
-    platforms = platforms || @hydra_systems
-    job = if project == "nixos", do: "nixpkgs.#{attribute}", else: attribute
+    if eligible_attribute?(channel, attribute, selected_attributes) do
+      platforms = platforms || @hydra_systems
+      job = if project == "nixos", do: "nixpkgs.#{attribute}", else: attribute
 
-    @hydra_systems
-    |> Enum.filter(&(&1 in platforms))
-    |> Enum.filter(&built_by?(&1, project, jobset))
-    |> Enum.map(&{&1, "#{@hydra_base_url}/job/#{project}/#{jobset}/#{job}.#{&1}"})
+      @hydra_systems
+      |> Enum.filter(&(&1 in platforms))
+      |> Enum.filter(&built_by?(&1, project, jobset))
+      |> Enum.map(&{&1, "#{@hydra_base_url}/job/#{project}/#{jobset}/#{job}.#{&1}"})
+    else
+      []
+    end
   end
 
-  def hydra_job_links(_channel, _attribute, _platforms), do: []
+  def hydra_job_links(_channel, _attribute, _platforms, _selected_attributes), do: []
+
+  defp eligible_attribute?(%__MODULE__{name: "nixos-" <> rest}, attribute, selected_attributes) do
+    not String.ends_with?(rest, "-small") or
+      (is_list(selected_attributes) and attribute in selected_attributes)
+  end
+
+  defp eligible_attribute?(%__MODULE__{}, _attribute, _selected_attributes), do: true
 
   defp built_by?(system, project, jobset) do
     darwin? = String.ends_with?(system, "-darwin")
