@@ -69,16 +69,23 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
     assert html =~ "2026-03-31"
   end
 
-  test "marks the PR anchor as the page's external link", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/changes/6001")
+  test "places the PR link in the title with the same icon as metadata", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/changes/6001")
 
-    assert [link | _] =
-             html
-             |> Floki.parse_document!()
-             |> Floki.find("a[data-external-link]")
+    assert has_element?(
+             view,
+             ~s(header.change-show__identity h1 a.change-show__pr-link[href="https://github.com/NixOS/nixpkgs/pull/6001"][data-external-link] svg.icon-external)
+           )
 
-    assert Floki.attribute(link, "href") == ["https://github.com/NixOS/nixpkgs/pull/6001"]
-    assert Floki.attribute(link, "target") == ["_blank"]
+    assert has_element?(view, "header.change-show__identity h1 a", "#6001")
+    assert has_element?(view, ".change-show__status .pill-merged", "merged")
+    assert has_element?(view, ".change-show__meta dt", "Base branch")
+    refute has_element?(view, "header.change-show__identity code")
+
+    assert has_element?(
+             view,
+             ~s(.change-show__meta a[href="https://github.com/NixOS/nixpkgs/pull/6001"] svg.icon-external)
+           )
   end
 
   test "shows labels", %{conn: conn} do
@@ -109,6 +116,14 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
     assert html =~ "show-change-pkg"
   end
 
+  test "shows packages and metadata in separate columns", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/changes/6001")
+
+    assert has_element?(view, ".change-show__content #affected-packages")
+    assert has_element?(view, "aside.change-show__aside .change-show__meta")
+    assert has_element?(view, "aside.change-show__aside .change-show__labels", "6.topic: nixos")
+  end
+
   test "the affected packages section uses the shared section header", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/changes/6001")
 
@@ -137,9 +152,10 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
   test "hides the affected options section when no channel revision resolves", %{
     conn: conn
   } do
-    {:ok, _view, html} = live(conn, ~p"/changes/6001")
+    {:ok, view, _html} = live(conn, ~p"/changes/6001")
 
-    refute html =~ "Affected options"
+    refute has_element?(view, "#affected-options")
+    refute has_element?(view, ".change-show__content .change-show__options")
   end
 
   # Names here (release line 99.99, `scoped.nix`, the `scoped*` option
@@ -190,14 +206,47 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
       change =
         Tracker.Fixtures.change!(6002, %{
           base_ref: "release-99.99",
-          processing_status: :processed
+          processing_status: :processed,
+          package_count: 1
         })
+
+      package = Tracker.Nixpkgs.Package.bulk_upsert_all([%{attribute: "scoped-change-pkg"}])
+
+      Tracker.Nixpkgs.ChangePackage.bulk_create_all([
+        %{change_id: change.id, package_id: package["scoped-change-pkg"], type: :changed}
+      ])
 
       Tracker.Nixpkgs.ChangeFile.bulk_insert_all([
         %{change_id: change.id, file_id: Tracker.Nixpkgs.File.get_by_path!("scoped.nix").id}
       ])
 
       %{change: change, full: full, full_cr: full_cr}
+    end
+
+    test "renders affected options alongside affected packages", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/changes/6002?channel=nixos-98.98")
+
+      assert has_element?(view, ".change-show__content #affected-packages", "scoped-change-pkg")
+      assert has_element?(view, ".change-show__content #affected-options", "scopedsmall.opts")
+    end
+
+    test "shows options and linking status when no packages are linked", %{conn: conn} do
+      change =
+        Tracker.Fixtures.change!(6003, %{
+          base_ref: "release-99.99",
+          processing_status: :processed,
+          package_count: 0
+        })
+
+      Tracker.Nixpkgs.ChangeFile.bulk_insert_all([
+        %{change_id: change.id, file_id: Tracker.Nixpkgs.File.get_by_path!("scoped.nix").id}
+      ])
+
+      {:ok, view, _html} = live(conn, ~p"/changes/6003?channel=nixos-98.98")
+
+      refute has_element?(view, ".change-show__packages")
+      assert has_element?(view, "#package-linking-status", "0 packages linked")
+      assert has_element?(view, ".change-show__content #affected-options", "scopedsmall.opts")
     end
 
     test "scopes to the first channel downstream of base_ref when the change has not landed in the lens channel",
@@ -359,6 +408,10 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
 
       {:ok, view, _html} = live(conn, ~p"/changes/46822")
 
+      refute has_element?(view, ".change-show__packages")
+      assert has_element?(view, ".change-show__content #package-linking-status")
+      assert has_element?(view, "aside.change-show__aside .change-show__meta")
+
       assert has_element?(
                view,
                "p#package-linking-status [data-processing-status=\"processed\"]",
@@ -464,28 +517,27 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
   end
 
   describe "propagation lifecycle section" do
-    test "renders the DAG rooted at the change's base_ref", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/changes/6001")
+    test "renders the DAG above the content for a merged change", %{conn: conn} do
+      {:ok, view, html} = live(conn, ~p"/changes/6001")
 
-      assert html =~ "Propagation"
+      assert has_element?(view, "#change-propagation .propagation-dag")
+      assert has_element?(view, "#change-propagation", "channels reached")
       assert html =~ ~s|data-branch="master"|
       assert html =~ ~s|data-branch="nixpkgs-unstable"|
       assert html =~ ~s|data-branch="nixos-unstable-small"|
       assert html =~ ~s|data-branch="nixos-unstable"|
     end
 
-    test "renders the mobile branch tree alongside the desktop DAG", %{conn: conn} do
+    test "keeps the mobile branch tree in the propagation panel", %{conn: conn} do
       change_id = Tracker.Nixpkgs.Change.get_by_number!(6001).id
-
       Tracker.Nixpkgs.ChangeBranch.create!(%{change_id: change_id, branch_name: "master"})
 
-      {:ok, _view, html} = live(conn, ~p"/changes/6001")
+      {:ok, view, _html} = live(conn, ~p"/changes/6001")
 
-      assert html =~ ~s|class="m4-tree"|
-      assert html =~ ~r/<li[^>]*class="is-done"[^>]*data-branch="master"/
-
-      assert html =~ ~s|data-branch="nixos-unstable"|
-      refute html =~ ~r/<li[^>]*class="is-done"[^>]*data-branch="nixos-unstable"/
+      assert has_element?(
+               view,
+               "#change-propagation .change-show__tree .m4-tree li.is-done[data-branch=master]"
+             )
     end
 
     test "marks branches with a ChangeBranch as present", %{conn: conn} do
@@ -553,107 +605,33 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
         }
       ])
 
-      {:ok, _view, html} = live(conn, ~p"/changes/6002")
+      {:ok, view, _html} = live(conn, ~p"/changes/6002")
 
-      refute html =~ "Propagation"
-      refute html =~ "propagation-dag"
+      refute has_element?(view, "#change-propagation")
+      refute has_element?(view, ".propagation-dag")
     end
   end
 
-  describe "mobile M4 chrome" do
-    test "renders chip row + title with mobile classes", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/changes/6001")
-
-      assert html =~ ~s|class="change-head-row cm-headrow"|
-      assert html =~ ~s|<code class="cm-base">master</code>|
-      assert html =~ ~s|class="cm-title"|
-    end
-
-    test "renders the m4 progress band with landed counts and merged-ago text", %{conn: conn} do
-      change_id = Tracker.Nixpkgs.Change.get_by_number!(6001).id
-      Tracker.Nixpkgs.ChangeBranch.create!(%{change_id: change_id, branch_name: "master"})
-
-      {:ok, _view, html} = live(conn, ~p"/changes/6001")
-
-      assert html =~ ~s|class="m4-prop-num"|
-      assert html =~ "channels reached"
-      assert html =~ ~s|class="m4-prop-bar"|
-      assert html =~ ~r/class="m4-prop-foot"[^>]*>\s*merged/
-    end
-
-    test "renders the segmented tabs with four panels", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/changes/6001")
-
-      assert html =~ ~s|class="m3-tabs"|
-      assert html =~ ~s|class="m3-panel m3-panel-chans"|
-      assert html =~ ~s|class="m3-panel m3-panel-pkgs"|
-      assert html =~ ~s|class="m3-panel m3-panel-opts"|
-      assert html =~ ~s|class="m3-panel m3-panel-info"|
-
-      tab_labels = Regex.scan(~r/<label[^>]*for="cmtab-[^"]+"/, html) |> length()
-      assert tab_labels == 4
-
-      assert html =~
-               ~r/<input type="radio" name="cmtab-6001"[^>]*class="m4tab m4tab-chans"[^>]*checked/
-    end
-  end
-
-  describe "default tab selection" do
-    test "defaults to Info when the PR is not merged", %{conn: conn} do
+  test "shows each unmerged status below the title without propagation", %{conn: conn} do
+    for {state, number} <- [open: 6201, draft: 6202, closed: 6203] do
       Tracker.Nixpkgs.Change.bulk_upsert_all([
         %{
-          number: 6201,
-          title: "open pr",
-          state: :open,
+          number: number,
+          title: "#{state} pr",
+          state: state,
           author: "x",
-          url: "https://github.com/NixOS/nixpkgs/pull/6201",
+          url: "https://github.com/NixOS/nixpkgs/pull/#{number}",
           base_ref: "master",
           processing_status: :pending
         }
       ])
 
-      {:ok, _view, html} = live(conn, ~p"/changes/6201")
+      {:ok, view, _html} = live(conn, ~p"/changes/#{number}")
 
-      assert html =~
-               ~r/<input type="radio" name="cmtab-6201"[^>]*class="m4tab m4tab-info"[^>]*checked/
-
-      refute html =~
-               ~r/<input type="radio" name="cmtab-6201"[^>]*class="m4tab m4tab-chans"[^>]*checked/
-    end
-
-    test "defaults to Packages when package_search is in the URL", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/changes/6001?package_search=show")
-
-      assert html =~
-               ~r/<input type="radio" name="cmtab-6001"[^>]*class="m4tab m4tab-pkgs"[^>]*checked/
-
-      refute html =~
-               ~r/<input type="radio" name="cmtab-6001"[^>]*class="m4tab m4tab-chans"[^>]*checked/
-    end
-
-    test "ignores package_search default when packages are disabled", %{conn: conn} do
-      Tracker.Nixpkgs.Change.bulk_upsert_all([
-        %{
-          number: 6202,
-          title: "merged but no packages",
-          state: :merged,
-          author: "x",
-          url: "https://github.com/NixOS/nixpkgs/pull/6202",
-          base_ref: "master",
-          merge_commit_sha: "abc",
-          merged_at: ~U[2026-04-01 12:00:00Z],
-          package_count: 0,
-          processing_status: :processed
-        }
-      ])
-
-      {:ok, _view, html} = live(conn, ~p"/changes/6202?package_search=show")
-
-      refute html =~
-               ~r/<input type="radio" name="cmtab-6202"[^>]*class="m4tab m4tab-pkgs"[^>]*checked/
-
-      assert html =~
-               ~r/<input type="radio" name="cmtab-6202"[^>]*class="m4tab m4tab-chans"[^>]*checked/
+      assert has_element?(view, ".change-show__status .pill-#{state}", "#{state}")
+      assert has_element?(view, "header.change-show__identity h1 a", "##{number}")
+      refute has_element?(view, "#change-propagation")
+      assert has_element?(view, "aside.change-show__aside .change-show__meta")
     end
   end
 
@@ -749,33 +727,6 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
 
       html = render(view)
       refute html =~ ~r/class="[^"]*propagation-node-present[^"]*"[^>]*data-branch="master"/
-    end
-
-    test "rebuilds the mobile propagation tree when the lens changes", %{conn: conn} do
-      Tracker.Nixpkgs.Channel.create!(%{
-        name: "nixpkgs-unstable",
-        display_name: "nixpkgs-unstable",
-        status: :active,
-        is_stable: false
-      })
-
-      Tracker.Nixpkgs.Channel.create!(%{
-        name: "nixos-unstable",
-        display_name: "nixos-unstable",
-        status: :active,
-        is_stable: false
-      })
-
-      {:ok, view, html} =
-        live(conn, ~p"/changes/6001?channel=nixpkgs-unstable")
-
-      assert html =~ ~r/<li[^>]*class="[^"]*is-mine[^"]*"[^>]*data-branch="nixpkgs-unstable"/
-      refute html =~ ~r/<li[^>]*class="[^"]*is-mine[^"]*"[^>]*data-branch="nixos-unstable"/
-
-      {:ok, _view, html} = switch_lens(conn, view, "nixos-unstable")
-
-      assert html =~ ~r/<li[^>]*class="[^"]*is-mine[^"]*"[^>]*data-branch="nixos-unstable"/
-      refute html =~ ~r/<li[^>]*class="[^"]*is-mine[^"]*"[^>]*data-branch="nixpkgs-unstable"/
     end
   end
 

@@ -2768,21 +2768,67 @@ a.revision-link {
 	}
 }
 
-/* Change Show — redesign. All rules scoped to .change-show. */
-.change-show .change-head {
-	margin-bottom: 1.25rem;
+.change-show {
+	display: grid;
+	gap: 1.125rem;
 }
 
-.change-show .change-head-row {
+.change-show__identity {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	gap: 0.55rem 1.5rem;
+	align-items: center;
+	padding: 1.25rem 1.5rem;
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	background: var(--bg);
+}
+
+.change-show__identity h1 {
+	grid-column: 1;
+	margin: 0;
+	letter-spacing: -0.02em;
+}
+
+.change-show__status {
+	grid-column: 1;
+	grid-row: 2;
 	display: flex;
 	align-items: center;
-	gap: 0.6rem;
-	flex-wrap: wrap;
-	margin-bottom: 0.5rem;
 }
 
-.change-show .change-prnum {
-	font-weight: 600;
+.change-show__identity #subscribe-toggle {
+	grid-column: 2;
+	grid-row: 1 / 3;
+	margin: 0;
+}
+
+.change-show__pr-link {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.3em;
+	white-space: nowrap;
+	font-family: var(--mono);
+	font-weight: 500;
+	color: var(--accent);
+}
+
+.change-show__identity .change-show__pr-link {
+	margin-left: 0.4rem;
+	vertical-align: middle;
+	font-size: 0.5em;
+	letter-spacing: 0;
+	text-decoration: none;
+}
+
+.change-show__identity .change-show__pr-link:hover {
+	text-decoration: underline;
+	text-underline-offset: 2px;
+}
+
+.change-show__pr-link .icon-external {
+	width: 1em;
+	height: 1em;
 }
 
 /* Shared accent pill (change list/show state, inbox type chip). Tinted
@@ -2893,85 +2939,79 @@ a.revision-link {
 	margin: 0;
 }
 
-.change-show .change-card {
+.change-show__grid {
+	display: grid;
+	grid-template-columns: minmax(0, 1.45fr) minmax(16rem, 0.9fr);
+	gap: 1.125rem;
+	align-items: start;
+}
+
+.change-show__content,
+.change-show__aside {
+	display: grid;
+	gap: 1.125rem;
+	min-width: 0;
+	align-content: start;
+}
+
+.change-show__panel {
+	min-width: 0;
+	overflow: hidden;
 	border: 1px solid var(--line);
-	border-radius: 8px;
-	padding: 1.25rem 1.25rem 1rem;
-	margin-bottom: 1.25rem;
+	border-radius: var(--radius);
 	background: var(--bg);
 }
 
-.change-show .change-card-head {
-	display: flex;
-	align-items: baseline;
-	justify-content: flex-end;
-	margin-bottom: 0.5rem;
+.change-show__panel > .section-header {
+	margin: 0;
+	padding: 1rem 1.125rem;
+	border-bottom: 1px solid var(--line);
 }
 
-.change-show .change-card .propagation-dag {
+.change-show__propagation > .section-header {
+	padding-bottom: 0.5rem;
+	border-bottom: 0;
+}
+
+.change-show__reach {
+	font-family: var(--mono);
+	font-size: 0.6875rem;
+	color: var(--text-3);
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+.change-show__dag {
+	padding: 0.35rem 1.125rem 1.25rem;
+}
+
+.change-show__dag .propagation-dag {
 	display: block;
-	margin: 0 auto;
 	max-width: 100%;
+	height: auto;
+	margin: auto;
 }
 
-.change-show .change-card .propagation-dag a {
+.change-show__dag .propagation-dag a {
 	text-decoration: none;
 }
 
-.change-show .change-card .propagation-dag text {
+.change-show__dag .propagation-dag text {
 	font-size: 12px;
-	font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-}
-
-.change-show .change-meta {
-	display: grid;
-	grid-template-columns: 1fr 1fr;
-	gap: 0.5rem 2rem;
-	padding: 1rem 1.25rem;
-	border: 1px solid var(--line);
-	border-radius: 8px;
-	background: var(--surface);
-	margin-bottom: 1rem;
-}
-
-.change-show .change-meta > div {
-	display: grid;
-	grid-template-columns: 9rem 1fr;
-	gap: 0.5rem;
-	align-items: baseline;
-}
-
-.change-show .change-meta dt {
-	color: var(--text-2);
-	text-transform: uppercase;
-	letter-spacing: 0.04em;
-	font-weight: 600;
-	margin: 0;
-}
-
-.change-show .change-meta dd {
-	margin: 0;
-}
-
-.change-show .change-labels {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 0.4rem;
-	margin-bottom: 1.5rem;
-}
-
-.change-show .label-chip {
-	display: inline-block;
-	padding: 0.15rem 0.5rem;
-	border-radius: 999px;
-	background: var(--surface);
-	border: 1px solid var(--line);
-	color: var(--text-2);
 	font-family: var(--mono);
 }
 
-.change-show .change-section {
-	margin-bottom: 1.5rem;
+.change-show__tree {
+	display: none;
+}
+
+.change-show__panel .row-list {
+	border: 0;
+	border-radius: 0;
+}
+
+.change-show__panel .pagination {
+	padding: 0 1.125rem 1rem;
 }
 
 .change-show .section-controls form {
@@ -2984,206 +3024,127 @@ a.revision-link {
 	margin: 0;
 }
 
-.change-show .muted {
+.change-show__notice {
+	margin: 0;
+	padding: 1rem 1.125rem;
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
 	color: var(--text-2);
+}
+
+.change-show__more {
+	margin: 0;
+	padding: 1rem 1.125rem;
+	border-top: 1px solid var(--line);
+	color: var(--text-2);
+}
+
+.change-show__panel > dl {
+	margin: 0;
+	padding: 0 1.125rem;
+}
+
+.change-show__panel > dl > div {
+	display: grid;
+	grid-template-columns: 7rem minmax(0, 1fr);
+	gap: 0.875rem;
+	position: relative;
+	padding: 0.6875rem 0;
+}
+
+.change-show__panel > dl > div:not(:last-child)::after {
+	content: "";
+	position: absolute;
+	right: -1.125rem;
+	bottom: 0;
+	left: -1.125rem;
+	height: 1px;
+	background: var(--line-soft);
+}
+
+.change-show__panel > dl dt {
+	font-weight: 500;
+}
+
+.change-show__panel > dl dd {
+	min-width: 0;
+	margin: 0;
+	overflow-wrap: anywhere;
+	font-variant-numeric: tabular-nums;
+}
+
+.change-show__meta .change-show__pr-link {
+	font-size: 0.8125rem;
+}
+
+.change-show__chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+	padding: 1rem 1.125rem;
+}
+
+.change-show .label-chip {
+	display: inline-flex;
+	padding: 0.25rem 0.625rem;
+	border: 1px solid var(--line);
+	border-radius: 999px;
+	background: var(--surface);
+	color: var(--text-2);
+	font-size: 0.75rem;
+	line-height: 1.4;
+}
+
+.change-show__job pre {
+	margin: 0;
+	padding: 1rem 1.125rem;
+	overflow-wrap: anywhere;
+	white-space: pre-wrap;
+}
+
+.change-show__job > button {
+	margin: 1rem 1.125rem;
 }
 
 .change-show .mono {
 	font-family: var(--mono);
 }
 
-/* ──────────────────────────────────────────────────────────────────
- * Change Show — mobile (M4)
- *
- * Mobile-only chrome (big progress band, segmented tabs, branch
- * tree) is layered on top of the desktop layout. By default the
- * mobile pieces are hidden; at ≤719px the desktop pieces hide and
- * the M4 layout takes over. 719px matches the global
- * 719px chrome breakpoint so the page and section nav swap
- * together.
- * ────────────────────────────────────────────────────────────── */
-
-.change-show .cm-base {
-	display: inline-block;
-	font-family: var(--mono);
-}
-
-.change-show .m4-prop-num,
-.change-show .m4-prop-track,
-.change-show .m4-prop-label-mobile,
-.change-show .m3-tabs > input[type="radio"],
-.change-show .m3-tabs > .m3-tabs-bar,
-.change-show .m4-tree,
-.change-show .m4-legend {
-	display: none;
-}
-
 @media (max-width: 719px) {
-	.change-show .change-head-row.cm-headrow {
-		flex-wrap: wrap;
-		gap: 0.375rem;
-		font-size: 0.8125rem;
+	.change-show__identity {
+		grid-template-columns: 1fr;
+		padding: 1rem;
 	}
 
-	.change-show .cm-arrow {
-		color: var(--text-2);
-	}
-
-	.change-show .cm-base {
-		font-size: 0.78125rem;
-		background: var(--surface);
-		border: 1px solid var(--line);
-		padding: 0.0625rem 0.375rem;
-		border-radius: 4px;
-	}
-
-	.change-show .change-head h1.cm-title {
+	.change-show__identity h1 {
 		font-size: 1.375rem;
-		font-weight: 700;
 		line-height: 1.22;
-		letter-spacing: -0.01em;
-		margin: 0.25rem 0 0.875rem;
 		text-wrap: pretty;
-		word-break: break-word;
+		overflow-wrap: anywhere;
 	}
 
-	/* Progress band: M4 layout */
-	.change-show .change-card-prop {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		padding: 0.75rem 0.875rem;
-		margin-bottom: 0.75rem;
+	.change-show__identity #subscribe-toggle {
+		grid-column: 1;
+		grid-row: 3;
+		justify-self: start;
+		margin-top: 0.25rem;
 	}
 
-	.change-show .change-card-prop .change-card-head {
-		display: flex;
-		flex-direction: column;
-		gap: 0.125rem;
-		min-width: 0;
-		margin: 0;
-		justify-content: center;
+	.change-show__grid {
+		grid-template-columns: 1fr;
 	}
 
-	.change-show .m4-prop-num {
-		display: block;
-		font-size: 1.75rem;
-		font-weight: 700;
-		color: var(--text);
-		font-variant-numeric: tabular-nums;
-		line-height: 1;
-	}
-
-	.change-show .m4-prop-num small {
-		font-size: 0.875rem;
-		color: var(--text-2);
-		font-weight: 500;
-	}
-
-	.change-show .m4-prop-label > small {
+	.change-show__dag {
 		display: none;
 	}
 
-	.change-show .m4-prop-label-mobile {
+	.change-show__tree {
 		display: block;
-		font-size: 0.78125rem;
-		color: var(--text-2);
+		padding: 0 1.125rem 1rem;
 	}
 
-	.change-show .m4-prop-track {
-		display: flex;
-		flex: 1;
-		flex-direction: column;
-		gap: 0.375rem;
-		min-width: 0;
-	}
-
-	.change-show .m4-prop-bar {
-		height: 6px;
-		border-radius: 999px;
-		background: var(--surface);
-		border: 1px solid var(--line);
-		overflow: hidden;
-	}
-
-	.change-show .m4-prop-bar > i {
-		display: block;
-		height: 100%;
-		background: var(--accent);
-	}
-
-	.change-show .m4-prop-foot {
-		font-size: 0.71875rem;
-		color: var(--text-2);
-		font-family: var(--mono);
-		white-space: nowrap;
-	}
-
-	.change-show .change-dag-desktop {
-		display: none;
-	}
-
-	/* Segmented tabs — CSS-only radio + class selectors. */
-	.change-show .m3-tabs {
-		position: relative;
-		margin: 0 -1rem 0.75rem;
-		padding: 0 1rem;
-	}
-
-	.change-show .m3-tabs > input[type="radio"] {
-		position: absolute;
-		opacity: 0;
-		pointer-events: none;
-	}
-
-	.change-show .m3-tabs > .m3-tabs-bar {
-		display: grid;
-		grid-template-columns: repeat(4, 1fr);
-		grid-auto-rows: 2.75rem;
-		gap: 2px;
-		padding: 3px;
-		background: rgba(120, 120, 128, 0.12);
-		border-radius: 9px;
-		margin-bottom: 0.5rem;
-	}
-
-	.change-show .m3-tabs-bar label {
-		font-size: 0.75rem;
-		font-weight: 600;
-		line-height: 1;
-		text-align: center;
-		border-radius: 7px;
-		color: var(--text-2);
-		cursor: pointer;
-		min-height: 2.75rem;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-	}
-
-	.change-show .m3-tabs:has(.m4tab-chans:checked) .m3-tab-chans,
-	.change-show .m3-tabs:has(.m4tab-pkgs:checked) .m3-tab-pkgs,
-	.change-show .m3-tabs:has(.m4tab-opts:checked) .m3-tab-opts,
-	.change-show .m3-tabs:has(.m4tab-info:checked) .m3-tab-info {
-		background: var(--bg);
-		color: var(--text);
-		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
-	}
-
-	.change-show .m3-tab.is-disabled {
-		opacity: 0.45;
-	}
-
-	.change-show .m3-panel {
-		display: none;
-		padding-top: 0.5rem;
-	}
-
-	.change-show .m3-tabs:has(.m4tab-chans:checked) .m3-panel-chans,
-	.change-show .m3-tabs:has(.m4tab-pkgs:checked) .m3-panel-pkgs,
-	.change-show .m3-tabs:has(.m4tab-opts:checked) .m3-panel-opts,
-	.change-show .m3-tabs:has(.m4tab-info:checked) .m3-panel-info {
-		display: block;
+	.change-show__panel > dl > div {
+		grid-template-columns: 6.5rem minmax(0, 1fr);
 	}
 
 	/* Branch tree — nested <ul> with CSS elbow connectors. */
@@ -3327,67 +3288,6 @@ a.revision-link {
 		font-weight: 600;
 	}
 
-	/* Legend */
-	.change-show .m4-legend {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.625rem 0.875rem;
-		margin: 0.875rem 0 0.25rem;
-		padding: 0.625rem 0.75rem;
-		border: 1px solid var(--line);
-		border-radius: 10px;
-		background: var(--surface);
-		font-size: 0.71875rem;
-		color: var(--text-2);
-	}
-
-	.change-show .m4-legend span {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.375rem;
-	}
-
-	.change-show .m4-legend-dot {
-		width: 12px;
-		height: 12px;
-		border-radius: 999px;
-		border: 2px solid var(--line);
-		background: var(--bg);
-		display: inline-block;
-	}
-
-	.change-show .m4-legend-dot.is-done {
-		background: var(--accent);
-		border-color: var(--accent);
-	}
-
-	.change-show .m4-legend-dot.is-mine {
-		background: var(--accent);
-		border-color: var(--accent);
-		box-shadow: 0 0 0 2px var(--accent-edge);
-	}
-
-	/* Info panel — keep the 2-col outer grid but stack each label above
-	   its value so long values (commit SHA, dates) don't overflow. */
-	.change-show .m3-panel-info .change-meta {
-		gap: 0.875rem 1rem;
-		padding: 0.875rem;
-	}
-
-	.change-show .m3-panel-info .change-meta > div {
-		grid-template-columns: 1fr;
-		gap: 0.125rem;
-	}
-
-	.change-show .m3-panel-info .change-meta dt {
-		font-size: 0.65625rem;
-	}
-
-	.change-show .m3-panel-info .change-meta dd {
-		font-size: 0.84375rem;
-		overflow-wrap: anywhere;
-		min-width: 0;
-	}
 }
 
 /* ========================================================================

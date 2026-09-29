@@ -63,18 +63,6 @@ Hooks.AnchorExpand = {
   }
 }
 
-Hooks.ChangeTabs = {
-  mounted() { this.sync() },
-  updated() { this.sync() },
-  sync() {
-    const radios = [...this.el.querySelectorAll('input[type="radio"]')]
-    const current = radios.find(r => r.checked)
-    if (current && !current.disabled) return
-    const fallback = radios.find(r => !r.disabled)
-    if (fallback) fallback.checked = true
-  }
-}
-
 // Records the lens the page rendered as the restoration preference.
 Hooks.LensCookie = {
   mounted() { this.write() },
