@@ -141,18 +141,6 @@ defmodule TrackerWeb.PackageLive.Show do
                   <span :if={team.scope}>{team.scope}</span>
                 </span>
               </:item>
-              <:item :if={@hydra_links != []} title="Hydra">
-                <span :for={{system, url} <- @hydra_links}>
-                  <a href={url} target="_blank" rel="noopener noreferrer">{system}</a>
-                </span>
-              </:item>
-              <:item :if={@log_pages != []} title="Update logs">
-                <span :for={page <- @log_pages}>
-                  <a href={page.url} target="_blank" rel="noopener noreferrer">
-                    {page.attribute}
-                  </a>
-                </span>
-              </:item>
             </.list>
 
             <details :if={@package_meta.platforms not in [nil, []]}>
@@ -166,7 +154,28 @@ defmodule TrackerWeb.PackageLive.Show do
             </details>
           </div>
 
-          <div class="package-show__panel">
+          <div :if={@hydra_links != [] or @log_pages != []} class="package-show__panel">
+            <SectionHeader.section_header title="External" class="package-show__panel-header" />
+            <.list>
+              <:item :if={@hydra_links != []} title="Hydra">
+                <span :for={{system, url} <- @hydra_links}>
+                  <a href={url} target="_blank" rel="noopener noreferrer">{system}</a>
+                </span>
+              </:item>
+              <:item :if={@log_pages != []} title="Update logs">
+                <span :for={page <- @log_pages}>
+                  <a href={page.url} target="_blank" rel="noopener noreferrer">
+                    {page.attribute}
+                  </a>
+                </span>
+              </:item>
+            </.list>
+          </div>
+
+          <div
+            :if={@family_siblings != [] or @variant_siblings != [] or @linked_options != []}
+            class="package-show__panel"
+          >
             <SectionHeader.section_header title="Related" class="package-show__panel-header" />
             <.list>
               <:item :if={@family_siblings != []} title="Also available in">

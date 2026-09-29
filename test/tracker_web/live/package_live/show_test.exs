@@ -636,7 +636,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
       assert html =~ ~s|href="https://example.com/download"|
     end
 
-    test "shows matching update-log links in metadata with the exact attribute first", %{
+    test "shows matching update-log links in External with the exact attribute first", %{
       conn: conn,
       package: package
     } do
@@ -650,7 +650,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
       row =
         html
         |> Floki.parse_document!()
-        |> Floki.find(".package-show__meta > .package-show__panel:first-of-type dl > div")
+        |> Floki.find(".package-show__meta > .package-show__panel:nth-of-type(2) dl > div")
         |> Enum.find(&(Floki.find(&1, "dt") |> Floki.text() == "Update logs"))
 
       assert row
@@ -674,11 +674,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
 
       {:ok, view, _html} = live(conn, ~p"/packages/#{rich.attribute}")
 
-      refute has_element?(
-               view,
-               ".package-show__meta > .package-show__panel:first-of-type dl",
-               "Update logs"
-             )
+      refute has_element?(view, ".package-show__meta > .package-show__panel h2", "External")
     end
 
     test "shows source provenance", %{conn: conn, rich: rich} do
@@ -790,11 +786,8 @@ defmodule TrackerWeb.PackageLive.ShowTest do
              "Metadata"
            )
 
-    assert has_element?(
-             view,
-             ".package-show__meta > .package-show__panel:nth-of-type(2) h2",
-             "Related"
-           )
+    refute has_element?(view, ".package-show__meta > .package-show__panel h2", "External")
+    refute has_element?(view, ".package-show__meta > .package-show__panel h2", "Related")
 
     refute has_element?(view, ".package-show__related")
     refute has_element?(view, ".package-show__panel-header .n")
