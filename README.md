@@ -1,13 +1,6 @@
 # Tracker
 
-To start your Phoenix server:
-
-  * Run `mix setup` to install and setup dependencies
-  * Start Phoenix endpoint with `mix phx.server` or inside IEx with `iex -S mix phx.server`
-
-Now you can visit [`localhost:6950`](http://localhost:6950) from your browser.
-
-Ready to run in production? Please [check our deployment guides](https://hexdocs.pm/phoenix/deployment.html).
+A nixpkgs and ecosystem tracking tool.
 
 ## Signing in during development
 
@@ -30,45 +23,6 @@ with nothing ingested yet the task says so and seeds nothing.
 
 The route only exists when `dev_routes` is enabled, so it is never compiled
 into a production build.
-
-## Channel lens and search
-
-The channel lens scopes supported lists without changing their search query.
-Search updates the URL as you type; changing the channel keeps the latest
-search term, and the resulting URL can be bookmarked or reloaded. Selecting
-another channel clears a pinned revision but preserves the search.
-
-## Small-channel Hydra links
-
-Package pages show small-channel Hydra links only for attributes selected by
-the matching nixpkgs revision's `nixos/release-small.nix`. Selection names are
-extracted lazily from the local bare clone during revision ingestion and stored
-with that revision; missing selection suppresses links rather than guessing.
-Full channels retain their existing platform-based links. Selection does not
-guarantee that Hydra has evaluated a job successfully.
-
-To populate selections for already-ingested revisions, run
-`Tracker.Ingestion.Steps.ExtractHydraPackages.backfill("nixos-unstable-small")`
-in an IEx session. It processes revisions chronologically and skips those
-already populated.
-
-## Package update logs
-
-An independent Oban job polls the root index at
-`https://nixpkgs-update-logs.nix-community.org/` every four hours. Package
-pages display discovered directory links in Metadata, labelled with their
-original source attributes. Matching recognizes exact attributes, terminal
-`-full`/`Full`/`-minimal`/`Minimal` package-name variants, and recognized
-package-set ecosystems (such as BEAM versions). Unknown dotted namespaces
-and distinct package version suffixes remain separate. A failed index fetch
-or parse leaves the previously discovered links intact.
-
-## Time zones
-
-Absolute times use the browser's IANA time zone when available, otherwise UTC.
-Signed-in users can select an explicit override from Account settings and reset
-back to Browser timezone at any time. Deployments need an IANA zoneinfo
-database; the NixOS module configures `TZDIR` from `tzdata`.
 
 ## Service accounts and API tokens
 
