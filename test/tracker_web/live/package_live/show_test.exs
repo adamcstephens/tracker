@@ -553,7 +553,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
            pname: "rich-pname",
            outputs: ["man", "out"],
            default_output: "out",
-           long_description: "First rich line.\nSecond rich line.",
+           long_description: "First rich\nline.\n\nSecond rich\nline.",
            main_program: "richbin",
            broken: true,
            unfree: true,
@@ -571,12 +571,33 @@ defmodule TrackerWeb.PackageLive.ShowTest do
       %{rich: rich}
     end
 
-    test "shows the long description preserving line breaks", %{conn: conn, rich: rich} do
-      {:ok, _view, html} = live(conn, ~p"/packages/#{rich.attribute}")
+    test "shows the long description after the other sidebar panels", %{conn: conn, rich: rich} do
+      {:ok, view, _html} = live(conn, ~p"/packages/#{rich.attribute}")
 
-      assert html =~ "First rich line."
-      assert html =~ "Second rich line."
-      assert html =~ "white-space: pre-line"
+      panels =
+        view
+        |> render()
+        |> Floki.parse_document!()
+        |> Floki.find(".package-show__meta > .package-show__panel")
+
+      assert panels |> List.last() |> Floki.find("h2") |> Floki.text() == "Description"
+
+      assert panels
+             |> List.last()
+             |> Floki.find(".package-show__description p")
+             |> Enum.map(&String.trim(Floki.text(&1))) == [
+               "First rich line.",
+               "Second rich line."
+             ]
+    end
+
+    test "omits the description panel when no long description exists", %{
+      conn: conn,
+      package: package
+    } do
+      {:ok, view, _html} = live(conn, ~p"/packages/#{package.attribute}")
+
+      refute has_element?(view, ".package-show__meta > .package-show__panel h2", "Description")
     end
 
     test "shows outputs with the default output", %{conn: conn, rich: rich} do

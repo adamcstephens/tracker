@@ -967,6 +967,18 @@ a.revision-link {
 	border-bottom: 1px solid var(--line);
 }
 
+.package-show__description {
+	padding: 1rem 1.125rem;
+}
+
+.package-show__description p {
+	margin: 0;
+}
+
+.package-show__description p + p {
+	margin-top: 1rem;
+}
+
 .package-show__panel > dl {
 	margin: 0;
 	padding: 0 1.125rem;

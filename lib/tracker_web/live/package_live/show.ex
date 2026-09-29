@@ -89,10 +89,6 @@ defmodule TrackerWeb.PackageLive.Show do
             <li :for={vuln <- @package_meta.known_vulnerabilities}><mark>{vuln}</mark></li>
           </ul>
 
-          <p :if={@package_meta.long_description} style="white-space: pre-line;">
-            {@package_meta.long_description}
-          </p>
-
           <div class="package-show__panel">
             <SectionHeader.section_header title="Metadata" class="package-show__panel-header" />
             <.list>
@@ -205,6 +201,14 @@ defmodule TrackerWeb.PackageLive.Show do
               </:item>
             </.list>
           </div>
+          <section :if={@package_meta.long_description} class="package-show__panel">
+            <SectionHeader.section_header title="Description" class="package-show__panel-header" />
+            <div class="package-show__description">
+              <p :for={paragraph <- description_paragraphs(@package_meta.long_description)}>
+                {paragraph}
+              </p>
+            </div>
+          </section>
         </aside>
         <div class="package-show__content">
           <section id="current-versions">
@@ -321,6 +325,13 @@ defmodule TrackerWeb.PackageLive.Show do
       </div>
     </div>
     """
+  end
+
+  defp description_paragraphs(description) do
+    description
+    |> String.trim()
+    |> String.split(~r/\n\s*\n/)
+    |> Enum.map(&(&1 |> String.replace(~r/\s*\n\s*/, " ") |> String.trim()))
   end
 
   # A removal is the end of a version's run, not a version of its own — it links
