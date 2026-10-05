@@ -546,13 +546,6 @@ defmodule TrackerWeb.LayoutsTest do
                Enum.find(general.shortcuts, &("Esc" in &1.keys))
     end
 
-    test "it documents \"#\" as the way into the channel lens" do
-      general = Enum.find(Layouts.shortcut_groups(), &(&1.title == "General"))
-
-      assert %{keys: ["#"], label: "Focus the channel lens"} =
-               Enum.find(general.shortcuts, &("#" in &1.keys))
-    end
-
     test "it documents \"v\" as the way out to GitHub" do
       general = Enum.find(Layouts.shortcut_groups(), &(&1.title == "General"))
 

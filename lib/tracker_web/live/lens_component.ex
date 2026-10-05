@@ -2,9 +2,9 @@ defmodule TrackerWeb.LensComponent do
   @moduledoc """
   LiveComponent for the sitewide channel lens selector in the nav bar.
 
-  Renders a divided-pill selector: a `Channel` label, the channel `<select>`
-  (which acts as the dropdown trigger), and an optional read-only revision
-  display when the lens is pinned to a specific revision.
+  Renders a divided-pill selector: a `Channel` label, the channel name,
+  and a read-only revision display. An invisible native `<select>` covers
+  the pill, including the revision, with a separate submit button.
 
   Progressive enhancement: wraps the channel `<select>` in a form that POSTs
   to `/lens` for no-JS fallback. With JS, `phx-change` navigates to the same URL
@@ -67,9 +67,8 @@ defmodule TrackerWeb.LensComponent do
           <span class="lens-channel-name" aria-hidden="true">
             {if @lens.all?, do: "All channels", else: @lens.channel.name}
           </span>
-          <%!-- Invisible overlay on the cell: the visible name above sizes
-               the cell to the selected channel, while a native select sized
-               to its widest option would leave dead space after it. --%>
+          <%!-- The visible cells size the pill to the selected channel;
+               the native select overlays the pill without widening it. --%>
           <select
             id="lens-channel"
             name="channel"
