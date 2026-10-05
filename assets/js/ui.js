@@ -93,11 +93,6 @@ function focusClearedSearch() {
 focusClearedSearch()
 window.addEventListener("phx:page-loading-stop", focusClearedSearch)
 
-// "#" is Shift+3 on most layouts, so match the character rather than the key
-// position, and keep it out of the row-navigation listener below, whose
-// shiftKey guard would reject it. Focus only: .focus() cannot pop a native
-// select open, and showPicker() is missing from an engine. Arrow keys then
-// pick a channel, which the listener below leaves to the select.
 document.addEventListener("keydown", (event) => {
   if (event.key !== "#") return
   if (event.ctrlKey || event.metaKey || event.altKey) return
@@ -109,6 +104,7 @@ document.addEventListener("keydown", (event) => {
 
   event.preventDefault()
   select.focus()
+  select.showPicker?.()
 })
 
 // "v" follows the page out to GitHub. A focused row's own link wins over the
