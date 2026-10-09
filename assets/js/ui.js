@@ -63,6 +63,13 @@ document.addEventListener("keydown", (event) => {
   event.target.blur()
 })
 
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") return
+  if (event.target.id !== "page-search-input") return
+
+  event.target.blur()
+})
+
 // The × clears by navigating, which destroys the input, so the intent to focus
 // has to outlive the trip. Park it in sessionStorage and pick it up on the far
 // side, which covers both the live nav and the full reload an opted-out page

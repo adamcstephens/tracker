@@ -59,4 +59,17 @@ defmodule TrackerWeb.Browser.SearchEscapeTest do
 
     assert read(conn, ~s|document.activeElement.matches(".row-line")|)
   end
+
+  test "Enter leaves the search box and enables row navigation", %{conn: conn} do
+    conn = searched_page(conn)
+
+    press(conn, "body", "/")
+    press(conn, "#page-search-input", "Enter")
+
+    refute read(conn, ~s|document.activeElement.id|) == "page-search-input"
+
+    press(conn, "body", "j")
+
+    assert read(conn, ~s|document.activeElement.matches(".row-line")|)
+  end
 end
