@@ -63,11 +63,10 @@ document.addEventListener("keydown", (event) => {
   event.target.blur()
 })
 
-document.addEventListener("keydown", (event) => {
-  if (event.key !== "Enter") return
-  if (event.target.id !== "page-search-input") return
+document.addEventListener("submit", (event) => {
+  if (event.target.id !== "page-search") return
 
-  event.target.blur()
+  event.target.querySelector("#page-search-input")?.blur()
 })
 
 // The × clears by navigating, which destroys the input, so the intent to focus

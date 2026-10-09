@@ -72,4 +72,22 @@ defmodule TrackerWeb.Browser.SearchEscapeTest do
 
     assert read(conn, ~s|document.activeElement.matches(".row-line")|)
   end
+
+  test "Enter submits the passthrough search on package pages", %{conn: conn} do
+    package = package!()
+    conn = visit(conn, "/packages/#{package.attribute}")
+
+    conn =
+      evaluate(conn, """
+      let input = document.getElementById("page-search-input")
+      input.value = "package search"
+      input.focus()
+      """)
+
+    press(conn, "#page-search-input", "Enter")
+
+    assert_path(conn, "/packages")
+    assert read(conn, ~s|new URLSearchParams(location.search).get("search")|) == "package search"
+    refute read(conn, ~s|document.activeElement.id|) == "page-search-input"
+  end
 end
