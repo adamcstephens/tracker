@@ -93,7 +93,7 @@ defmodule TrackerWeb.ChannelLive.DiffTest do
       live(conn, ~p"/channels/nixos-diffview/diff/#{cr1.revision}/#{cr2.revision}")
 
     # diff-stay is 1.0.0 in both revisions - it should not appear in version changes
-    version_changes_html = view |> element("section:last-of-type table") |> render()
+    version_changes_html = view |> element("#packages") |> render()
     refute version_changes_html =~ ">diff-stay<"
   end
 
@@ -120,26 +120,17 @@ defmodule TrackerWeb.ChannelLive.DiffTest do
     assert html =~ "New description."
   end
 
-  test "does not list unchanged options in metadata changes", %{conn: conn, cr1: cr1, cr2: cr2} do
-    {:ok, _view, html} =
-      live(conn, ~p"/channels/nixos-diffview/diff/#{cr1.revision}/#{cr2.revision}")
+  test "orders reversed comparison endpoints chronologically", %{conn: conn, cr1: cr1, cr2: cr2} do
+    {:ok, view, _html} =
+      live(conn, ~p"/channels/nixos-diffview/diff/#{cr2.revision}/#{cr1.revision}")
 
-    # opt_added exists only in cr2; it should appear in option events,
-    # not the metadata-changes section.
-    refute html =~ ~r/Option Metadata.*diff\.opt\.added/s
-  end
+    assert has_element?(
+             view,
+             "a[href='https://github.com/NixOS/nixpkgs/compare/#{cr1.revision}...#{cr2.revision}']"
+           )
 
-  test "shows diff summary counts", %{conn: conn, cr1: cr1, cr2: cr2} do
-    {:ok, _view, html} =
-      live(conn, ~p"/channels/nixos-diffview/diff/#{cr1.revision}/#{cr2.revision}")
-
-    [summary] = html |> Floki.parse_document!() |> Floki.find("dl.diff-summary")
-    text = summary |> Floki.text() |> String.replace(~r/\s+/, " ") |> String.trim()
-
-    assert text =~ "Packages: 1 added"
-    assert text =~ "1 version change"
-    assert text =~ "Options: 1 added"
-    assert text =~ "1 metadata change"
+    assert view |> element("#packages") |> render() =~ "2.12.1"
+    assert view |> element("#packages") |> render() =~ "2.13.0"
   end
 
   test "links to github compare", %{conn: conn, cr1: cr1, cr2: cr2} do

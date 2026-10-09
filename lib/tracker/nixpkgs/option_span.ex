@@ -47,6 +47,7 @@ defmodule Tracker.Nixpkgs.OptionSpan do
     define :get_by_name_at, args: [:channel_id, :at, :name], not_found_error?: false
     define :by_option, args: [:option_id, {:optional, :channel_id}]
     define :current_for_options, args: [:option_ids]
+    define :comparison_candidates, args: [:channel_id, :from_at, :to_at]
 
     define :list_by_channel,
       args: [:channel_id, :at, {:optional, :search}, {:optional, :prefix}]
@@ -104,6 +105,21 @@ defmodule Tracker.Nixpkgs.OptionSpan do
 
   actions do
     defaults [:read]
+
+    read :comparison_candidates do
+      argument :channel_id, :integer, allow_nil?: false
+      argument :from_at, :utc_datetime, allow_nil?: false
+      argument :to_at, :utc_datetime, allow_nil?: false
+      prepare build(select: [:option_id], distinct: [:option_id])
+
+      filter expr(
+               channel_id == ^arg(:channel_id) and
+                 ((fragment("lower(?)", valid) > ^arg(:from_at) and
+                     fragment("lower(?)", valid) <= ^arg(:to_at)) or
+                    (fragment("upper(?)", valid) > ^arg(:from_at) and
+                       fragment("upper(?)", valid) <= ^arg(:to_at)))
+             )
+    end
 
     read :open_for_channel do
       description "Currently-open spans (unbounded upper) for a channel."

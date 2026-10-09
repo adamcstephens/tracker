@@ -37,6 +37,16 @@ defmodule Tracker.Nixpkgs.Package do
     define :ids_by_attributes, args: [:attributes]
     define :by_ids, args: [:ids]
     define :by_change, args: [:change_id, {:optional, :search}]
+
+    define :compare_revisions,
+      args: [
+        :from_channel_id,
+        :from_at,
+        :to_channel_id,
+        :to_at,
+        {:optional, :search},
+        {:optional, :change}
+      ]
   end
 
   actions do
@@ -171,6 +181,32 @@ defmodule Tracker.Nixpkgs.Package do
       prepare {Tracker.Nixpkgs.Preparations.TrigramSearch, fields: [:attribute]}
 
       filter expr(exists(change_packages, change_id == ^arg(:change_id)))
+    end
+
+    read :compare_revisions do
+      description "Net version and presence changes between revision endpoints, paginated in SQL."
+      argument :from_channel_id, :integer, allow_nil?: false
+      argument :from_at, :utc_datetime, allow_nil?: false
+      argument :to_channel_id, :integer, allow_nil?: false
+      argument :to_at, :utc_datetime, allow_nil?: false
+      argument :search, :ci_string, default: ""
+      argument :candidate_ids, {:array, :integer}
+
+      argument :change, :string,
+        default: "all",
+        constraints: [match: ~r/\A(all|added|removed|changed)\z/]
+
+      pagination do
+        offset? true
+        countable true
+        default_limit 15
+      end
+
+      prepare build(sort: :attribute, select: [:attribute])
+      prepare {Tracker.Nixpkgs.Preparations.TrigramSearch, fields: [:attribute]}
+
+      prepare {Tracker.Nixpkgs.Preparations.RevisionComparison,
+               span: Tracker.Nixpkgs.PackageSpan, key: :package_id, fields: [:version]}
     end
 
     read :id_map do

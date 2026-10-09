@@ -1168,7 +1168,7 @@ a.revision-link {
 }
 
 /* Path bar — the breadcrumb header is the page's h1. */
-.option-show .opt-pathbar {
+:is(.option-show, .revision-comparison) .opt-pathbar {
 	display: flex;
 	align-items: center;
 	flex-wrap: wrap;
@@ -1184,8 +1184,8 @@ a.revision-link {
 	word-break: break-all;
 }
 
-.option-show .crumb-link,
-.option-show .crumb-current {
+:is(.option-show, .revision-comparison) .crumb-link,
+:is(.option-show, .revision-comparison) .crumb-current {
 	padding: 2px 6px;
 	margin: 0 -2px;
 	border-radius: 5px;
@@ -1197,17 +1197,17 @@ a.revision-link {
 	word-break: break-all;
 }
 
-.option-show a.crumb-link:hover {
+:is(.option-show, .revision-comparison) a.crumb-link:hover {
 	background: var(--accent-bg);
 	color: var(--accent);
 	text-decoration: none;
 }
 
-.option-show .crumb-current {
+:is(.option-show, .revision-comparison) .crumb-current {
 	cursor: default;
 }
 
-.option-show .crumb-sep {
+:is(.option-show, .revision-comparison) .crumb-sep {
 	color: var(--text-2);
 	font-weight: 500;
 	padding: 0 1px;
@@ -3923,4 +3923,451 @@ kbd + kbd {
 	white-space: normal;
 	overflow: visible;
 	mask-image: none;
+}
+
+/* Shared channel revision show / comparison surface. */
+.revision-comparison .comparison-header {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 0.5rem 1rem;
+	margin-bottom: 1rem;
+}
+
+.revision-comparison .opt-pathbar {
+	margin: 0;
+}
+
+.revision-comparison .comparison-released {
+	grid-column: 1;
+	margin: 0;
+	color: var(--text-2);
+	font-size: 0.8125rem;
+	font-variant-numeric: tabular-nums;
+}
+
+.revision-comparison .comparison-lens {
+	grid-column: 2;
+	grid-row: 1;
+}
+
+.revision-comparison :is(.comparison-lens, .comparison-endpoints a[role="button"]) {
+	margin: 0;
+	padding: 0.5rem 0.75rem;
+	font-size: 0.78125rem;
+	white-space: nowrap;
+}
+
+.revision-comparison .comparison-endpoints {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	overflow: hidden;
+}
+
+.revision-comparison .comparison-endpoint {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.75rem;
+	min-width: 0;
+	padding: 0.875rem 1.125rem;
+	border-right: 1px solid var(--line);
+}
+
+.revision-comparison .comparison-endpoint > div > a {
+	font-family: var(--mono);
+	font-size: 1.125rem;
+}
+
+.revision-comparison .comparison-value-label {
+	display: block;
+	margin-bottom: 0.25rem;
+	font-size: 0.6875rem;
+	font-weight: 500;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--text-2);
+}
+
+.revision-comparison .comparison-compare {
+	display: flex;
+	align-items: center;
+	padding: 0.75rem 1rem;
+}
+
+.revision-comparison .comparison-baseline {
+	padding: 1rem;
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	color: var(--text-2);
+}
+
+.revision-comparison .comparison-section-heading {
+	display: flex;
+	align-items: center;
+	gap: 0.875rem;
+	margin: 1.5rem 0 0.75rem;
+}
+
+.revision-comparison .comparison-section-heading h2 {
+	margin: 0;
+	font-size: 1.375rem;
+	flex-shrink: 0;
+}
+
+.revision-comparison .comparison-section-heading::after {
+	content: "";
+	height: 1px;
+	background: var(--line-soft);
+	flex: 1;
+	order: 1;
+}
+
+.revision-comparison .comparison-section-heading > span {
+	order: 2;
+	color: var(--text-2);
+	font-size: 0.8125rem;
+}
+
+.revision-comparison :is(.comparison-package-panel, .comparison-options) {
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	overflow: hidden;
+}
+
+.revision-comparison .comparison-filters {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.375rem;
+	padding: 0.75rem 1rem;
+	border-bottom: 1px solid var(--line);
+}
+
+.revision-comparison .comparison-filters [role="button"] {
+	width: auto;
+	margin: 0;
+	padding: 0.375rem 0.625rem;
+	border: 1px solid transparent;
+	background: transparent;
+	color: var(--text);
+	font-size: 0.78125rem;
+	text-decoration: none;
+}
+
+.revision-comparison .comparison-filters [aria-pressed="true"] {
+	background: var(--accent-bg);
+	border-color: var(--accent-edge);
+	color: var(--accent);
+}
+
+.revision-comparison .comparison-filters [role="button"]:hover {
+	background: var(--accent-soft);
+	filter: none;
+}
+
+.revision-comparison .comparison-filters [role="button"] span {
+	margin-left: 0.625rem;
+	font-family: var(--mono);
+	font-variant-numeric: tabular-nums;
+}
+
+.revision-comparison .comparison-packages {
+	width: 100%;
+	table-layout: fixed;
+	margin: 0;
+	font-size: 0.8125rem;
+}
+
+.revision-comparison .comparison-packages th:first-child {
+	width: 46%;
+}
+
+.revision-comparison .comparison-packages th:nth-child(2) {
+	width: 18%;
+}
+
+.revision-comparison .comparison-packages :is(th, td) {
+	padding: 0.625rem 0.875rem;
+	border-bottom: 1px solid var(--line-soft);
+	background: var(--bg);
+	overflow-wrap: anywhere;
+}
+
+.revision-comparison .comparison-packages th {
+	background: var(--surface);
+	color: var(--text-2);
+	font-weight: 500;
+}
+
+.revision-comparison .comparison-packages tr:last-child td {
+	border-bottom: 0;
+}
+
+.revision-comparison :is(.comparison-package-name, .comparison-version, .comparison-option-header > a) {
+	font-family: var(--mono);
+}
+
+.revision-comparison .comparison-package-name a {
+	text-decoration: none;
+}
+
+.revision-comparison .comparison-version-from {
+	color: var(--text-2);
+}
+
+.revision-comparison .comparison-version-arrow {
+	display: none;
+}
+
+.revision-comparison .comparison-badge {
+	display: inline-block;
+	border-radius: 999px;
+	padding: 0.125rem 0.5rem;
+	font-size: 0.71875rem;
+	line-height: 1.4;
+	color: var(--t-update);
+	background: color-mix(in srgb, var(--t-update) 12%, transparent);
+}
+
+.revision-comparison .comparison-badge--added {
+	color: var(--t-add);
+	background: color-mix(in srgb, var(--t-add) 12%, transparent);
+}
+
+.revision-comparison .comparison-badge--removed {
+	color: var(--t-remove);
+	background: color-mix(in srgb, var(--t-remove) 12%, transparent);
+}
+
+.revision-comparison .comparison-option {
+	margin: 0;
+	padding: 0;
+	border: 0;
+	border-bottom: 1px solid var(--line);
+	border-radius: 0;
+	background: var(--bg);
+	box-shadow: none;
+}
+
+.revision-comparison .comparison-option-header {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 0.75rem;
+	margin: 0;
+	padding: 0.875rem 1rem;
+	border-bottom: 1px solid var(--line-soft);
+	background: var(--bg);
+	overflow-wrap: anywhere;
+}
+
+.revision-comparison .comparison-option-header > a {
+	min-width: 0;
+	text-decoration: none;
+}
+
+.revision-comparison .comparison-field {
+	padding: 1rem;
+	border-bottom: 1px solid var(--line-soft);
+}
+
+.revision-comparison .comparison-field:last-child {
+	border-bottom: 0;
+}
+
+.revision-comparison .comparison-field-label {
+	margin: 0 0 0.75rem;
+	font-size: 0.8125rem;
+	color: var(--text-2);
+}
+
+.revision-comparison .comparison-field-label strong {
+	color: var(--text);
+	font-family: var(--mono);
+	font-weight: 500;
+}
+
+.revision-comparison .comparison-values {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	gap: 1rem;
+}
+
+.revision-comparison .comparison-values > div {
+	min-width: 0;
+	padding: 0.875rem;
+	border: 1px solid var(--line-soft);
+	border-radius: 8px;
+	background: var(--surface);
+}
+
+.revision-comparison .comparison-values :is(p, pre) {
+	margin: 0;
+	font-size: 0.8125rem;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.revision-comparison .comparison-values pre {
+	padding: 0;
+	background: transparent;
+	color: var(--text);
+}
+
+.revision-comparison .comparison-field details {
+	margin: 1rem 0 0;
+	padding: 0;
+	font-size: 0.8125rem;
+}
+
+.revision-comparison .comparison-field summary {
+	color: var(--text-2);
+}
+
+.revision-comparison .comparison-full-values {
+	margin-top: 0.75rem;
+}
+
+.revision-comparison :is(.comparison-empty, .comparison-option-counts) {
+	margin: 0;
+	padding: 0.75rem 1rem;
+	color: var(--text-2);
+	font-size: 0.8125rem;
+}
+
+.revision-comparison .comparison-footnote {
+	margin: 1rem 0 0;
+	color: var(--text-2);
+	font-size: 0.78125rem;
+}
+
+@media (max-width: 719px) {
+	.revision-comparison .comparison-header {
+		gap: 0.5rem;
+		margin-bottom: 0.75rem;
+	}
+
+	.revision-comparison .opt-pathbar {
+		grid-column: 1 / -1;
+		padding: 0 2px;
+		font-size: 1.0625rem;
+	}
+
+	.revision-comparison .comparison-lens {
+		grid-row: 2;
+		padding: 0.375rem 0.625rem;
+	}
+
+	.revision-comparison .comparison-released {
+		font-size: 0.6875rem;
+	}
+
+	.revision-comparison .comparison-endpoints {
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	}
+
+	.revision-comparison .comparison-endpoint {
+		display: block;
+		padding: 0.75rem;
+	}
+
+	.revision-comparison .comparison-endpoint:nth-child(2) {
+		border-right: 0;
+	}
+
+	.revision-comparison .comparison-endpoint a[role="button"] {
+		margin-top: 0.375rem;
+		padding: 0.25rem 0.5rem;
+		font-size: 0.6875rem;
+	}
+
+	.revision-comparison .comparison-compare {
+		grid-column: 1 / -1;
+		padding: 0;
+		border-top: 1px solid var(--line);
+	}
+
+	.revision-comparison .comparison-compare a {
+		width: 100%;
+		border: 0;
+		border-radius: 0;
+		background: var(--accent-soft);
+	}
+
+	.revision-comparison .comparison-section-heading {
+		gap: 0.75rem;
+	}
+
+	.revision-comparison .comparison-section-heading h2 {
+		font-size: 1.125rem;
+	}
+
+	.revision-comparison .comparison-filters {
+		padding: 0.75rem;
+		gap: 0.25rem;
+	}
+
+	.revision-comparison .comparison-packages :is(thead, .comparison-version-arrow) {
+		display: none;
+	}
+
+	.revision-comparison .comparison-packages,
+	.revision-comparison .comparison-packages tbody {
+		display: block;
+	}
+
+	.revision-comparison .comparison-packages tr {
+		display: grid;
+		grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto;
+		gap: 0.375rem;
+		padding: 0.625rem 0.75rem;
+		border-bottom: 1px solid var(--line-soft);
+	}
+
+	.revision-comparison .comparison-packages tr:last-child {
+		border-bottom: 0;
+	}
+
+	.revision-comparison .comparison-packages td {
+		padding: 0;
+		border: 0;
+		min-width: 0;
+	}
+
+	.revision-comparison .comparison-package-name {
+		grid-column: 1 / -1;
+		grid-row: 1;
+	}
+
+	.revision-comparison .comparison-package-change {
+		grid-column: 3;
+		grid-row: 2;
+		align-self: start;
+		text-align: right;
+		max-width: 8rem;
+	}
+
+	.revision-comparison .comparison-version-from {
+		grid-column: 1;
+		grid-row: 2;
+		max-width: 7rem;
+	}
+
+	.revision-comparison .comparison-version-to {
+		grid-column: 2;
+		grid-row: 2;
+	}
+
+	.revision-comparison .comparison-packages .comparison-version-arrow {
+		display: inline;
+		margin-right: 0.375rem;
+		color: var(--text-2);
+	}
+
+	.revision-comparison .comparison-values {
+		grid-template-columns: minmax(0, 1fr);
+	}
 }

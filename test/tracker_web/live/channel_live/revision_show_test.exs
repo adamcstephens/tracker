@@ -67,15 +67,6 @@ defmodule TrackerWeb.ChannelLive.RevisionShowTest do
     assert html =~ String.slice(cr2.revision, 0, 7)
   end
 
-  test "shows result when present", %{conn: conn, cr2: cr2} do
-    Ash.update!(Ash.Changeset.for_update(cr2, :record_result, %{result: :success}))
-
-    {:ok, _view, html} =
-      live(conn, ~p"/channels/nixos-revshow/revisions/#{short(cr2)}")
-
-    assert html =~ "Success"
-  end
-
   test "shows diff from previous revision", %{conn: conn, cr2: cr2} do
     {:ok, _view, html} =
       live(conn, ~p"/channels/nixos-revshow/revisions/#{short(cr2)}")
@@ -110,27 +101,6 @@ defmodule TrackerWeb.ChannelLive.RevisionShowTest do
     assert html =~ "Revshow new description."
   end
 
-  test "shows diff summary counts when previous revision exists", %{conn: conn, cr2: cr2} do
-    {:ok, _view, html} =
-      live(conn, ~p"/channels/nixos-revshow/revisions/#{short(cr2)}")
-
-    [summary] = html |> Floki.parse_document!() |> Floki.find("dl.diff-summary")
-    text = summary |> Floki.text() |> String.replace(~r/\s+/, " ") |> String.trim()
-
-    assert text =~ "Packages: 1 added"
-    assert text =~ "0 removed"
-    assert text =~ "1 version change"
-    assert text =~ "Options: 1 added"
-    assert text =~ "1 metadata change"
-  end
-
-  test "does not render diff summary when no previous revision", %{conn: conn, cr_no_prev: cr} do
-    {:ok, _view, html} =
-      live(conn, ~p"/channels/nixos-revshow-rel/revisions/#{short(cr)}")
-
-    assert html |> Floki.parse_document!() |> Floki.find("dl.diff-summary") == []
-  end
-
   test "shows no-diff message when no previous revision", %{conn: conn, cr_no_prev: cr} do
     {:ok, _view, html} =
       live(conn, ~p"/channels/nixos-revshow-rel/revisions/#{short(cr)}")
@@ -143,23 +113,6 @@ defmodule TrackerWeb.ChannelLive.RevisionShowTest do
       live(conn, ~p"/channels/nixos-revshow/revisions/#{short(cr2)}")
 
     assert html =~ "https://github.com/NixOS/nixpkgs/commit/#{cr2.revision}"
-  end
-
-  test "updates result when the revision result is recorded", %{
-    conn: conn,
-    cr2: cr2
-  } do
-    {:ok, view, html} =
-      live(conn, ~p"/channels/nixos-revshow/revisions/#{cr2.revision}")
-
-    # Initially no result
-    refute html =~ "Success"
-    assert html =~ "Result: -"
-
-    Tracker.Nixpkgs.ChannelRevision.record_result!(cr2, %{result: :success})
-
-    html = render(view)
-    assert html =~ "Result: Success"
   end
 
   test "returns error for unknown revision", %{conn: conn} do

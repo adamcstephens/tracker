@@ -2,6 +2,28 @@
 
 A nixpkgs and ecosystem tracking tool.
 
+## Revision comparisons
+
+Channel revision pages compare the viewed revision with its predecessor.
+`/channels/<channel>/diff/<from-hash>/<to-hash>` uses the same layout for a
+chosen pair, ordering the endpoints chronologically. The first known revision
+has no predecessor comparison.
+
+Packages appear once per attribute, with Added, Removed, or Version changed
+status and endpoint versions. The top searchbar searches changed packages and
+options; package change filters retain comparison-wide counts. Both lists use
+15-item query-backed pages, and paging one preserves the other.
+
+Comparison state is shareable through `search`, `change` (`all`, `added`,
+`removed`, `changed`), `page`, and `option_page` query parameters. Search resets
+both pagers; package filtering resets only the package pager. Changed options
+are grouped by option, with excerpts around the changed values and disclosures
+for complete metadata.
+
+From/To revision links follow the viewed channel while preserving the selected
+`channel`/`rev` lens. Separate GitHub buttons open endpoint commits and the full
+comparison. **Use as lens** pins the To revision for navigation elsewhere.
+
 ## Signing in during development
 
 GitHub OAuth is the only sign-in strategy, so logged-in pages (inbox,

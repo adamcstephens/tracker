@@ -47,6 +47,7 @@ defmodule TrackerWeb.Pagination do
     <nav
       :if={show_pagination?(@total_pages, @has_prev_page?, @has_next_page?)}
       id={"pagination-#{@anchor}"}
+      aria-label={"#{@anchor} pagination"}
       phx-hook="PageAnchor"
       data-anchor={@anchor}
       data-page={@current_page}
@@ -57,6 +58,7 @@ defmodule TrackerWeb.Pagination do
         patch={@prev_path}
         role="button"
         class="outline secondary pagination-button"
+        aria-label={"Previous #{@anchor} page"}
       >
         &larr;
       </.link>
@@ -65,6 +67,7 @@ defmodule TrackerWeb.Pagination do
         role="button"
         aria-disabled="true"
         class="outline secondary pagination-button"
+        aria-label={"Previous #{@anchor} page"}
       >
         &larr;
       </span>
@@ -79,6 +82,7 @@ defmodule TrackerWeb.Pagination do
         patch={@next_path}
         role="button"
         class="outline secondary pagination-button"
+        aria-label={"Next #{@anchor} page"}
       >
         &rarr;
       </.link>
@@ -87,6 +91,7 @@ defmodule TrackerWeb.Pagination do
         role="button"
         aria-disabled="true"
         class="outline secondary pagination-button"
+        aria-label={"Next #{@anchor} page"}
       >
         &rarr;
       </span>

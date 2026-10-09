@@ -4,81 +4,16 @@ defmodule TrackerWeb.ChannelLive.RevisionShow do
   import TrackerWeb.ChannelLive.DiffSections
 
   alias Tracker.Nixpkgs.ChannelRevision
-  alias Tracker.Nixpkgs.ChannelRevision.RevisionDiff
-  alias TrackerWeb.Lens
-  alias TrackerWeb.PageSearch
-  alias TrackerWeb.Time
+  alias TrackerWeb.ChannelLive.ComparisonState
 
-  @impl true
+  @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
-    <.header>
-      {@channel}
-      <:subtitle>
-        Revision <.github_link revision={@revision.revision} /> &middot;
-        Released {@formatted_released_at} &middot;
-        Result: {format_result(@revision.result)}
-      </:subtitle>
-      <:actions>
-        <.link
-          :if={@lens_path}
-          navigate={@lens_path}
-          title="View the rest of the site through this channel and revision"
-        >
-          Use as lens
-        </.link>
-      </:actions>
-    </.header>
-
-    <section :if={@previous_revision}>
-      <h3>Changes from previous revision</h3>
-      <p>
-        Diff from <.github_link revision={@previous_revision.revision} /> &rarr;
-        <.github_link revision={@revision.revision} /> &middot;
-        <a
-          href={"https://github.com/NixOS/nixpkgs/compare/#{@previous_revision.revision}...#{@revision.revision}"}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          GitHub diff
-        </a>
-      </p>
-
-      <.revision_diff_sections
-        diff={@diff}
-        channel={@channel}
-        heading_level={:h4}
-        show_revision_column={false}
-        empty_message="No changes from previous revision."
-      />
-    </section>
-
-    <p :if={!@previous_revision}>
-      This is the first known revision for this channel.
-    </p>
+    <.revision_comparison {assigns} />
     """
   end
 
-  defp github_link(assigns) do
-    ~H"""
-    <a
-      href={"https://github.com/NixOS/nixpkgs/commit/#{@revision}"}
-      target="_blank"
-      rel="noopener noreferrer"
-      title={@revision}
-      class="revision-link"
-    >
-      {String.slice(@revision, 0, 7)}
-    </a>
-    """
-  end
-
-  defp format_result(nil), do: "-"
-  defp format_result(:success), do: "Success"
-  defp format_result(:partial_success), do: "Partial"
-  defp format_result(:error), do: "Error"
-
-  @impl true
+  @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
     {:ok,
      socket
@@ -86,7 +21,7 @@ defmodule TrackerWeb.ChannelLive.RevisionShow do
      |> assign(:subscribed_channel_id, nil)}
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_params(
         %{"path_channel" => channel_name, "revision" => rev_hash} = params,
         _url,
@@ -107,73 +42,46 @@ defmodule TrackerWeb.ChannelLive.RevisionShow do
 
     revision = ChannelRevision.find_by_channel_hash!(channel.id, rev_hash)
 
-    lens = socket.assigns.lens && %{socket.assigns.lens | disabled?: true}
-
     {:noreply,
      socket
-     |> assign(:channel, channel_name)
-     |> assign(:channel_id, channel.id)
      |> assign(:subscribed_channel_id, channel.id)
-     |> assign(:lens, lens)
-     |> assign(:lens_path, lens_path(socket, lens, channel_name, revision))
-     |> assign(:page_search, %PageSearch{
-       mode: :inert,
-       value: Map.get(params, "search", "")
-     })
-     |> assign_revision_data(revision)}
+     |> assign(:comparison_params, params)
+     |> assign_revision_data(channel_name, revision, params)}
   end
 
-  # The lens this page would set, or nil once it is already the lens in force.
-  defp lens_path(socket, lens, channel_name, revision) do
-    if Lens.canonical(lens) == {channel_name, revision.revision} do
-      nil
-    else
-      Lens.path_for(socket.assigns.current_path, channel_name, revision.revision)
-    end
+  @impl Phoenix.LiveView
+  def handle_event("search", %{"search" => search}, socket) do
+    {:noreply, ComparisonState.search(socket, search)}
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_info(
         %Ash.Notifier.Notification{resource: ChannelRevision, action: %{name: :record_result}},
         socket
       ) do
     revision =
       ChannelRevision.find_by_channel_hash!(
-        socket.assigns.channel_id,
+        socket.assigns.subscribed_channel_id,
         socket.assigns.revision.revision
       )
 
-    {:noreply, assign_revision_data(socket, revision)}
+    {:noreply,
+     assign_revision_data(
+       socket,
+       socket.assigns.channel,
+       revision,
+       socket.assigns.comparison_params
+     )}
   end
 
-  defp assign_revision_data(socket, revision) do
-    channel_name = socket.assigns[:channel] || ""
-
+  defp assign_revision_data(socket, channel_name, %ChannelRevision{} = revision, params) do
     previous_revision =
       if revision.previous_channel_revision_id do
-        Ash.load!(revision, :previous_channel_revision).previous_channel_revision
-      end
-
-    diff =
-      if previous_revision do
-        ChannelRevision.diff_between(previous_revision, revision)
-      else
-        %RevisionDiff{
-          package_events: [],
-          version_changes: [],
-          option_events: [],
-          option_metadata_changes: []
-        }
+        ChannelRevision.get_by_id!(revision.previous_channel_revision_id)
       end
 
     socket
     |> assign(:page_title, "#{channel_name} — #{String.slice(revision.revision, 0, 7)}")
-    |> assign(:revision, revision)
-    |> assign(:previous_revision, previous_revision)
-    |> assign(
-      :formatted_released_at,
-      Time.format_datetime(revision.released_at, socket.assigns.time_zone)
-    )
-    |> assign(:diff, diff)
+    |> ComparisonState.load(channel_name, previous_revision, revision, params)
   end
 end

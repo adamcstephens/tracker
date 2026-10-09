@@ -12,6 +12,16 @@ defmodule Tracker.Nixpkgs.Option do
     define :bulk_upsert, args: [:name]
     define :id_map, action: :id_map
     define :by_ids, args: [:ids]
+
+    define :compare_revisions,
+      args: [
+        :from_channel_id,
+        :from_at,
+        :to_channel_id,
+        :to_at,
+        {:optional, :search},
+        {:optional, :change}
+      ]
   end
 
   actions do
@@ -28,6 +38,34 @@ defmodule Tracker.Nixpkgs.Option do
 
       prepare build(sort: :name)
       prepare {Tracker.Nixpkgs.Preparations.TrigramSearch, fields: [:name]}
+    end
+
+    read :compare_revisions do
+      description "Net metadata and presence changes between revision endpoints, paginated in SQL."
+      argument :from_channel_id, :integer, allow_nil?: false
+      argument :from_at, :utc_datetime, allow_nil?: false
+      argument :to_channel_id, :integer, allow_nil?: false
+      argument :to_at, :utc_datetime, allow_nil?: false
+      argument :search, :ci_string, default: ""
+      argument :candidate_ids, {:array, :integer}
+
+      argument :change, :string,
+        default: "all",
+        constraints: [match: ~r/\A(all|added|removed|changed)\z/]
+
+      pagination do
+        offset? true
+        countable true
+        default_limit 15
+      end
+
+      prepare build(sort: :name, select: [:name])
+      prepare {Tracker.Nixpkgs.Preparations.TrigramSearch, fields: [:name]}
+
+      prepare {Tracker.Nixpkgs.Preparations.RevisionComparison,
+               span: Tracker.Nixpkgs.OptionSpan,
+               key: :option_id,
+               fields: [:description, :type, :default, :example, :read_only]}
     end
 
     read :id_map do
