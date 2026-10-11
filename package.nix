@@ -6,6 +6,7 @@
   fetchurl,
   jq,
   lib,
+  nix,
   postgresql,
   postgresqlTestHook,
   rustc,
@@ -128,11 +129,14 @@ beamPackages.mixRelease rec {
     TZDIR = "${tzdata}/share/zoneinfo";
   };
   nativeCheckInputs = [
+    nix
     postgresql
     postgresqlTestHook
   ];
   checkPhase = ''
     runHook preCheck
+
+    export NIX_STATE_DIR=$TMPDIR/nix-state
 
     export LUMIS_DATA_DIR=$TMPDIR/lumis
     mkdir -p $LUMIS_DATA_DIR
