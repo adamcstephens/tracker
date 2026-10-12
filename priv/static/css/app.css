@@ -1067,15 +1067,10 @@ a.revision-link {
 	font-weight: 700;
 }
 
-.current-versions__empty,
-.current-versions__pinned {
+.current-versions__empty {
 	margin: 0;
 	padding: 1rem 1.125rem;
 	color: var(--text-2);
-}
-
-.current-versions__pinned {
-	border-top: 1px solid var(--line);
 }
 
 .package-show__revisions > p {
@@ -3300,7 +3295,6 @@ a.revision-link {
 		margin-top: 0.125rem;
 		font-weight: 600;
 	}
-
 }
 
 /* ========================================================================

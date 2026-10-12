@@ -213,29 +213,45 @@ defmodule TrackerWeb.PackageLive.Show do
         <div class="package-show__content">
           <section id="current-versions">
             <SectionHeader.section_header title="Current versions" count={length(@current_versions)} />
-            <RowList.row_list :if={@current_versions != []} id="current-version-list">
-              <RowList.row
-                :for={{channel, version} <- @current_versions}
-                data-channel={channel.name}
-                class={current_version_class(channel, @lens)}
-              >
-                <:label>
-                  {channel.name}
-                  <span :if={selected_channel?(channel, @lens)} class="current-versions__selected">
-                    selected
-                  </span>
-                </:label>
-                <:meta><code>{version}</code></:meta>
-              </RowList.row>
+            <RowList.row_list
+              :if={@current_versions != [] or @historical_revision?}
+              id="current-version-list"
+            >
+              <%= for {channel, version} <- @current_versions do %>
+                <RowList.row
+                  data-channel={channel.name}
+                  class={current_version_class(channel, @lens, @historical_revision?)}
+                >
+                  <:label>
+                    {channel.name}
+                    <span
+                      :if={selected_channel?(channel, @lens) and not @historical_revision?}
+                      class="current-versions__selected"
+                    >
+                      selected
+                    </span>
+                  </:label>
+                  <:meta><code>{version}</code></:meta>
+                </RowList.row>
+                <.pinned_version_row
+                  :if={@historical_revision? and selected_channel?(channel, @lens)}
+                  lens={@lens}
+                  version={@pinned_version}
+                />
+              <% end %>
+              <.pinned_version_row
+                :if={
+                  @historical_revision? and
+                    not Enum.any?(@current_versions, fn {channel, _} ->
+                      selected_channel?(channel, @lens)
+                    end)
+                }
+                lens={@lens}
+                version={@pinned_version}
+              />
             </RowList.row_list>
             <p :if={@current_versions == []} class="current-versions__empty">
               Not currently available in any channel.
-            </p>
-            <p :if={@pinned_version} class="current-versions__pinned">
-              At this revision in {@lens.channel.name}: <code>{@pinned_version}</code>
-            </p>
-            <p :if={@pinned_absent?} class="current-versions__pinned">
-              At this revision: not in {@lens.channel.name}.
             </p>
           </section>
 
@@ -352,6 +368,24 @@ defmodule TrackerWeb.PackageLive.Show do
       revision={rev_revision(@rev)}
     />
     <mark :if={rev_added?(@rev)}>added</mark>
+    """
+  end
+
+  defp pinned_version_row(assigns) do
+    ~H"""
+    <RowList.row
+      data-revision={@lens.revision.revision}
+      class="current-versions__row--selected"
+    >
+      <:label>
+        {@lens.channel.name}@{String.slice(@lens.revision.revision, 0, 7)}
+        <span class="current-versions__selected">selected</span>
+      </:label>
+      <:meta>
+        <code :if={@version}>{@version}</code>
+        <span :if={is_nil(@version)}>not available</span>
+      </:meta>
+    </RowList.row>
     """
   end
 
@@ -634,6 +668,7 @@ defmodule TrackerWeb.PackageLive.Show do
 
     socket
     |> assign(:current_versions, current_versions(package_id))
+    |> assign(:historical_revision?, historical_revision?(socket.assigns.lens))
     |> assign_removal_status(package_id, channel_id)
     |> assign_current_meta(package_id, channel_id, TrackerWeb.Lens.pinned_at(socket.assigns.lens))
     |> assign(:recent_changes, recent_changes)
@@ -796,23 +831,10 @@ defmodule TrackerWeb.PackageLive.Show do
     )
   end
 
-  defp assign_pinned_context(socket, _span, nil) do
-    socket
-    |> assign(:pinned_version, nil)
-    |> assign(:pinned_absent?, false)
-  end
+  defp assign_pinned_context(socket, _span, nil), do: assign(socket, :pinned_version, nil)
 
-  defp assign_pinned_context(socket, nil, _pinned_at) do
-    socket
-    |> assign(:pinned_version, nil)
-    |> assign(:pinned_absent?, true)
-  end
-
-  defp assign_pinned_context(socket, span, _pinned_at) do
-    socket
-    |> assign(:pinned_version, span.version)
-    |> assign(:pinned_absent?, false)
-  end
+  defp assign_pinned_context(socket, span, _pinned_at),
+    do: assign(socket, :pinned_version, span && span.version)
 
   # The jobset and its selected package attributes belong to the same channel
   # revision supplying the metadata at this point in the lens.
@@ -884,8 +906,17 @@ defmodule TrackerWeb.PackageLive.Show do
 
   defp selected_channel?(_channel, _lens), do: false
 
-  defp current_version_class(channel, lens) do
-    if selected_channel?(channel, lens), do: "current-versions__row--selected"
+  defp current_version_class(channel, lens, historical_revision?) do
+    if selected_channel?(channel, lens) and not historical_revision?,
+      do: "current-versions__row--selected"
+  end
+
+  defp historical_revision?(nil), do: false
+  defp historical_revision?(%TrackerWeb.Lens{revision: nil}), do: false
+
+  defp historical_revision?(%TrackerWeb.Lens{} = lens) do
+    {:ok, latest} = Tracker.Nixpkgs.ChannelRevision.latest_at(lens.channel.id)
+    lens.revision.id != latest.id
   end
 
   defp load_variant_siblings(%{package_variant_group_id: nil}), do: []

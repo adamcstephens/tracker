@@ -477,7 +477,37 @@ defmodule TrackerWeb.PackageLive.ShowTest do
         live(conn, ~p"/packages/#{pinned.attribute}?channel=nixos-25.67&rev=pina11aaa222333")
 
       assert has_element?(view, "#current-versions li[data-channel='nixos-25.67']", "2.0")
-      assert has_element?(view, "#current-versions .current-versions__pinned", "1.0")
+
+      refute has_element?(
+               view,
+               "#current-versions li[data-channel='nixos-25.67'] .current-versions__selected"
+             )
+
+      assert has_element?(
+               view,
+               "#current-versions li[data-channel='nixos-25.67'] + li[data-revision='pina11aaa222333'].current-versions__row--selected",
+               "nixos-25.67@pina11a"
+             )
+
+      assert has_element?(view, "#current-versions li[data-revision] code", "1.0")
+      assert has_element?(view, "#current-versions li[data-revision] .current-versions__selected")
+      refute has_element?(view, "#current-versions .current-versions__pinned")
+    end
+
+    test "pinning the latest revision keeps the current row selected", %{
+      conn: conn,
+      pinned: pinned
+    } do
+      {:ok, view, _html} =
+        live(conn, ~p"/packages/#{pinned.attribute}?channel=nixos-25.67&rev=abc123def456789")
+
+      assert has_element?(
+               view,
+               "#current-versions li[data-channel='nixos-25.67'].current-versions__row--selected .current-versions__selected"
+             )
+
+      refute has_element?(view, "#current-versions li[data-revision]")
+      refute has_element?(view, "#current-versions .current-versions__pinned")
     end
 
     test "the position link targets the pinned ref", %{conn: conn, pinned: pinned} do
