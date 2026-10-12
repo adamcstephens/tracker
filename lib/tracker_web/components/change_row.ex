@@ -71,20 +71,11 @@ defmodule TrackerWeb.ChangeRow do
 
   defp external_icon(assigns) do
     ~H"""
-    <svg
-      class="icon-external"
+    <span
+      class="svg-icon icon-external"
       aria-hidden="true"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.7"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    >
-      <path d="M14 4h6v6" />
-      <path d="M20 4 10 14" />
-      <path d="M19 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h6" />
-    </svg>
+      style={"--icon-url: url('#{~p"/images/external-link.svg"}')"}
+    ></span>
     """
   end
 

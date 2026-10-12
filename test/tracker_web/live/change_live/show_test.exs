@@ -69,23 +69,18 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
     assert html =~ "2026-03-31"
   end
 
-  test "places the PR link in the title with the same icon as metadata", %{conn: conn} do
+  test "places the PR link in the title", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/changes/6001")
 
     assert has_element?(
              view,
-             ~s(header.change-show__identity h1 a.change-show__pr-link[href="https://github.com/NixOS/nixpkgs/pull/6001"][data-external-link] svg.icon-external)
+             ~s(header.change-show__identity h1 a.change-show__pr-link[href="https://github.com/NixOS/nixpkgs/pull/6001"][data-external-link])
            )
 
     assert has_element?(view, "header.change-show__identity h1 a", "#6001")
     assert has_element?(view, ".change-show__status .pill-merged", "merged")
     assert has_element?(view, ".change-show__meta dt", "Base branch")
     refute has_element?(view, "header.change-show__identity code")
-
-    assert has_element?(
-             view,
-             ~s(.change-show__meta a[href="https://github.com/NixOS/nixpkgs/pull/6001"] svg.icon-external)
-           )
   end
 
   test "shows labels", %{conn: conn} do

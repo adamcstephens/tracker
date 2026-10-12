@@ -253,30 +253,21 @@ defmodule TrackerWeb.InboxLive.Subscriptions do
   attr :name, :string, required: true
 
   defp icon(assigns) do
+    icon_path =
+      case assigns.name do
+        "package" -> ~p"/images/subscription-package.svg"
+        "channel" -> ~p"/images/inbox-revision.svg"
+        "change" -> ~p"/images/inbox-propagate.svg"
+      end
+
+    assigns = assign(assigns, :icon_path, icon_path)
+
     ~H"""
-    <svg
-      class="ibx-icon"
+    <span
+      class="svg-icon ibx-icon"
       aria-hidden="true"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.7"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    >
-      <%= case @name do %>
-        <% "package" -> %>
-          <path d="M21 8 12 3 3 8v8l9 5 9-5V8Z" /><path d="m3 8 9 5 9-5" /><path d="M12 13v8" />
-        <% "channel" -> %>
-          <path d="M3 12h4l3 7 4-14 3 7h4" />
-        <% "change" -> %>
-          <circle cx="6" cy="6" r="2.5" /><circle cx="6" cy="18" r="2.5" /><circle
-            cx="18"
-            cy="18"
-            r="2.5"
-          /><path d="M6 8.5v3a4 4 0 0 0 4 4h5.5" />
-      <% end %>
-    </svg>
+      style={"--icon-url: url('#{@icon_path}')"}
+    ></span>
     """
   end
 end

@@ -546,68 +546,22 @@ defmodule TrackerWeb.InboxLive.Index do
   attr :name, :string, required: true
 
   defp icon(assigns) do
+    assigns =
+      assign(
+        assigns,
+        :icon_path,
+        if(assigns.name == "external",
+          do: ~p"/images/external-link.svg",
+          else: ~p"/images/#{"inbox-#{assigns.name}.svg"}"
+        )
+      )
+
     ~H"""
-    <svg
-      class="ibx-icon"
+    <span
+      class="svg-icon ibx-icon"
       aria-hidden="true"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.7"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    >
-      <%= case @name do %>
-        <% "saved" -> %>
-          <path d="M6 4h12v17l-6-4-6 4z" />
-        <% "update" -> %>
-          <path d="M21 12a9 9 0 1 1-3-6.7" /><path d="M21 4v5h-5" />
-        <% "add" -> %>
-          <path d="M12 5v14M5 12h14" />
-        <% "remove" -> %>
-          <path d="M5 12h14" />
-        <% "revision" -> %>
-          <path d="M3 12h4l3 7 4-14 3 7h4" />
-        <% "propagate" -> %>
-          <circle cx="6" cy="6" r="2.5" /><circle cx="6" cy="18" r="2.5" /><circle
-            cx="18"
-            cy="18"
-            r="2.5"
-          /><path d="M6 8.5v3a4 4 0 0 0 4 4h5.5" />
-        <% "pr-open" -> %>
-          <circle cx="7" cy="6" r="2.5" /><circle cx="7" cy="18" r="2.5" /><path d="M7 8.5v7" /><circle
-            cx="17"
-            cy="18"
-            r="2.5"
-          /><path d="M17 15.5V9a3 3 0 0 0-3-3h-3" />
-        <% "pr-merged" -> %>
-          <circle cx="7" cy="6" r="2.5" /><circle cx="7" cy="18" r="2.5" /><path d="M7 8.5v7" /><circle
-            cx="17"
-            cy="12"
-            r="2.5"
-          /><path d="M14.5 12h-2A5.5 5.5 0 0 1 7 6.5" />
-        <% "check" -> %>
-          <path d="M20 6 9 17l-5-5" />
-        <% "unread" -> %>
-          <circle cx="12" cy="12" r="8" /><circle
-            cx="12"
-            cy="12"
-            r="3.1"
-            fill="currentColor"
-            stroke="none"
-          />
-        <% "external" -> %>
-          <path d="M14 4h6v6" /><path d="M20 4 10 14" /><path d="M19 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h6" />
-        <% "rss" -> %>
-          <path d="M4 11a9 9 0 0 1 9 9" /><path d="M4 4a16 16 0 0 1 16 16" /><circle
-            cx="5"
-            cy="19"
-            r="1.4"
-            fill="currentColor"
-            stroke="none"
-          />
-      <% end %>
-    </svg>
+      style={"--icon-url: url('#{@icon_path}')"}
+    ></span>
     """
   end
 end

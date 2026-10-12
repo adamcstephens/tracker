@@ -306,19 +306,11 @@ defmodule TrackerWeb.Layouts do
       aria-label="Inbox"
       aria-current={active_nav?(@view, "InboxLive") && "page"}
     >
-      <svg
-        class="app-inbox__icon"
+      <span
+        class="svg-icon app-inbox__icon"
         aria-hidden="true"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.7"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      >
-        <path d="M4 13h4l2 3h4l2-3h4" />
-        <path d="M5 5h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" />
-      </svg>
+        style={"--icon-url: url('#{~p"/images/inbox.svg"}')"}
+      ></span>
       <span :if={@badge} class="app-inbox__badge">{@badge}</span>
     </.link>
     """

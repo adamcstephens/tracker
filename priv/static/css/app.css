@@ -36,6 +36,15 @@ svg {
 	max-width: 100%;
 }
 
+.svg-icon {
+	display: block;
+	width: 1em;
+	height: 1em;
+	background-color: currentColor;
+	-webkit-mask: var(--icon-url) center / contain no-repeat;
+	mask: var(--icon-url) center / contain no-repeat;
+}
+
 /* 7. Inherit fonts for form controls */
 input,
 button,
@@ -2729,7 +2738,7 @@ a.revision-link {
 		color: var(--text-2);
 	}
 
-	.app-signin--mobile svg {
+	.app-signin--mobile .svg-icon {
 		width: 1.3125rem;
 		height: 1.3125rem;
 	}
@@ -3758,7 +3767,8 @@ a.revision-link {
 }
 
 .ibx-save.is-saved .ibx-icon {
-	fill: currentColor;
+	-webkit-mask-image: url("/images/saved-filled.svg");
+	mask-image: url("/images/saved-filled.svg");
 }
 
 .ibx-act:focus-visible {

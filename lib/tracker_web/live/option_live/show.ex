@@ -223,60 +223,31 @@ defmodule TrackerWeb.OptionLive.Show do
 
   defp check_icon(assigns) do
     ~H"""
-    <svg
-      class="opt-check-icon"
-      viewBox="0 0 24 24"
-      width="14"
-      height="14"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.8"
-      stroke-linecap="round"
-      stroke-linejoin="round"
+    <span
+      class="svg-icon opt-check-icon"
       aria-hidden="true"
-    >
-      <polyline points="20 6 9 17 4 12" />
-    </svg>
+      style={"--icon-url: url('#{~p"/images/option-check.svg"}'); width: 14px; height: 14px"}
+    ></span>
     """
   end
 
   defp copy_icon(assigns) do
     ~H"""
-    <svg
-      class="opt-share-icon"
-      viewBox="0 0 24 24"
-      width="14"
-      height="14"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.8"
-      stroke-linecap="round"
-      stroke-linejoin="round"
+    <span
+      class="svg-icon opt-share-icon"
       aria-hidden="true"
-    >
-      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-    </svg>
+      style={"--icon-url: url('#{~p"/images/option-copy.svg"}'); width: 14px; height: 14px"}
+    ></span>
     """
   end
 
   defp share_icon(assigns) do
     ~H"""
-    <svg
-      class="opt-share-icon"
-      viewBox="0 0 24 24"
-      width="14"
-      height="14"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.8"
-      stroke-linecap="round"
-      stroke-linejoin="round"
+    <span
+      class="svg-icon opt-share-icon"
       aria-hidden="true"
-    >
-      <path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 1 0-7.07-7.07l-1.5 1.5" />
-      <path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 1 0 7.07 7.07l1.5-1.5" />
-    </svg>
+      style={"--icon-url: url('#{~p"/images/option-share.svg"}'); width: 14px; height: 14px"}
+    ></span>
     """
   end
 
