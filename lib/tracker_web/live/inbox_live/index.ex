@@ -338,6 +338,7 @@ defmodule TrackerWeb.InboxLive.Index do
             type="button"
             class="ibx-btn ibx-btn--primary"
             phx-click="mark-all-read"
+            data-confirm="Mark all notifications matching the current filters as read?"
             disabled={@matching_unread_count == 0}
           >
             <.icon name="check" /> Mark all read
