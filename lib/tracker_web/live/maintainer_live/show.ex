@@ -13,6 +13,7 @@ defmodule TrackerWeb.MaintainerLive.Show do
     ~H"""
     <.header>
       {@maintainer.github}
+      <.badge :if={@maintainer.committer}>Committer</.badge>
       <:subtitle>Maintainer</:subtitle>
     </.header>
 

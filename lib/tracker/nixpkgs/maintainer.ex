@@ -15,6 +15,7 @@ defmodule Tracker.Nixpkgs.Maintainer do
     define :id_map, action: :id_map
     define :by_githubs, args: [:githubs]
     define :reassign_github_id
+    define :set_committer
   end
 
   actions do
@@ -52,6 +53,10 @@ defmodule Tracker.Nixpkgs.Maintainer do
     update :reassign_github_id do
       accept [:github_id]
     end
+
+    update :set_committer do
+      accept [:committer]
+    end
   end
 
   attributes do
@@ -63,6 +68,8 @@ defmodule Tracker.Nixpkgs.Maintainer do
     end
 
     attribute :github, :string, public?: true
+
+    attribute :committer, :boolean, default: false, allow_nil?: false, public?: true
 
     timestamps()
   end
@@ -81,8 +88,8 @@ defmodule Tracker.Nixpkgs.Maintainer do
     end
   end
 
-  # 5 columns: id, github_id, github, inserted_at, updated_at
-  @ash_cols 5
+  # 6 columns: id, github_id, github, committer, inserted_at, updated_at
+  @ash_cols 6
   @max_batch div(65_535, @ash_cols)
 
   def bulk_upsert_all(records) do
