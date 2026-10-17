@@ -488,6 +488,13 @@ defmodule TrackerWeb.InboxLive.Index do
           <.link :if={@n.change} navigate={@path} class="ibx-tag ibx-tag--pr">
             PR <span class="hash">#{@n.change.number}</span>
           </.link>
+          <span
+            :if={@n.type == :package_change_opened && @n.change}
+            class={"pill pill-#{@n.change.state}"}
+          >
+            <span class="dot" aria-hidden="true"></span>
+            {@n.change.state}
+          </span>
           <.link
             :if={@n.change && @n.package}
             navigate={~p"/packages/#{@n.package.attribute}"}

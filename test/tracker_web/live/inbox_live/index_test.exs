@@ -688,7 +688,7 @@ defmodule TrackerWeb.InboxLive.IndexTest do
     assert has_element?(view, "#notification-#{revision.id}")
   end
 
-  test "a PR notification leads with the change title and tags the package", %{conn: conn} do
+  test "a PR notification leads with the change title, state, and package tag", %{conn: conn} do
     user = register_user!()
     pkg = package!("ripgrep")
     chan = channel!()
@@ -710,6 +710,7 @@ defmodule TrackerWeb.InboxLive.IndexTest do
 
     assert row |> Floki.find(".row-label .ibx-title") |> Floki.text() =~ change.title
     assert row |> Floki.find(".row-sublabel .ibx-tag--package") |> Floki.text() =~ pkg.attribute
+    assert row |> Floki.find(".row-sublabel .pill-open") |> Floki.text() =~ "open"
   end
 
   test "shows the version bump for package_version_changed notifications", %{conn: conn} do
