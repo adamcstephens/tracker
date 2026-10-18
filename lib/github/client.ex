@@ -13,6 +13,7 @@ defmodule GitHub.Client do
 
   alias GitHub.App
   alias GitHub.Error
+  alias Tracker.GitHub.Telemetry
 
   defmodule S3Config do
     @moduledoc false
@@ -97,6 +98,7 @@ defmodule GitHub.Client do
 
     case Req.request(Req.new(), req_opts) do
       {:ok, %Req.Response{} = response} ->
+        Telemetry.observe_rest(response)
         process_response(method, url, server, params, auth, response, s3_config, cached_entry)
 
       {:error, reason} ->
@@ -186,13 +188,17 @@ defmodule GitHub.Client do
   defp response_error(status, body, response) do
     decoded = safe_decode(body)
 
-    Error.new(
-      code: status,
-      reason: classify(status, decoded, response),
-      message: error_message(status, decoded),
-      source: body,
-      step: {__MODULE__, :request}
-    )
+    error =
+      Error.new(
+        code: status,
+        reason: classify(status, decoded, response),
+        message: error_message(status, decoded),
+        source: body,
+        step: {__MODULE__, :request}
+      )
+
+    if error.reason == :rate_limited, do: Telemetry.rate_limited(response)
+    error
   end
 
   defp classify(status, _decoded, _response) when status in @http_code_server_error,

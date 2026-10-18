@@ -30,6 +30,10 @@ if token = System.get_env("TRACKER_DISCORD_TOKEN") do
   config :nostrum, token: token
 end
 
+if token = System.get_env("TRACKER_METRICS_TOKEN") do
+  config :tracker, :metrics_token, token
+end
+
 if System.get_env("TRACKER_S3_BUCKET") do
   s3_opts = [
     bucket: System.fetch_env!("TRACKER_S3_BUCKET"),

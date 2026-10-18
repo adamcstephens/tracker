@@ -452,6 +452,7 @@ let
               jose
               mint
               req
+              ssl_verify_fun
             ];
           };
         in
@@ -1464,6 +1465,27 @@ let
         in
         drv;
 
+      octo_fetch =
+        let
+          version = "0.5.0";
+          drv = buildMix {
+            inherit version;
+            name = "octo_fetch";
+
+            src = fetchHex {
+              inherit version;
+              pkg = "octo_fetch";
+              sha256 = "6226cc3c14ca948ee9f25fb0446322e5c288e215da9beba7899b6b5f4cd3ccb0";
+            };
+
+            beamDeps = [
+              castore
+              ssl_verify_fun
+            ];
+          };
+        in
+        drv;
+
       open_api_spex =
         let
           version = "3.22.4";
@@ -1499,6 +1521,29 @@ let
               pkg = "owl";
               sha256 = "351e768af8f2edc575cdaab1a5a2f6d6381be591758a026c701c703145508a0c";
             };
+          };
+        in
+        drv;
+
+      peep =
+        let
+          version = "4.4.0";
+          drv = buildMix {
+            inherit version;
+            name = "peep";
+
+            src = fetchHex {
+              inherit version;
+              pkg = "peep";
+              sha256 = "f289959a9e5fcf92f5a4becaf4dd0df95c58841368f6ad0574b8ea830a7c1453";
+            };
+
+            beamDeps = [
+              nimble_options
+              plug
+              telemetry
+              telemetry_metrics
+            ];
           };
         in
         drv;
@@ -1850,6 +1895,38 @@ let
         in
         drv;
 
+      prom_ex =
+        let
+          version = "1.12.0";
+          drv = buildMix {
+            inherit version;
+            name = "prom_ex";
+
+            src = fetchHex {
+              inherit version;
+              pkg = "prom_ex";
+              sha256 = "6357484941489ba2fee64bb1e9f2a1e86309545304f9e90144e3c10e553c958b";
+            };
+
+            beamDeps = [
+              ecto
+              finch
+              jason
+              oban
+              octo_fetch
+              peep
+              phoenix
+              phoenix_live_view
+              plug
+              telemetry
+              telemetry_metrics
+              telemetry_metrics_prometheus_core
+              telemetry_poller
+            ];
+          };
+        in
+        drv;
+
       reactor =
         let
           version = "1.0.7";
@@ -2069,6 +2146,22 @@ let
         in
         drv;
 
+      ssl_verify_fun =
+        let
+          version = "1.1.7";
+          drv = buildMix {
+            inherit version;
+            name = "ssl_verify_fun";
+
+            src = fetchHex {
+              inherit version;
+              pkg = "ssl_verify_fun";
+              sha256 = "fe4c190e8f37401d30167c8c405eda19469f34577987c76dde613e838bbc67f8";
+            };
+          };
+        in
+        drv;
+
       stream_data =
         let
           version = "1.4.0";
@@ -2143,6 +2236,27 @@ let
 
             beamDeps = [
               telemetry
+            ];
+          };
+        in
+        drv;
+
+      telemetry_metrics_prometheus_core =
+        let
+          version = "1.2.1";
+          drv = buildMix {
+            inherit version;
+            name = "telemetry_metrics_prometheus_core";
+
+            src = fetchHex {
+              inherit version;
+              pkg = "telemetry_metrics_prometheus_core";
+              sha256 = "5e2c599da4983c4f88a33e9571f1458bf98b0cf6ba930f1dc3a6e8cf45d5afb6";
+            };
+
+            beamDeps = [
+              telemetry
+              telemetry_metrics
             ];
           };
         in

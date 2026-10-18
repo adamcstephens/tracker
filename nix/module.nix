@@ -35,6 +35,8 @@ in
         Path to an environment file read by systemd. Must define
         `SECRET_KEY_BASE` and `TOKEN_SIGNING_SECRET`, plus `DATABASE_URL`
         unless {option}`services.tracker.database.createLocally` is set.
+        Optionally define `TRACKER_METRICS_TOKEN` to enable bearer-authenticated
+        Prometheus scraping at `/metrics`; without it the endpoint returns 404.
       '';
     };
 

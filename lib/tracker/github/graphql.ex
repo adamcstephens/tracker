@@ -14,6 +14,7 @@ defmodule Tracker.GitHub.GraphQL do
   alias GitHub.Error
   alias Tracker.GitHub.GraphQL.PullRequest
   alias Tracker.GitHub.RateLimitCache
+  alias Tracker.GitHub.Telemetry
 
   @endpoint "https://api.github.com/graphql"
   @max_ids 100
@@ -41,7 +42,7 @@ defmodule Tracker.GitHub.GraphQL do
 
   @query """
   query($ids: [ID!]!) {
-    rateLimit { cost remaining resetAt }
+    rateLimit { cost limit remaining resetAt }
     nodes(ids: $ids) {
       __typename
       ... on PullRequest {
@@ -53,7 +54,7 @@ defmodule Tracker.GitHub.GraphQL do
 
   @search_query """
   query($q: String!, $first: Int!, $after: String) {
-    rateLimit { cost remaining resetAt }
+    rateLimit { cost limit remaining resetAt }
     search(query: $q, type: ISSUE, first: $first, after: $after) {
       issueCount
       pageInfo { endCursor hasNextPage }
@@ -113,7 +114,7 @@ defmodule Tracker.GitHub.GraphQL do
       ]
       |> maybe_add_plug(plug)
 
-    case Req.request(Req.new(), req_opts) do
+    case request(req_opts) do
       {:ok, %Req.Response{status: 200, body: body}} ->
         handle_body(body, node_ids, table)
 
@@ -200,7 +201,7 @@ defmodule Tracker.GitHub.GraphQL do
       ]
       |> maybe_add_plug(plug)
 
-    case Req.request(Req.new(), req_opts) do
+    case request(req_opts) do
       {:ok, %Req.Response{status: 200, body: body}} ->
         handle_search_body(body, table)
 
@@ -284,7 +285,7 @@ defmodule Tracker.GitHub.GraphQL do
       ]
       |> maybe_add_plug(plug)
 
-    case Req.request(Req.new(), req_opts) do
+    case request(req_opts) do
       {:ok, %Req.Response{status: 200, body: body}} ->
         handle_numbers_body(body, numbers, table)
 
@@ -329,7 +330,7 @@ defmodule Tracker.GitHub.GraphQL do
 
     """
     query($owner: String!, $name: String!) {
-      rateLimit { cost remaining resetAt }
+      rateLimit { cost limit remaining resetAt }
       repository(owner: $owner, name: $name) {
         #{aliases}
       }
@@ -561,6 +562,17 @@ defmodule Tracker.GitHub.GraphQL do
       reason: :rate_limited,
       step: {__MODULE__, :fetch_prs}
     )
+  end
+
+  defp request(opts) do
+    result = Req.request(Req.new(), opts)
+
+    case result do
+      {:ok, %Req.Response{} = response} -> Telemetry.observe_graphql(response)
+      {:error, _reason} -> :ok
+    end
+
+    result
   end
 
   defp maybe_add_plug(opts, nil), do: opts

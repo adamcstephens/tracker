@@ -10,6 +10,7 @@ defmodule Tracker.Application do
     Oban.Telemetry.attach_default_logger(:debug)
 
     children = [
+      Tracker.PromEx,
       Tracker.Repo,
       {Tracker.GitServer, Application.get_env(:tracker, Tracker.GitServer, [])},
       Tracker.GitHub.RateLimitCache,

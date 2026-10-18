@@ -78,6 +78,7 @@ defmodule Tracker.MixProject do
       {:phoenix_test_playwright, "~> 0.15", only: :test, runtime: false},
       {:picosat_elixir, "~> 0.2"},
       {:postgrex, ">= 0.0.0"},
+      {:prom_ex, "~> 1.12"},
       {:req, "~> 0.6"},
       {:req_s3, "~> 0.2.4"},
       {:sourceror, "~> 1.7", only: [:dev, :test]},

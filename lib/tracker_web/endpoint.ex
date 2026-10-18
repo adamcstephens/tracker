@@ -2,6 +2,7 @@ defmodule TrackerWeb.Endpoint do
   use Phoenix.Endpoint, otp_app: :tracker
 
   plug TrackerWeb.Plug.HealthCheck
+  plug TrackerWeb.Plug.Metrics, prom_ex_module: Tracker.PromEx
 
   # The session will be stored in the cookie and signed,
   # this means its contents can be read but not tampered with.
