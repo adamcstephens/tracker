@@ -8,7 +8,6 @@ defmodule TrackerWeb.LayoutsTest do
   alias Tracker.Accounts.User
   alias Tracker.Nixpkgs.Channel
   alias TrackerWeb.Layouts
-  alias TrackerWeb.Layouts.NavItem
 
   setup do
     suffix = System.unique_integer([:positive])
@@ -32,20 +31,6 @@ defmodule TrackerWeb.LayoutsTest do
       assert html =~ ~s(class="app-header__row app-header__row--bottom")
       assert html =~ ~s(class="app-brand")
       assert html =~ "Tracker"
-    end
-
-    test "tabs row contains all six sections", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/changes")
-
-      for label <- ~w(Packages Channels Options Changes Maintainers Teams) do
-        assert html =~ label
-      end
-    end
-
-    test "active tab is marked aria-current=page", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/changes")
-
-      assert html =~ ~s(aria-current="page")
     end
 
     test "renders sign-in link when no current user", %{conn: conn} do
@@ -248,75 +233,102 @@ defmodule TrackerWeb.LayoutsTest do
     end
   end
 
-  describe "section nav (single source)" do
-    test "renders one nav carrying full and short labels", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/changes")
+  describe "section navigation" do
+    test "renders four ordered primary sections followed by More" do
+      doc = navigation()
 
-      assert html =~ ~s(class="app-nav")
+      assert Floki.attribute(doc, ".app-tabs > li > a", "aria-label") ==
+               ["Packages", "Changes", "Channels", "Options"]
 
-      # Short (mobile) labels live in dedicated spans alongside the full ones,
-      # so one render serves both breakpoints; CSS picks which to show.
-      for short <- ~w(Pkgs Chans More) do
-        assert html =~ ~r{class="app-tab__short">\s*#{short}}
+      assert Floki.attribute(doc, ".app-tabs > li > a", "href") ==
+               ["/packages", "/changes", "/channels", "/options"]
+
+      assert doc
+             |> Floki.find(".app-tabs > li:last-child > details > summary")
+             |> Floki.text()
+             |> String.replace("▾", "")
+             |> String.trim() == "More"
+
+      assert Floki.find(doc, ".app-tabs > li") |> length() == 5
+      assert Floki.find(doc, "nav") |> length() == 1
+    end
+
+    test "abbreviated labels retain full accessible names" do
+      doc = navigation()
+
+      assert Floki.find(doc, ".app-tabs > li > a .app-tab__short")
+             |> Enum.map(&(Floki.text(&1) |> String.trim())) ==
+               ["Pkgs", "Chgs", "Chans", "Opts"]
+    end
+
+    test "secondary sections appear only once, inside the native More disclosure" do
+      doc = navigation()
+
+      assert Floki.attribute(doc, "details.app-more a", "href") == ["/maintainers", "/teams"]
+
+      for path <- ["/maintainers", "/teams"] do
+        assert [_] = Floki.find(doc, ~s(a[href="#{path}"]))
+        assert [_] = Floki.find(doc, ~s(details.app-more a[href="#{path}"]))
+      end
+    end
+
+    test "Admin is available only to administrators and only within More" do
+      for user <- [nil, %User{roles: [:user]}] do
+        assert Floki.find(navigation(current_user: user), ~s(a[href="/admin"])) == []
       end
 
-      for full <- ~w(Packages Channels Maintainers Teams) do
-        assert html =~ ~r{class="app-tab__full">\s*#{full}}
+      doc = navigation(current_user: %User{roles: [:user, :admin]})
+      assert [_] = Floki.find(doc, ~s(a[href="/admin"]))
+
+      assert Floki.attribute(doc, "details.app-more a", "href") ==
+               ["/maintainers", "/teams", "/admin"]
+    end
+
+    test "primary active state does not activate More" do
+      doc = navigation(view: TrackerWeb.ChangeLive.Index)
+      assert Floki.attribute(doc, ~s(a[aria-current="page"]), "href") == ["/changes"]
+      assert Floki.find(doc, ~s(summary[aria-current="page"])) == []
+    end
+
+    test "secondary active state marks More and exactly the matching child" do
+      for {view, path} <- [
+            {TrackerWeb.MaintainerLive.Show, "/maintainers"},
+            {TrackerWeb.TeamLive.Index, "/teams"},
+            {TrackerWeb.AdminLive.Ingestion, "/admin"}
+          ] do
+        doc = navigation(view: view, current_user: %User{roles: [:user, :admin]})
+        assert [_] = Floki.find(doc, ~s(details.app-more > summary[aria-current="page"]))
+        assert Floki.attribute(doc, ~s(a[aria-current="page"]), "href") == [path]
       end
     end
 
-    test "tags off-breakpoint cells for CSS hiding", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/changes")
+    test "every primary and secondary destination preserves the search query" do
+      search = "hello & nix+pkgs"
+      doc = navigation(search: search, current_user: %User{roles: [:user, :admin]})
+      links = Floki.attribute(doc, "a", "href")
 
-      # Maintainers/Teams are desktop-only; the More collapse is mobile-only.
-      assert html =~ ~s(class="is-desktop-only")
-      assert html =~ ~s(class="is-mobile-only")
+      assert Enum.map(links, &URI.parse(&1).path) ==
+               [
+                 "/packages",
+                 "/changes",
+                 "/channels",
+                 "/options",
+                 "/maintainers",
+                 "/teams",
+                 "/admin"
+               ]
+
+      for href <- links do
+        assert URI.decode_query(URI.parse(href).query) == %{"search" => search}
+      end
     end
 
-    test "marks the active section with aria-current=page", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/changes")
-
-      current =
-        html
-        |> Floki.parse_document!()
-        |> Floki.find(~s(.app-nav a[aria-current="page"]))
-        |> Floki.text()
-
-      assert current =~ "Changes"
-    end
-  end
-
-  describe "mobile More dropdown" do
-    test "renders More as a details disclosure listing the desktop sections", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/changes")
-
-      doc = Floki.parse_document!(html)
-
-      assert [_] = Floki.find(doc, "details.app-more")
-
-      panel_links =
-        doc
-        |> Floki.find(".app-more__panel a")
-        |> Enum.map(&(&1 |> Floki.text() |> String.trim()))
-
-      assert "Maintainers" in panel_links
-      assert "Teams" in panel_links
-    end
-
-    test "marks the active route on both the summary and its panel link", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/maintainers")
-
-      doc = Floki.parse_document!(html)
-
-      assert Floki.find(doc, ~s(summary.app-more__summary[aria-current="page"])) != []
-
-      active_panel =
-        doc
-        |> Floki.find(~s(.app-more__panel a[aria-current="page"]))
-        |> Floki.text()
-        |> String.trim()
-
-      assert active_panel =~ "Maintainers"
+    defp navigation(opts \\ []) do
+      render_component(
+        &Layouts.app_nav/1,
+        Keyword.merge([view: TrackerWeb.ChangeLive.Index, current_user: nil, search: ""], opts)
+      )
+      |> Floki.parse_document!()
     end
   end
 
@@ -412,87 +424,6 @@ defmodule TrackerWeb.LayoutsTest do
         |> String.trim()
 
       assert badge == "1"
-    end
-  end
-
-  describe "nav_items/1 (single nav source)" do
-    test "lists sections in desktop order with both/desktop/mobile contexts" do
-      items = Layouts.nav_items(nil)
-
-      assert Enum.map(items, & &1.path) == [
-               "/packages",
-               "/channels",
-               "/options",
-               "/changes",
-               "/maintainers",
-               "/teams",
-               "/maintainers"
-             ]
-
-      assert Enum.map(items, & &1.context) == [
-               :both,
-               :both,
-               :both,
-               :both,
-               :desktop,
-               :desktop,
-               :mobile
-             ]
-    end
-
-    test "common items carry both full and short labels" do
-      pkgs = Enum.find(Layouts.nav_items(nil), &(&1.path == "/packages"))
-
-      assert pkgs.full == "Packages"
-      assert pkgs.short == "Pkgs"
-    end
-
-    test "the mobile-only More entry collapses maintainers and teams" do
-      more = Enum.find(Layouts.nav_items(nil), &(&1.context == :mobile))
-
-      assert more.short == "More"
-      assert more.path == "/maintainers"
-      assert more.active == ["MaintainerLive", "TeamLive"]
-    end
-
-    test "the More entry carries the desktop group as dropdown children" do
-      more = Enum.find(Layouts.nav_items(nil), &(&1.context == :mobile))
-
-      assert Enum.map(more.children, & &1.path) == ["/maintainers", "/teams"]
-      assert Enum.map(more.children, & &1.full) == ["Maintainers", "Teams"]
-    end
-
-    test "Admin section appears only for admin users" do
-      refute Enum.any?(Layouts.nav_items(nil), &(&1.full == "Admin"))
-      refute Enum.any?(Layouts.nav_items(%User{roles: [:user]}), &(&1.full == "Admin"))
-      assert Enum.any?(Layouts.nav_items(%User{roles: [:user, :admin]}), &(&1.full == "Admin"))
-    end
-
-    test "admin user's More dropdown includes Admin as a child" do
-      more = Enum.find(Layouts.nav_items(%User{roles: [:user, :admin]}), &(&1.context == :mobile))
-
-      assert "/admin" in Enum.map(more.children, & &1.path)
-    end
-
-    test "Admin tab underlines on the admin page without sharing Teams' underline" do
-      admin = Enum.find(Layouts.nav_items(%User{roles: [:user, :admin]}), &(&1.full == "Admin"))
-
-      assert Layouts.nav_active?(TrackerWeb.AdminLive.Ingestion, admin)
-      refute Layouts.nav_active?(TrackerWeb.TeamLive.Index, admin)
-    end
-  end
-
-  describe "nav_active?/2" do
-    test "true when the view matches any of the item's active prefixes" do
-      item = %NavItem{
-        path: "/maintainers",
-        active: ["MaintainerLive", "TeamLive"],
-        context: :mobile
-      }
-
-      assert Layouts.nav_active?(TrackerWeb.TeamLive.Index, item)
-      assert Layouts.nav_active?(TrackerWeb.MaintainerLive.Index, item)
-      refute Layouts.nav_active?(TrackerWeb.PackageLive.Index, item)
     end
   end
 

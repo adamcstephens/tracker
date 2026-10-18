@@ -14,18 +14,16 @@ defmodule TrackerWeb.Layouts do
 
   defmodule NavItem do
     @moduledoc """
-    One chrome navigation entry, shared by both nav renders.
+    One chrome navigation entry shared across breakpoints.
 
-    `context` controls which breakpoint shows the item (CSS hides the others);
     `full`/`short` are the desktop and mobile labels. A non-empty `children`
-    list turns the entry into a disclosure (the mobile "More" dropdown).
+    list turns the entry into a native disclosure.
     """
     use TypedStruct
 
     typedstruct enforce: true do
       field :path, String.t()
       field :active, [String.t()]
-      field :context, :both | :desktop | :mobile
       field :full, String.t() | nil, enforce: false
       field :short, String.t() | nil, enforce: false
       field :children, list(), default: []
@@ -137,9 +135,7 @@ defmodule TrackerWeb.Layouts do
   @doc """
   The single ordered source for the chrome section navigation.
 
-  Order follows the desktop layout. The desktop tabs render the `:both` and
-  `:desktop` entries; the mobile bar renders `:both` and `:mobile`. CSS hides
-  the off-breakpoint cells, so one render serves both.
+  Four primary sections followed by the More disclosure at every breakpoint.
   """
   def nav_items(current_user) do
     more_group = more_group(current_user)
@@ -149,60 +145,50 @@ defmodule TrackerWeb.Layouts do
         path: "/packages",
         full: "Packages",
         short: "Pkgs",
-        active: ["PackageLive"],
-        context: :both
+        active: ["PackageLive"]
+      },
+      %NavItem{
+        path: "/changes",
+        full: "Changes",
+        short: "Chgs",
+        active: ["ChangeLive"]
       },
       %NavItem{
         path: "/channels",
         full: "Channels",
         short: "Chans",
-        active: ["ChannelLive"],
-        context: :both
+        active: ["ChannelLive"]
       },
       %NavItem{
         path: "/options",
         full: "Options",
-        short: "Options",
-        active: ["OptionLive"],
-        context: :both
+        short: "Opts",
+        active: ["OptionLive"]
       },
       %NavItem{
-        path: "/changes",
-        full: "Changes",
-        short: "Changes",
-        active: ["ChangeLive"],
-        context: :both
+        path: "/maintainers",
+        full: "More",
+        active: Enum.flat_map(more_group, & &1.active) |> Enum.uniq(),
+        children: more_group
       }
-    ] ++
-      more_group ++
-      [
-        %NavItem{
-          path: "/maintainers",
-          short: "More",
-          active: Enum.flat_map(more_group, & &1.active) |> Enum.uniq(),
-          context: :mobile,
-          children: more_group
-        }
-      ]
+    ]
   end
 
-  # Sections that are top-level tabs on desktop, but collapse into the mobile
-  # "More" dropdown. Defined once so both renders share the same source.
+  # Secondary sections live only in More, at every breakpoint.
   defp more_group(current_user) do
     [
       %NavItem{
         path: "/maintainers",
         full: "Maintainers",
-        active: ["MaintainerLive"],
-        context: :desktop
+        active: ["MaintainerLive"]
       },
-      %NavItem{path: "/teams", full: "Teams", active: ["TeamLive"], context: :desktop}
+      %NavItem{path: "/teams", full: "Teams", active: ["TeamLive"]}
     ] ++ admin_items(current_user)
   end
 
   defp admin_items(current_user) do
     if current_user && Tracker.Accounts.User.has_role?(current_user, :admin) do
-      [%NavItem{path: "/admin", full: "Admin", active: ["AdminLive"], context: :desktop}]
+      [%NavItem{path: "/admin", full: "Admin", active: ["AdminLive"]}]
     else
       []
     end
@@ -222,8 +208,7 @@ defmodule TrackerWeb.Layouts do
   @doc """
   Renders the chrome section navigation once for both breakpoints.
 
-  CSS picks the per-breakpoint label (`app-tab__full`/`app-tab__short`) and
-  hides the off-breakpoint cells via `is-desktop-only`/`is-mobile-only`.
+  CSS picks the per-breakpoint label (`app-tab__full`/`app-tab__short`).
   """
   def app_nav(assigns) do
     assigns = assign(assigns, :items, nav_items(assigns.current_user))
@@ -231,10 +216,11 @@ defmodule TrackerWeb.Layouts do
     ~H"""
     <nav class="app-nav" aria-label="Primary">
       <ul class="app-tabs">
-        <li :for={item <- @items} class={nav_item_class(item)}>
+        <li :for={item <- @items}>
           <.link
             :if={item.children == []}
             navigate={nav_path(item.path, @search)}
+            aria-label={item.full}
             aria-current={nav_active?(@view, item) && "page"}
           >
             <span :if={item.full} class="app-tab__full">{item.full}</span>
@@ -242,7 +228,7 @@ defmodule TrackerWeb.Layouts do
           </.link>
           <details :if={item.children != []} class="app-more">
             <summary class="app-more__summary" aria-current={nav_active?(@view, item) && "page"}>
-              <span class="app-tab__short">{item.short}</span>
+              <span>{item.full}</span>
               <span class="app-more__caret" aria-hidden="true">▾</span>
             </summary>
             <div class="app-more__panel">
@@ -260,10 +246,6 @@ defmodule TrackerWeb.Layouts do
     </nav>
     """
   end
-
-  defp nav_item_class(%NavItem{context: :desktop}), do: "is-desktop-only"
-  defp nav_item_class(%NavItem{context: :mobile}), do: "is-mobile-only"
-  defp nav_item_class(%NavItem{context: :both}), do: nil
 
   def active_nav?(view, prefix) when is_atom(view) do
     case Module.split(view) do

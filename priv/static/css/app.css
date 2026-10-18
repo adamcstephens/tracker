@@ -1998,14 +1998,10 @@ a.revision-link {
 	border-bottom-color: var(--accent);
 }
 
-/* Single nav source — desktop shows full labels and both/desktop items */
 .app-tab__short {
 	display: none;
 }
 
-.app-tabs .is-mobile-only {
-	display: none;
-}
 
 /* Inbox icon — replaces the Inbox text tab. Carries the unread badge. */
 .app-inbox {
@@ -2490,7 +2486,83 @@ a.revision-link {
 	mask: url("/images/arrow-forward.svg") center / contain no-repeat;
 }
 
-@media (max-width: 719px) {
+.app-nav {
+	min-width: 0;
+}
+
+.app-more {
+	position: relative;
+	margin: 0;
+}
+
+.app-more__summary {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.25rem;
+	min-height: 2.75rem;
+	padding: 0.875rem;
+	color: var(--text-2);
+	font-size: 0.9375rem;
+	font-weight: 500;
+	line-height: 1;
+	white-space: nowrap;
+	list-style: none;
+	cursor: pointer;
+	border-bottom: 2px solid transparent;
+}
+
+.app-more__summary::-webkit-details-marker {
+	display: none;
+}
+
+.app-more__summary:hover {
+	color: var(--text);
+}
+
+.app-more__summary[aria-current="page"] {
+	color: var(--text);
+	border-bottom-color: var(--accent);
+}
+
+.app-more__caret {
+	font-size: 0.7em;
+}
+
+.app-more__panel {
+	position: absolute;
+	top: 100%;
+	right: 0;
+	z-index: 60;
+	min-width: 10rem;
+	padding: 0.3125rem;
+	background: var(--bg);
+	border: 1px solid var(--line);
+	border-radius: 0.625rem;
+}
+
+.app-more__panel a {
+	display: flex;
+	align-items: center;
+	justify-content: flex-start;
+	min-height: 2.5rem;
+	padding: 0.375rem 0.75rem;
+	color: var(--text-2);
+	font-weight: 500;
+	border-bottom: 0;
+	border-radius: 0.5rem;
+}
+
+.app-more__panel a:hover {
+	color: var(--text);
+	background: var(--surface);
+}
+
+.app-more__panel a[aria-current="page"] {
+	color: var(--accent);
+}
+
+@media (max-width: 1023px) {
 	/* Identity moves off the top row on mobile: the user chip and inbox icon
 	   re-render as the search-row avatar and the lens-row bell. The brand
 	   stays, compacted into the home mark at the head of the tab strip. */
@@ -2503,8 +2575,6 @@ a.revision-link {
 		gap: 0.75rem;
 	}
 
-	/* Brand → home mark: glyph-only in a 30px surface box, pinned left of
-	   the scrolling strip (per the navbar_header handoff). */
 	.app-brand__word {
 		display: none;
 	}
@@ -2518,23 +2588,13 @@ a.revision-link {
 		border: 1px solid var(--ibx-line);
 	}
 
-	/* The nav anchors both the right-edge fade and the More dropdown panel,
-	   so neither lives inside the scroller's clip. */
 	.app-nav {
+		display: grid;
+		grid-template-columns: repeat(5, minmax(0, 1fr));
+		gap: 0;
 		flex: 1;
 		min-width: 0;
 		position: relative;
-	}
-
-	.app-nav::after {
-		content: "";
-		position: absolute;
-		top: 0;
-		right: 0;
-		bottom: 0;
-		width: 1.25rem;
-		background: linear-gradient(90deg, transparent, var(--bg));
-		pointer-events: none;
 	}
 
 	.app-tab__full {
@@ -2545,36 +2605,14 @@ a.revision-link {
 		display: inline;
 	}
 
-	.app-tabs .is-desktop-only {
-		display: none;
-	}
-
-	/* "More" rides at the end of the strip. */
-	.app-tabs .is-mobile-only {
-		display: flex;
-		margin-left: auto;
-	}
-
-	/* Horizontally scrollable strip; the fade above hints at the overflow. */
 	.app-tabs {
-		display: flex;
-		width: 100%;
-		gap: 1.25rem;
-		overflow-x: auto;
-		scrollbar-width: none;
-		padding-right: 1.25rem;
-	}
-
-	.app-tabs::-webkit-scrollbar {
-		display: none;
+		display: contents;
 	}
 
 	.app-tabs li {
-		flex: none;
 		display: flex;
-		/* Fixed height so every cell matches: the More cell's <details>
-		   wrapper is otherwise ~8px taller than the plain <a> tab cells,
-		   which the row's centering turns into a vertical misalignment. */
+		justify-content: center;
+		min-width: 0;
 		height: 2.75rem;
 	}
 
@@ -2589,83 +2627,17 @@ a.revision-link {
 		margin-bottom: 0;
 	}
 
-	/* "More" tab is a native <details> disclosure: the summary looks like a
-	   tab, the panel drops down beneath it (no JS needed). Static so the
-	   panel positions against .app-nav, escaping the strip's overflow clip. */
+	/* Position the disclosure panel against the full navigation width. */
 	.app-more {
 		position: static;
 		flex: none;
 		display: flex;
+		width: 100%;
 	}
 
 	.app-more__summary {
-		flex: 1;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		gap: 0.25rem;
-		min-height: 2.75rem;
-		padding: 0.375rem 0;
-		color: var(--text-2);
+		padding-inline: 0;
 		font-size: 0.9375rem;
-		font-weight: 500;
-		line-height: 1;
-		white-space: nowrap;
-		list-style: none;
-		cursor: pointer;
-		border-bottom: 2px solid transparent;
-	}
-
-	.app-more__summary::-webkit-details-marker {
-		display: none;
-	}
-
-	.app-more__summary:hover {
-		color: var(--text);
-	}
-
-	.app-more__summary[aria-current="page"] {
-		color: var(--text);
-		border-bottom-color: var(--accent);
-	}
-
-	.app-more__caret {
-		font-size: 0.7em;
-	}
-
-	.app-more__panel {
-		position: absolute;
-		top: 100%;
-		right: 0;
-		z-index: 60;
-		min-width: 10rem;
-		padding: 0.3125rem;
-		background: var(--bg);
-		border: 1px solid var(--line);
-		border-radius: 0.625rem;
-		box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.18);
-	}
-
-	.app-more__panel a {
-		display: flex;
-		align-items: center;
-		justify-content: flex-start;
-		min-height: 2.5rem;
-		padding: 0.375rem 0.75rem;
-		color: var(--text-2);
-		font-weight: 500;
-		/* Panel items are a stacked menu, not tabs — no tab underline. */
-		border-bottom: 0;
-		border-radius: 0.5rem;
-	}
-
-	.app-more__panel a:hover {
-		color: var(--text);
-		background: var(--surface);
-	}
-
-	.app-more__panel a[aria-current="page"] {
-		color: var(--accent);
 	}
 
 	.app-header__row--bottom > .container {
@@ -2750,6 +2722,7 @@ a.revision-link {
 		display: flex;
 		align-items: center;
 		flex: 1 1 100%;
+		min-width: 0;
 		gap: 0.625rem;
 	}
 
@@ -2770,18 +2743,46 @@ a.revision-link {
 
 	.lens {
 		flex: 1;
+		min-width: 0;
 	}
 
 	.lens__form {
 		display: flex;
 		width: 100%;
 		min-height: 2.5rem;
+		min-width: 0;
+		height: 2.5rem;
 	}
 
 	/* The label doesn't fit alongside the revision display; the dot +
 	   channel name carry the meaning (the select keeps its aria-label). */
 	.lens-label {
 		display: none;
+	}
+
+	.lens-channel-cell {
+		min-width: 0;
+		padding-right: 0;
+	}
+
+	.lens-channel-name {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.lens-rev {
+		flex-shrink: 0;
+		border-left: 0;
+		padding-inline: 0;
+		white-space: nowrap;
+	}
+}
+
+@media (max-width: 359px) {
+	.app-tabs a,
+	.app-more__summary {
+		font-size: 0.8125rem;
 	}
 }
 
