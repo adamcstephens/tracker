@@ -157,6 +157,23 @@ document.addEventListener("keydown", (event) => {
 // document order for free, so a page's several lists chain together and a list
 // nested in an expanded row falls in at the row it belongs to.
 const ROW_SELECTOR = "ul.row-list > li > .row-line, ul.row-list > li > details > summary, .comparison-packages tbody tr td:first-child a, .comparison-option-header > a"
+let pointerRow = null
+
+function pointAtRow(event) {
+  if (event.pointerType !== "mouse") return
+  pointerRow = event.target.closest(ROW_SELECTOR)
+  document.documentElement.dataset.rowNavigation = "pointer"
+}
+
+document.addEventListener("pointermove", pointAtRow)
+document.addEventListener("pointerdown", pointAtRow)
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Tab") {
+    pointerRow = null
+    document.documentElement.dataset.rowNavigation = "keyboard"
+  }
+})
 
 function keynavRows() {
   return [...document.querySelectorAll(ROW_SELECTOR)]
@@ -166,14 +183,16 @@ function moveRow(step) {
   let rows = keynavRows()
   if (!rows.length) return false
 
-  // Read the cursor off the focused element rather than storing an index, so
-  // clicking or tabbing into a row leaves it where the user put it.
-  let index = rows.indexOf(document.activeElement)
-  let wanted = index === -1 ? (step > 0 ? 0 : rows.length - 1) : index + step
+  let current = pointerRow || document.activeElement
+  let index = rows.indexOf(current)
+  if (index === -1 && step < 0) return false
+  let wanted = index === -1 ? 0 : index + step
 
   let next = rows[Math.min(Math.max(wanted, 0), rows.length - 1)]
   if (!next) return false
 
+  pointerRow = null
+  document.documentElement.dataset.rowNavigation = "keyboard"
   next.focus()
   next.scrollIntoView({block: "nearest"})
   return true

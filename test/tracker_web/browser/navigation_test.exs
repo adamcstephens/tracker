@@ -109,7 +109,7 @@ defmodule TrackerWeb.Browser.NavigationTest do
     conn = changes_page(conn)
 
     press(conn, "body", "g")
-    press(conn, "body", "k")
+    press(conn, "body", "j")
 
     refute cursor_moved?(conn)
     assert_path(conn, "/changes")
@@ -120,7 +120,7 @@ defmodule TrackerWeb.Browser.NavigationTest do
 
     press(conn, "body", "g")
     Process.sleep(1_100)
-    press(conn, "body", "k")
+    press(conn, "body", "j")
 
     assert cursor_moved?(conn)
   end

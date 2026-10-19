@@ -114,15 +114,14 @@ defmodule TrackerWeb.Browser.RowCursorTest do
     assert walk(conn, "k", 2) == [0, 0]
   end
 
-  test "with nothing focused j takes the first row and k the last", %{conn: conn} do
+  test "with nothing focused j takes the first row and k does nothing", %{conn: conn} do
     conn = options_page(conn)
-    last = read(conn, "#{@rows}.length") - 1
-
-    press(blur(conn), "body", "j")
-    assert cursor(conn) == 0
 
     press(blur(conn), "body", "k")
-    assert cursor(conn) == last
+    assert cursor(conn) == -1
+
+    press(conn, "body", "j")
+    assert cursor(conn) == 0
   end
 
   test "the cursor picks up from the row the mouse left it on", %{conn: conn} do
@@ -133,6 +132,46 @@ defmodule TrackerWeb.Browser.RowCursorTest do
     assert clicked > 0
 
     assert walk(conn, "j", 1) == [clicked + 1]
+  end
+
+  test "mouse and keyboard hand off a single highlighted row", %{conn: conn} do
+    conn = options_page(conn)
+
+    {:ok, _} = PlaywrightEx.Frame.hover(conn.frame_id, selector: @second_leaf, timeout: 2000)
+    assert_highlighted_rows(conn, [1])
+
+    press(conn, "body", "j")
+    assert cursor(conn) == 2
+    assert_highlighted_rows(conn, [2])
+
+    {:ok, _} =
+      PlaywrightEx.Frame.hover(conn.frame_id,
+        selector: "#options-list > li:nth-child(4) > details > summary",
+        timeout: 2000
+      )
+
+    assert_highlighted_rows(conn, [3])
+
+    press(conn, "body", "k")
+    assert cursor(conn) == 2
+    assert_highlighted_rows(conn, [2])
+  end
+
+  defp assert_highlighted_rows(conn, expected) do
+    assert {:ok, _} =
+             PlaywrightEx.Frame.wait_for_function(conn.frame_id,
+               timeout: 2000,
+               expression: """
+               (() => {
+                 const highlighted = [...#{@rows}].flatMap((row, index) => {
+                   const style = getComputedStyle(row)
+                   return style.backgroundColor !== "rgba(0, 0, 0, 0)" || style.outlineStyle !== "none"
+                     ? [index] : []
+                 })
+                 return JSON.stringify(highlighted) === #{inspect(Jason.encode!(expected))}
+               })()
+               """
+             )
   end
 
   test "the page's several lists are one cursor", %{conn: conn} do

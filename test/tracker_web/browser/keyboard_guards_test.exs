@@ -94,9 +94,9 @@ defmodule TrackerWeb.Browser.KeyboardGuardsTest do
     },
     %{name: "v", key: "v", from: "body", survives: [], fires: "!!window.__opened"},
     %{name: "j", key: "j", from: "body", survives: [:select], fires: @cursor_moved},
-    %{name: "k", key: "k", from: "body", survives: [:select], fires: @cursor_moved},
+    %{name: "k", key: "k", from: @row, survives: [], fires: @cursor_moved},
     %{name: "ArrowDown", key: "ArrowDown", from: "body", survives: [], fires: @cursor_moved},
-    %{name: "ArrowUp", key: "ArrowUp", from: "body", survives: [], fires: @cursor_moved}
+    %{name: "ArrowUp", key: "ArrowUp", from: @row, survives: [], fires: @cursor_moved}
   ]
 
   @on_inbox [
@@ -193,22 +193,18 @@ defmodule TrackerWeb.Browser.KeyboardGuardsTest do
     assert read(conn, ~s|document.getElementById("shortcuts").open|) == false
   end
 
-  test "arrow keys yield to a focused select but j and k do not", %{conn: conn} do
+  test "j starts a cursor from a select while upward navigation leaves it alone", %{conn: conn} do
     conn = changes_page(conn)
 
-    for key <- ~w(ArrowDown ArrowUp) do
+    for key <- ["ArrowDown", "ArrowUp", "k"] do
       conn = fire(conn, "#probe-select", key)
 
       assert read(conn, ~s|document.activeElement.id|) == "probe-select",
              "#{key} should leave a focused select alone"
     end
 
-    for key <- ~w(j k) do
-      conn = fire(conn, "#probe-select", key)
-
-      assert read(conn, ~s|document.activeElement.matches(".row-line")|) == true,
-             "#{key} should move the cursor even from a focused select"
-    end
+    conn = fire(conn, "#probe-select", "j")
+    assert read(conn, ~s|document.activeElement.matches(".row-line")|) == true
   end
 
   test "g honours its guards", %{conn: conn} do
@@ -240,7 +236,7 @@ defmodule TrackerWeb.Browser.KeyboardGuardsTest do
   defp chord_armed?(conn, selector, key, open_dialog? \\ false) do
     conn = fire(conn, selector, key, open_dialog?)
     conn = evaluate(conn, @reset)
-    press(conn, "body", "k")
+    press(conn, "body", "j")
 
     read(conn, ~s|document.activeElement.matches(".row-line")|) == false
   end

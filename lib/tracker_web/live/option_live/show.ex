@@ -122,6 +122,11 @@ defmodule TrackerWeb.OptionLive.Show do
                       )}</span>
                     <% end %>
                   </:label>
+                  <:meta>
+                    <span class="opt-type">
+                      {rev.type}<span :if={rev.read_only}> (read-only)</span>
+                    </span>
+                  </:meta>
                   <:body>
                     <div class="opt-detail-actions">
                       <button

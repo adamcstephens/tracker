@@ -1445,7 +1445,7 @@ a.revision-link {
 	transform: rotate(90deg);
 }
 
-.row-list summary:hover {
+:root:not([data-row-navigation="keyboard"]) .row-list summary:hover {
 	background: var(--surface);
 }
 
@@ -1457,7 +1457,7 @@ a.revision-link {
 	text-decoration: none;
 }
 
-.row-link:hover {
+:root:not([data-row-navigation="keyboard"]) .row-link:hover {
 	background: var(--accent-soft);
 	text-decoration: none;
 }
@@ -1465,6 +1465,10 @@ a.revision-link {
 /* Keyboard cursor, all three row modes. Inset because the list clips its
    overflow — an outset outline is cut off on the first and last rows. */
 .row-line:focus-visible {
+	outline: none;
+}
+
+:root:not([data-row-navigation="pointer"]) .row-line:focus-visible {
 	outline: 2px solid var(--accent-edge);
 	outline-offset: -2px;
 	background: var(--surface);
@@ -1581,6 +1585,15 @@ a.revision-link {
 	gap: 10px;
 	padding: 12px 14px 0;
 	background: var(--surface-inset);
+}
+
+.option-show .opt-type {
+	display: inline-block;
+	max-width: min(40ch, 35vw);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	vertical-align: bottom;
 }
 
 .row-action {
