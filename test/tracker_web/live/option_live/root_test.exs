@@ -63,13 +63,13 @@ defmodule TrackerWeb.OptionLive.RootTest do
     %{channel: channel, channel_revision: cr}
   end
 
-  test "shows top-level groups as children cards with option counts", %{conn: conn} do
+  test "multi-option groups navigate and singleton subtrees expand at the root", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/options")
 
     assert html =~ ~s(href="/options/services?)
-    assert html =~ ~s(href="/options/programs?)
+    assert html =~ ~s(id="opt-programs.vim.enable")
     assert html =~ "2 options"
-    assert html =~ "1 options"
+    refute html =~ ~s(href="/options/programs?)
   end
 
   test "group card names carry no leading dot at the root", %{conn: conn} do
@@ -131,7 +131,7 @@ defmodule TrackerWeb.OptionLive.RootTest do
 
     {:ok, _view, html} = switch_lens(conn, view, channel2.name)
 
-    assert html =~ ~s(href="/options/programs?)
+    assert html =~ ~s(id="opt-programs.vim.enable")
     refute html =~ ~s(href="/options/services?)
   end
 
@@ -181,7 +181,7 @@ defmodule TrackerWeb.OptionLive.RootTest do
   test "search at the root shows no group cards", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/options?search=nginx")
 
-    refute html =~ ~s(id="option-children")
+    refute html =~ ~s(id="options-list")
   end
 
   test "fuzzy search tolerates typos", %{conn: conn} do

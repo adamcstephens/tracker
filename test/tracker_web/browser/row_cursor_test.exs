@@ -45,7 +45,6 @@ defmodule TrackerWeb.Browser.RowCursorTest do
   @rows ~s|document.querySelectorAll("ul.row-list > li > .row-line, ul.row-list > li > details > summary")|
   @cursor "[...#{@rows}].indexOf(document.activeElement)"
 
-  @first_child "#option-children > li:nth-child(1) > .row-line"
   @second_leaf "#options-list > li:nth-child(2) > details > summary"
 
   setup do
@@ -139,16 +138,23 @@ defmodule TrackerWeb.Browser.RowCursorTest do
   test "the page's several lists are one cursor", %{conn: conn} do
     conn = options_page(conn)
 
+    evaluate(conn, """
+    document.querySelector(".option-show").insertAdjacentHTML("beforeend", `
+      <ul class="row-list" id="additional-list">
+        <li><div class="row-line" tabindex="-1">additional row</div></li>
+      </ul>`)
+    """)
+
     press(blur(conn), "body", "j")
-    assert cursor_list(conn) == "option-children"
+    assert cursor_list(conn) == "options-list"
 
     walk(
       conn,
       "j",
-      read(conn, ~s|#{@rows}.length - document.querySelectorAll("#options-list > li").length|)
+      read(conn, ~s|document.querySelectorAll("#options-list > li").length|)
     )
 
-    assert cursor_list(conn) == "options-list"
+    assert cursor_list(conn) == "additional-list"
     assert cursor(conn) > 0
   end
 

@@ -155,24 +155,6 @@ defmodule TrackerWeb.OptionLive.ShowTest do
     refute html =~ "services.nginx.virtualHosts.example.serverName"
   end
 
-  test "shows deeper descendants as Children cards", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/options/services.nginx")
-
-    assert html =~ "Children"
-    refute html =~ "Sub-groups"
-    assert html =~ "services.nginx.virtualHosts"
-    # The child card links to the sub-group prefix
-    assert html =~ ~s(href="/options/services.nginx.virtualHosts?)
-  end
-
-  test "children and leaf sections use the shared section header", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/options/services.nginx")
-
-    assert has_element?(view, ".section-header h2", "Children")
-    assert has_element?(view, ".section-header h2", "Options at this prefix")
-    assert has_element?(view, ".section-header .n", "2")
-  end
-
   test "leaf option rows carry a share link instead of the # anchor", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/options/services.nginx")
 
@@ -188,68 +170,142 @@ defmodule TrackerWeb.OptionLive.ShowTest do
     assert html =~ ~s(data-copy="services.nginx.enable")
   end
 
-  describe "both list sections render through the shared RowList (TRK-367)" do
-    test "children and leaf options share the row-list container", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/options/services.nginx")
+  test "mixed groups and options are sorted in one list", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/options/services.nginx")
 
-      # One grouped card per section, no detached child cards
-      assert html =~ ~s(class="row-list )
-      refute html =~ "opt-children"
-      refute html =~ "child-card"
-    end
+    rows = html |> Floki.parse_document!() |> Floki.find("#options-list > li")
 
-    test "both lists clip long attribute-path labels to one line", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/options/services.nginx")
-      doc = Floki.parse_document!(html)
+    assert Enum.map(rows, &Floki.text(Floki.find(&1, ".tail"))) == [
+             "enable",
+             "user",
+             "virtualHosts"
+           ]
 
-      for id <- ~w(option-children options-list) do
-        assert [list] = Floki.find(doc, "##{id}")
-        assert "row-list--clip-label" in String.split(hd(Floki.attribute(list, "class")))
-      end
-    end
+    assert [_] = Floki.find(List.last(rows), "a.row-link")
+    assert [_] = Floki.find(hd(rows), "details:not([open])")
+  end
 
-    test "children are link rows that navigate to the sub-group", %{conn: conn} do
-      {:ok, view, html} = live(conn, ~p"/options/services.nginx")
+  test "groups navigate while a sole option opens expanded", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/options/services.nginx")
 
-      assert html =~ ~s(class="row-line row-link")
+    view
+    |> element(~s(#options-list a[href^="/options/services.nginx.virtualHosts?"]))
+    |> render_click()
 
-      view
-      |> element(~s(a[href^="/options/services.nginx.virtualHosts?"]))
-      |> render_click()
+    {to, _flash} = assert_redirect(view)
+    assert_same_path(to, ~p"/options/services.nginx.virtualHosts")
 
-      {to, _flash} = assert_redirect(view)
-      assert_same_path(to, ~p"/options/services.nginx.virtualHosts")
-    end
+    {:ok, view, _html} = live(conn, ~p"/options/services.nginx.enable")
+    assert has_element?(view, ~s([id="opt-services.nginx.enable"] details[open]))
+  end
 
-    test "children rows carry their option count as trailing meta", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/options/services.nginx")
+  test "singleton subtrees expand at their full relative path", %{
+    conn: conn,
+    channel_revision: cr
+  } do
+    options =
+      Map.new(
+        ["boot.bcache.enable", "boot.deep.single.leaf", "boot.loader.a", "boot.loader.b"],
+        fn name ->
+          {name,
+           %{
+             "declarations" => ["nixos/modules/tasks/boot.nix"],
+             "description" => "Configure #{name}.",
+             "loc" => String.split(name, "."),
+             "type" => "boolean"
+           }}
+        end
+      )
 
-      assert html =~ ~s(class="row-meta")
-      assert html =~ "options"
-    end
+    Fixtures.load_options(Map.merge(@nginx_options, options), cr)
+    {:ok, view, html} = live(conn, ~p"/options/boot")
 
-    test "leaf options stay expandable rows with deep-link anchors", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/options/services.nginx")
+    rows = html |> Floki.parse_document!() |> Floki.find("#options-list > li")
 
-      # The hook and per-option ids are what make #opt-… deep links expand
-      assert html =~ ~s(phx-hook="AnchorExpand")
-      assert html =~ ~s(id="opt-services.nginx.enable")
-      assert html =~ "<details"
-    end
+    assert Enum.map(rows, &Floki.text(Floki.find(&1, ".tail"))) ==
+             ["bcache.enable", "deep.single.leaf", "loader"]
 
-    test "a lone leaf option renders already expanded", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/options/services.nginx.enable")
+    assert has_element?(view, ~s([id="opt-boot.bcache.enable"] details))
+    assert has_element?(view, ~s([id="opt-boot.deep.single.leaf"] details))
+    assert has_element?(view, ~s(#options-list a[href^="/options/boot.loader?"]))
+    refute has_element?(view, ~s(#options-list a.row-link[href^="/options/boot.bcache?"]))
+    assert html =~ "Configure boot.bcache.enable."
+    assert html =~ "nixos/modules/tasks/boot.nix"
+  end
 
-      assert html =~ ~s(<li id="opt-services.nginx.enable">)
-      assert html =~ "<details open"
-    end
+  test "the root pulls up a deep singleton without navigating intermediate prefixes", %{
+    conn: conn,
+    channel_revision: cr
+  } do
+    Fixtures.load_options(
+      Map.put(@nginx_options, "boot.bcache.enable", %{
+        "description" => "Enable bcache.",
+        "loc" => ["boot", "bcache", "enable"],
+        "type" => "boolean"
+      }),
+      cr
+    )
 
-    test "a childless section never emits an empty details panel", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/options/services.nginx")
+    {:ok, view, _html} = live(conn, ~p"/options")
+    assert has_element?(view, ~s(#options-list [id="opt-boot.bcache.enable"] details))
+    assert has_element?(view, "#options-list .tail", "boot.bcache.enable")
+    assert has_element?(view, ~s(#options-list a.row-link[href^="/options/services?"]))
+  end
 
-      # Children rows are links, so the disclosure chrome must not appear there
-      refute html =~ ~s(<details id="row-)
-    end
+  test "a settable group plus one descendant is not a singleton", %{
+    conn: conn,
+    channel_revision: cr
+  } do
+    Fixtures.load_options(
+      Map.take(@nginx_options, [
+        "services.nginx.virtualHosts",
+        "services.nginx.virtualHosts.example.serverName"
+      ]),
+      cr
+    )
+
+    {:ok, view, _html} = live(conn, ~p"/options/services.nginx")
+
+    assert has_element?(
+             view,
+             ~s(#options-list a.row-link[href^="/options/services.nginx.virtualHosts?"])
+           )
+
+    refute has_element?(view, ~s([id="opt-services.nginx.virtualHosts"]))
+    refute has_element?(view, ~s([id="opt-services.nginx.virtualHosts.example.serverName"]))
+  end
+
+  test "singleton promotion uses the selected revision's subtree and metadata", %{
+    conn: conn,
+    channel: channel,
+    channel_revision: cr
+  } do
+    old_options = %{
+      "boot.bcache.enable" => %{
+        "description" => "Original bcache description.",
+        "type" => "boolean"
+      }
+    }
+
+    Fixtures.load_options(old_options, cr)
+
+    new_options =
+      old_options
+      |> put_in(["boot.bcache.enable", "description"], "Updated bcache description.")
+      |> Map.put("boot.bcache.extra", %{"type" => "string"})
+
+    revision!(channel, "bcachenew12345", ~U[2026-03-16 10:00:00Z], new_options)
+
+    {:ok, old_view, old_html} =
+      live(conn, ~p"/options/boot?channel=#{channel.name}&rev=#{cr.revision}")
+
+    assert has_element?(old_view, ~s([id="opt-boot.bcache.enable"] details[open]))
+    assert old_html =~ "Original bcache description."
+    refute old_html =~ "Updated bcache description."
+
+    {:ok, current_view, _html} = live(conn, ~p"/options/boot?channel=#{channel.name}")
+    assert has_element?(current_view, ~s(#options-list a.row-link[href^="/options/boot.bcache?"]))
+    refute has_element?(current_view, ~s([id="opt-boot.bcache.enable"]))
   end
 
   test "pure group prefix lists a top-level Defined-in section", %{conn: conn} do
@@ -569,8 +625,7 @@ defmodule TrackerWeb.OptionLive.ShowTest do
 
     assert html =~ "Select a channel"
     assert html =~ "lens-attention"
-    refute html =~ "Options at this prefix"
-    refute html =~ ~s(id="option-children")
+    refute html =~ ~s(id="options-list")
   end
 
   test "an explicit ?channel= trumps an all-channels cookie preference", %{conn: conn} do
@@ -579,7 +634,7 @@ defmodule TrackerWeb.OptionLive.ShowTest do
     {:ok, _view, html} = live(conn, ~p"/options/services.nginx?channel=nixos-optshow")
 
     refute html =~ "Select a channel"
-    assert html =~ "Options at this prefix"
+    assert html =~ ~s(id="options-list")
   end
 
   test "lens change patches the URL and reloads", %{conn: conn} do
@@ -673,13 +728,13 @@ defmodule TrackerWeb.OptionLive.ShowTest do
   test "search shows only the match list, not children cards", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/options/services.nginx?search=serverName")
 
-    refute html =~ ~s(id="option-children")
+    refute html =~ ~s(id="options-list")
   end
 
   test "search hides leaf details, files, and PR sections", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/options/services.nginx?search=serverName")
 
-    refute html =~ "Options at this prefix"
+    refute html =~ ~s(id="options-list")
     refute html =~ ">Defined in</h2>"
     refute html =~ "Recent PRs"
   end
@@ -756,8 +811,7 @@ defmodule TrackerWeb.OptionLive.ShowTest do
       |> element("#page-search")
       |> render_change(%{"search" => ""})
 
-    assert html =~ "Children"
-    assert html =~ "Options at this prefix"
+    assert html =~ ~s(id="options-list")
   end
 
   test "lists recent PRs whose change_files intersect the prefix's file set", %{conn: conn} do

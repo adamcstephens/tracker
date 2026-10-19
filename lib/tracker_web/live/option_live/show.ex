@@ -2,6 +2,7 @@ defmodule TrackerWeb.OptionLive.Show do
   use TrackerWeb, :live_view
 
   import TrackerWeb.CodeHighlight
+  require Ash.Expr
 
   alias TrackerWeb.PageSearch
   alias TrackerWeb.Pagination
@@ -63,26 +64,6 @@ defmodule TrackerWeb.OptionLive.Show do
         No options match this prefix in {@channel}.
       </p>
 
-      <section :if={@subgroups != []}>
-        <SectionHeader.section_header title="Children" count={length(@subgroups)} />
-        <RowList.row_list id="option-children" clip_label>
-          <RowList.row
-            :for={{group, count} <- @subgroups}
-            mode={:link}
-            navigate={~p"/options/#{group}"}
-          >
-            <:label>
-              <span :if={@prefix != ""} class="leading">{@prefix}.</span><span class="tail">{tail(
-                group,
-                @prefix
-              )}</span>
-            </:label>
-            <:meta>{count} options</:meta>
-            <:actions><span class="arrow" aria-hidden="true">→</span></:actions>
-          </RowList.row>
-        </RowList.row_list>
-      </section>
-
       <section :if={@matches != []}>
         <SectionHeader.section_header title="Matching options" count={@match_count} />
         <RowList.row_list id="matching-options" reserve_sublabel>
@@ -110,88 +91,100 @@ defmodule TrackerWeb.OptionLive.Show do
         />
       </section>
 
-      <section :if={@leaf_options != []}>
-        <SectionHeader.section_header
-          title="Options at this prefix"
-          count={length(@leaf_options)}
-        />
+      <section :if={@entries != []}>
+        <SectionHeader.section_header title="Options" count={length(@entries)} />
         <RowList.row_list id="options-list" phx-hook="AnchorExpand" clip_label>
-          <RowList.row
-            :for={rev <- @leaf_options}
-            id={"opt-#{rev.option.name}"}
-            mode={:expandable}
-            open={length(@leaf_options) == 1}
-          >
-            <:label>
-              <%= if rev.option.name == @prefix do %>
-                <em class="tail">self</em>
-              <% else %>
-                <span :if={@prefix != ""} class="leading">{@prefix}.</span><span class="tail">{tail(
-                  rev.option.name,
-                  @prefix
-                )}</span>
-              <% end %>
-            </:label>
-            <:meta>
-              <span class="opt-type">
-                {rev.type}<span :if={rev.read_only}> (read-only)</span>
-              </span>
-            </:meta>
-            <:actions>
-              <button
-                type="button"
-                class="row-action"
-                data-copy={rev.option.name}
-                onclick={copy_onclick()}
-                title="Copy attribute path"
-                aria-label={"Copy attribute path #{rev.option.name}"}
-              >
-                <.copy_icon />
-                <.check_icon />
-              </button>
-              <a
-                href={~p"/options/#{rev.option.name}"}
-                class="row-action"
-                onclick={copy_onclick()}
-                title="Copy share link"
-                aria-label={"Copy link to #{rev.option.name}"}
-              >
-                <.share_icon />
-                <.check_icon />
-              </a>
-            </:actions>
-            <:body>
-              <dl class="opt-detail">
-                <dt :if={rev.type}>Type</dt>
-                <dd :if={rev.type}>
-                  {rev.type}
-                  <span :if={rev.read_only} class="read-only">(read-only)</span>
-                </dd>
+          <%= for {name, entry} <- @entries do %>
+            <%= case entry do %>
+              <% {:group, count} -> %>
+                <RowList.row mode={:link} navigate={~p"/options/#{name}"}>
+                  <:label>
+                    <span :if={@prefix != ""} class="leading">{@prefix}.</span><span class="tail">{tail(
+                      name,
+                      @prefix
+                    )}</span>
+                  </:label>
+                  <:meta>{count} options</:meta>
+                  <:actions><span class="arrow" aria-hidden="true">→</span></:actions>
+                </RowList.row>
+              <% {:option, rev} -> %>
+                <RowList.row
+                  id={"opt-#{rev.option.name}"}
+                  mode={:expandable}
+                  open={length(@entries) == 1}
+                >
+                  <:label>
+                    <%= if rev.option.name == @prefix do %>
+                      <em class="tail">self</em>
+                    <% else %>
+                      <span :if={@prefix != ""} class="leading">{@prefix}.</span><span class="tail">{tail(
+                        rev.option.name,
+                        @prefix
+                      )}</span>
+                    <% end %>
+                  </:label>
+                  <:meta>
+                    <span class="opt-type">
+                      {rev.type}<span :if={rev.read_only}> (read-only)</span>
+                    </span>
+                  </:meta>
+                  <:actions>
+                    <button
+                      type="button"
+                      class="row-action"
+                      data-copy={rev.option.name}
+                      onclick={copy_onclick()}
+                      title="Copy attribute path"
+                      aria-label={"Copy attribute path #{rev.option.name}"}
+                    >
+                      <.copy_icon />
+                      <.check_icon />
+                    </button>
+                    <a
+                      href={~p"/options/#{rev.option.name}"}
+                      class="row-action"
+                      onclick={copy_onclick()}
+                      title="Copy share link"
+                      aria-label={"Copy link to #{rev.option.name}"}
+                    >
+                      <.share_icon />
+                      <.check_icon />
+                    </a>
+                  </:actions>
+                  <:body>
+                    <dl class="opt-detail">
+                      <dt :if={rev.type}>Type</dt>
+                      <dd :if={rev.type}>
+                        {rev.type}
+                        <span :if={rev.read_only} class="read-only">(read-only)</span>
+                      </dd>
 
-                <dt :if={rev.description}>Description</dt>
-                <dd :if={rev.description}><.nixos_markdown text={rev.description} /></dd>
+                      <dt :if={rev.description}>Description</dt>
+                      <dd :if={rev.description}><.nixos_markdown text={rev.description} /></dd>
 
-                <dt :if={rev.default}>Default</dt>
-                <dd :if={rev.default}><.code_block code={rev.default} /></dd>
+                      <dt :if={rev.default}>Default</dt>
+                      <dd :if={rev.default}><.code_block code={rev.default} /></dd>
 
-                <dt :if={rev.example}>Example</dt>
-                <dd :if={rev.example}><.code_block code={rev.example} /></dd>
+                      <dt :if={rev.example}>Example</dt>
+                      <dd :if={rev.example}><.code_block code={rev.example} /></dd>
 
-                <dt :if={packages_for(@packages_by_option, rev.option_id) != []}>Packages</dt>
-                <dd :if={packages_for(@packages_by_option, rev.option_id) != []}>
-                  <span :for={pkg <- packages_for(@packages_by_option, rev.option_id)}>
-                    <.link navigate={~p"/packages/#{pkg.attribute}"}>{pkg.attribute}</.link>
-                  </span>
-                </dd>
-                <dt :if={files_for(@files_by_option, rev.option_id) != []}>Defined in</dt>
-                <dd :if={files_for(@files_by_option, rev.option_id) != []}>
-                  <span :for={file <- files_for(@files_by_option, rev.option_id)}>
-                    <.declaration_link path={file.path} channel_revision={@channel_revision} />
-                  </span>
-                </dd>
-              </dl>
-            </:body>
-          </RowList.row>
+                      <dt :if={packages_for(@packages_by_option, rev.option_id) != []}>Packages</dt>
+                      <dd :if={packages_for(@packages_by_option, rev.option_id) != []}>
+                        <span :for={pkg <- packages_for(@packages_by_option, rev.option_id)}>
+                          <.link navigate={~p"/packages/#{pkg.attribute}"}>{pkg.attribute}</.link>
+                        </span>
+                      </dd>
+                      <dt :if={files_for(@files_by_option, rev.option_id) != []}>Defined in</dt>
+                      <dd :if={files_for(@files_by_option, rev.option_id) != []}>
+                        <span :for={file <- files_for(@files_by_option, rev.option_id)}>
+                          <.declaration_link path={file.path} channel_revision={@channel_revision} />
+                        </span>
+                      </dd>
+                    </dl>
+                  </:body>
+                </RowList.row>
+            <% end %>
+          <% end %>
         </RowList.row_list>
       </section>
 
@@ -425,7 +418,15 @@ defmodule TrackerWeb.OptionLive.Show do
         cr -> load_prefix_view(cr, prefix)
       end
 
+    {subgroups, leaf_options} = pull_up_singletons(channel_revision, subgroups, leaf_options)
     leaf_options = drop_settable_set_duplicates(subgroups, leaf_options)
+
+    entries =
+      Enum.sort_by(
+        Enum.map(subgroups, fn {name, count} -> {name, {:group, count}} end) ++
+          Enum.map(leaf_options, fn rev -> {rev.option.name, {:option, rev}} end),
+        &elem(&1, 0)
+      )
 
     # Per-option "Defined in" links (inside each leaf accordion) and the
     # recent-PRs-touching-the-subtree's-files list both ride option↔file spans.
@@ -440,7 +441,7 @@ defmodule TrackerWeb.OptionLive.Show do
         socket.assigns.matches == []
 
     socket
-    |> assign(:subgroups, subgroups)
+    |> assign(:entries, entries)
     |> assign(:leaf_options, leaf_options)
     |> assign(:files, files)
     |> assign(:files_by_option, files_by_option)
@@ -559,9 +560,6 @@ defmodule TrackerWeb.OptionLive.Show do
     TableParams.to_path(tp, show_path(prefix))
   end
 
-  # Both tree views are assembled from three narrow queries — subgroup counts
-  # aggregated in the database, full detail for only the handful of leaf rows
-  # the page renders, and the subtree's file set for Defined-in/recent PRs.
   # Hydrating every revision under a big prefix like `services` costs seconds.
   defp load_root_view(channel_revision) do
     subgroups =
@@ -578,6 +576,38 @@ defmodule TrackerWeb.OptionLive.Show do
       )
 
     {subgroups, leaf_revs, []}
+  end
+
+  defp pull_up_singletons(_channel_revision, [], leaf_options), do: {[], leaf_options}
+
+  defp pull_up_singletons(channel_revision, subgroups, leaf_options) do
+    direct_names = MapSet.new(leaf_options, & &1.option.name)
+
+    {singletons, groups} =
+      Enum.split_with(subgroups, fn {name, count} ->
+        count == 1 and not MapSet.member?(direct_names, name)
+      end)
+
+    promoted =
+      case singletons do
+        [] ->
+          []
+
+        _ ->
+          filter =
+            Enum.reduce(singletons, Ash.Expr.expr(false), fn {name, _count}, filter ->
+              prefix = name <> "."
+              Ash.Expr.expr(^filter or string_starts_with(option.name, ^prefix))
+            end)
+
+          Tracker.Nixpkgs.OptionSpan.at!(
+            channel_revision.channel_id,
+            channel_revision.released_at,
+            query: [filter: filter, load: [:option]]
+          )
+      end
+
+    {groups, leaf_options ++ promoted}
   end
 
   # An attrsOf-submodule option like services.bitcoind is both a real option
