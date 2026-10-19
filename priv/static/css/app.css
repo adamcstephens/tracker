@@ -1862,11 +1862,6 @@ a.revision-link {
 		justify-content: flex-end;
 	}
 
-	/* The type tag is clutter at this width, and the detail body has it. */
-	.option-show summary .row-meta {
-		display: none;
-	}
-
 	/* Option detail: stack dt above dd in one column. */
 	.option-show .opt-detail {
 		grid-template-columns: 1fr;
