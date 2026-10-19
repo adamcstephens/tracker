@@ -105,7 +105,6 @@ defmodule TrackerWeb.OptionLive.Show do
                     )}</span>
                   </:label>
                   <:meta>{count} options</:meta>
-                  <:actions><span class="arrow" aria-hidden="true">→</span></:actions>
                 </RowList.row>
               <% {:option, rev} -> %>
                 <RowList.row
@@ -123,35 +122,28 @@ defmodule TrackerWeb.OptionLive.Show do
                       )}</span>
                     <% end %>
                   </:label>
-                  <:meta>
-                    <span class="opt-type">
-                      {rev.type}<span :if={rev.read_only}> (read-only)</span>
-                    </span>
-                  </:meta>
-                  <:actions>
-                    <button
-                      type="button"
-                      class="row-action"
-                      data-copy={rev.option.name}
-                      onclick={copy_onclick()}
-                      title="Copy attribute path"
-                      aria-label={"Copy attribute path #{rev.option.name}"}
-                    >
-                      <.copy_icon />
-                      <.check_icon />
-                    </button>
-                    <a
-                      href={~p"/options/#{rev.option.name}"}
-                      class="row-action"
-                      onclick={copy_onclick()}
-                      title="Copy share link"
-                      aria-label={"Copy link to #{rev.option.name}"}
-                    >
-                      <.share_icon />
-                      <.check_icon />
-                    </a>
-                  </:actions>
                   <:body>
+                    <div class="opt-detail-actions">
+                      <button
+                        type="button"
+                        class="row-action"
+                        data-copy={rev.option.name}
+                        onclick={copy_onclick()}
+                        title="Copy attribute path"
+                        aria-label={"Copy attribute path #{rev.option.name}"}
+                      >
+                        <.copy_icon /> Copy path <.check_icon />
+                      </button>
+                      <a
+                        href={~p"/options/#{rev.option.name}"}
+                        class="row-action"
+                        onclick={copy_onclick()}
+                        title="Copy share link"
+                        aria-label={"Copy link to #{rev.option.name}"}
+                      >
+                        <.share_icon /> Copy link <.check_icon />
+                      </a>
+                    </div>
                     <dl class="opt-detail">
                       <dt :if={rev.type}>Type</dt>
                       <dd :if={rev.type}>

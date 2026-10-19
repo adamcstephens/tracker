@@ -1548,17 +1548,41 @@ a.revision-link {
 	align-self: center;
 }
 
-.option-show .opt-type {
-	/* long types stay on one line; the full type is in the detail body */
-	display: inline-block;
-	max-width: 40ch;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	vertical-align: bottom;
+.option-show #options-list .row-line {
+	grid-template-columns: minmax(0, 1fr) auto 1rem;
 }
 
-/* Row actions on expandable rows stay hidden until hover/open. */
+.option-show #options-list details .row-label::before {
+	content: none;
+}
+
+.option-show #options-list .row-line::after {
+	grid-column: 3;
+	text-align: center;
+	color: var(--text-2);
+	font-size: 0.8125rem;
+}
+
+.option-show #options-list .row-link::after {
+	content: "→";
+}
+
+.option-show #options-list summary::after {
+	content: "▸";
+	transition: transform 120ms;
+}
+
+.option-show #options-list details[open] > summary::after {
+	transform: rotate(90deg);
+}
+
+.option-show .opt-detail-actions {
+	display: flex;
+	gap: 10px;
+	padding: 12px 14px 0;
+	background: var(--surface-inset);
+}
+
 .row-action {
 	display: inline-flex;
 	align-items: center;
@@ -1579,15 +1603,6 @@ a.revision-link {
 		opacity 120ms;
 }
 
-.row-list summary .row-action {
-	opacity: 0;
-}
-
-.row-list summary:hover .row-action,
-.row-list summary:focus-within .row-action,
-.row-list details[open] > summary .row-action {
-	opacity: 1;
-}
 
 .row-action:hover {
 	background: var(--surface);
@@ -1600,10 +1615,6 @@ a.revision-link {
 	display: block;
 }
 
-/* Keep a just-clicked button visible even if the pointer leaves. */
-.row-list summary .row-action.copied {
-	opacity: 1;
-}
 
 .option-show .opt-detail {
 	display: grid;
