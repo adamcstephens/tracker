@@ -1470,6 +1470,7 @@ a.revision-link {
 	background: var(--surface);
 }
 
+
 .row-label {
 	font-family: var(--mono);
 	font-weight: 500;
@@ -4102,9 +4103,9 @@ kbd + kbd {
 }
 
 .revision-comparison .comparison-packages th {
-	background: var(--surface);
 	color: var(--text-2);
-	font-weight: 500;
+	font-weight: 600;
+	border-bottom: 2px solid var(--line);
 }
 
 .revision-comparison .comparison-packages tr:last-child td {
@@ -4172,6 +4173,21 @@ kbd + kbd {
 .revision-comparison .comparison-option-header > a {
 	min-width: 0;
 	text-decoration: none;
+}
+
+.revision-comparison .comparison-packages tbody tr:has(a:focus-visible),
+.revision-comparison .comparison-option-header:has(> a:focus-visible) {
+	outline: 2px solid var(--accent-edge);
+	outline-offset: -2px;
+	background: var(--surface);
+}
+
+.revision-comparison .comparison-packages tbody tr:has(a:focus-visible) td {
+	background: var(--surface);
+}
+
+.revision-comparison :is(.comparison-package-name, .comparison-option-header) > a:focus-visible {
+	outline: none;
 }
 
 .revision-comparison .comparison-field {

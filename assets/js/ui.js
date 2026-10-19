@@ -156,7 +156,7 @@ document.addEventListener("keydown", (event) => {
 // Every list on the page is one cursor. Selecting rows in a single pass gives
 // document order for free, so a page's several lists chain together and a list
 // nested in an expanded row falls in at the row it belongs to.
-const ROW_SELECTOR = "ul.row-list > li > .row-line, ul.row-list > li > details > summary"
+const ROW_SELECTOR = "ul.row-list > li > .row-line, ul.row-list > li > details > summary, .comparison-packages tbody tr td:first-child a, .comparison-option-header > a"
 
 function keynavRows() {
   return [...document.querySelectorAll(ROW_SELECTOR)]
