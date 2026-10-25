@@ -19,8 +19,8 @@ defmodule TrackerWeb.RowList do
   rows carry) belongs in `:label` or `:sublabel`, which share the row's one
   flexible column.
 
-  Rows whose meta is wide enough to crowd the label on a phone should pass
-  `stacked` to `row_list/1`.
+  Rows whose meta is wide enough to crowd the label in a narrow container
+  should pass `stacked` to `row_list/1`.
 
   ## Uniform row height
 
@@ -44,12 +44,12 @@ defmodule TrackerWeb.RowList do
   paths or package names losing the tail costs more than the drift it saves.
   A list whose labels are prose, where the leading words carry the sense and
   the length is arbitrary, passes `truncate_label` and gets them clipped to
-  the row with an ellipsis: one line, or two on a narrow screen, where a
+  the row with an ellipsis: one line, or two in a narrow container, where a
   stacked label owns the full width and one line would cut most of them.
 
   A list whose labels are a single token behind a collapsible page prefix — an
-  option name under the path bar — passes `clip_label` instead. On a narrow
-  screen the prefix already collapses to an ellipsis, so a wrapped label only
+  option name under the path bar — passes `clip_label` instead. In a narrow
+  container the prefix collapses to an ellipsis, so a wrapped label only
   ever spills a fragment of that one tail token onto a second line: pure drift,
   no sense recovered. `clip_label` holds them to one line so every row is the
   same height, and the full name stays on the row's copy button and its
@@ -74,7 +74,7 @@ defmodule TrackerWeb.RowList do
 
   attr :stacked, :boolean,
     default: false,
-    doc: "drop meta and actions onto their own line on narrow screens"
+    doc: "drop meta and actions onto their own line in narrow containers"
 
   attr :reserve_sublabel, :boolean,
     default: false,

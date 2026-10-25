@@ -1313,6 +1313,7 @@ a.revision-link {
 /* Row list — the app-wide list idiom: rows sharing one card surface,
    separated by dividers. */
 .row-list {
+	container: row-list / inline-size;
 	list-style: none;
 	padding: 0;
 	margin: 0;
@@ -1787,7 +1788,9 @@ a.revision-link {
 		font-size: 1.0625rem;
 		row-gap: 2px;
 	}
+}
 
+@container row-list (max-width: 40rem) {
 	/* Rows: let a long label wrap; keep meta and actions pinned. */
 	.row-line {
 		gap: 8px;
@@ -1858,10 +1861,18 @@ a.revision-link {
 		grid-column: 2 / -1;
 	}
 
+	.row-list--stacked .row-meta {
+		min-width: 0;
+		overflow-wrap: anywhere;
+		flex-wrap: wrap;
+	}
+
 	.row-list--stacked .row-actions {
 		justify-content: flex-end;
 	}
+}
 
+@media (max-width: 560px) {
 	/* Option detail: stack dt above dd in one column. */
 	.option-show .opt-detail {
 		grid-template-columns: 1fr;
