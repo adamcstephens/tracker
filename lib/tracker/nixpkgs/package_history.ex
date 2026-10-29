@@ -285,7 +285,8 @@ defmodule Tracker.Nixpkgs.PackageHistory do
     :bad_platforms,
     :changelog,
     :download_page,
-    :source_provenance
+    :source_provenance,
+    :problems
   ]
 
   @doc "The span fields that carry package metadata (as opposed to identity/version)."
@@ -298,8 +299,11 @@ defmodule Tracker.Nixpkgs.PackageHistory do
   metadata channel for display.
   """
   @spec metadata_missing?(PackageSpan.t()) :: boolean()
-  def metadata_missing?(span) do
-    Enum.all?(@metadata_fields, &is_nil(Map.get(span, &1)))
+  def metadata_missing?(%PackageSpan{} = span) do
+    Enum.all?(@metadata_fields, fn field ->
+      value = Map.get(span, field)
+      is_nil(value) or (field == :problems and value == [])
+    end)
   end
 
   @doc """

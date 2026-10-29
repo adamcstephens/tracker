@@ -158,6 +158,94 @@ defmodule Tracker.Ingestion.Steps.LoadPackagesTest do
     assert open.main_program == "hello-renamed"
   end
 
+  test "problem-only changes preserve history, clear problems, and leave version history unchanged" do
+    problem = %{
+      "kind" => "future-kind",
+      "message" => "  Exact upstream text\n",
+      "urls" => ["https://example.test/advisory"]
+    }
+
+    Tracker.PackageStreamFixtures.json()
+    |> put_in(["packages", "hello", "meta", "problems"], %{"zeta" => problem})
+    |> stub_fixture()
+
+    channel = run_step!("nixos-24.11")
+    original = open_span!(channel, "hello")
+    assert [stored] = Map.fetch!(original, :problems)
+    assert stored.__struct__ == Tracker.Nixpkgs.Problem
+
+    assert {stored.id, stored.kind, stored.message, stored.urls} ==
+             {"zeta", problem["kind"], problem["message"], problem["urls"]}
+
+    changed_problem = %{problem | "message" => "Changed text"}
+
+    Tracker.PackageStreamFixtures.json()
+    |> put_in(["packages", "hello", "meta", "problems"], %{"zeta" => changed_problem})
+    |> stub_fixture()
+
+    run_revision!(channel, "problem-changed", ~U[2026-07-02 10:00:00Z])
+    changed = open_span!(channel, "hello")
+    assert changed.id != original.id
+    assert [%{message: "Changed text"}] = changed.problems
+    assert changed.version == original.version
+
+    stub_fixture(Tracker.PackageStreamFixtures.json())
+    run_revision!(channel, "problem-cleared", ~U[2026-07-03 10:00:00Z])
+    cleared = open_span!(channel, "hello")
+    assert cleared.problems == []
+    assert cleared.id != changed.id
+
+    package_id = original.package_id
+    history = Tracker.Nixpkgs.PackageHistory
+    pinned = history.metadata_at(channel.id, ~U[2026-07-01 10:00:00Z], [package_id])
+    assert pinned[package_id].problems == [stored]
+    assert history.current_metadata(channel.id, [package_id])[package_id].problems == []
+
+    assert {[%{version: "2.12.1"}], 1} =
+             history.version_changes_by_package(package_id, channel_id: channel.id)
+
+    spans =
+      PackageSpan.by_package!(package_id, channel.id) |> Enum.sort_by(& &1.valid.lower, DateTime)
+
+    assert [first, second, third] = spans
+    assert first.valid.upper == second.valid.lower
+    assert second.valid.upper == third.valid.lower
+  end
+
+  test "problem key order causes no churn and problems stay scoped to attribute and channel" do
+    package = Tracker.PackageStreamFixtures.json()["packages"]["hello"]
+
+    first_meta =
+      ~s({"problems":{"z":{"kind":"new","message":"Z"},"a":{"kind":"known","message":"A"}}})
+
+    second_meta =
+      ~s({"problems":{"a":{"message":"A","kind":"known"},"z":{"message":"Z","kind":"new"}}})
+
+    body = fn meta ->
+      package_json = package |> Map.delete("meta") |> Jason.encode!()
+      with_meta = String.trim_trailing(package_json, "}") <> ~s(,"meta":#{meta}})
+
+      ExBrotli.compress!(
+        ~s({"version":2,"packages":{"hello":#{with_meta},"alias":#{Jason.encode!(package)}}})
+      )
+    end
+
+    stub_packages_body(body.(first_meta))
+    channel = run_step!("nixos-24.11")
+    original = open_span!(channel, "hello")
+    assert Enum.map(Map.fetch!(original, :problems), &{&1.id, &1.urls}) == [{"a", []}, {"z", []}]
+    assert open_span!(channel, "alias").problems == []
+
+    stub_packages_body(body.(second_meta))
+    run_revision!(channel, "reordered", ~U[2026-07-02 10:00:00Z])
+    assert open_span!(channel, "hello").id == original.id
+
+    stub_fixture(%{"version" => 2, "packages" => %{"hello" => package}})
+    other_channel = run_step!("nixos-unstable")
+    assert open_span!(other_channel, "hello").problems == []
+    assert open_span!(channel, "hello").problems == original.problems
+  end
+
   test "logs unknown platform patterns from the stream meta in one warning" do
     stub_packages_body(Tracker.PackageStreamFixtures.unknown_platform_br())
 

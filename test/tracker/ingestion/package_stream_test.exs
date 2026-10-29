@@ -156,6 +156,54 @@ defmodule Tracker.Ingestion.PackageStreamTest do
       assert pkg[:known_vulnerabilities] == ["CVE-2024-0001: buffer overflow"]
     end
 
+    test "normalizes problems by identifier while preserving kind, message, and URLs" do
+      br = Tracker.PackageStreamFixtures.problems_br()
+      :ok = PackageStream.stream_packages(br, self())
+
+      packages = collect_packages()
+
+      assert packages["with_problems"][:problems] == [
+               %{
+                 "id" => "a-first",
+                 "kind" => "unmaintained",
+                 "message" => "An identifier is not its kind.",
+                 "urls" => []
+               },
+               %{
+                 "id" => "m-middle",
+                 "kind" => "unmaintained",
+                 "message" => "A separate issue with the same kind.",
+                 "urls" => []
+               },
+               %{
+                 "id" => "z-last",
+                 "kind" => "future/upstream-kind",
+                 "message" => "  Preserve punctuation: <unsafe> & café.\nSecond line.\n",
+                 "urls" => [
+                   "https://example.com/advisory?x=1&y=2#details",
+                   "https://example.org/另一个"
+                 ]
+               }
+             ]
+    end
+
+    test "emits an empty problems list for missing, null, or empty metadata" do
+      br = Tracker.PackageStreamFixtures.problems_br()
+      :ok = PackageStream.stream_packages(br, self())
+
+      packages = collect_packages()
+
+      for attr <- [
+            "absent_meta",
+            "null_meta",
+            "missing_problems",
+            "null_problems",
+            "empty_problems"
+          ] do
+        assert packages[attr][:problems] == [], "expected empty problems for #{attr}"
+      end
+    end
+
     test "normalizes platform pattern objects to display names" do
       br = Tracker.PackageStreamFixtures.small_packages_br()
       :ok = PackageStream.stream_packages(br, self())

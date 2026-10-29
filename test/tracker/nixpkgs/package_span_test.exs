@@ -4,6 +4,32 @@ defmodule Tracker.Nixpkgs.PackageSpanTest do
   alias Tracker.Fixtures
   alias Tracker.Nixpkgs.PackageSpan
 
+  test "problem structs round trip through persisted spans with exact text" do
+    channel = Fixtures.channel!()
+    revision = Fixtures.channel_revision!(channel)
+    package = Fixtures.package!()
+
+    problem =
+      struct!(Tracker.Nixpkgs.Problem,
+        id: "  identifier ",
+        kind: "future kind",
+        message: "  Preserve whitespace\n",
+        urls: [" https://example.test/detail "]
+      )
+
+    Fixtures.apply_package_revision!(revision, [{package, %{version: "1", problems: [problem]}}])
+    [stored] = PackageSpan.current_for_packages!(channel.id, [package.id])
+    assert stored.problems == [problem]
+
+    assert Tracker.Nixpkgs.SpanEngine.reconstruct(
+             PackageSpan.spec(),
+             channel.id,
+             revision.released_at
+           )[
+             [package.id]
+           ].problems == [problem]
+  end
+
   describe "for_packages" do
     test "returns all spans for the packages in one channel" do
       chan = Fixtures.channel!()

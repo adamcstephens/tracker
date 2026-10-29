@@ -273,6 +273,7 @@ defmodule Tracker.Nixpkgs.SpanEngineTest do
         Enum.map(packages, fn %{id: id} ->
           wide_spec.payload_columns
           |> Map.new(&{&1, nil})
+          |> Map.put(:problems, [])
           |> Map.merge(%{package_id: id, version: "1.0"})
         end)
 

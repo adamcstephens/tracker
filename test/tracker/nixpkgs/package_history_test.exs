@@ -751,6 +751,16 @@ defmodule Tracker.Nixpkgs.PackageHistoryTest do
     end
   end
 
+  test "empty problems do not suppress missing-metadata fallback but reported problems do" do
+    empty = struct!(Tracker.Nixpkgs.PackageSpan, problems: [])
+    assert PackageHistory.metadata_missing?(empty)
+
+    problem =
+      struct!(Tracker.Nixpkgs.Problem, id: "security", kind: "future", message: "Needs attention")
+
+    refute PackageHistory.metadata_missing?(%{empty | problems: [problem]})
+  end
+
   describe "metadata_at/3" do
     test "resolves the span valid at a point in time, not the open one" do
       channel = Fixtures.channel!("meta-at")

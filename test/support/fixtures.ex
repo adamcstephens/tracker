@@ -141,6 +141,7 @@ defmodule Tracker.Fixtures do
   defp package_payload(package, attrs) do
     Tracker.Nixpkgs.PackageSpan.payload_columns()
     |> Map.new(&{&1, nil})
+    |> Map.put(:problems, [])
     |> Map.put(:package_id, package.id)
     |> Map.merge(attrs)
   end

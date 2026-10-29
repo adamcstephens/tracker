@@ -81,7 +81,8 @@ defmodule Tracker.Nixpkgs.PackageSpan do
     :bad_platforms,
     :changelog,
     :download_page,
-    :source_provenance
+    :source_provenance,
+    :problems
   ]
 
   @doc """
@@ -258,6 +259,11 @@ defmodule Tracker.Nixpkgs.PackageSpan do
     attribute :changelog, {:array, :string}, public?: true
     attribute :download_page, :string, public?: true
     attribute :source_provenance, {:array, :string}, public?: true
+
+    attribute :problems, {:array, Tracker.Nixpkgs.Problem},
+      public?: true,
+      allow_nil?: false,
+      default: []
 
     timestamps()
   end

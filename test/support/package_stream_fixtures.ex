@@ -16,6 +16,46 @@ defmodule Tracker.PackageStreamFixtures do
     |> ExBrotli.compress!()
   end
 
+  def problems_br do
+    ~S"""
+    {
+      "version": 2,
+      "packages": {
+        "with_problems": {
+          "version": "1.0",
+          "meta": {
+            "problems": {
+              "z-last": {
+                "kind": "future/upstream-kind",
+                "message": "  Preserve punctuation: <unsafe> & café.\nSecond line.\n",
+                "urls": [
+                  "https://example.com/advisory?x=1&y=2#details",
+                  "https://example.org/另一个"
+                ]
+              },
+              "a-first": {
+                "kind": "unmaintained",
+                "message": "An identifier is not its kind."
+              },
+              "m-middle": {
+                "kind": "unmaintained",
+                "message": "A separate issue with the same kind.",
+                "urls": []
+              }
+            }
+          }
+        },
+        "absent_meta": {"version": "1.0"},
+        "null_meta": {"version": "1.0", "meta": null},
+        "missing_problems": {"version": "1.0", "meta": {}},
+        "null_problems": {"version": "1.0", "meta": {"problems": null}},
+        "empty_problems": {"version": "1.0", "meta": {"problems": {}}}
+      }
+    }
+    """
+    |> ExBrotli.compress!()
+  end
+
   @doc """
   Returns the raw JSON map (for reference in assertions).
   """

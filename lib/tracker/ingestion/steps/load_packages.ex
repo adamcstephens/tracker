@@ -35,7 +35,8 @@ defmodule Tracker.Ingestion.Steps.LoadPackages do
     :bad_platforms,
     :changelog,
     :download_page,
-    :source_provenance
+    :source_provenance,
+    :problems
   ]
 
   @impl true
@@ -115,6 +116,10 @@ defmodule Tracker.Ingestion.Steps.LoadPackages do
         Enum.reduce(@meta_fields, %{version: fields[:version]}, fn key, entry ->
           Helpers.maybe_put(entry, key, fields[key])
         end)
+        |> Map.put(
+          :problems,
+          Enum.map(fields[:problems] || [], &Tracker.Nixpkgs.Problem.from_nif/1)
+        )
 
       # Collect direct (non-team) maintainers
       non_team = fields[:maintainers] || []

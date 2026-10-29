@@ -3,7 +3,7 @@ use serde::de::{self, DeserializeSeed, Deserializer, IgnoredAny, MapAccess, Visi
 use serde::Deserialize;
 use serde_json::Value;
 use std::cell::RefCell;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
 use std::io::Read;
 use std::sync::OnceLock;
@@ -33,6 +33,7 @@ mod atoms {
         insecure,
         unsupported,
         known_vulnerabilities,
+        problems,
         platforms,
         bad_platforms,
         changelog,
@@ -87,6 +88,8 @@ struct PackageMeta {
     unsupported: Option<bool>,
     #[serde(rename = "knownVulnerabilities")]
     known_vulnerabilities: Option<Vec<String>>,
+    #[serde(default)]
+    problems: Option<BTreeMap<String, ProblemInfo>>,
     #[serde(rename = "platforms")]
     platforms_raw: Option<Vec<Value>>,
     #[serde(skip)]
@@ -109,6 +112,14 @@ struct PackageMeta {
     non_team_maintainers: Option<Vec<MaintainerInfo>>,
     #[serde(default)]
     teams: Option<Vec<TeamInfo>>,
+}
+
+#[derive(serde::Deserialize, Debug, PartialEq)]
+struct ProblemInfo {
+    kind: String,
+    message: String,
+    #[serde(default)]
+    urls: Vec<String>,
 }
 
 #[derive(serde::Deserialize, Debug, PartialEq, Clone)]
@@ -542,8 +553,14 @@ fn encode_package_tuple<'a>(env: Env<'a>, attr: &str, entry: &PackageEntry) -> T
 fn encode_package_fields<'a>(env: Env<'a>, entry: &PackageEntry) -> Term<'a> {
     let version_term = entry.version.as_deref().unwrap_or("").encode(env);
 
-    let mut keys = vec![atoms::version().encode(env)];
-    let mut vals = vec![version_term];
+    let mut keys = vec![atoms::version().encode(env), atoms::problems().encode(env)];
+    let mut vals = vec![
+        version_term,
+        encode_problems(
+            env,
+            entry.meta.as_ref().and_then(|meta| meta.problems.as_ref()),
+        ),
+    ];
 
     if let Some(ref pname) = entry.pname {
         keys.push(atoms::pname().encode(env));
@@ -634,6 +651,29 @@ fn encode_package_fields<'a>(env: Env<'a>, entry: &PackageEntry) -> Term<'a> {
     }
 
     Term::map_from_arrays(env, &keys, &vals).expect("failed to build map")
+}
+
+fn encode_problems<'a>(env: Env<'a>, problems: Option<&BTreeMap<String, ProblemInfo>>) -> Term<'a> {
+    let terms: Vec<Term<'a>> = problems
+        .into_iter()
+        .flatten()
+        .map(|(id, problem)| {
+            let keys = [
+                "id".encode(env),
+                "kind".encode(env),
+                "message".encode(env),
+                "urls".encode(env),
+            ];
+            let vals = [
+                id.as_str().encode(env),
+                problem.kind.as_str().encode(env),
+                problem.message.as_str().encode(env),
+                encode_string_list(env, &problem.urls),
+            ];
+            Term::map_from_arrays(env, &keys, &vals).expect("failed to build problem map")
+        })
+        .collect();
+    terms.encode(env)
 }
 
 fn encode_string_list<'a>(env: Env<'a>, items: &[String]) -> Term<'a> {
