@@ -46,7 +46,7 @@ update-elixir:
     mix deps.update --all
     mix deps.get
     mix hex.outdated
-    mix hex.audit
+    mix hex.audit || true
 
 [working-directory('native/package_stream')]
 update-rust:

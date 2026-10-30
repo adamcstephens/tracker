@@ -11,3 +11,4 @@ buckets:
 bot:
     username: bot-tracker
     user_id: 2
+frontend_url: https://project.junco.dev/
