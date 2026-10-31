@@ -5,8 +5,8 @@ defmodule TrackerWeb.InboxBadgeHook do
 
   The hook owns the connected session's subscription to the user's
   notification topic, so a notification arriving — or being read on another
-  device — moves the badge wherever you are. Only `InboxLive.Index` handles
-  these messages itself, so they are halted for every other view.
+  device — moves the badge wherever you are. Inbox and dashboard views also
+  refresh their previews; these messages are halted for other views.
   """
   import Phoenix.Component, only: [assign: 3]
   import Phoenix.LiveView, only: [attach_hook: 4, connected?: 1]
@@ -34,7 +34,7 @@ defmodule TrackerWeb.InboxBadgeHook do
   defp refresh(%Ash.Notifier.Notification{resource: Notification}, socket) do
     socket = assign(socket, :unread_notification_count, count(socket))
 
-    if socket.view == TrackerWeb.InboxLive.Index,
+    if socket.view in [TrackerWeb.InboxLive.Index, TrackerWeb.DashboardLive.Index],
       do: {:cont, socket},
       else: {:halt, socket}
   end

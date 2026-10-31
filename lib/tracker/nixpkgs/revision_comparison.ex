@@ -110,12 +110,24 @@ defmodule Tracker.Nixpkgs.RevisionComparison do
   defp comparison_page(resource, %ChannelRevision{} = from, %ChannelRevision{} = to, opts) do
     candidates = candidate_ids(resource, from, to)
 
-    counts = %Counts{
-      added: read_page(resource, from, to, candidates, "", "added", 1, 1).count,
-      removed: read_page(resource, from, to, candidates, "", "removed", 1, 1).count,
-      changed: read_page(resource, from, to, candidates, "", "changed", 1, 1).count
-    }
+    if Keyword.get(opts, :preview, false) do
+      preview_page(resource, from, to, candidates)
+    else
+      counts = %Counts{
+        added: read_page(resource, from, to, candidates, "", "added", 1, 1).count,
+        removed: read_page(resource, from, to, candidates, "", "removed", 1, 1).count,
+        changed: read_page(resource, from, to, candidates, "", "changed", 1, 1).count
+      }
 
+      if Keyword.get(opts, :counts_only, false) do
+        %Page{counts: counts, count: counts.added + counts.removed + counts.changed}
+      else
+        paginated_page(resource, from, to, candidates, counts, opts)
+      end
+    end
+  end
+
+  defp paginated_page(resource, from, to, candidates, counts, opts) do
     search = Keyword.get(opts, :search, "")
     change = Keyword.get(opts, :change, "all")
     requested_page = max(Keyword.get(opts, :page, 1), 1)
@@ -134,6 +146,28 @@ defmodule Tracker.Nixpkgs.RevisionComparison do
       counts: counts,
       page: page,
       total_pages: total_pages
+    }
+  end
+
+  defp preview_page(resource, from, to, candidates) do
+    changed = read_page(resource, from, to, candidates, "", "changed", 1, 3)
+    added = read_page(resource, from, to, candidates, "", "added", 1, 3)
+    removed = read_page(resource, from, to, candidates, "", "removed", 1, 3)
+    counts = %Counts{changed: changed.count, added: added.count, removed: removed.count}
+    groups = [changed.results, added.results, removed.results]
+    preferred = Enum.flat_map(groups, &Enum.take(&1, 1))
+    key = if resource == Package, do: :attribute, else: :name
+
+    remaining =
+      groups
+      |> List.flatten()
+      |> Enum.reject(fn row -> Enum.any?(preferred, &(&1.id == row.id)) end)
+      |> Enum.sort_by(&Map.fetch!(&1, key))
+
+    %Page{
+      results: preferred ++ Enum.take(remaining, 3 - length(preferred)),
+      counts: counts,
+      count: counts.added + counts.removed + counts.changed
     }
   end
 

@@ -7,6 +7,7 @@ defmodule TrackerWeb.ChannelLive.ComparisonState do
   def load(socket, channel, from, to, params) do
     search = Map.get(params, "search", "")
     change = Map.get(params, "change", "all")
+    option_change = Map.get(params, "option_change", "all")
 
     package_page =
       RevisionComparison.packages(from, to,
@@ -16,7 +17,11 @@ defmodule TrackerWeb.ChannelLive.ComparisonState do
       )
 
     option_page =
-      RevisionComparison.options(from, to, page: page(params["option_page"]), search: search)
+      RevisionComparison.options(from, to,
+        page: page(params["option_page"]),
+        search: search,
+        change: option_change
+      )
 
     uri = URI.parse(socket.assigns.current_path)
     query = URI.decode_query(uri.query || "")
@@ -42,6 +47,13 @@ defmodule TrackerWeb.ChannelLive.ComparisonState do
       package_page: package_page,
       option_page: option_page,
       change: change,
+      option_change: option_change,
+      option_filter_paths:
+        Map.new(["all", "changed", "added", "removed"], fn value ->
+          {value,
+           path(uri.path, query |> Map.put("option_change", value) |> Map.delete("option_page")) <>
+             "#options"}
+        end),
       filter_paths:
         Map.new(["all", "changed", "added", "removed"], fn value ->
           {value, path(uri.path, query |> Map.put("change", value) |> Map.delete("page"))}

@@ -44,10 +44,15 @@ defmodule Tracker.Nixpkgs.Change do
     define :touch_last_checked
     define :mark_dormant
     define :mark_not_found
+    define :dashboard_recent
   end
 
   actions do
     defaults [:read]
+
+    read :dashboard_recent do
+      prepare build(sort: [gh_updated_at: :desc_nils_last, number: :desc], limit: 7)
+    end
 
     read :list do
       argument :search, :ci_string

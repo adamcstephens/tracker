@@ -16,6 +16,8 @@ defmodule TrackerWeb.ChannelLive.DiffSections do
   attr :option_page, Page, required: true
   attr :change, :string, default: "all"
   attr :filter_paths, :map, required: true
+  attr :option_change, :string, default: "all"
+  attr :option_filter_paths, :map, required: true
   attr :package_prev_path, :string, required: true
   attr :package_next_path, :string, required: true
   attr :option_prev_path, :string, required: true
@@ -121,6 +123,13 @@ defmodule TrackerWeb.ChannelLive.DiffSections do
           <span>{comparison_total(@option_page.counts)} options</span>
         </div>
         <div class="comparison-options">
+          <.comparison_filters
+            counts={@option_page.counts}
+            change={@option_change}
+            paths={@option_filter_paths}
+            changed_label="Changed"
+            options
+          />
           <article :for={row <- @option_page.results} class="comparison-option">
             <header class="comparison-option-header">
               <.link navigate={~p"/options/#{row.name}"}>{row.name}</.link>
@@ -209,6 +218,7 @@ defmodule TrackerWeb.ChannelLive.DiffSections do
   attr :change, :string, required: true
   attr :changed_label, :string, required: true
   attr :paths, :map, required: true
+  attr :options, :boolean, default: false
 
   defp comparison_filters(assigns) do
     ~H"""
@@ -224,7 +234,8 @@ defmodule TrackerWeb.ChannelLive.DiffSections do
         }
         patch={@paths[value]}
         role="button"
-        data-change={value}
+        data-change={!@options && value}
+        data-option-change={@options && value}
         aria-pressed={to_string(@change == value)}
       >
         {label} <span>{count}</span>

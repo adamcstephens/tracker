@@ -27,6 +27,7 @@ defmodule Tracker.Notifications.ChangeSubscription do
     define :find, args: [:change_id, {:optional, :channel_id}], not_found_error?: false
     define :destroy
     define :for_user
+    define :dashboard_preview
     define :subscribers_of_change, args: [:change_id, {:optional, :channel_id}]
   end
 
@@ -59,6 +60,22 @@ defmodule Tracker.Notifications.ChangeSubscription do
     read :for_user do
       description "List the actor's change subscriptions, newest first."
       prepare build(sort: [inserted_at: :desc])
+    end
+
+    read :dashboard_preview do
+      pagination do
+        offset? true
+        countable true
+        default_limit 3
+        max_page_size 3
+      end
+
+      prepare build(
+                distinct: [:change_id],
+                distinct_sort: [inserted_at: :desc, id: :desc],
+                sort: [inserted_at: :desc, id: :desc],
+                load: [:channel, change: [:change_branches]]
+              )
     end
 
     read :subscribers_of_change do

@@ -189,6 +189,7 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
 
     publish :create, [[:channel_id, "any"], "created"]
     publish :record_result, [[:channel_id, "any"], "completed"]
+    publish :record_options_result, [[:channel_id, "any"], "options_completed"]
   end
 
   attributes do

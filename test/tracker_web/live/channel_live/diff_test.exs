@@ -140,4 +140,35 @@ defmodule TrackerWeb.ChannelLive.DiffTest do
     assert html =~
              "https://github.com/NixOS/nixpkgs/compare/#{cr1.revision}...#{cr2.revision}"
   end
+
+  for entry <- [:revision, :diff] do
+    @entry entry
+    test "#{entry} option count destinations filter independently of packages", %{
+      conn: conn,
+      cr1: cr1,
+      cr2: cr2
+    } do
+      path =
+        case @entry do
+          :revision -> "/channels/nixos-diffview/revisions/#{cr2.revision}"
+          :diff -> "/channels/nixos-diffview/diff/#{cr1.revision}/#{cr2.revision}"
+        end
+
+      {:ok, view, _} = live(conn, path <> "?channel=nixos-diffview&option_change=added#options")
+      assert has_element?(view, "#options", "diff.opt.added")
+      refute has_element?(view, "#options", "diff.opt.changed")
+      assert has_element?(view, "#packages", "diff-hello")
+      assert has_element?(view, "#packages", "diff-added-pkg")
+      assert has_element?(view, "#packages", "diff-gone-pkg")
+
+      {:ok, filtered, _} =
+        live(conn, path <> "?channel=nixos-diffview&option_change=changed&change=removed#options")
+
+      assert has_element?(filtered, "#options", "diff.opt.changed")
+      refute has_element?(filtered, "#options", "diff.opt.added")
+      assert has_element?(filtered, "#packages", "diff-gone-pkg")
+      refute has_element?(filtered, "#packages", "diff-hello")
+      refute has_element?(filtered, "#packages", "diff-added-pkg")
+    end
+  end
 end

@@ -81,7 +81,7 @@ defmodule TrackerWeb.Router do
         {TrackerWeb.Lens, :default},
         TrackerWeb.InboxBadgeHook
       ] do
-      live "/", PackageLive.Index, :index
+      live "/", DashboardLive.Index, :index
       live "/packages", PackageLive.Index, :index
       live "/packages/:name", PackageLive.Show, :show
       live "/channels", ChannelLive.Index, :index
