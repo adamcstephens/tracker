@@ -145,6 +145,22 @@ defmodule TrackerWeb.Browser.OptionTreeTest do
     read(conn, ~s|document.getElementById("opt-#{name}").querySelector("details").open|)
   end
 
+  test "search results show the child navigation arrow and open the matching option", %{
+    conn: conn
+  } do
+    conn = visit(conn, ~p"/options?search=user")
+
+    assert read(
+             conn,
+             ~s|getComputedStyle(document.querySelector("#matching-options .row-link"), "::after").content|
+           ) == ~s("→")
+
+    conn = click_link(conn, "services.nginx.user")
+
+    assert path(conn) == "/options/services.nginx"
+    assert option_open?(conn, "services.nginx.user")
+  end
+
   # A search match takes the user to the parent group focused on the option, so
   # the group page must open the option its fragment names — even on the
   # socket-free page an anonymous visitor gets, where no LiveView hook runs.
