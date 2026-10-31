@@ -666,13 +666,13 @@ defmodule TrackerWeb.OptionLive.ShowTest do
     assert String.ends_with?(href, "#opt-services.nginx.virtualHosts.example.serverName")
   end
 
-  test "matching options render as shared row-list link rows", %{conn: conn} do
+  test "matching options use collapsed-option metadata with link navigation", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/options/services.nginx?search=serverName")
 
     document = Floki.parse_document!(html)
     [list] = Floki.find(document, "#matching-options")
 
-    assert Floki.attribute(list, "class") == ["row-list row-list--reserve-sublabel"]
+    assert Floki.attribute(list, "class") == ["row-list"]
     assert Floki.find(document, "table") == []
 
     [row] = Floki.find(list, "li")
@@ -681,11 +681,29 @@ defmodule TrackerWeb.OptionLive.ShowTest do
 
     assert Floki.find(row, ~s(a.row-link[href^="/options/#{parent}?"])) != []
     assert Floki.find(row, ~s(a.row-link[href$="#opt-#{name}"])) != []
-    # The parent group is context, not a second link inside the row link. It
-    # rides in the body column: it's a full attribute path, so a trailing
-    # column would crush the label on narrow screens.
-    assert Floki.text(Floki.find(row, ".row-sublabel")) =~ "services.nginx.virtualHosts.example"
-    assert Floki.find(row, ".row-meta") == []
+    assert Floki.text(Floki.find(row, ".row-label")) == name
+    assert row |> Floki.find(".row-meta .opt-type") |> Floki.text() |> String.trim() == "string"
+    assert Floki.find(row, ".row-sublabel") == []
+    assert Floki.find(row, ".row-actions") == []
+    assert Floki.find(row, "details") == []
+  end
+
+  test "matching options include read-only type metadata", %{conn: conn, channel_revision: cr} do
+    options =
+      put_in(@nginx_options, ["services.nginx.virtualHosts.example.serverName", "readOnly"], true)
+
+    Fixtures.load_options(options, cr)
+
+    {:ok, _view, html} = live(conn, ~p"/options?search=serverName")
+
+    metadata =
+      html
+      |> Floki.parse_document!()
+      |> Floki.find("#matching-options .row-meta .opt-type")
+      |> Floki.text()
+
+    assert metadata =~ "string"
+    assert metadata =~ "(read-only)"
   end
 
   test "matching options paginate through page links", %{conn: conn, channel_revision: cr} do

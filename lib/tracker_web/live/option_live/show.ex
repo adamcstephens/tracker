@@ -66,17 +66,18 @@ defmodule TrackerWeb.OptionLive.Show do
 
       <section :if={@matches != []}>
         <SectionHeader.section_header title="Matching options" count={@match_count} />
-        <RowList.row_list id="matching-options" reserve_sublabel>
+        <RowList.row_list id="matching-options">
           <RowList.row
             :for={rev <- @matches}
             mode={:link}
             navigate={match_navigate(rev.option.name)}
           >
             <:label>{rev.option.name}</:label>
-            <:sublabel :if={parent_prefix(rev.option.name)}>
-              in {parent_prefix(rev.option.name)}
-            </:sublabel>
-            <:actions><span class="arrow" aria-hidden="true">→</span></:actions>
+            <:meta>
+              <span class="opt-type">
+                {rev.type}<span :if={rev.read_only}> (read-only)</span>
+              </span>
+            </:meta>
           </RowList.row>
         </RowList.row_list>
 
