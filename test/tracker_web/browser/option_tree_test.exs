@@ -145,6 +145,24 @@ defmodule TrackerWeb.Browser.OptionTreeTest do
     read(conn, ~s|document.getElementById("opt-#{name}").querySelector("details").open|)
   end
 
+  @tag browser_context_opts: [viewport: %{width: 390, height: 844}]
+  test "mobile search keeps the full muted prefix and accented option tail", %{conn: conn} do
+    conn = visit(conn, ~p"/options?search=user")
+
+    assert read(conn, """
+           (() => {
+             const label = document.querySelector("#matching-options .row-label");
+             const prefix = label.querySelector(".leading");
+             const tail = label.querySelector(".tail");
+             return prefix.textContent === "services.nginx." &&
+               tail.textContent === "user" &&
+               getComputedStyle(prefix).fontSize !== "0px" &&
+               getComputedStyle(prefix, "::before").content === "none" &&
+               getComputedStyle(prefix).color !== getComputedStyle(tail).color;
+           })()
+           """)
+  end
+
   test "search results show the child navigation arrow and open the matching option", %{
     conn: conn
   } do

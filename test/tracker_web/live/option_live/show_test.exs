@@ -682,6 +682,8 @@ defmodule TrackerWeb.OptionLive.ShowTest do
     assert Floki.find(row, ~s(a.row-link[href^="/options/#{parent}?"])) != []
     assert Floki.find(row, ~s(a.row-link[href$="#opt-#{name}"])) != []
     assert Floki.text(Floki.find(row, ".row-label")) == name
+    assert Floki.text(Floki.find(row, ".row-label .leading")) == parent <> "."
+    assert Floki.text(Floki.find(row, ".row-label .tail")) == "serverName"
     assert row |> Floki.find(".row-meta .opt-type") |> Floki.text() |> String.trim() == "string"
     assert Floki.find(row, ".row-sublabel") == []
     assert Floki.find(row, ".row-actions") == []

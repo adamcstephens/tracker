@@ -72,7 +72,13 @@ defmodule TrackerWeb.OptionLive.Show do
             mode={:link}
             navigate={match_navigate(rev.option.name)}
           >
-            <:label>{rev.option.name}</:label>
+            <:label>
+              <% parent = parent_prefix(rev.option.name) %>
+              <span :if={parent} class="leading">{parent}.</span><span class="tail">{tail(
+                rev.option.name,
+                parent || ""
+              )}</span>
+            </:label>
             <:meta>
               <span class="opt-type">
                 {rev.type}<span :if={rev.read_only}> (read-only)</span>

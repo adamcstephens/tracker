@@ -1816,11 +1816,11 @@ a.revision-link {
 	/* Collapse the page-prefix part of a row label to an ellipsis — the
 	   path bar already says where we are. font-size: 0 keeps the full text
 	   selectable and readable to screen readers. */
-	.row-label .leading {
+	.row-list:not(#matching-options) .row-label .leading {
 		font-size: 0;
 	}
 
-	.row-label .leading::before {
+	.row-list:not(#matching-options) .row-label .leading::before {
 		content: "…";
 		font-size: 0.9375rem;
 	}
