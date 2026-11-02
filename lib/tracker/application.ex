@@ -50,8 +50,9 @@ defmodule Tracker.Application do
     :ok
   end
 
-  defp discord_children do
-    case Application.get_env(:tracker, :discord_token) do
+  @doc false
+  def discord_children do
+    case Application.get_env(:nostrum, :token) do
       token when is_binary(token) and token != "" ->
         [Nostrum.Application, Tracker.Discord.Consumer]
 
