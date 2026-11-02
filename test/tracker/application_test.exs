@@ -12,6 +12,13 @@ defmodule Tracker.ApplicationTest do
     end)
   end
 
+  test "includes Nostrum with its runtime dependencies" do
+    assert :nostrum in Keyword.get(Tracker.MixProject.application(), :included_applications, [])
+
+    assert {:nostrum, _requirement} =
+             List.keyfind(Tracker.MixProject.project()[:deps], :nostrum, 0)
+  end
+
   test "starts Discord with the configured Nostrum token" do
     Application.put_env(:nostrum, :token, "configured-token")
 

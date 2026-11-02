@@ -22,7 +22,8 @@ defmodule Tracker.MixProject do
   def application do
     [
       mod: {Tracker.Application, []},
-      extra_applications: [:logger, :runtime_tools]
+      included_applications: [:nostrum],
+      extra_applications: [:gun, :logger, :runtime_tools]
     ]
   end
 
@@ -63,7 +64,7 @@ defmodule Tracker.MixProject do
       {:lumis, "~> 0.9"},
       {:lumis_wasm_nix, "~> 0.26.2"},
       {:mdex, "~> 0.14.0"},
-      {:nostrum, "~> 0.10.4", runtime: false},
+      {:nostrum, "~> 0.10.4"},
       {:jose, "~> 1.11"},
       {:oban, "~> 2.0"},
       {:oban_met, "~> 1.1"},
