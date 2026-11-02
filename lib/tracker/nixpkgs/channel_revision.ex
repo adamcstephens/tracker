@@ -17,6 +17,7 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
     define :list_by_channel, args: [:channel_id]
     define :record_result
     define :record_options_result
+    define :record_summaries
     define :record_hydra_package_attributes
     define :by_channel, args: [:channel_id]
     define :find_by_hash, args: [:hash]
@@ -90,6 +91,10 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
 
     update :record_options_result do
       accept [:options_result]
+    end
+
+    update :record_summaries do
+      accept [:package_summary, :option_summary]
     end
 
     update :record_hydra_package_attributes do
@@ -205,6 +210,9 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
     attribute :options_result, :atom,
       constraints: [one_of: [:success, :error]],
       public?: true
+
+    attribute :package_summary, Tracker.Nixpkgs.Types.RevisionSummary, public?: true
+    attribute :option_summary, Tracker.Nixpkgs.Types.RevisionSummary, public?: true
 
     attribute :released_at, :utc_datetime, allow_nil?: false, public?: true
     attribute :hydra_package_attributes, {:array, :string}, public?: true

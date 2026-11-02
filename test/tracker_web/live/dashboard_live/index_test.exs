@@ -5,6 +5,9 @@ defmodule TrackerWeb.DashboardLive.IndexTest do
   import Tracker.Fixtures
 
   alias AshAuthentication.Plug.Helpers
+  alias Tracker.Dashboard
+  alias Tracker.Nixpkgs.{ChannelRevision, RevisionComparison, RevisionSummary}
+  alias TrackerWeb.Lens
   alias Tracker.Notifications.ChangeSubscription
   alias Tracker.Notifications.Notification
 
@@ -34,6 +37,9 @@ defmodule TrackerWeb.DashboardLive.IndexTest do
     for revision <- [previous, current] do
       Tracker.Nixpkgs.ChannelRevision.record_result!(revision, %{result: :success})
     end
+
+    current = ChannelRevision.get_by_id!(current.id)
+    assert {:ok, _current} = RevisionSummary.persist(current)
 
     {:ok, view, _} = live(conn, "/?channel=#{channel.name}")
     assert has_element?(view, "#dashboard-revision-summary", "Packages")
@@ -132,6 +138,178 @@ defmodule TrackerWeb.DashboardLive.IndexTest do
              "#dashboard-revision-summary",
              String.slice(previous.revision, 0, 7)
            )
+  end
+
+  test "successful historical ingestion without stored summaries remains unavailable", %{
+    conn: conn
+  } do
+    {channel, _previous, current} = comparison_fixture!(persist?: false)
+
+    for suffix <- ["", "&rev=#{current.revision}"] do
+      {:ok, view, _} = live(conn, "/?channel=#{channel.name}#{suffix}")
+      dashboard = Dashboard.load(%Lens{channel: channel, revision: current}, nil)
+      assert dashboard.selected.status == :incomplete
+      assert dashboard.selected.package_status == :incomplete
+      assert dashboard.selected.option_status == :incomplete
+      assert is_nil(dashboard.selected.package_counts)
+      assert is_nil(dashboard.selected.option_counts)
+      assert dashboard.selected.package_rows == []
+      assert dashboard.selected.option_rows == []
+      refute has_element?(view, "#dashboard-revision-summary .dashboard-counts")
+      assert has_element?(view, "#dashboard-revision-summary", "Comparison unavailable")
+      assert has_element?(view, "#dashboard-package-changes", "Comparison unavailable")
+      assert has_element?(view, "#dashboard-option-changes", "Comparison unavailable")
+      refute has_element?(view, "#dashboard-package-changes", "alpha-changed")
+      refute has_element?(view, "#dashboard-option-changes", "alpha.changed")
+    end
+
+    dashboard = Dashboard.load(%Lens{all?: true}, nil)
+    [summary] = dashboard.channels
+    assert summary.status == :incomplete
+    assert is_nil(summary.package_counts)
+    assert is_nil(summary.option_counts)
+  end
+
+  for {missing, available} <- [
+        {:package_summary, :option_summary},
+        {:option_summary, :package_summary}
+      ] do
+    @missing missing
+    @available available
+    test "missing #{@missing} does not hide the independently persisted #{@available}" do
+      {channel, _previous, current} = comparison_fixture!()
+      current = ChannelRevision.get_by_id!(current.id)
+      ChannelRevision.record_summaries!(current, %{@missing => nil})
+      dashboard = Dashboard.load(%Lens{channel: channel}, nil)
+
+      assert dashboard.selected.status == :incomplete
+
+      if @missing == :package_summary do
+        assert dashboard.selected.package_status == :incomplete
+        assert is_nil(dashboard.selected.package_counts)
+        assert dashboard.selected.package_rows == []
+        assert dashboard.selected.option_status == :ready
+        assert dashboard.selected.option_counts.changed == 2
+        assert Enum.any?(dashboard.selected.option_rows, &(&1.name == "alpha.changed"))
+      else
+        assert dashboard.selected.option_status == :incomplete
+        assert is_nil(dashboard.selected.option_counts)
+        assert dashboard.selected.option_rows == []
+        assert dashboard.selected.package_status == :ready
+        assert dashboard.selected.package_counts.changed == 2
+        assert Enum.any?(dashboard.selected.package_rows, &(&1.attribute == "alpha-changed"))
+      end
+    end
+  end
+
+  test "stored counts and previews are authoritative for latest, pinned and all-channel reads", %{
+    conn: conn
+  } do
+    {channel, _previous, current} = comparison_fixture!()
+    current = ChannelRevision.get_by_id!(current.id)
+    [package_row | _] = current.package_summary.results
+    [option_row | _] = current.option_summary.results
+
+    package_summary = %{
+      current.package_summary
+      | counts: %RevisionComparison.Counts{changed: 11, added: 13, removed: 17},
+        results: [
+          %{
+            package_row
+            | attribute: "stored-only-package",
+              old_version: "saved-old",
+              new_version: "saved-new"
+          }
+        ]
+    }
+
+    option_summary = %{
+      current.option_summary
+      | counts: %RevisionComparison.Counts{changed: 19, added: 23, removed: 29},
+        results: [%{option_row | name: "stored.only.option"}]
+    }
+
+    ChannelRevision.record_summaries!(current, %{
+      package_summary: package_summary,
+      option_summary: option_summary
+    })
+
+    dashboard = Dashboard.load(%Lens{channel: channel}, nil)
+    assert dashboard.selected.package_counts == package_summary.counts
+    assert dashboard.selected.option_counts == option_summary.counts
+    assert dashboard.selected.package_rows == package_summary.results
+    assert dashboard.selected.option_rows == option_summary.results
+
+    all = Dashboard.load(%Lens{all?: true}, nil)
+    [summary] = all.channels
+    assert summary.package_counts == package_summary.counts
+    assert summary.option_counts == option_summary.counts
+    assert summary.package_rows == []
+    assert summary.option_rows == []
+
+    newer =
+      channel_revision!(channel, %{
+        revision: "newer-without-summary",
+        released_at: ~U[2026-09-03 00:00:00Z],
+        previous_channel_revision_id: current.id
+      })
+
+    ChannelRevision.record_result!(newer, %{result: :success})
+    ChannelRevision.record_options_result!(newer, %{options_result: :success})
+    pinned = Dashboard.load(%Lens{channel: channel, revision: current}, nil)
+    assert pinned.selected.package_counts == package_summary.counts
+    assert pinned.selected.option_counts == option_summary.counts
+    assert pinned.selected.package_rows == package_summary.results
+    assert pinned.selected.option_rows == option_summary.results
+    [latest] = pinned.channels
+    assert is_nil(latest.package_counts)
+    assert is_nil(latest.option_counts)
+
+    {:ok, view, _} = live(conn, "/?channel=#{channel.name}&rev=#{current.revision}")
+    assert has_element?(view, "#dashboard-package-changes", "stored-only-package")
+    assert has_element?(view, "#dashboard-package-changes", "saved-old")
+    assert has_element?(view, "#dashboard-package-changes", "saved-new")
+    assert has_element?(view, "#dashboard-option-changes", "stored.only.option")
+    refute has_element?(view, "#dashboard-package-changes", "alpha-changed")
+    refute has_element?(view, "#dashboard-option-changes", "alpha.changed")
+    assert has_element?(view, "#dashboard-revision-summary .dashboard-counts strong", "11")
+    assert has_element?(view, "#dashboard-revision-summary .dashboard-counts strong", "19")
+  end
+
+  test "persisted zero summaries are ready rather than unavailable", %{conn: conn} do
+    {channel, _previous, current} = comparison_fixture!()
+    current = ChannelRevision.get_by_id!(current.id)
+
+    ChannelRevision.record_summaries!(current, %{
+      package_summary: %{
+        current.package_summary
+        | counts: %RevisionComparison.Counts{},
+          results: []
+      },
+      option_summary: %{
+        current.option_summary
+        | counts: %RevisionComparison.Counts{},
+          results: []
+      }
+    })
+
+    dashboard = Dashboard.load(%Lens{channel: channel}, nil)
+    assert dashboard.selected.status == :ready
+    assert dashboard.selected.package_counts == %RevisionComparison.Counts{}
+    assert dashboard.selected.option_counts == %RevisionComparison.Counts{}
+    assert dashboard.selected.package_rows == []
+    assert dashboard.selected.option_rows == []
+
+    {:ok, view, _} = live(conn, "/?channel=#{channel.name}")
+
+    assert has_element?(
+             view,
+             "#dashboard-package-changes",
+             "No package changes in this revision."
+           )
+
+    assert has_element?(view, "#dashboard-option-changes", "No option changes in this revision.")
+    refute has_element?(view, "#dashboard-revision-summary", "Comparison unavailable")
   end
 
   test "signed in preview is actor scoped, bounded, and does not mark read or create a feed token",
@@ -233,6 +411,8 @@ defmodule TrackerWeb.DashboardLive.IndexTest do
     channel = channel!("nixos-26.05")
     {:ok, empty, _} = live(conn, "/?channel=#{channel.name}")
     refute has_element?(empty, "#dashboard-package-changes a[href*='/revisions/']")
+    assert has_element?(empty, "#dashboard-revision-summary", "No releases yet.")
+    assert Dashboard.load(%Lens{channel: channel}, nil).selected.status == :no_release
     revision = channel_revision!(channel)
     {:ok, first, _} = live(conn, "/?channel=#{channel.name}")
 
@@ -244,6 +424,8 @@ defmodule TrackerWeb.DashboardLive.IndexTest do
 
     refute has_element?(first, "#dashboard-package-changes", "Version changed 0")
     refute has_element?(first, "#dashboard-option-changes", "Changed 0")
+    assert has_element?(first, "#dashboard-revision-summary", "First known revision")
+    assert Dashboard.load(%Lens{channel: channel}, nil).selected.status == :first_revision
   end
 
   test "empty personal sections are still reachable without leaking public replacements", %{
@@ -284,10 +466,25 @@ defmodule TrackerWeb.DashboardLive.IndexTest do
         previous_channel_revision_id: current.id
       })
 
-    Tracker.Nixpkgs.ChannelRevision.record_result!(newer, %{result: :success})
+    package = package!("completion-persisted-package")
+    option = option!("completion.persisted.option")
+    apply_package_revision!(newer, [{package, "8"}], complete?: true)
+    apply_option_revision!(newer, [{option, %{type: "integer"}}], complete?: true)
+
+    assert {:ok, newer} =
+             RevisionSummary.persist(newer, %{newer | result: :success, options_result: :success})
+
+    newer = ChannelRevision.record_result!(newer, %{result: :success})
+    ChannelRevision.record_options_result!(newer, %{options_result: :success})
     assert has_element?(latest, "#dashboard-revision-summary", "ccccccc")
     assert has_element?(pinned, "#dashboard-revision-summary", "bbbbbbb")
     refute has_element?(pinned, "#dashboard-revision-summary", "ccccccc")
+    assert has_element?(latest, "#dashboard-package-changes", package.attribute)
+    assert has_element?(latest, "#dashboard-option-changes", option.name)
+    assert has_element?(pinned, "#dashboard-package-changes", "alpha-changed")
+    assert has_element?(pinned, "#dashboard-option-changes", "alpha.changed")
+    refute has_element?(pinned, "#dashboard-package-changes", package.attribute)
+    refute has_element?(pinned, "#dashboard-option-changes", option.name)
 
     unrelated =
       channel_revision!(channel!(), %{
@@ -354,13 +551,18 @@ defmodule TrackerWeb.DashboardLive.IndexTest do
   test "incomplete option data stays unavailable until independent options completion", %{
     conn: conn
   } do
-    {channel, _previous, current} = comparison_fixture!()
-    Tracker.Nixpkgs.ChannelRevision.record_options_result!(current, %{options_result: :error})
+    {channel, _previous, current} = comparison_fixture!(persist?: false)
+    current = ChannelRevision.record_options_result!(current, %{options_result: :error})
+    assert {:ok, current} = RevisionSummary.persist(current)
     {:ok, view, _} = live(conn, "/?channel=#{channel.name}")
     assert has_element?(view, "#dashboard-package-changes", "alpha-changed")
     refute has_element?(view, "#dashboard-option-changes a[href*='option_change=']")
     refute has_element?(view, "#dashboard-option-changes", "alpha.changed")
-    Tracker.Nixpkgs.ChannelRevision.record_options_result!(current, %{options_result: :success})
+
+    assert {:ok, current} =
+             RevisionSummary.persist(current, %{current | options_result: :success})
+
+    ChannelRevision.record_options_result!(current, %{options_result: :success})
     assert has_element?(view, "#dashboard-option-changes", "alpha.changed")
   end
 
@@ -424,7 +626,8 @@ defmodule TrackerWeb.DashboardLive.IndexTest do
       end
 
     apply_package_revision!(next, packages, complete?: true)
-    Tracker.Nixpkgs.ChannelRevision.record_result!(next, %{result: :success})
+    next = ChannelRevision.record_result!(next, %{result: :success})
+    assert {:ok, _next} = RevisionSummary.persist(next)
     {:ok, view, _} = live(conn, "/?channel=#{channel.name}")
 
     text =
@@ -460,7 +663,7 @@ defmodule TrackerWeb.DashboardLive.IndexTest do
     assert has_element?(view, "#dashboard-recent-changes .pill-draft")
   end
 
-  defp comparison_fixture! do
+  defp comparison_fixture!(opts \\ []) do
     channel = channel!("nixos-26.05")
 
     previous =
@@ -519,6 +722,16 @@ defmodule TrackerWeb.DashboardLive.IndexTest do
 
       Tracker.Nixpkgs.ChannelRevision.record_options_result!(revision, %{options_result: :success})
     end
+
+    current = ChannelRevision.get_by_id!(current.id)
+
+    current =
+      if Keyword.get(opts, :persist?, true) do
+        assert {:ok, persisted} = RevisionSummary.persist(current)
+        persisted
+      else
+        current
+      end
 
     {channel, previous, current}
   end

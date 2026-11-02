@@ -2,7 +2,7 @@ defmodule Tracker.Dashboard do
   use TypedStruct
 
   alias Tracker.Accounts.User
-  alias Tracker.Nixpkgs.{Channel, ChannelRevision, Change, RevisionComparison}
+  alias Tracker.Nixpkgs.{Channel, ChannelRevision, Change, RevisionComparison, RevisionSummary}
   alias Tracker.Notifications.{ChangeSubscription, Notification}
   alias TrackerWeb.Lens
 
@@ -124,15 +124,15 @@ defmodule Tracker.Dashboard do
 
   defp summary(channel, %ChannelRevision{} = revision, previous, preview?) do
     predecessor = Map.get(previous, revision.previous_channel_revision_id)
-    package_status = comparison_status(predecessor, revision, :result)
+    package_status = comparison_status(predecessor, revision, :result, :package_summary)
 
     option_status =
       if String.starts_with?(channel.name, "nixpkgs-"),
         do: :not_applicable,
-        else: comparison_status(predecessor, revision, :options_result)
+        else: comparison_status(predecessor, revision, :options_result, :option_summary)
 
-    packages = comparison(package_status, :packages, predecessor, revision, preview?)
-    options = comparison(option_status, :options, predecessor, revision, preview?)
+    packages = comparison(package_status, revision.package_summary, preview?)
+    options = comparison(option_status, revision.option_summary, preview?)
 
     %ChannelSummary{
       channel: channel,
@@ -155,23 +155,27 @@ defmodule Tracker.Dashboard do
   defp package_status_for(:first_revision, _), do: :first_revision
   defp package_status_for(_, _), do: :incomplete
 
-  defp comparison_status(nil, _revision, _field), do: :first_revision
+  defp comparison_status(nil, _revision, _result_field, _summary_field), do: :first_revision
 
-  defp comparison_status(%ChannelRevision{} = previous, %ChannelRevision{} = revision, field) do
-    if Map.fetch!(previous, field) == :success and Map.fetch!(revision, field) == :success,
-      do: :ready,
-      else: :incomplete
+  defp comparison_status(
+         %ChannelRevision{} = previous,
+         %ChannelRevision{} = revision,
+         result_field,
+         summary_field
+       ) do
+    if Map.fetch!(previous, result_field) == :success and
+         Map.fetch!(revision, result_field) == :success and
+         not is_nil(Map.fetch!(revision, summary_field)),
+       do: :ready,
+       else: :incomplete
   end
 
-  defp comparison(:ready, kind, previous, revision, preview?) do
-    apply(RevisionComparison, kind, [
-      previous,
-      revision,
-      [preview: preview?, counts_only: not preview?]
-    ])
+  defp comparison(:ready, %RevisionSummary{} = summary, preview?) do
+    page = RevisionSummary.to_page(summary)
+    if preview?, do: page, else: %{page | results: []}
   end
 
-  defp comparison(_status, _kind, _previous, _revision, _preview?), do: nil
+  defp comparison(_status, _summary, _preview?), do: nil
 
   defp personal(dashboard, nil, _lens), do: dashboard
 

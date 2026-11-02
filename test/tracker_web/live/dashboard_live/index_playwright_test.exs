@@ -1,7 +1,7 @@
 defmodule TrackerWeb.DashboardLive.IndexPlaywrightTest do
   use TrackerWeb.PlaywrightCase
 
-  alias Tracker.Nixpkgs.ChannelRevision
+  alias Tracker.Nixpkgs.{ChannelRevision, RevisionSummary}
   alias Tracker.Notifications.ChangeSubscription
 
   setup do
@@ -34,6 +34,9 @@ defmodule TrackerWeb.DashboardLive.IndexPlaywrightTest do
         ChannelRevision.record_result!(revision, %{result: :success})
         ChannelRevision.record_options_result!(revision, %{options_result: :success})
       end
+
+      current = ChannelRevision.get_by_id!(current.id)
+      assert {:ok, _current} = RevisionSummary.persist(current)
 
       notification!(user, %{channel_id: channel.id, channel_revision_id: current.id})
     end
