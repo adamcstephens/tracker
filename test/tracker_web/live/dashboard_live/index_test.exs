@@ -17,6 +17,44 @@ defmodule TrackerWeb.DashboardLive.IndexTest do
     refute has_element?(view, "#dashboard-followed-changes")
   end
 
+  test "nixpkgs revisions omit options while retaining package comparisons", %{conn: conn} do
+    channel = channel!("nixpkgs-unstable")
+    previous = channel_revision!(channel, %{released_at: ~U[2026-09-01 00:00:00Z]})
+
+    current =
+      channel_revision!(channel, %{
+        released_at: ~U[2026-09-02 00:00:00Z],
+        previous_channel_revision_id: previous.id
+      })
+
+    package = package!("dashboard-nixpkgs")
+    apply_package_revision!(previous, [{package, "1"}], complete?: true)
+    apply_package_revision!(current, [{package, "2"}], complete?: true)
+
+    for revision <- [previous, current] do
+      Tracker.Nixpkgs.ChannelRevision.record_result!(revision, %{result: :success})
+    end
+
+    {:ok, view, _} = live(conn, "/?channel=#{channel.name}")
+    assert has_element?(view, "#dashboard-revision-summary", "Packages")
+    refute has_element?(view, "#dashboard-revision-summary", "Options")
+    assert has_element?(view, "#dashboard-package-changes", package.attribute)
+    refute has_element?(view, "#dashboard-option-changes")
+    dashboard = Tracker.Dashboard.load(%TrackerWeb.Lens{channel: channel}, nil)
+    assert dashboard.selected.status == :ready
+    assert dashboard.selected.option_status == :not_applicable
+    assert is_nil(dashboard.selected.option_counts)
+    assert dashboard.selected.option_rows == []
+  end
+
+  test "nixpkgs channels without releases omit options", %{conn: conn} do
+    channel = channel!("nixpkgs-unstable")
+    {:ok, view, _} = live(conn, "/?channel=#{channel.name}")
+    assert has_element?(view, "#dashboard-revision-summary", "Packages")
+    refute has_element?(view, "#dashboard-revision-summary", "Options")
+    refute has_element?(view, "#dashboard-option-changes")
+  end
+
   test "packages remains the searchable package listing", %{conn: conn} do
     package!("dashboard-search-target")
     {:ok, view, _} = live(conn, ~p"/packages?channel=all&search=dashboard-search-target")

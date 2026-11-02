@@ -226,6 +226,7 @@ defmodule TrackerWeb.DashboardLive.Index do
           status={@summary.package_status}
         />
         <.counts
+          :if={@summary.option_status != :not_applicable}
           summary={@summary}
           title="Options"
           section="options"
@@ -371,7 +372,11 @@ defmodule TrackerWeb.DashboardLive.Index do
         </p>
       </div>
     </section>
-    <section id="dashboard-option-changes" class="dashboard-section">
+    <section
+      :if={@summary.option_status != :not_applicable}
+      id="dashboard-option-changes"
+      class="dashboard-section"
+    >
       <div class="dashboard-heading">
         <h2>Option changes in this channel</h2><.link
           :if={@summary.option_counts}

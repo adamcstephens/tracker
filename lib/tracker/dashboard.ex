@@ -117,12 +117,20 @@ defmodule Tracker.Dashboard do
 
   defp selected_revision(_lens, _revisions), do: nil
 
+  defp summary(%Channel{name: "nixpkgs-" <> _} = channel, nil, _previous, _preview?),
+    do: %ChannelSummary{channel: channel, option_status: :not_applicable}
+
   defp summary(channel, nil, _previous, _preview?), do: %ChannelSummary{channel: channel}
 
   defp summary(channel, %ChannelRevision{} = revision, previous, preview?) do
     predecessor = Map.get(previous, revision.previous_channel_revision_id)
     package_status = comparison_status(predecessor, revision, :result)
-    option_status = comparison_status(predecessor, revision, :options_result)
+
+    option_status =
+      if String.starts_with?(channel.name, "nixpkgs-"),
+        do: :not_applicable,
+        else: comparison_status(predecessor, revision, :options_result)
+
     packages = comparison(package_status, :packages, predecessor, revision, preview?)
     options = comparison(option_status, :options, predecessor, revision, preview?)
 
@@ -131,7 +139,7 @@ defmodule Tracker.Dashboard do
       revision: revision,
       previous_revision: predecessor,
       status:
-        if(package_status == :ready and option_status == :ready,
+        if(package_status == :ready and option_status in [:ready, :not_applicable],
           do: :ready,
           else: package_status_for(package_status, option_status)
         ),
