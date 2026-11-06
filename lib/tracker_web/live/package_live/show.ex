@@ -255,12 +255,20 @@ defmodule TrackerWeb.PackageLive.Show do
             </p>
           </section>
 
-          <section :if={@lens_channel_name || @recent_changes != []}>
-            <SectionHeader.section_header title="Recent Changes" count={length(@recent_changes)}>
+          <section :if={@lens_channel_name || @recent_changes != []} class="package-show__changes">
+            <SectionHeader.section_header
+              title={
+                if @lens_channel_name && @in_channel?,
+                  do: "Recent Changes",
+                  else: "Changes · cross-channel"
+              }
+              count={length(@recent_changes)}
+            >
               <:controls>
                 <form
                   :if={@lens_channel_name}
                   id="recent-changes-filter"
+                  class="revision-filters"
                   method="get"
                   action={~p"/packages/#{@package.attribute}"}
                   phx-change="filter-changes"
@@ -285,7 +293,6 @@ defmodule TrackerWeb.PackageLive.Show do
                 </form>
               </:controls>
             </SectionHeader.section_header>
-            <p :if={!@lens_channel_name || !@in_channel?}>Showing cross-channel history.</p>
             <p :if={@recent_changes == []}>No recent changes found.</p>
             <ChangeRow.change_row_list id="recent-changes">
               <ChangeRow.change_row

@@ -1210,7 +1210,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
 
       html =
         view
-        |> element("form.revision-filters")
+        |> element("#revision-filters")
         |> render_change(%{"all_revisions" => "true"})
 
       versions = version_order(html)
@@ -1227,7 +1227,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
       [form] =
         html
         |> Floki.parse_document!()
-        |> Floki.find("form.revision-filters")
+        |> Floki.find("#revision-filters")
 
       assert Floki.attribute(form, "method") == ["get"]
       assert Floki.attribute(form, "action") == ["/packages/#{package.attribute}"]
@@ -1241,7 +1241,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
         live(conn, ~p"/packages/#{package.attribute}?all_revisions=true")
 
       view
-      |> element("form.revision-filters")
+      |> element("#revision-filters")
       |> render_change(%{"version" => "2.12", "all_revisions" => "true"})
 
       url = assert_patch(view)
@@ -1360,7 +1360,7 @@ defmodule TrackerWeb.PackageLive.ShowTest do
       assert assert_patch(view) =~ "in_channel=false"
       assert render(view) =~ "out-of-lens change"
 
-      view |> element("form.revision-filters") |> render_change(%{"version" => "2.12"})
+      view |> element("#revision-filters") |> render_change(%{"version" => "2.12"})
       path = assert_patch(view)
       assert path =~ "in_channel=false"
       assert path =~ "rev=#{pin.revision}"

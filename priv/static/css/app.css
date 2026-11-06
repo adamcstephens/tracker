@@ -1082,6 +1082,18 @@ a.revision-link {
 	color: var(--text-2);
 }
 
+.package-show__changes {
+	container-type: inline-size;
+}
+
+@container (max-width: 40rem) {
+	.package-show__changes .section-controls {
+		order: 1;
+		flex-basis: 100%;
+	}
+}
+
+.package-show__changes > p,
 .package-show__revisions > p {
 	margin: 0;
 	padding: 1rem 1.125rem;
