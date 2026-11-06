@@ -2,7 +2,6 @@ defmodule TrackerWeb.Router do
   use TrackerWeb, :router
 
   use AshAuthentication.Phoenix.Router
-  import AshAuthentication.Plug.Helpers
 
   import Phoenix.LiveDashboard.Router
   import Oban.Web.Router
