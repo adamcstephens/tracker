@@ -89,7 +89,7 @@ defmodule Tracker.Nixpkgs.BackportReconcileWorkerTest do
              )
 
     assert [%{original: %{number: 99}, source_status: :imported}] = BackportLink.for_change!(400)
-    refute Change.get_by_number!(400).backport_pending
+    assert Change.get_by_number!(400).backport_gh_updated_at == backport.updated_at
   end
 
   test "issues and unavailable PRs never become Changes" do
@@ -203,35 +203,45 @@ defmodule Tracker.Nixpkgs.BackportReconcileWorkerTest do
     assert length(BackportLink.for_change!(801)) == 26
   end
 
-  test "native metadata refresh and upsert invalidate evidence without a state transition" do
-    ChangeDiscoveryWorker.upsert_pulls([pr(900)])
+  test "native refresh and upsert expose newer GitHub timestamps without a state transition" do
+    pr = pr(900)
+    ChangeDiscoveryWorker.upsert_pulls([pr])
     change = Change.get_by_number!(900)
 
     change =
       Change.mark_backport_checked!(change, %{
         backport_retry_at: nil,
-        expected_version: change.backport_version
+        backport_gh_updated_at: change.gh_updated_at
       })
 
-    refute change.backport_pending
-    edited = Change.refresh_from_graphql!(change, %{body: "Backport of #901"})
-    assert edited.backport_pending
+    assert [] == Change.backport_backlog!()
+
+    edited =
+      Change.refresh_from_graphql!(change, %{
+        body: "Backport of #901",
+        gh_updated_at: DateTime.add(pr.updated_at, 1, :second)
+      })
+
+    assert [%{number: 900}] = Change.backport_backlog!()
     assert edited.body == "Backport of #901"
 
     checked =
       Change.mark_backport_checked!(edited, %{
         backport_retry_at: nil,
-        expected_version: edited.backport_version
+        backport_gh_updated_at: edited.gh_updated_at
       })
+
+    assert [] == Change.backport_backlog!()
 
     upserted =
       Change.bulk_upsert!(900, %{
         title: checked.title,
         state: checked.state,
-        body: "Backport of #902"
+        body: "Backport of #902",
+        gh_updated_at: DateTime.add(pr.updated_at, 2, :second)
       })
 
-    assert upserted.backport_pending
+    assert [%{number: 900}] = Change.backport_backlog!()
     assert upserted.body == "Backport of #902"
   end
 
@@ -246,10 +256,10 @@ defmodule Tracker.Nixpkgs.BackportReconcileWorkerTest do
 
     opts = [fetcher: fetch, commits_fetcher: commits]
     assert {:error, :unavailable_commit} = BackportReconcileWorker.run(nil, opts)
-    refute Change.get_by_number!(1001).backport_pending
+    assert Change.get_by_number!(1001).backport_checked_at
     assert Change.get_by_number!(1000).backport_retry_at
     assert {:ok, 1} = BackportReconcileWorker.run(nil, opts)
-    refute Change.get_by_number!(1025).backport_pending
+    assert Change.get_by_number!(1025).backport_checked_at
   end
 
   test "concurrent metadata edits are not marked reconciled against older evidence" do
@@ -258,14 +268,19 @@ defmodule Tracker.Nixpkgs.BackportReconcileWorkerTest do
 
     commits = fn 1100 ->
       change = Change.get_by_number!(1100)
-      Change.refresh_from_graphql!(change, %{body: "Backport of #1101"})
+
+      Change.refresh_from_graphql!(change, %{
+        body: "Backport of #1101",
+        gh_updated_at: DateTime.add(change.gh_updated_at, 1, :second)
+      })
+
       {:ok, []}
     end
 
     assert {:ok, 1} =
              BackportReconcileWorker.run([1100], fetcher: fetch, commits_fetcher: commits)
 
-    assert Change.get_by_number!(1100).backport_pending
+    assert Change.get_by_number!(1100).backport_gh_updated_at == pr(1100).updated_at
     assert Enum.any?(Change.backport_backlog!(), &(&1.number == 1100))
   end
 
@@ -298,12 +313,8 @@ defmodule Tracker.Nixpkgs.BackportReconcileWorkerTest do
     assert [%{source_status: :issue, confidence: :candidate}] = BackportLink.for_change!(1200)
   end
 
-  test "unavailable historical PRs with no evidence version are retried without blocking the backlog" do
+  test "unavailable historical PRs without a GitHub timestamp are retried without blocking the backlog" do
     Change.bulk_upsert_all([%{number: 1300, title: "Historical", state: :closed}])
-
-    Repo.update_all(from(change in Change, where: change.number == 1300),
-      set: [backport_version: nil]
-    )
 
     assert {:ok, 1} =
              BackportReconcileWorker.run([1300],
@@ -311,7 +322,7 @@ defmodule Tracker.Nixpkgs.BackportReconcileWorkerTest do
              )
 
     change = Change.get_by_number!(1300)
-    refute change.backport_pending
+    assert change.backport_checked_at
     assert change.backport_retry_at
     assert [] == Change.backport_backlog!()
   end

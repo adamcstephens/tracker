@@ -88,7 +88,7 @@ defmodule Tracker.Nixpkgs.BackportReconcileWorker do
   defp mark_checked(%Change{} = change, retry_at) do
     Change.mark_backport_checked!(change, %{
       backport_retry_at: retry_at,
-      expected_version: change.backport_version
+      backport_gh_updated_at: change.gh_updated_at
     })
   end
 

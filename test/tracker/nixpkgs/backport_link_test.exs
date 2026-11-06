@@ -3,18 +3,32 @@ defmodule Tracker.Nixpkgs.BackportLinkTest do
 
   alias Tracker.Nixpkgs.{BackportLink, Change}
 
-  test "metadata invalidation preserves check order so historical Changes cannot starve" do
-    Change.bulk_upsert_all([%{number: 10, title: "Active", state: :open}])
+  test "a newer GitHub timestamp preserves check order so historical Changes cannot starve" do
+    timestamp = ~U[2026-11-01 00:00:00Z]
+
+    Change.bulk_upsert_all([
+      %{number: 10, title: "Active", state: :open, gh_updated_at: timestamp}
+    ])
+
     change = Change.get_by_number!(10)
 
     checked =
       Change.mark_backport_checked!(change, %{
         backport_retry_at: nil,
-        expected_version: change.backport_version
+        backport_gh_updated_at: timestamp
       })
 
     Change.bulk_upsert_all([%{number: 11, title: "Historical", state: :merged}])
-    Change.bulk_upsert_all([%{number: 10, title: "Edited", state: :open}])
+
+    Change.bulk_upsert_all([
+      %{
+        number: 10,
+        title: "Edited",
+        state: :open,
+        gh_updated_at: DateTime.add(timestamp, 1, :second)
+      }
+    ])
+
     edited = Change.get_by_number!(10)
     assert edited.backport_checked_at == checked.backport_checked_at
     assert Enum.map(Change.backport_backlog!(), & &1.number) == [11, 10]
