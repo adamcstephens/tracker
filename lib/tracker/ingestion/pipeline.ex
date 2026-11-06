@@ -217,6 +217,7 @@ defmodule Tracker.Ingestion.Pipeline do
       constraints: [
         one_of: [
           :create_revision,
+          :extract_hydra_packages,
           :load_packages,
           :detect_package_events,
           :load_options,

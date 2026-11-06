@@ -16,6 +16,42 @@ defmodule Tracker.Ingestion.PipelineTest do
     {:ok, channel: channel}
   end
 
+  test "loads persisted Hydra steps in a fresh VM before the step graph is loaded" do
+    code = """
+    Code.ensure_loaded!(Tracker.Ingestion.Pipeline)
+    false = :code.is_loaded(Tracker.Ingestion.StepGraph)
+
+    for {field, value} <- [
+          {:active_steps, ["create_revision", "load_packages", "finalize", "load_options",
+                           "link_options", "extract_hydra_packages"]},
+          {:completed_steps, ["extract_hydra_packages"]},
+          {:failed_step, "extract_hydra_packages"}
+        ] do
+      type = Tracker.Ingestion.Pipeline.__schema__(:type, field)
+      {:ok, _loaded} = Ecto.Type.load(type, value)
+    end
+
+    false = :code.is_loaded(Tracker.Ingestion.StepGraph)
+    """
+
+    paths = Enum.flat_map(:code.get_path(), &["-pa", to_string(&1)])
+
+    {output, status} =
+      System.cmd("elixir", ["--erl", "+S 2:2"] ++ paths ++ ["--eval", code],
+        stderr_to_stdout: true
+      )
+
+    assert status == 0, output
+  end
+
+  test "records Hydra extraction as a failed or stuck step", %{channel: channel} do
+    pipeline = create_pipeline!(create_run!(), channel)
+    failed = Pipeline.mark_failed!(pipeline, :extract_hydra_packages, "extraction failed")
+    assert failed.failed_step == :extract_hydra_packages
+    stuck = Pipeline.mark_stuck!(failed, :extract_hydra_packages, "retry budget exhausted")
+    assert stuck.failed_step == :extract_hydra_packages
+  end
+
   defp create_run! do
     IngestionRun.create!(%{type: :cron_update, started_at: DateTime.utc_now()})
   end
