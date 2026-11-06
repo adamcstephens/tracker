@@ -3403,99 +3403,6 @@ a.revision-link {
 	display: block;
 }
 
-.ibx-toolbar {
-	display: flex;
-	align-items: center;
-	gap: 0.5rem;
-	flex-wrap: wrap;
-	padding-bottom: 0.875rem;
-	margin-bottom: 0.375rem;
-	border-bottom: 1px solid var(--ibx-line-soft);
-}
-
-.ibx-seg {
-	display: inline-flex;
-	background: var(--ibx-surface);
-	border: 1px solid var(--ibx-line);
-	border-radius: 0.5rem;
-	padding: 2px;
-	gap: 2px;
-}
-
-.ibx-toolbar .ibx-seg :is(button, a) {
-	border: 0;
-	background: transparent;
-	color: var(--text-2);
-	font-size: 0.78125rem;
-	font-weight: 500;
-	padding: 0.3125rem 0.6875rem;
-	border-radius: 0.375rem;
-	cursor: pointer;
-	display: inline-flex;
-	align-items: center;
-	gap: 0.375rem;
-	text-decoration: none;
-}
-
-.ibx-toolbar .ibx-seg :is(button, a):hover {
-	filter: none;
-	color: var(--text);
-}
-
-.ibx-seg button .n {
-	font-family: var(--mono);
-	font-size: 0.6875rem;
-	color: var(--text-3);
-}
-
-.ibx-toolbar .ibx-seg :is(button, a).is-active {
-	background: var(--ibx-surface-3);
-	color: var(--text);
-}
-
-.ibx-seg button.is-active .n {
-	color: var(--accent);
-}
-
-.ibx-actions {
-	margin-left: auto;
-	display: inline-flex;
-	align-items: center;
-	gap: 0.5rem;
-}
-
-.ibx-toolbar .ibx-btn {
-	display: inline-flex;
-	align-items: center;
-	gap: 0.4375rem;
-	padding: 0.375rem 0.75rem;
-	border-radius: 0.5rem;
-	border: 1px solid var(--ibx-line);
-	background: var(--ibx-surface);
-	color: var(--text);
-	font-size: 0.78125rem;
-	font-weight: 500;
-	cursor: pointer;
-}
-
-.ibx-toolbar .ibx-btn .ibx-icon {
-	width: 0.875rem;
-	height: 0.875rem;
-	color: var(--text-2);
-}
-
-.ibx-toolbar .ibx-btn--primary {
-	background: var(--accent-bg);
-	border-color: var(--accent-edge);
-	color: var(--text);
-}
-
-.ibx-toolbar .ibx-btn--primary:hover:not(:disabled) {
-	filter: none;
-	background: color-mix(in srgb, var(--accent) 20%, transparent);
-	color: var(--text);
-}
-
 .ibx-iconbtn {
 	width: 2rem;
 	height: 2rem;
@@ -3753,19 +3660,6 @@ a.revision-link {
 }
 
 @media (max-width: 719px) {
-	.ibx-seg {
-		flex: 1 1 auto;
-	}
-
-	.ibx-toolbar .ibx-seg button {
-		flex: 1;
-		justify-content: center;
-	}
-
-	.ibx-actions {
-		flex-shrink: 0;
-	}
-
 	/* Narrow inbox rows: the trailing dot and actions wrap under the body. */
 	.ibx .row-line--leading {
 		grid-template-columns: 1.625rem minmax(0, 1fr);
@@ -3784,8 +3678,10 @@ a.revision-link {
 	}
 }
 
-.ibx-grouped {
+.ibx-workspace {
 	max-width: none;
+	width: 100%;
+	min-width: 0;
 }
 
 .ibx-heading {
@@ -3797,20 +3693,39 @@ a.revision-link {
 }
 
 .ibx-heading .ibx-seg {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
 	background: none;
 	border: 0;
-	gap: 1rem;
+	padding: 0;
+	gap: 1.5rem;
 }
 
 .ibx-heading .ibx-seg a {
 	color: var(--text-2);
-	padding: 0.5rem 0;
+	padding: 0;
 	text-decoration: none;
+}
+
+.ibx-heading .ibx-seg h1 {
+	order: -1;
+	margin: 0;
+	font-size: 1.875rem;
+	letter-spacing: -0.04em;
 }
 
 .ibx-heading .ibx-seg a.is-active {
 	color: var(--text);
-	border-bottom: 2px solid var(--accent);
+}
+
+.ibx-heading > .ibx-iconbtn {
+	margin-left: auto;
+	flex: none;
+}
+
+.ibx-subscriptions-content > section + section {
+	margin-top: 1.5rem;
 }
 
 .ibx-layout {
@@ -3959,13 +3874,27 @@ a.revision-link {
 
 .ibx-day-entries {
 	display: grid;
-	gap: 0.75rem;
+	gap: 0;
 }
 
 .ibx-revision-group {
 	border: 1px solid var(--ibx-line);
 	border-radius: 8px;
 	overflow: hidden;
+}
+
+.ibx-day-entries > .ibx-revision-group {
+	margin: 0.375rem 0;
+}
+
+.ibx-day-entries > .row-list {
+	border: 0;
+	border-radius: 0;
+	border-bottom: 1px solid var(--ibx-line-soft);
+}
+
+.ibx-day-entries > .row-list .row-line {
+	padding: 0.875rem 1rem;
 }
 
 .ibx-group-heading {
@@ -4010,6 +3939,30 @@ a.revision-link {
 .ibx-group-members .row-list {
 	border: 0;
 	border-radius: 0;
+}
+
+.ibx-group-members {
+	padding: 0 1rem 0 2.5rem;
+}
+
+.ibx-group-members .row-list > li {
+	border-top: 1px solid var(--ibx-line-soft);
+}
+
+.ibx-workspace .row-sublabel {
+	flex-wrap: wrap;
+	white-space: normal;
+	overflow: visible;
+	mask-image: none;
+}
+
+.ibx-workspace .row-actions {
+	justify-content: flex-end;
+}
+
+.ibx-group-members .row-line {
+	padding-left: 0;
+	padding-right: 0;
 }
 
 .ibx-more-controls {
@@ -4058,6 +4011,14 @@ a.revision-link {
 
 	.ibx-group-heading > .ibx-act {
 		margin-left: auto;
+	}
+
+	.ibx-group-members {
+		padding: 0 0.75rem;
+	}
+
+	.ibx-heading .ibx-seg {
+		gap: 1rem;
 	}
 
 	.ibx-grouped .ibx-btn,

@@ -69,63 +69,61 @@ defmodule TrackerWeb.Browser.InboxGroupingTest do
     conn: conn,
     user: user,
     channel: channel,
-    revision: revision,
-    notification: notification
+    revision: revision
   } do
     conn =
       inbox(
         conn,
         user,
-        "/inbox?filter=all&channel_id=#{channel.id}&package_id=#{notification.package_id}"
+        "/inbox?filter=all&channel_id=#{channel.id}"
       )
 
-    assert_restored_scope(conn, channel.id, notification.package_id)
+    assert_restored_scope(conn, channel.id)
     click(conn, "#reset-filters")
-    assert_scope_values(conn, "", "")
+    assert_scope_value(conn, "")
     assert_has(conn, "#filter-all.is-active")
     assert read(conn, "new URL(location.href).searchParams.has('channel_id')") == false
-    assert read(conn, "new URL(location.href).searchParams.has('package_id')") == false
+    refute_has(conn, "[name=package_id]")
 
     evaluate(conn, "history.back()")
-    assert_restored_scope(conn, channel.id, notification.package_id)
+    assert_restored_scope(conn, channel.id)
     assert_has(conn, "#revision-group-#{revision.id}")
 
     evaluate(conn, "history.forward()")
-    assert_scope_values(conn, "", "")
+    assert_scope_value(conn, "")
     assert read(conn, "new URL(location.href).searchParams.has('channel_id')") == false
-    assert read(conn, "new URL(location.href).searchParams.has('package_id')") == false
     assert_has(conn, "#filter-all.is-active")
 
     path = read(conn, "location.pathname + location.search")
     conn = visit(conn, path)
     assert_has(conn, "#filter-all.is-active")
     assert_has(conn, "#revision-group-#{revision.id}")
-    assert_scope_values(conn, "", "")
+    assert_scope_value(conn, "")
   end
 
-  defp assert_restored_scope(conn, channel_id, package_id) do
+  defp assert_restored_scope(conn, channel_id) do
     assert_path(conn, "/inbox")
 
     PhoenixTest.Playwright.retry(
       fn ->
         assert read(
                  conn,
-                 ~s|["filter","channel_id","package_id"].map(key => new URL(location.href).searchParams.get(key))|
-               ) == ["all", to_string(channel_id), to_string(package_id)]
+                 ~s|["filter","channel_id"].map(key => new URL(location.href).searchParams.get(key))|
+               ) == ["all", to_string(channel_id)]
       end,
       timeout()
     )
 
-    assert_scope_values(conn, channel_id, package_id)
+    assert_scope_value(conn, channel_id)
   end
 
-  defp assert_scope_values(conn, channel_id, package_id) do
+  defp assert_scope_value(conn, channel_id) do
     PhoenixTest.Playwright.retry(
       fn ->
         assert read(
                  conn,
-                 ~s|["#inbox-channel","#inbox-package"].map(selector => document.querySelector(selector)?.value)|
-               ) == [to_string(channel_id), to_string(package_id)]
+                 ~s|document.querySelector("#inbox-channel")?.value|
+               ) == to_string(channel_id)
       end,
       timeout()
     )
@@ -149,12 +147,126 @@ defmodule TrackerWeb.Browser.InboxGroupingTest do
     assert_has(conn, "#inbox-filters[open]")
     assert_has(conn, "#inbox-filters input[type=checkbox]")
     assert_has(conn, "#inbox-filters select[name=channel_id]")
-    assert_has(conn, "#inbox-filters select[name=package_id]")
+    refute_has(conn, "[name=package_id]")
     click(conn, "#revision-group-#{revision.id} [phx-click=toggle-group]")
     assert_has(conn, "#notification-#{notification.id}")
     assert read(conn, "document.documentElement.scrollWidth <= window.innerWidth")
     assert read(conn, "document.body.scrollWidth <= window.innerWidth")
     assert %Notification{read_at: nil} = Ash.get!(Notification, notification.id, actor: user)
+  end
+
+  @tag :selected_a
+  @tag browser_context_opts: [viewport: %{width: 1440, height: 1060}]
+  test "desktop Inbox and Subscriptions use the same wide shell and divider-led rows", %{
+    conn: conn,
+    user: user,
+    revision: revision,
+    notification: notification
+  } do
+    Tracker.Notifications.PackageSubscription.subscribe!(notification.package_id, nil,
+      actor: user
+    )
+
+    for _ <- 1..2,
+        do: notification!(user, %{type: :package_change_opened, change_id: change!().id})
+
+    change = change!(nil, %{title: "linked-browser-propagation"})
+    branch = change_branch!(change, "nixos-unstable", revision)
+
+    propagated =
+      notification!(user, %{
+        type: :change_propagated,
+        change_id: change.id,
+        change_branch_id: branch.id,
+        channel_id: revision.channel_id,
+        channel_revision_id: revision.id
+      })
+
+    conn = inbox(conn, user)
+    assert_has(conn, ".ibx-workspace > .ibx-heading #view-nav-inbox[aria-current=page]")
+
+    assert read(
+             conn,
+             "getComputedStyle(document.querySelector('.ibx-layout')).gridTemplateColumns.split(' ').length"
+           ) == 2
+
+    assert read(conn, "document.querySelector('.ibx-sidebar').getBoundingClientRect().width") >=
+             220
+
+    width = read(conn, "document.querySelector('.ibx-workspace').getBoundingClientRect().width")
+    assert width > 1000
+
+    assert read(
+             conn,
+             "Array.from(document.querySelectorAll('.ibx-day-entries > .row-list')).every(el => getComputedStyle(el).borderTopWidth === '0px' && getComputedStyle(el).borderRadius === '0px')"
+           )
+
+    assert read(conn, "document.querySelectorAll('.ibx-day-entries > .row-list').length") == 2
+    click(conn, "#revision-group-#{revision.id} [phx-click=toggle-group]")
+    assert_has(conn, "#notification-#{notification.id}")
+    assert_has(conn, "#revision-group-#{revision.id} #notification-#{propagated.id}")
+    click(conn, "#notification-#{propagated.id} [aria-label='Save for later']")
+    assert_has(conn, "#notification-#{propagated.id} [aria-label='Remove from saved']")
+    conn = fill_in(conn, "Search notifications…", with: "linked-browser-propagation")
+    assert_has(conn, "#revision-group-#{revision.id}[data-notification-count='1']")
+    assert_has(conn, "#notification-#{propagated.id}")
+    refute_has(conn, "#notification-#{notification.id}")
+    click(conn, "#notification-#{propagated.id} [aria-label='Mark as read']")
+    assert_has(conn, "#inbox-empty")
+    click(conn, "#view-nav-subscriptions")
+    assert_has(conn, ".ibx-workspace > .ibx-heading #view-nav-subscriptions[aria-current=page]")
+
+    assert read(conn, "document.querySelector('.ibx-workspace').getBoundingClientRect().width") ==
+             width
+
+    assert_has(conn, "#package-subscriptions")
+    assert read(conn, "document.documentElement.scrollWidth <= window.innerWidth")
+  end
+
+  @tag :selected_a
+  @tag browser_context_opts: [viewport: %{width: 390, height: 844}]
+  test "mobile propagation digests expand, search, save and read without overflow", %{
+    conn: conn,
+    user: user
+  } do
+    matching_change = change!(nil, %{title: "digest-browser-matching"})
+    hidden_change = change!(nil, %{title: "digest-browser-hidden"})
+
+    [matching, hidden] =
+      for change <- [matching_change, hidden_change] do
+        branch = change_branch!(change, "nixos-unstable")
+
+        notification!(user, %{
+          type: :change_propagated,
+          change_id: change.id,
+          change_branch_id: branch.id,
+          occurred_at: ~U[2026-11-06 12:00:00Z]
+        })
+      end
+
+    conn = inbox(conn, user, "/inbox?filter=all")
+    assert_has(conn, ".ibx-propagation-group[data-notification-count='2']")
+    press(conn, ".ibx-propagation-group [phx-click=toggle-group]", "Enter")
+    assert_has(conn, ".ibx-propagation-group #notification-#{matching.id}")
+    assert_has(conn, ".ibx-propagation-group #notification-#{hidden.id}")
+    conn = fill_in(conn, "Search notifications…", with: "digest-browser-matching")
+    assert_has(conn, ".ibx-propagation-group[data-notification-count='1']")
+    assert_has(conn, "#notification-#{matching.id}")
+    refute_has(conn, "#notification-#{hidden.id}")
+    click(conn, "#notification-#{matching.id} [aria-label='Save for later']")
+    assert_has(conn, "#notification-#{matching.id} [aria-label='Remove from saved']")
+    click(conn, "#notification-#{matching.id} [aria-label='Mark as read']")
+    assert_has(conn, "#notification-#{matching.id} [aria-label='Mark as unread']")
+    assert read(conn, "document.documentElement.scrollWidth <= window.innerWidth")
+    assert read(conn, "document.body.scrollWidth <= window.innerWidth")
+    width = read(conn, "document.querySelector('.ibx-workspace').getBoundingClientRect().width")
+    assert width >= 342 and width <= 390
+    click(conn, "#view-nav-subscriptions")
+    assert_has(conn, ".ibx-workspace > .ibx-heading #view-nav-subscriptions[aria-current=page]")
+    assert read(conn, "document.documentElement.scrollWidth <= window.innerWidth")
+
+    assert read(conn, "document.querySelector('.ibx-workspace').getBoundingClientRect().width") ==
+             width
   end
 
   test "the actual Clear search control restores ordinary group expansion", %{

@@ -41,7 +41,6 @@ defmodule TrackerWeb.InboxLive.Index do
      socket
      |> assign(:channel_revision_id, integer_param(params["channel_revision_id"]))
      |> assign(:channel_id, integer_param(params["channel_id"]))
-     |> assign(:package_id, integer_param(params["package_id"]))
      |> assign(:table_params, tp)
      |> assign(:search_collapsed, search_collapsed)
      |> assign(:filter, parse_filter(params["filter"]))
@@ -108,7 +107,6 @@ defmodule TrackerWeb.InboxLive.Index do
   def handle_event("filter-scope", params, socket) do
     socket
     |> assign(:channel_id, integer_param(params["channel_id"]))
-    |> assign(:package_id, integer_param(params["package_id"]))
     |> reset_to_first_page()
   end
 
@@ -116,12 +114,11 @@ defmodule TrackerWeb.InboxLive.Index do
     socket
     |> assign(:active_types, MapSet.new(NotificationPresenter.type_order()))
     |> assign(:channel_id, nil)
-    |> assign(:package_id, nil)
     |> reset_to_first_page()
   end
 
   def handle_event("toggle-group", %{"id" => id}, socket) do
-    key = String.to_integer(id)
+    key = id
     state = if socket.assigns.table_params.search == "", do: :expanded, else: :search_collapsed
     keys = Map.fetch!(socket.assigns, state)
     keys = if MapSet.member?(keys, key), do: MapSet.delete(keys, key), else: MapSet.put(keys, key)
@@ -129,7 +126,7 @@ defmodule TrackerWeb.InboxLive.Index do
   end
 
   def handle_event("show-more", %{"id" => id}, socket) do
-    key = String.to_integer(id)
+    key = id
 
     {:noreply,
      socket
@@ -138,15 +135,13 @@ defmodule TrackerWeb.InboxLive.Index do
   end
 
   def handle_event("show-fewer", %{"id" => id}, socket) do
-    key = String.to_integer(id)
+    key = id
     {:noreply, socket |> update(:member_limits, &Map.delete(&1, key)) |> load_notifications()}
   end
 
   def handle_event("mark-group-read", %{"id" => id}, socket) do
     {:ok, _count} =
-      Inbox.mark_matching_read(query_args(socket), socket.assigns.current_user,
-        entry_key: String.to_integer(id)
-      )
+      Inbox.mark_matching_read(query_args(socket), socket.assigns.current_user, entry_key: id)
 
     {:noreply, load_notifications(socket)}
   end
@@ -198,7 +193,7 @@ defmodule TrackerWeb.InboxLive.Index do
     else
       expanded =
         page.entries
-        |> Enum.filter(&expanded?(&1.key, socket.assigns))
+        |> Enum.filter(&expanded?(&1, socket.assigns))
         |> Enum.group_by(&Map.get(socket.assigns.member_limits, &1.key, 3))
         |> Enum.flat_map(fn {limit, entries} ->
           {:ok, loaded} = Inbox.members(scope, user, entries, limit: limit)
@@ -214,6 +209,11 @@ defmodule TrackerWeb.InboxLive.Index do
                 loaded
                 | members:
                     Enum.take(loaded.members, Map.get(socket.assigns.member_limits, entry.key, 3)),
+                  propagation_notifications:
+                    Enum.take(
+                      loaded.propagation_notifications,
+                      Map.get(socket.assigns.member_limits, entry.key, 3)
+                    ),
                   revision_notifications:
                     Enum.take(
                       loaded.revision_notifications,
@@ -228,8 +228,8 @@ defmodule TrackerWeb.InboxLive.Index do
 
       notifications =
         Enum.flat_map(entries, fn entry ->
-          if entry.key > 0,
-            do: entry.members ++ entry.revision_notifications,
+          if entry.kind != :notification,
+            do: entry.members ++ entry.revision_notifications ++ entry.propagation_notifications,
             else: [entry.notification]
         end)
 
@@ -255,7 +255,7 @@ defmodule TrackerWeb.InboxLive.Index do
           {day, rows}
         end)
 
-      {:ok, {channels, packages}} = Inbox.filter_options(user)
+      {:ok, channels} = Inbox.filter_options(user)
 
       socket
       |> assign(:entries, entries)
@@ -270,14 +270,13 @@ defmodule TrackerWeb.InboxLive.Index do
       |> assign(:total_count, count(socket, %{}))
       |> assign(:saved_count, count(socket, %{saved_only: true}))
       |> assign(:channels, channels)
-      |> assign(:packages, packages)
       |> assign(:has_prev_page?, tp.page > 1)
       |> assign(:has_next_page?, tp.page < last_page)
       |> assign(:total_pages, last_page)
       |> assign(:current_page, tp.page)
       |> assign(
         :narrowed?,
-        scope.search != "" or scope.channel_id != nil or scope.package_id != nil or
+        scope.search != "" or scope.channel_id != nil or
           scope.channel_revision_id != nil or
           length(scope.types) != length(NotificationPresenter.type_order()) or
           socket.assigns.filter == :saved
@@ -286,8 +285,10 @@ defmodule TrackerWeb.InboxLive.Index do
     end
   end
 
-  defp expanded?(key, assigns) do
-    key > 0 and
+  defp expanded?(%Inbox.Entry{} = entry, assigns) do
+    key = entry.key
+
+    entry.kind != :notification and
       if assigns.table_params.search == "",
         do: MapSet.member?(assigns.expanded, key),
         else: not MapSet.member?(assigns.search_collapsed, key)
@@ -305,7 +306,6 @@ defmodule TrackerWeb.InboxLive.Index do
     %{
       channel_revision_id: socket.assigns.channel_revision_id,
       channel_id: socket.assigns.channel_id,
-      package_id: socket.assigns.package_id,
       unread_only: socket.assigns.filter == :unread,
       saved_only: socket.assigns.filter == :saved,
       types: MapSet.to_list(socket.assigns.active_types),
@@ -344,7 +344,6 @@ defmodule TrackerWeb.InboxLive.Index do
     %{
       channel_revision_id: assigns.channel_revision_id,
       channel_id: assigns.channel_id,
-      package_id: assigns.package_id,
       filter: assigns.filter != :unread && Atom.to_string(assigns.filter),
       types: types
     }
@@ -356,7 +355,7 @@ defmodule TrackerWeb.InboxLive.Index do
   @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
-    <div class="ibx ibx-grouped">
+    <div class="ibx ibx-workspace ibx-grouped">
       <div class="ibx-heading">
         <.view_nav active={:inbox} />
         <a
@@ -418,17 +417,6 @@ defmodule TrackerWeb.InboxLive.Index do
                   {channel.name}
                 </option>
               </select>
-              <label for="inbox-package">Package</label>
-              <select id="inbox-package" name="package_id">
-                <option value="" selected={is_nil(@package_id)}>All packages</option>
-                <option
-                  :for={package <- @packages}
-                  value={package.id}
-                  selected={@package_id == package.id}
-                >
-                  {package.attribute}
-                </option>
-              </select>
             </form>
             <button id="reset-filters" class="ibx-reset" type="button" phx-click="reset-filters">Reset filters</button>
           </div>
@@ -461,32 +449,39 @@ defmodule TrackerWeb.InboxLive.Index do
               <SectionHeader.section_header title={day} count={length(entries)} />
               <div class="ibx-day-entries" id={"inbox-day-#{index}"}>
                 <%= for entry <- entries do %>
-                  <%= if entry.key > 0 do %>
+                  <%= if entry.kind != :notification do %>
                     <article
-                      id={"revision-group-#{entry.key}"}
-                      class="ibx-revision-group"
+                      id={group_id(entry)}
+                      class={[
+                        "ibx-revision-group",
+                        entry.kind == :propagation && "ibx-propagation-group"
+                      ]}
+                      data-propagation-count={entry.propagation_count}
                       data-notification-count={entry.notification_count}
                       data-package-count={entry.package_count}
                       data-unread-count={entry.unread_count}
                     >
                       <div class="ibx-group-heading">
                         <button
-                          id={"revision-disclosure-#{entry.key}"}
+                          id={"disclosure-#{group_id(entry)}"}
                           type="button"
                           class="ibx-disclosure"
                           phx-click="toggle-group"
                           phx-value-id={entry.key}
-                          aria-expanded={to_string(expanded?(entry.key, assigns))}
-                          aria-controls={"revision-members-#{entry.key}"}
+                          aria-expanded={to_string(expanded?(entry, assigns))}
+                          aria-controls={"members-#{group_id(entry)}"}
                         >
-                          <span aria-hidden="true">{if expanded?(entry.key, assigns),
+                          <span aria-hidden="true">{if expanded?(entry, assigns),
                             do: "▾",
                             else: "▸"}</span>
-                          <span><strong>{entry.notification.channel_revision.channel.name} · {String.slice(
-                            entry.notification.channel_revision.revision,
-                            0,
-                            7
-                          )}</strong><span class="ibx-group-meta">{entry.notification_count} matching notifications · {entry.package_count} affected packages · {entry.unread_count} unread</span></span>
+                          <span>
+                            <strong>{group_title(entry)}</strong>
+                            <span class="ibx-group-meta">
+                              {entry.notification_count} matching notifications · {entry.package_count} affected packages
+                              <span :if={entry.propagation_count > 0}> · {entry.propagation_count} propagation notifications</span>
+                              · {entry.unread_count} unread
+                            </span>
+                          </span>
                         </button>
                         <button
                           class="ibx-btn"
@@ -496,6 +491,7 @@ defmodule TrackerWeb.InboxLive.Index do
                           disabled={entry.unread_count == 0}
                         >{if @narrowed?, do: "Mark matching read", else: "Mark group read"} ({entry.unread_count})</button>
                         <.link
+                          :if={entry.kind == :revision}
                           navigate={
                             ~p"/channels/#{entry.notification.channel_revision.channel.name}/revisions/#{entry.notification.channel_revision.revision}"
                           }
@@ -505,13 +501,13 @@ defmodule TrackerWeb.InboxLive.Index do
                         ><.icon name="external" /></.link>
                       </div>
                       <div
-                        id={"revision-members-#{entry.key}"}
+                        id={"members-#{group_id(entry)}"}
                         class="ibx-group-members"
-                        hidden={!expanded?(entry.key, assigns)}
+                        hidden={!expanded?(entry, assigns)}
                       >
                         <RowList.row_list
-                          :if={expanded?(entry.key, assigns)}
-                          id={"revision-notifications-#{entry.key}"}
+                          :if={expanded?(entry, assigns)}
+                          id={"notifications-#{group_id(entry)}"}
                         >
                           <.row
                             :for={n <- entry.revision_notifications}
@@ -527,24 +523,22 @@ defmodule TrackerWeb.InboxLive.Index do
                             time_zone={@time_zone}
                             version_changes={@version_changes}
                           />
+                          <.row
+                            :for={n <- entry.propagation_notifications}
+                            n={n}
+                            now={@now}
+                            time_zone={@time_zone}
+                            version_changes={@version_changes}
+                          />
                         </RowList.row_list>
-                        <div :if={expanded?(entry.key, assigns)} class="ibx-more-controls">
+                        <div :if={expanded?(entry, assigns)} class="ibx-more-controls">
                           <button
-                            :if={
-                              length(entry.members) + length(entry.revision_notifications) <
-                                entry.notification_count
-                            }
+                            :if={visible_member_count(entry) < entry.notification_count}
                             class="ibx-reset"
                             type="button"
                             phx-click="show-more"
                             phx-value-id={entry.key}
-                          >Show more · {entry.notification_count - length(entry.members) -
-                            length(entry.revision_notifications)} matching notifications remaining · {entry.package_count -
-                            (entry.members
-                             |> Enum.map(& &1.package_id)
-                             |> Enum.reject(&is_nil/1)
-                             |> Enum.uniq()
-                             |> length())} packages remaining</button>
+                          >Show more · {entry.notification_count - visible_member_count(entry)} matching notifications remaining</button>
                           <button
                             :if={Map.get(@member_limits, entry.key, 3) > 3}
                             class="ibx-reset"
@@ -588,27 +582,44 @@ defmodule TrackerWeb.InboxLive.Index do
     """
   end
 
+  defp group_id(%Inbox.Entry{kind: :revision} = entry),
+    do: "revision-group-#{entry.revision_id}"
+
+  defp group_id(%Inbox.Entry{kind: :propagation} = entry),
+    do: "propagation-group-#{Base.url_encode64(entry.key, padding: false)}"
+
+  defp group_title(%Inbox.Entry{kind: :revision} = entry) do
+    revision = entry.notification.channel_revision
+    "#{revision.channel.name} · #{String.slice(revision.revision, 0, 7)}"
+  end
+
+  defp group_title(%Inbox.Entry{kind: :propagation} = entry),
+    do: "Reached #{entry.branch_name} · #{Date.to_iso8601(entry.propagation_day)}"
+
+  defp visible_member_count(%Inbox.Entry{} = entry),
+    do:
+      length(entry.members) + length(entry.revision_notifications) +
+        length(entry.propagation_notifications)
+
   attr :active, :atom, required: true, values: [:inbox, :subscriptions]
 
   def view_nav(assigns) do
     ~H"""
     <nav class="ibx-seg" aria-label="Inbox views">
-      <.link
-        id="view-nav-inbox"
-        navigate={~p"/inbox"}
-        class={@active == :inbox && "is-active"}
-        aria-current={@active == :inbox && "page"}
-      >
-        Inbox
-      </.link>
-      <.link
-        id="view-nav-subscriptions"
-        navigate={~p"/inbox/subscriptions"}
-        class={@active == :subscriptions && "is-active"}
-        aria-current={@active == :subscriptions && "page"}
-      >
-        Subscriptions
-      </.link>
+      <%= for {view, title, path} <- [
+        {:inbox, "Inbox", ~p"/inbox"},
+        {:subscriptions, "Subscriptions", ~p"/inbox/subscriptions"}
+      ] do %>
+        <%= if @active == view do %>
+          <h1>
+            <.link id={"view-nav-#{view}"} navigate={path} class="is-active" aria-current="page">
+              {title}
+            </.link>
+          </h1>
+        <% else %>
+          <.link id={"view-nav-#{view}"} navigate={path}>{title}</.link>
+        <% end %>
+      <% end %>
     </nav>
     """
   end

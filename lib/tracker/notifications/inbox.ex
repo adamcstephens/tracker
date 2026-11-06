@@ -10,17 +10,22 @@ defmodule Tracker.Notifications.Inbox do
     use TypedStruct
 
     typedstruct do
-      field :key, integer(), enforce: true
+      field :key, String.t(), enforce: true
+      field :kind, :revision | :propagation | :notification, enforce: true
       field :revision_id, integer()
+      field :branch_name, String.t()
+      field :propagation_day, Date.t()
       field :occurred_at, DateTime.t(), enforce: true
       field :notification, Notification.t(), enforce: true
       field :notification_count, non_neg_integer(), default: 0
       field :package_count, non_neg_integer(), default: 0
       field :revision_notification_count, non_neg_integer(), default: 0
       field :package_notification_count, non_neg_integer(), default: 0
+      field :propagation_count, non_neg_integer(), default: 0
       field :unread_count, non_neg_integer(), default: 0
       field :members, [Notification.t()], default: []
       field :revision_notifications, [Notification.t()], default: []
+      field :propagation_notifications, [Notification.t()], default: []
     end
   end
 
@@ -57,11 +62,10 @@ defmodule Tracker.Notifications.Inbox do
              actor: actor,
              page: [offset: offset, limit: limit, count: true]
            ),
-         {:ok, representatives} <- load_counts(page.results, scope, actor),
          {:ok, counts} <- matching_counts(scope, actor) do
       {:ok,
        %Page{
-         entries: Enum.map(representatives, &entry/1),
+         entries: Enum.map(page.results, &entry/1),
          count: page.count,
          notification_count: counts.notification_count,
          package_count: counts.package_count,
@@ -76,7 +80,7 @@ defmodule Tracker.Notifications.Inbox do
 
   def members(scope, %User{} = actor, entries, opts \\ []) do
     limit = Keyword.get(opts, :limit, 3)
-    groups = Enum.filter(entries, &(&1.key > 0))
+    groups = Enum.reject(entries, &(&1.kind == :notification))
 
     package_query =
       matching_query(scope, actor)
@@ -94,7 +98,11 @@ defmodule Tracker.Notifications.Inbox do
     with {:ok, notifications} <-
            Ash.load(
              Enum.map(groups, & &1.notification),
-             [revision_members: package_query, revision_notifications: revision_query],
+             [
+               inbox_members: package_query,
+               revision_notifications: revision_query,
+               propagation_notifications: revision_query
+             ],
              actor: actor,
              reuse_values?: false
            ) do
@@ -106,8 +114,9 @@ defmodule Tracker.Notifications.Inbox do
            {:ok, notification} ->
              %{
                entry
-               | members: notification.revision_members,
-                 revision_notifications: notification.revision_notifications
+               | members: notification.inbox_members,
+                 revision_notifications: notification.revision_notifications,
+                 propagation_notifications: notification.propagation_notifications
              }
 
            :error ->
@@ -162,21 +171,8 @@ defmodule Tracker.Notifications.Inbox do
                select: [:channel_id]
              ],
              load: [:channel]
-           ),
-         {:ok, packages} <-
-           Notification.matching(%{},
-             actor: actor,
-             query: [
-               filter: [package_id: [is_nil: false]],
-               distinct: [:package_id],
-               sort: [package_id: :asc],
-               select: [:package_id]
-             ],
-             load: [:package]
            ) do
-      {:ok,
-       {channels |> Enum.map(& &1.channel) |> Enum.sort_by(& &1.name),
-        packages |> Enum.map(& &1.package) |> Enum.sort_by(& &1.attribute)}}
+      {:ok, channels |> Enum.map(& &1.channel) |> Enum.sort_by(& &1.name)}
     else
       {:error, error} -> {:error, error}
     end
@@ -185,41 +181,6 @@ defmodule Tracker.Notifications.Inbox do
   defp matching_query(scope, %User{} = actor) do
     Notification
     |> Ash.Query.for_read(:matching, Map.new(scope), actor: actor)
-  end
-
-  defp load_counts([], _scope, _actor), do: {:ok, []}
-
-  defp load_counts(notifications, scope, %User{} = actor) do
-    groups = Enum.filter(notifications, &(&1.entry_key > 0))
-    matching = matching_query(scope, actor)
-
-    query =
-      Notification
-      |> Ash.Query.aggregate(:inbox_notification_count, :count, :revision_members,
-        query: matching
-      )
-      |> Ash.Query.aggregate(:inbox_package_count, :count, :revision_members,
-        query: matching,
-        field: :package_id,
-        uniq?: true
-      )
-      |> Ash.Query.aggregate(:inbox_package_notification_count, :count, :revision_members,
-        query:
-          Ash.Query.filter(
-            matching,
-            type in [:package_version_changed, :package_added, :package_removed]
-          )
-      )
-      |> Ash.Query.aggregate(:inbox_unread_count, :count, :revision_members,
-        query: Ash.Query.filter(matching, is_nil(read_at))
-      )
-
-    with {:ok, loaded} <- Ash.load(groups, query, actor: actor) do
-      by_id = Map.new(loaded, &{&1.id, &1})
-      {:ok, Enum.map(notifications, &Map.get(by_id, &1.id, &1))}
-    else
-      {:error, error} -> {:error, error}
-    end
   end
 
   defp matching_counts(scope, %User{} = actor) do
@@ -235,30 +196,27 @@ defmodule Tracker.Notifications.Inbox do
   end
 
   defp entry(%Notification{} = notification) do
-    if notification.entry_key > 0 do
-      %Entry{
-        key: notification.entry_key,
-        revision_id: notification.channel_revision_id,
-        occurred_at: notification.occurred_at,
-        notification: notification,
-        notification_count: notification.aggregates.inbox_notification_count,
-        package_count: notification.aggregates.inbox_package_count,
-        package_notification_count: notification.aggregates.inbox_package_notification_count,
-        revision_notification_count:
-          notification.aggregates.inbox_notification_count -
-            notification.aggregates.inbox_package_notification_count,
-        unread_count: notification.aggregates.inbox_unread_count
-      }
-    else
-      %Entry{
-        key: notification.entry_key,
-        occurred_at: notification.occurred_at,
-        notification: notification,
-        notification_count: 1,
-        package_count: if(is_nil(notification.package_id), do: 0, else: 1),
-        package_notification_count: if(is_nil(notification.package_id), do: 0, else: 1),
-        unread_count: if(is_nil(notification.read_at), do: 1, else: 0)
-      }
-    end
+    kind =
+      case notification.entry_key do
+        "revision:" <> _ -> :revision
+        "propagation:" <> _ -> :propagation
+        "notification:" <> _ -> :notification
+      end
+
+    %Entry{
+      key: notification.entry_key,
+      kind: kind,
+      revision_id: if(kind == :revision, do: notification.channel_revision_id),
+      branch_name: if(kind == :propagation, do: notification.propagation_target),
+      propagation_day: if(kind == :propagation, do: notification.propagation_day),
+      occurred_at: notification.occurred_at,
+      notification: notification,
+      notification_count: notification.aggregates.inbox_notification_count,
+      package_count: notification.aggregates.inbox_package_count,
+      package_notification_count: notification.aggregates.inbox_package_notification_count,
+      revision_notification_count: notification.aggregates.inbox_revision_notification_count,
+      propagation_count: notification.aggregates.inbox_propagation_count,
+      unread_count: notification.aggregates.inbox_unread_count
+    }
   end
 end

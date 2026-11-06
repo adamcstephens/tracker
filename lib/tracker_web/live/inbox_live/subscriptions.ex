@@ -112,76 +112,77 @@ defmodule TrackerWeb.InboxLive.Subscriptions do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="ibx">
-      <div class="ibx-toolbar">
+    <div class="ibx ibx-workspace ibx-subscriptions">
+      <div class="ibx-heading">
         <.view_nav active={:subscriptions} />
       </div>
+      <div class="ibx-subscriptions-content">
+        <p :if={!@any_subs?} id="subscriptions-empty" class="ibx-empty">
+          No subscriptions yet. Subscribe from a package, channel, or change page.
+        </p>
 
-      <p :if={!@any_subs?} id="subscriptions-empty" class="ibx-empty">
-        No subscriptions yet. Subscribe from a package, channel, or change page.
-      </p>
+        <div :if={@any_subs? && !@any_visible?} class="ibx-empty">
+          Nothing matches this search.
+        </div>
 
-      <div :if={@any_subs? && !@any_visible?} class="ibx-empty">
-        Nothing matches this search.
+        <.section
+          :if={@visible_package_subs != []}
+          id="package-subscriptions"
+          title="Packages"
+          count={length(@visible_package_subs)}
+        >
+          <.sub_row
+            :for={sub <- @visible_package_subs}
+            id={"package-subscription-#{sub.id}"}
+            kind="package"
+            path={~p"/packages/#{sub.package.attribute}"}
+            label={sub.package.attribute}
+            scope={(sub.channel && sub.channel.name) || "All channels"}
+            events={sub.events}
+            at={sub.inserted_at}
+            now={@now}
+            time_zone={@time_zone}
+          />
+        </.section>
+
+        <.section
+          :if={@visible_channel_subs != []}
+          id="channel-subscriptions"
+          title="Channels"
+          count={length(@visible_channel_subs)}
+        >
+          <.sub_row
+            :for={sub <- @visible_channel_subs}
+            id={"channel-subscription-#{sub.id}"}
+            kind="channel"
+            path={~p"/channels/#{sub.channel.name}"}
+            label={sub.channel.name}
+            at={sub.inserted_at}
+            now={@now}
+            time_zone={@time_zone}
+          />
+        </.section>
+
+        <.section
+          :if={@visible_change_subs != []}
+          id="change-subscriptions"
+          title="Changes"
+          count={length(@visible_change_subs)}
+        >
+          <.sub_row
+            :for={sub <- @visible_change_subs}
+            id={"change-subscription-#{sub.id}"}
+            kind="change"
+            path={~p"/changes/#{sub.change.number}"}
+            label={"##{sub.change.number} #{sub.change.title}"}
+            scope={(sub.channel && sub.channel.name) || "Any branch"}
+            propagated?={sub.propagated?}
+            at={sub.inserted_at}
+            now={@now}
+            time_zone={@time_zone}
+          />
+        </.section>
       </div>
-
-      <.section
-        :if={@visible_package_subs != []}
-        id="package-subscriptions"
-        title="Packages"
-        count={length(@visible_package_subs)}
-      >
-        <.sub_row
-          :for={sub <- @visible_package_subs}
-          id={"package-subscription-#{sub.id}"}
-          kind="package"
-          path={~p"/packages/#{sub.package.attribute}"}
-          label={sub.package.attribute}
-          scope={(sub.channel && sub.channel.name) || "All channels"}
-          events={sub.events}
-          at={sub.inserted_at}
-          now={@now}
-          time_zone={@time_zone}
-        />
-      </.section>
-
-      <.section
-        :if={@visible_channel_subs != []}
-        id="channel-subscriptions"
-        title="Channels"
-        count={length(@visible_channel_subs)}
-      >
-        <.sub_row
-          :for={sub <- @visible_channel_subs}
-          id={"channel-subscription-#{sub.id}"}
-          kind="channel"
-          path={~p"/channels/#{sub.channel.name}"}
-          label={sub.channel.name}
-          at={sub.inserted_at}
-          now={@now}
-          time_zone={@time_zone}
-        />
-      </.section>
-
-      <.section
-        :if={@visible_change_subs != []}
-        id="change-subscriptions"
-        title="Changes"
-        count={length(@visible_change_subs)}
-      >
-        <.sub_row
-          :for={sub <- @visible_change_subs}
-          id={"change-subscription-#{sub.id}"}
-          kind="change"
-          path={~p"/changes/#{sub.change.number}"}
-          label={"##{sub.change.number} #{sub.change.title}"}
-          scope={(sub.channel && sub.channel.name) || "Any branch"}
-          propagated?={sub.propagated?}
-          at={sub.inserted_at}
-          now={@now}
-          time_zone={@time_zone}
-        />
-      </.section>
     </div>
     """
   end

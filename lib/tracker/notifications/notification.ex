@@ -15,6 +15,8 @@ defmodule Tracker.Notifications.Notification do
     data_layer: AshPostgres.DataLayer,
     notifiers: [Ash.Notifier.PubSub]
 
+  require Ash.Query
+
   @package_event_types [
     :package_version_changed,
     :package_added,
@@ -79,7 +81,7 @@ defmodule Tracker.Notifications.Notification do
       argument :channel_revision_id, :integer
       argument :channel_id, :integer
       argument :package_id, :integer
-      argument :entry_key, :integer
+      argument :entry_key, :string
       argument :unread_only, :boolean, default: false
       argument :saved_only, :boolean, default: false
       argument :types, {:array, :atom}
@@ -111,8 +113,7 @@ defmodule Tracker.Notifications.Notification do
 
       argument :channel_revision_id, :integer
       argument :channel_id, :integer
-      argument :package_id, :integer
-      argument :entry_key, :integer
+      argument :entry_key, :string
       argument :unread_only, :boolean, default: false
       argument :saved_only, :boolean, default: false
       argument :types, {:array, :atom}
@@ -126,8 +127,7 @@ defmodule Tracker.Notifications.Notification do
 
       argument :channel_revision_id, :integer
       argument :channel_id, :integer
-      argument :package_id, :integer
-      argument :entry_key, :integer
+      argument :entry_key, :string
       argument :unread_only, :boolean, default: false
       argument :saved_only, :boolean, default: false
       argument :types, {:array, :atom}
@@ -142,13 +142,44 @@ defmodule Tracker.Notifications.Notification do
 
       prepare Tracker.Notifications.Inbox.Scope
 
-      prepare fn query, _context ->
+      prepare fn query, context ->
+        matching =
+          Ash.Query.for_read(__MODULE__, :matching, query.arguments, actor: context.actor)
+
+        # Ash's count query drops loads and sorts before compiling DISTINCT.
+        # Retain the grouping expression as a filter dependency so its target
+        # relationships are joined in both the representative and count queries.
         query
+        |> Ash.Query.filter(not is_nil(entry_key))
+        |> Ash.Query.aggregate(:inbox_notification_count, :count, :inbox_members, query: matching)
+        |> Ash.Query.aggregate(:inbox_package_count, :count, :inbox_members,
+          query: matching,
+          field: :package_id,
+          uniq?: true
+        )
+        |> Ash.Query.aggregate(:inbox_package_notification_count, :count, :inbox_members,
+          query:
+            Ash.Query.filter(
+              matching,
+              type in [:package_version_changed, :package_added, :package_removed]
+            )
+        )
+        |> Ash.Query.aggregate(:inbox_revision_notification_count, :count, :inbox_members,
+          query: Ash.Query.filter(matching, type == :channel_revision_published)
+        )
+        |> Ash.Query.aggregate(:inbox_propagation_count, :count, :inbox_members,
+          query: Ash.Query.filter(matching, type == :change_propagated)
+        )
+        |> Ash.Query.aggregate(:inbox_unread_count, :count, :inbox_members,
+          query: Ash.Query.filter(matching, is_nil(read_at))
+        )
         |> Ash.Query.distinct(:entry_key)
         |> Ash.Query.distinct_sort(occurred_at: :desc, id: :desc)
         |> Ash.Query.sort(occurred_at: :desc, id: :desc)
         |> Ash.Query.load([
           :entry_key,
+          :propagation_day,
+          :propagation_target,
           :package,
           :channel,
           :change,
@@ -227,42 +258,59 @@ defmodule Tracker.Notifications.Notification do
     belongs_to :change, Tracker.Nixpkgs.Change, attribute_type: :integer
     belongs_to :change_branch, Tracker.Nixpkgs.ChangeBranch, attribute_type: :integer
 
-    has_many :revision_members, __MODULE__ do
-      source_attribute :channel_revision_id
-      destination_attribute :channel_revision_id
-      no_attributes? false
-
-      filter expr(
-               type in [
-                 :package_version_changed,
-                 :package_added,
-                 :package_removed,
-                 :channel_revision_published
-               ]
-             )
+    has_many :inbox_members, __MODULE__ do
+      no_attributes? true
+      filter expr(entry_key == parent(entry_key) and user_id == parent(user_id))
     end
 
     has_many :revision_notifications, __MODULE__ do
-      source_attribute :channel_revision_id
-      destination_attribute :channel_revision_id
-      filter expr(type == :channel_revision_published)
+      no_attributes? true
+
+      filter expr(
+               entry_key == parent(entry_key) and user_id == parent(user_id) and
+                 type == :channel_revision_published
+             )
+    end
+
+    has_many :propagation_notifications, __MODULE__ do
+      no_attributes? true
+
+      filter expr(
+               entry_key == parent(entry_key) and user_id == parent(user_id) and
+                 type == :change_propagated
+             )
     end
   end
 
   calculations do
+    calculate :propagation_day, :date, expr(type(start_of_day(occurred_at, "Etc/UTC"), :date))
+
+    calculate :propagation_target, :string, expr(change_branch.branch_name || channel.name)
+
     calculate :entry_key,
-              :integer,
+              :string,
               expr(
-                if not is_nil(channel_revision_id) and
-                     type in [
-                       :package_version_changed,
-                       :package_added,
-                       :package_removed,
-                       :channel_revision_published
-                     ] do
-                  channel_revision_id
-                else
-                  0 - id
+                cond do
+                  not is_nil(channel_revision_id) and
+                      type in [
+                        :package_version_changed,
+                        :package_added,
+                        :package_removed,
+                        :channel_revision_published,
+                        :change_propagated
+                      ] ->
+                    string_join([type("revision:", :string), type(channel_revision_id, :string)])
+
+                  type == :change_propagated ->
+                    string_join([
+                      type("propagation:", :string),
+                      type(propagation_day, :string),
+                      type(":", :string),
+                      propagation_target
+                    ])
+
+                  true ->
+                    string_join([type("notification:", :string), type(id, :string)])
                 end
               )
   end

@@ -78,10 +78,10 @@ defmodule TrackerWeb.InboxLive.IndexTest do
     |> render()
     |> Floki.parse_document!()
     |> Floki.find("[phx-click=toggle-group][aria-expanded=false]")
-    |> Floki.attribute("phx-value-id")
+    |> Floki.attribute("id")
     |> Enum.each(fn id ->
       view
-      |> element("#revision-group-#{id} [phx-click=toggle-group]")
+      |> element("##{id}")
       |> render_click()
     end)
 

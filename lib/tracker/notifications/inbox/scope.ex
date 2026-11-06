@@ -14,9 +14,16 @@ defmodule Tracker.Notifications.Inbox.Scope do
         Ash.Query.filter(query, user_id == ^user_id)
       end
 
+    fields =
+      if query.action.name == :for_user do
+        [:channel_revision_id, :channel_id, :package_id, :entry_key]
+      else
+        [:channel_revision_id, :channel_id, :entry_key]
+      end
+
     query =
       Enum.reduce(
-        [:channel_revision_id, :channel_id, :package_id, :entry_key],
+        fields,
         query,
         fn field, query ->
           case Ash.Query.get_argument(query, field) do
