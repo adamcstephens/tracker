@@ -1,0 +1,707 @@
+defmodule TrackerWeb.InboxLive.GroupingTest do
+  use TrackerWeb.ConnCase, async: true
+
+  import Phoenix.LiveViewTest
+  import Tracker.Fixtures
+
+  alias AshAuthentication.Plug.Helpers
+  alias Tracker.Notifications.Notification
+
+  defp log_in(conn, user) do
+    conn
+    |> Plug.Test.init_test_session(%{})
+    |> Helpers.store_in_session(user)
+  end
+
+  defp revision_notifications!(user, count) do
+    channel = channel!()
+    revision = channel_revision!(channel)
+
+    notifications =
+      for _ <- 1..count do
+        package = package!()
+
+        notification!(user, %{
+          type: :package_added,
+          package_id: package.id,
+          channel_id: channel.id,
+          channel_revision_id: revision.id
+        })
+      end
+
+    {revision, notifications}
+  end
+
+  defp group_counts(view, revision, notifications, packages, unread) do
+    assert has_element?(
+             view,
+             "#revision-group-#{revision.id}[data-notification-count='#{notifications}']" <>
+               "[data-package-count='#{packages}'][data-unread-count='#{unread}']"
+           )
+  end
+
+  defp group_rows(view, revision) do
+    view
+    |> render()
+    |> Floki.parse_document!()
+    |> Floki.find("#revision-group-#{revision.id} .notification-row")
+    |> Floki.attribute("id")
+  end
+
+  defp assert_query(path, expected) do
+    query = URI.decode_query(URI.parse(path).query || "")
+
+    for {key, value} <- expected do
+      assert query[to_string(key)] == to_string(value)
+    end
+
+    query
+  end
+
+  test "a revision larger than a flat page occupies one collapsed entry", %{conn: conn} do
+    user = register_user!()
+    {revision, notifications} = revision_notifications!(user, 30)
+    {:ok, view, _html} = live(log_in(conn, user), ~p"/inbox")
+
+    assert has_element?(view, "#revision-group-#{revision.id}")
+    assert has_element?(view, "#revision-group-#{revision.id} [aria-expanded=false]")
+    refute has_element?(view, "#notification-#{hd(notifications).id}")
+    refute has_element?(view, "a[rel=next]")
+
+    view |> element("#revision-group-#{revision.id} [aria-expanded]") |> render_click()
+
+    assert length(
+             view
+             |> render()
+             |> Floki.parse_document!()
+             |> Floki.find("#revision-group-#{revision.id} .notification-row")
+           ) == 3
+
+    assert has_element?(view, "#revision-group-#{revision.id} button", "Show more")
+    assert Enum.all?(Notification.for_user!(actor: user), &is_nil(&1.read_at))
+  end
+
+  test "group read affects hidden matching children but not another actor", %{conn: conn} do
+    user = register_user!()
+    other = register_user!()
+    {revision, _notifications} = revision_notifications!(user, 30)
+
+    foreign =
+      notification!(other, %{
+        type: :channel_revision_published,
+        channel_revision_id: revision.id,
+        channel_id: revision.channel_id
+      })
+
+    {:ok, view, _html} = live(log_in(conn, user), ~p"/inbox")
+
+    view
+    |> element("#revision-group-#{revision.id} [phx-click=mark-group-read]")
+    |> render_click()
+
+    assert Notification.for_user!(%{unread_only: true}, actor: user) == []
+
+    assert Enum.any?(
+             Notification.for_user!(%{unread_only: true}, actor: other),
+             &(&1.id == foreign.id)
+           )
+
+    refute has_element?(view, "#revision-group-#{revision.id}")
+  end
+
+  test "search expands only matching children and reset preserves search and view", %{conn: conn} do
+    user = register_user!()
+    {revision, [matching, hidden]} = revision_notifications!(user, 2)
+    matching = Ash.load!(matching, :package, actor: user)
+
+    {:ok, view, _html} =
+      live(
+        log_in(conn, user),
+        ~p"/inbox?filter=all&search=#{matching.package.attribute}&types=package_added"
+      )
+
+    assert has_element?(view, "#revision-group-#{revision.id} [aria-expanded=true]")
+    assert has_element?(view, "#notification-#{matching.id}")
+    refute has_element?(view, "#notification-#{hidden.id}")
+    view |> element("#reset-filters") |> render_click()
+    assert has_element?(view, "#filter-all.is-active")
+    assert has_element?(view, "#notification-#{matching.id}")
+    refute has_element?(view, "#notification-#{hidden.id}")
+  end
+
+  test "explicit filter controls remain available with no results", %{conn: conn} do
+    user = register_user!()
+    {:ok, view, _html} = live(log_in(conn, user), ~p"/inbox?types=none")
+
+    assert has_element?(view, "#inbox-filters input[type=checkbox]")
+    assert has_element?(view, "#inbox-filters select[name=channel_id]")
+    assert has_element?(view, "#inbox-filters select[name=package_id]")
+    assert has_element?(view, "#reset-filters")
+    assert has_element?(view, "#inbox-empty")
+  end
+
+  test "pagination counts revisions and keeps propagation standalone", %{conn: conn} do
+    user = register_user!()
+    revisions = for _ <- 1..26, do: elem(revision_notifications!(user, 2), 0)
+    revision = hd(revisions)
+    change = change!()
+
+    propagation =
+      notification!(user, %{
+        type: :change_propagated,
+        change_id: change.id,
+        channel_revision_id: revision.id,
+        channel_id: revision.channel_id
+      })
+
+    {:ok, first, _html} = live(log_in(conn, user), ~p"/inbox?filter=all")
+
+    first_ids =
+      first
+      |> render()
+      |> Floki.parse_document!()
+      |> Floki.find("[id^=revision-group-]")
+      |> Floki.attribute("id")
+
+    assert length(first_ids) == 24
+    assert has_element?(first, "#notification-#{propagation.id}")
+
+    {:ok, second, _html} = live(log_in(conn, user), ~p"/inbox?filter=all&page=2")
+
+    second_ids =
+      second
+      |> render()
+      |> Floki.parse_document!()
+      |> Floki.find("[id^=revision-group-]")
+      |> Floki.attribute("id")
+
+    assert length(second_ids) == 2
+    assert MapSet.disjoint?(MapSet.new(first_ids), MapSet.new(second_ids))
+    assert length(Enum.uniq(first_ids ++ second_ids)) == 26
+  end
+
+  test "search-scoped group read preserves a hidden sibling", %{conn: conn} do
+    user = register_user!()
+    {revision, [matching, hidden]} = revision_notifications!(user, 2)
+    matching = Ash.load!(matching, :package, actor: user)
+    {:ok, view, _html} = live(log_in(conn, user), ~p"/inbox?search=#{matching.package.attribute}")
+    group_counts(view, revision, 1, 1, 1)
+
+    assert has_element?(
+             view,
+             "#revision-group-#{revision.id} [phx-click=mark-group-read]",
+             "Mark matching read"
+           )
+
+    view
+    |> element("#revision-group-#{revision.id} [phx-click=mark-group-read]")
+    |> render_click()
+
+    assert Enum.map(Notification.for_user!(%{unread_only: true}, actor: user), & &1.id) == [
+             hidden.id
+           ]
+
+    assert has_element?(view, "#inbox-empty")
+  end
+
+  test "all-matching read crosses entry pages", %{conn: conn} do
+    user = register_user!()
+    for _ <- 1..26, do: revision_notifications!(user, 2)
+    {:ok, view, _html} = live(log_in(conn, user), ~p"/inbox")
+
+    view |> element("#mark-all-read") |> render_click()
+
+    assert Notification.for_user!(%{unread_only: true}, actor: user) == []
+    assert has_element?(view, "#inbox-empty")
+  end
+
+  test "mixed groups count notifications separately from distinct packages", %{conn: conn} do
+    user = register_user!()
+    {revision, [added]} = revision_notifications!(user, 1)
+
+    removed =
+      notification!(user, %{
+        type: :package_removed,
+        package_id: added.package_id,
+        channel_id: revision.channel_id,
+        channel_revision_id: revision.id
+      })
+
+    published =
+      notification!(user, %{
+        type: :channel_revision_published,
+        channel_id: revision.channel_id,
+        channel_revision_id: revision.id
+      })
+
+    {:ok, view, _html} = live(log_in(conn, user), ~p"/inbox")
+    group_counts(view, revision, 3, 1, 3)
+    channel = Ash.get!(Tracker.Nixpkgs.Channel, revision.channel_id)
+
+    assert has_element?(
+             view,
+             "#revision-group-#{revision.id} a[href^='/channels/#{channel.name}/revisions/#{revision.revision}'][aria-label='Open full revision']"
+           )
+
+    view |> element("#revision-group-#{revision.id} [phx-click=toggle-group]") |> render_click()
+
+    assert Enum.sort(group_rows(view, revision)) ==
+             Enum.sort(Enum.map([added, removed, published], &"notification-#{&1.id}"))
+
+    assert has_element?(view, "#notification-#{published.id} [aria-label='Mark as read']")
+    assert has_element?(view, "#notification-#{published.id} [aria-label='Save for later']")
+  end
+
+  test "a revision-only group is visible and individually actionable", %{conn: conn} do
+    user = register_user!()
+    channel = channel!()
+    revision = channel_revision!(channel)
+
+    published =
+      notification!(user, %{
+        type: :channel_revision_published,
+        channel_id: channel.id,
+        channel_revision_id: revision.id
+      })
+
+    {:ok, view, _html} = live(log_in(conn, user), ~p"/inbox?filter=all")
+    group_counts(view, revision, 1, 0, 1)
+    view |> element("#revision-group-#{revision.id} [phx-click=toggle-group]") |> render_click()
+    assert group_rows(view, revision) == ["notification-#{published.id}"]
+
+    view
+    |> element("#notification-#{published.id} [aria-label='Save for later']")
+    |> render_click()
+
+    view |> element("#notification-#{published.id} [aria-label='Mark as read']") |> render_click()
+
+    group_counts(view, revision, 1, 0, 0)
+    assert has_element?(view, "#revision-group-#{revision.id} [aria-expanded=true]")
+
+    assert %Notification{saved: true, read_at: read_at} =
+             Ash.get!(Notification, published.id, actor: user)
+
+    refute is_nil(read_at)
+  end
+
+  test "read and Saved views project only matching members without independent group state", %{
+    conn: conn
+  } do
+    user = register_user!()
+    {revision, [saved_read, saved_unread, unsaved]} = revision_notifications!(user, 3)
+
+    saved_read =
+      saved_read |> Notification.save!(actor: user) |> Notification.mark_read!(actor: user)
+
+    Notification.save!(saved_unread, actor: user)
+    conn = log_in(conn, user)
+
+    {:ok, unread, _html} = live(conn, ~p"/inbox")
+    group_counts(unread, revision, 2, 2, 2)
+    {:ok, all, _html} = live(conn, ~p"/inbox?filter=all")
+    group_counts(all, revision, 3, 3, 2)
+    {:ok, saved, _html} = live(conn, ~p"/inbox?filter=saved")
+    group_counts(saved, revision, 2, 2, 1)
+
+    saved |> element("#revision-group-#{revision.id} [phx-click=toggle-group]") |> render_click()
+    assert has_element?(saved, "#notification-#{saved_read.id}:not(.is-unread)")
+    assert has_element?(saved, "#notification-#{saved_unread.id}.is-unread")
+    refute has_element?(saved, "#notification-#{unsaved.id}")
+
+    saved
+    |> element("#revision-group-#{revision.id} [phx-click=mark-group-read]")
+    |> render_click()
+
+    group_counts(saved, revision, 2, 2, 0)
+    assert has_element?(saved, "#notification-#{saved_unread.id}")
+    assert Ash.get!(Notification, saved_read.id, actor: user).read_at == saved_read.read_at
+
+    assert %Notification{saved: false, read_at: nil} =
+             Ash.get!(Notification, unsaved.id, actor: user)
+  end
+
+  test "show more and fewer are inline, bounded, and preserve read state", %{conn: conn} do
+    user = register_user!()
+    {revision, _notifications} = revision_notifications!(user, 8)
+    {:ok, view, _html} = live(log_in(conn, user), ~p"/inbox")
+
+    view |> element("#revision-group-#{revision.id} [phx-click=toggle-group]") |> render_click()
+    assert length(group_rows(view, revision)) == 3
+    view |> element("#revision-group-#{revision.id} [phx-click=show-more]") |> render_click()
+    assert length(group_rows(view, revision)) > 3
+    assert length(group_rows(view, revision)) <= 8
+    assert has_element?(view, "#revision-group-#{revision.id} [phx-click=show-fewer]")
+    view |> element("#revision-group-#{revision.id} [phx-click=show-fewer]") |> render_click()
+    assert length(group_rows(view, revision)) == 3
+    assert has_element?(view, "#revision-group-#{revision.id} [aria-expanded=true]")
+    assert Enum.all?(Notification.for_user!(actor: user), &is_nil(&1.read_at))
+  end
+
+  test "clearing search restores prior expanded and collapsed groups", %{conn: conn} do
+    user = register_user!()
+    {expanded, [expanded_notification]} = revision_notifications!(user, 1)
+    {collapsed, [collapsed_notification]} = revision_notifications!(user, 1)
+    channel = Ash.get!(Tracker.Nixpkgs.Channel, collapsed.channel_id)
+    {:ok, view, _html} = live(log_in(conn, user), ~p"/inbox?filter=all")
+
+    view |> element("#revision-group-#{expanded.id} [phx-click=toggle-group]") |> render_click()
+    view |> element("#page-search") |> render_change(%{"search" => channel.name})
+    search_path = assert_patch(view)
+    assert_query(search_path, filter: "all", search: channel.name)
+    assert has_element?(view, "#revision-group-#{collapsed.id} [aria-expanded=true]")
+    assert has_element?(view, "#notification-#{collapsed_notification.id}")
+    refute has_element?(view, "#revision-group-#{expanded.id}")
+
+    view |> element("#page-search") |> render_change(%{"search" => ""})
+    clear_path = assert_patch(view)
+    refute Map.has_key?(assert_query(clear_path, filter: "all"), "search")
+    assert has_element?(view, "#revision-group-#{expanded.id} [aria-expanded=true]")
+    assert has_element?(view, "#notification-#{expanded_notification.id}")
+    assert has_element?(view, "#revision-group-#{collapsed.id} [aria-expanded=false]")
+    refute has_element?(view, "#notification-#{collapsed_notification.id}")
+  end
+
+  test "all types are selected by default and deselecting the final type means none", %{
+    conn: conn
+  } do
+    user = register_user!()
+    {revision, _notifications} = revision_notifications!(user, 1)
+    {:ok, view, _html} = live(log_in(conn, user), ~p"/inbox?types=package_added")
+    assert has_element?(view, "#filter-type-package_added[checked]")
+    refute has_element?(view, "#filter-type-package_removed[checked]")
+
+    view |> element("#filter-type-package_added") |> render_click()
+    path = assert_patch(view)
+    assert_query(path, types: "none")
+    assert has_element?(view, "#inbox-empty")
+    refute has_element?(view, "#inbox-filters input[type=checkbox][checked]")
+    assert has_element?(view, "#mark-all-read[disabled]")
+
+    {:ok, reloaded, _html} = live(log_in(conn, user), path)
+    assert has_element?(reloaded, "#inbox-empty")
+    reloaded |> element("#reset-filters") |> render_click()
+    reset_path = assert_patch(reloaded)
+    refute Map.has_key?(URI.decode_query(URI.parse(reset_path).query || ""), "types")
+    assert has_element?(reloaded, "#revision-group-#{revision.id}")
+
+    checked =
+      reloaded
+      |> render()
+      |> Floki.parse_document!()
+      |> Floki.find("#inbox-filters input[type=checkbox][checked]")
+
+    assert length(checked) == 7
+  end
+
+  test "scope controls and reset preserve view search and revision across a reload", %{conn: conn} do
+    user = register_user!()
+    {revision, [matching, sibling]} = revision_notifications!(user, 2)
+    Notification.save!(matching, actor: user)
+    Notification.save!(sibling, actor: user)
+    channel = Ash.get!(Tracker.Nixpkgs.Channel, revision.channel_id)
+    conn = log_in(conn, user)
+
+    params = %{
+      filter: "saved",
+      search: channel.name,
+      types: "package_added",
+      channel_revision_id: revision.id,
+      channel_id: channel.id,
+      package_id: matching.package_id
+    }
+
+    {:ok, view, _html} = live(conn, ~p"/inbox?#{params}")
+    group_counts(view, revision, 1, 1, 1)
+
+    assert has_element?(
+             view,
+             "#inbox-filters select[name=channel_id] option[value='#{channel.id}'][selected]"
+           )
+
+    assert has_element?(
+             view,
+             "#inbox-filters select[name=package_id] option[value='#{matching.package_id}'][selected]"
+           )
+
+    refute has_element?(view, "#notification-#{sibling.id}")
+
+    view |> element("#reset-filters") |> render_click()
+    path = assert_patch(view)
+
+    query =
+      assert_query(path, filter: "saved", search: channel.name, channel_revision_id: revision.id)
+
+    for key <- ["types", "channel_id", "package_id", "page"], do: refute(Map.has_key?(query, key))
+    group_counts(view, revision, 2, 2, 2)
+    assert has_element?(view, "#notification-#{matching.id}")
+    assert has_element?(view, "#notification-#{sibling.id}")
+
+    {:ok, reloaded, _html} = live(conn, path)
+    group_counts(reloaded, revision, 2, 2, 2)
+    assert has_element?(reloaded, "#filter-saved.is-active")
+    assert has_element?(reloaded, "#page-search-input[value='#{channel.name}']")
+  end
+
+  test "consecutive scoped row reads and reset keep the URL and ledger consistent", %{conn: conn} do
+    user = register_user!()
+    {revision, [first, second, hidden]} = revision_notifications!(user, 3)
+    channel = Ash.get!(Tracker.Nixpkgs.Channel, revision.channel_id)
+    conn = log_in(conn, user)
+    {:ok, view, _html} = live(conn, ~p"/inbox?search=#{channel.name}")
+
+    for notification <- [first, second] do
+      view
+      |> form("#inbox-filters form", %{
+        "channel_id" => to_string(channel.id),
+        "package_id" => to_string(notification.package_id)
+      })
+      |> render_change()
+
+      path = assert_patch(view)
+
+      assert_query(path,
+        search: channel.name,
+        channel_id: channel.id,
+        package_id: notification.package_id
+      )
+
+      view
+      |> element("#notification-#{notification.id} [aria-label='Mark as read']")
+      |> render_click()
+
+      assert has_element?(view, "#inbox-empty")
+
+      assert %Notification{read_at: read_at} =
+               Ash.get!(Notification, notification.id, actor: user)
+
+      refute is_nil(read_at)
+      view |> element("#reset-filters") |> render_click()
+      reset_path = assert_patch(view)
+      assert_query(reset_path, search: channel.name)
+      refute Map.has_key?(URI.decode_query(URI.parse(reset_path).query || ""), "package_id")
+    end
+
+    assert has_element?(view, "#notification-#{hidden.id}")
+    {:ok, reloaded, _html} = live(conn, ~p"/inbox?search=#{channel.name}")
+    group_counts(reloaded, revision, 1, 1, 1)
+    assert has_element?(reloaded, "#notification-#{hidden.id}")
+
+    assert Enum.map(Notification.for_user!(%{unread_only: true}, actor: user), & &1.id) == [
+             hidden.id
+           ]
+  end
+
+  test "reading the final group on a page clamps to the surviving entry page", %{conn: conn} do
+    user = register_user!()
+    revisions = for _ <- 1..26, do: elem(revision_notifications!(user, 1), 0)
+    conn = log_in(conn, user)
+    {:ok, view, _html} = live(conn, ~p"/inbox?types=package_added&page=2")
+
+    [last_id] =
+      view
+      |> render()
+      |> Floki.parse_document!()
+      |> Floki.find("[id^=revision-group-]")
+      |> Floki.attribute("id")
+
+    last = Enum.find(revisions, &("revision-group-#{&1.id}" == last_id))
+
+    view |> element("##{last_id} [phx-click=mark-group-read]") |> render_click()
+    path = assert_patch(view)
+    query = assert_query(path, types: "package_added")
+    assert query["page"] in [nil, "1"]
+    refute has_element?(view, "##{last_id}")
+    refute has_element?(view, "a[rel=next]")
+    assert length(Notification.for_user!(%{unread_only: true}, actor: user)) == 25
+
+    assert Enum.all?(
+             Notification.for_user!(%{channel_revision_id: last.id}, actor: user),
+             & &1.read_at
+           )
+
+    {:ok, reloaded, _html} = live(conn, path)
+    refute has_element?(reloaded, "##{last_id}")
+
+    assert length(
+             reloaded
+             |> render()
+             |> Floki.parse_document!()
+             |> Floki.find("[id^=revision-group-]")
+           ) == 25
+  end
+
+  test "live member arrivals update counts without collapsing an expanded group", %{conn: conn} do
+    user = register_user!()
+    {revision, [existing]} = revision_notifications!(user, 1)
+    {:ok, view, _html} = live(log_in(conn, user), ~p"/inbox")
+    view |> element("#revision-group-#{revision.id} [phx-click=toggle-group]") |> render_click()
+
+    added =
+      notification!(user, %{
+        type: :package_added,
+        package_id: package!().id,
+        channel_id: revision.channel_id,
+        channel_revision_id: revision.id
+      })
+
+    group_counts(view, revision, 2, 2, 2)
+    assert has_element?(view, "#revision-group-#{revision.id} [aria-expanded=true]")
+    assert has_element?(view, "#notification-#{existing.id}")
+    assert has_element?(view, "#notification-#{added.id}")
+  end
+
+  test "row and group reads preserve another group's expansion", %{conn: conn} do
+    user = register_user!()
+    {revision, [first, _second]} = revision_notifications!(user, 2)
+    {unaffected, [survivor]} = revision_notifications!(user, 1)
+    {:ok, view, _html} = live(log_in(conn, user), ~p"/inbox")
+
+    for group <- [revision, unaffected] do
+      view |> element("#revision-group-#{group.id} [phx-click=toggle-group]") |> render_click()
+    end
+
+    view |> element("#notification-#{first.id} [aria-label='Mark as read']") |> render_click()
+    refute has_element?(view, "#notification-#{first.id}")
+    group_counts(view, revision, 1, 1, 1)
+    assert has_element?(view, "#revision-group-#{revision.id} [aria-expanded=true]")
+    assert has_element?(view, "#revision-group-#{unaffected.id} [aria-expanded=true]")
+
+    view
+    |> element("#revision-group-#{revision.id} [phx-click=mark-group-read]")
+    |> render_click()
+
+    refute has_element?(view, "#revision-group-#{revision.id}")
+    assert has_element?(view, "#revision-group-#{unaffected.id} [aria-expanded=true]")
+    assert has_element?(view, "#notification-#{survivor.id}")
+    assert %Notification{read_at: nil} = Ash.get!(Notification, survivor.id, actor: user)
+  end
+
+  test "case-insensitive search scopes counts, show-more and matching read", %{conn: conn} do
+    user = register_user!()
+    channel = channel!()
+    revision = channel_revision!(channel)
+    needle = "matching-preview-#{System.unique_integer([:positive])}"
+
+    matching =
+      for number <- 1..8 do
+        package = package!("#{needle}-#{number}")
+
+        notification!(user, %{
+          type: :package_added,
+          package_id: package.id,
+          channel_id: channel.id,
+          channel_revision_id: revision.id
+        })
+      end
+
+    hidden =
+      notification!(user, %{
+        type: :package_added,
+        package_id: package!().id,
+        channel_id: channel.id,
+        channel_revision_id: revision.id
+      })
+
+    {:ok, view, _html} = live(log_in(conn, user), ~p"/inbox?search=#{String.upcase(needle)}")
+    group_counts(view, revision, 8, 8, 8)
+    assert length(group_rows(view, revision)) == 3
+    view |> element("#revision-group-#{revision.id} [phx-click=show-more]") |> render_click()
+    visible_ids = group_rows(view, revision)
+    assert length(visible_ids) > 3
+    matching_ids = Enum.map(matching, &"notification-#{&1.id}")
+    assert Enum.all?(visible_ids, &(&1 in matching_ids))
+    refute has_element?(view, "#notification-#{hidden.id}")
+
+    view
+    |> element("#revision-group-#{revision.id} [phx-click=mark-group-read]")
+    |> render_click()
+
+    assert has_element?(view, "#inbox-empty")
+
+    assert Enum.map(Notification.for_user!(%{unread_only: true}, actor: user), & &1.id) == [
+             hidden.id
+           ]
+  end
+
+  test "show more fetches only the requested member limit for each expanded group", %{conn: conn} do
+    user = register_user!()
+    {expanded, _notifications} = revision_notifications!(user, 8)
+    {preview, _notifications} = revision_notifications!(user, 8)
+    {:ok, view, _html} = live(log_in(conn, user), ~p"/inbox")
+
+    for revision <- [expanded, preview] do
+      view |> element("#revision-group-#{revision.id} [phx-click=toggle-group]") |> render_click()
+      assert length(group_rows(view, revision)) == 3
+    end
+
+    owner = self()
+    handler = {__MODULE__, make_ref()}
+    event = Tracker.Repo.config()[:telemetry_prefix] ++ [:query]
+
+    :ok =
+      :telemetry.attach(
+        handler,
+        event,
+        fn _event, _measurements, metadata, {owner, user_id} ->
+          case metadata.result do
+            {:ok, %{columns: columns, rows: rows}} when is_list(columns) and is_list(rows) ->
+              if "__order__" in columns and
+                   Enum.all?(["user_id", "channel_revision_id", "package_id"], &(&1 in columns)) do
+                user_index = Enum.find_index(columns, &(&1 == "user_id"))
+                revision_index = Enum.find_index(columns, &(&1 == "channel_revision_id"))
+                package_index = Enum.find_index(columns, &(&1 == "package_id"))
+
+                for row <- rows,
+                    Enum.at(row, user_index) == user_id,
+                    not is_nil(Enum.at(row, package_index)) do
+                  send(owner, {:inbox_member_fetch, Enum.at(row, revision_index)})
+                end
+              end
+
+            _result ->
+              :ok
+          end
+        end,
+        {owner, Ecto.UUID.dump!(user.id)}
+      )
+
+    on_exit(fn -> :telemetry.detach(handler) end)
+    view |> element("#revision-group-#{expanded.id} [phx-click=show-more]") |> render_click()
+
+    assert length(group_rows(view, expanded)) == 8
+    assert length(group_rows(view, preview)) == 3
+    fetched = collect_member_fetches([])
+    assert Enum.frequencies(fetched) == %{expanded.id => 8, preview.id => 3}
+  end
+
+  test "collapsing search results does not overwrite ordinary expansion state", %{conn: conn} do
+    user = register_user!()
+    {expanded, [expanded_notification]} = revision_notifications!(user, 1)
+    {collapsed, [collapsed_notification]} = revision_notifications!(user, 1)
+    {:ok, view, _html} = live(log_in(conn, user), ~p"/inbox")
+    view |> element("#revision-group-#{expanded.id} [phx-click=toggle-group]") |> render_click()
+
+    view |> element("#page-search") |> render_change(%{"search" => "pkg-"})
+    assert_patch(view)
+    assert has_element?(view, "#revision-group-#{expanded.id} [aria-expanded=true]")
+    assert has_element?(view, "#revision-group-#{collapsed.id} [aria-expanded=true]")
+    view |> element("#revision-group-#{expanded.id} [phx-click=toggle-group]") |> render_click()
+    assert has_element?(view, "#revision-group-#{expanded.id} [aria-expanded=false]")
+    refute has_element?(view, "#notification-#{expanded_notification.id}")
+
+    view |> element("#page-search") |> render_change(%{"search" => ""})
+    assert_patch(view)
+    assert has_element?(view, "#revision-group-#{expanded.id} [aria-expanded=true]")
+    assert has_element?(view, "#notification-#{expanded_notification.id}")
+    assert has_element?(view, "#revision-group-#{collapsed.id} [aria-expanded=false]")
+    refute has_element?(view, "#notification-#{collapsed_notification.id}")
+  end
+
+  defp collect_member_fetches(revisions) do
+    receive do
+      {:inbox_member_fetch, revision_id} -> collect_member_fetches([revision_id | revisions])
+    after
+      0 -> revisions
+    end
+  end
+end

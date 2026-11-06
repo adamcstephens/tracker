@@ -34,5 +34,6 @@ defmodule TrackerWeb.PageSearch do
     field :hidden, %{String.t() => String.t()}, default: %{}
     # Where the clear (×) button lands; nil falls back to :action + :hidden.
     field :clear_to, String.t() | nil, default: nil
+    field :clear_mode, :navigate | :patch, default: :navigate
   end
 end

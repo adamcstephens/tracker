@@ -41,6 +41,8 @@ defmodule Tracker.Notifications.Notification do
 
   code_interface do
     define :for_user
+    define :for_inbox
+    define :matching
     define :mark_read
     define :mark_unread
     define :save
@@ -75,6 +77,9 @@ defmodule Tracker.Notifications.Notification do
       description "List the actor's notifications, newest first, filtered by read state, saved state, type, search and revision."
 
       argument :channel_revision_id, :integer
+      argument :channel_id, :integer
+      argument :package_id, :integer
+      argument :entry_key, :integer
       argument :unread_only, :boolean, default: false
       argument :saved_only, :boolean, default: false
       argument :types, {:array, :atom}
@@ -98,36 +103,59 @@ defmodule Tracker.Notifications.Notification do
                 ]
               )
 
-      filter expr(
-               if not is_nil(^arg(:channel_revision_id)) do
-                 channel_revision_id == ^arg(:channel_revision_id)
-               else
-                 true
-               end and
-                 if ^arg(:unread_only) do
-                   is_nil(read_at)
-                 else
-                   true
-                 end and
-                 if ^arg(:saved_only) do
-                   saved
-                 else
-                   true
-                 end and
-                 if not is_nil(^arg(:types)) do
-                   type in ^arg(:types)
-                 else
-                   true
-                 end and
-                 if not is_nil(^arg(:search)) and ^arg(:search) != "" do
-                   contains(package.attribute, ^arg(:search)) or
-                     contains(channel.name, ^arg(:search)) or
-                     contains(change.title, ^arg(:search)) or
-                     contains(change_branch.branch_name, ^arg(:search))
-                 else
-                   true
-                 end
-             )
+      prepare Tracker.Notifications.Inbox.Scope
+    end
+
+    read :matching do
+      description "The actor's matching ledger rows, shared by Inbox reads, counts and updates."
+
+      argument :channel_revision_id, :integer
+      argument :channel_id, :integer
+      argument :package_id, :integer
+      argument :entry_key, :integer
+      argument :unread_only, :boolean, default: false
+      argument :saved_only, :boolean, default: false
+      argument :types, {:array, :atom}
+      argument :search, :ci_string
+
+      prepare Tracker.Notifications.Inbox.Scope
+    end
+
+    read :for_inbox do
+      description "One newest matching notification per Inbox entry, grouped before pagination."
+
+      argument :channel_revision_id, :integer
+      argument :channel_id, :integer
+      argument :package_id, :integer
+      argument :entry_key, :integer
+      argument :unread_only, :boolean, default: false
+      argument :saved_only, :boolean, default: false
+      argument :types, {:array, :atom}
+      argument :search, :ci_string
+
+      pagination do
+        offset? true
+        countable true
+        required? true
+        default_limit 25
+      end
+
+      prepare Tracker.Notifications.Inbox.Scope
+
+      prepare fn query, _context ->
+        query
+        |> Ash.Query.distinct(:entry_key)
+        |> Ash.Query.distinct_sort(occurred_at: :desc, id: :desc)
+        |> Ash.Query.sort(occurred_at: :desc, id: :desc)
+        |> Ash.Query.load([
+          :entry_key,
+          :package,
+          :channel,
+          :change,
+          channel_revision: [:channel],
+          change_branch: [:change]
+        ])
+      end
     end
 
     update :mark_read do
@@ -198,6 +226,45 @@ defmodule Tracker.Notifications.Notification do
     belongs_to :channel_revision, Tracker.Nixpkgs.ChannelRevision, attribute_type: :integer
     belongs_to :change, Tracker.Nixpkgs.Change, attribute_type: :integer
     belongs_to :change_branch, Tracker.Nixpkgs.ChangeBranch, attribute_type: :integer
+
+    has_many :revision_members, __MODULE__ do
+      source_attribute :channel_revision_id
+      destination_attribute :channel_revision_id
+      no_attributes? false
+
+      filter expr(
+               type in [
+                 :package_version_changed,
+                 :package_added,
+                 :package_removed,
+                 :channel_revision_published
+               ]
+             )
+    end
+
+    has_many :revision_notifications, __MODULE__ do
+      source_attribute :channel_revision_id
+      destination_attribute :channel_revision_id
+      filter expr(type == :channel_revision_published)
+    end
+  end
+
+  calculations do
+    calculate :entry_key,
+              :integer,
+              expr(
+                if not is_nil(channel_revision_id) and
+                     type in [
+                       :package_version_changed,
+                       :package_added,
+                       :package_removed,
+                       :channel_revision_published
+                     ] do
+                  channel_revision_id
+                else
+                  0 - id
+                end
+              )
   end
 
   identities do

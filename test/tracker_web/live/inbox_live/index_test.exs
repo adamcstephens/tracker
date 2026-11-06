@@ -28,16 +28,20 @@ defmodule TrackerWeb.InboxLive.IndexTest do
 
   defp notifications!(user, count, overrides \\ %{}) do
     chan = channel!()
-    rev = channel_revision!(chan)
 
     rows =
       for i <- 1..count do
+        rev =
+          if overrides[:channel_revision_id],
+            do: nil,
+            else: channel_revision!(chan)
+
         Map.merge(
           %{
             user_id: user.id,
             type: :channel_revision_published,
             channel_id: chan.id,
-            channel_revision_id: rev.id,
+            channel_revision_id: overrides[:channel_revision_id] || rev.id,
             occurred_at: DateTime.add(~U[2024-01-01 00:00:00Z], i, :minute),
             dedup_key: "dk-#{System.unique_integer([:positive])}"
           },
@@ -54,19 +58,45 @@ defmodule TrackerWeb.InboxLive.IndexTest do
     view
     |> render()
     |> Floki.parse_document!()
-    |> Floki.find("#inbox-groups ul.row-list > li")
+    |> Floki.find("#inbox-groups .notification-row")
     |> Floki.attribute("id")
   end
 
+  defp live_expanded(conn, path) do
+    case live(conn, path) do
+      {:ok, view, _html} ->
+        expand_groups(view)
+        {:ok, view, render(view)}
+
+      other ->
+        other
+    end
+  end
+
+  defp expand_groups(view) do
+    view
+    |> render()
+    |> Floki.parse_document!()
+    |> Floki.find("[phx-click=toggle-group][aria-expanded=false]")
+    |> Floki.attribute("phx-value-id")
+    |> Enum.each(fn id ->
+      view
+      |> element("#revision-group-#{id} [phx-click=toggle-group]")
+      |> render_click()
+    end)
+
+    view
+  end
+
   test "redirects a logged-out visitor to sign in", %{conn: conn} do
-    assert {:error, {:redirect, %{to: "/sign-in"}}} = live(conn, ~p"/inbox")
+    assert {:error, {:redirect, %{to: "/sign-in"}}} = live_expanded(conn, ~p"/inbox")
   end
 
   test "shows an empty state when there are no notifications", %{conn: conn} do
     user = register_user!()
     conn = log_in(conn, user)
 
-    {:ok, view, _html} = live(conn, ~p"/inbox")
+    {:ok, view, _html} = live_expanded(conn, ~p"/inbox")
 
     assert has_element?(view, "#inbox-empty")
   end
@@ -76,7 +106,7 @@ defmodule TrackerWeb.InboxLive.IndexTest do
     n = published_notification!(user)
     conn = log_in(conn, user)
 
-    {:ok, view, _html} = live(conn, ~p"/inbox")
+    {:ok, view, _html} = live_expanded(conn, ~p"/inbox")
 
     assert has_element?(view, "#notification-#{n.id}")
     assert render(view) =~ "New revision"
@@ -88,7 +118,7 @@ defmodule TrackerWeb.InboxLive.IndexTest do
     published_notification!(other)
     conn = log_in(conn, user)
 
-    {:ok, view, _html} = live(conn, ~p"/inbox")
+    {:ok, view, _html} = live_expanded(conn, ~p"/inbox")
 
     assert has_element?(view, "#inbox-empty")
   end
@@ -103,7 +133,7 @@ defmodule TrackerWeb.InboxLive.IndexTest do
 
     conn = log_in(conn, user)
 
-    {:ok, view, _html} = live(conn, ~p"/inbox")
+    {:ok, view, _html} = live_expanded(conn, ~p"/inbox")
 
     html = render(view)
     assert html =~ "Today"
@@ -114,7 +144,7 @@ defmodule TrackerWeb.InboxLive.IndexTest do
     user = register_user!()
     conn = log_in(conn, user)
 
-    {:ok, view, _html} = live(conn, ~p"/inbox")
+    {:ok, view, _html} = live_expanded(conn, ~p"/inbox")
 
     assert has_element?(view, ~s{#view-nav-subscriptions[href="/inbox/subscriptions"]})
     assert has_element?(view, ~s{#view-nav-inbox.is-active[aria-current="page"]})
@@ -126,18 +156,21 @@ defmodule TrackerWeb.InboxLive.IndexTest do
     n = published_notification!(user)
     conn = log_in(conn, user)
 
-    {:ok, view, _html} = live(conn, ~p"/inbox")
+    {:ok, view, _html} = live_expanded(conn, ~p"/inbox")
     # widen to All so the row stays visible once it is read
     view |> element("#filter-all") |> render_click()
+    expand_groups(view)
     assert has_element?(view, "#notification-#{n.id}.is-unread")
 
     view |> element("#notification-#{n.id} [aria-label='Mark as read']") |> render_click()
+    expand_groups(view)
 
     refute has_element?(view, "#notification-#{n.id}.is-unread")
     assert {:ok, %Notification{read_at: read_at}} = Ash.get(Notification, n.id, actor: user)
     refute is_nil(read_at)
 
     view |> element("#notification-#{n.id} [aria-label='Mark as unread']") |> render_click()
+    expand_groups(view)
 
     assert has_element?(view, "#notification-#{n.id}.is-unread")
     assert {:ok, %Notification{read_at: nil}} = Ash.get(Notification, n.id, actor: user)
@@ -149,11 +182,12 @@ defmodule TrackerWeb.InboxLive.IndexTest do
       published_notification!(user)
       conn = log_in(conn, user)
 
-      {:ok, view, _html} = live(conn, ~p"/inbox")
+      {:ok, view, _html} = live_expanded(conn, ~p"/inbox")
 
       assert has_element?(view, "#filter-unread.is-active")
 
       view |> element("#filter-all") |> render_click()
+      expand_groups(view)
 
       refute has_element?(view, "#filter-unread.is-active")
     end
@@ -165,10 +199,11 @@ defmodule TrackerWeb.InboxLive.IndexTest do
     published_notification!(user)
     conn = log_in(conn, user)
 
-    {:ok, view, _html} = live(conn, ~p"/inbox")
+    {:ok, view, _html} = live_expanded(conn, ~p"/inbox")
     refute has_element?(view, "#mark-all-read[disabled]")
 
     view |> element("#mark-all-read") |> render_click()
+    expand_groups(view)
 
     refute has_element?(view, ".is-unread")
     assert has_element?(view, "#mark-all-read[disabled]")
@@ -180,12 +215,13 @@ defmodule TrackerWeb.InboxLive.IndexTest do
       published_notification!(user)
       conn = log_in(conn, user)
 
-      {:ok, phone, _} = live(conn, ~p"/inbox?filter=all")
-      {:ok, laptop, _} = live(conn, ~p"/inbox?filter=all")
+      {:ok, phone, _} = live_expanded(conn, ~p"/inbox?filter=all")
+      {:ok, laptop, _} = live_expanded(conn, ~p"/inbox?filter=all")
 
       assert has_element?(laptop, ".is-unread")
 
       phone |> element("button[phx-click='toggle-read']") |> render_click()
+      expand_groups(phone)
 
       refute render(laptop) =~ "is-unread"
     end
@@ -196,12 +232,13 @@ defmodule TrackerWeb.InboxLive.IndexTest do
       {:ok, _} = Notification.mark_read(n, actor: user)
       conn = log_in(conn, user)
 
-      {:ok, phone, _} = live(conn, ~p"/inbox?filter=all")
-      {:ok, laptop, _} = live(conn, ~p"/inbox?filter=all")
+      {:ok, phone, _} = live_expanded(conn, ~p"/inbox?filter=all")
+      {:ok, laptop, _} = live_expanded(conn, ~p"/inbox?filter=all")
 
       refute render(laptop) =~ "is-unread"
 
       phone |> element("button[phx-click='toggle-read']") |> render_click()
+      expand_groups(phone)
 
       assert has_element?(laptop, ".is-unread")
     end
@@ -212,12 +249,13 @@ defmodule TrackerWeb.InboxLive.IndexTest do
       published_notification!(user)
       conn = log_in(conn, user)
 
-      {:ok, phone, _} = live(conn, ~p"/inbox?filter=all")
-      {:ok, laptop, _} = live(conn, ~p"/inbox?filter=all")
+      {:ok, phone, _} = live_expanded(conn, ~p"/inbox?filter=all")
+      {:ok, laptop, _} = live_expanded(conn, ~p"/inbox?filter=all")
 
       assert has_element?(laptop, ".is-unread")
 
       phone |> element("#mark-all-read") |> render_click()
+      expand_groups(phone)
 
       refute render(laptop) =~ "is-unread"
     end
@@ -230,15 +268,17 @@ defmodule TrackerWeb.InboxLive.IndexTest do
     {:ok, _} = Notification.mark_read(read, actor: user)
     conn = log_in(conn, user)
 
-    {:ok, view, _html} = live(conn, ~p"/inbox")
+    {:ok, view, _html} = live_expanded(conn, ~p"/inbox")
 
     refute has_element?(view, "#notification-#{read.id}")
     assert has_element?(view, "#notification-#{unread.id}")
 
     view |> element("#filter-all") |> render_click()
+    expand_groups(view)
     assert has_element?(view, "#notification-#{read.id}")
 
     view |> element("#filter-unread") |> render_click()
+    expand_groups(view)
     refute has_element?(view, "#notification-#{read.id}")
   end
 
@@ -250,7 +290,7 @@ defmodule TrackerWeb.InboxLive.IndexTest do
       n = published_notification!(user)
       conn = log_in(conn, user)
 
-      {:ok, view, _html} = live(conn, ~p"/inbox")
+      {:ok, view, _html} = live_expanded(conn, ~p"/inbox")
 
       view
       |> element(
@@ -258,13 +298,15 @@ defmodule TrackerWeb.InboxLive.IndexTest do
       )
       |> render_click()
 
+      expand_groups(view)
+
       assert has_element?(view, "#notification-#{n.id}.is-unread")
       assert %Notification{saved: true, read_at: nil} = Ash.get!(Notification, n.id, actor: user)
       assert view |> element("#filter-saved .n") |> render() =~ ">1<"
       assert view |> element("#filter-unread .n") |> render() =~ ">1<"
       assert view |> element("#inbox-icon .app-inbox__badge") |> render() =~ ">1<"
 
-      {:ok, view, _html} = live(conn, ~p"/inbox?filter=saved")
+      {:ok, view, _html} = live_expanded(conn, ~p"/inbox?filter=saved")
 
       assert has_element?(view, "#filter-saved.is-active")
 
@@ -274,6 +316,7 @@ defmodule TrackerWeb.InboxLive.IndexTest do
              )
 
       view |> element("#notification-#{n.id} [aria-label='Mark as read']") |> render_click()
+      expand_groups(view)
 
       assert has_element?(view, "#notification-#{n.id}:not(.is-unread)")
 
@@ -284,19 +327,24 @@ defmodule TrackerWeb.InboxLive.IndexTest do
       refute has_element?(view, "#inbox-icon .app-inbox__badge")
 
       view |> element("#filter-all") |> render_click()
+      expand_groups(view)
       view |> element("#notification-#{n.id} [aria-label='Remove from saved']") |> render_click()
+      expand_groups(view)
 
       assert %Notification{saved: false, read_at: ^read_at} =
                Ash.get!(Notification, n.id, actor: user)
 
       view |> element("#notification-#{n.id} [aria-label='Save for later']") |> render_click()
+      expand_groups(view)
       view |> element("#notification-#{n.id} [aria-label='Mark as unread']") |> render_click()
+      expand_groups(view)
 
       assert %Notification{saved: true, read_at: nil} = Ash.get!(Notification, n.id, actor: user)
 
       view |> element("#notification-#{n.id} [aria-label='Remove from saved']") |> render_click()
+      expand_groups(view)
 
-      {:ok, reloaded, _html} = live(conn, ~p"/inbox?filter=all")
+      {:ok, reloaded, _html} = live_expanded(conn, ~p"/inbox?filter=all")
 
       assert has_element?(
                reloaded,
@@ -350,7 +398,7 @@ defmodule TrackerWeb.InboxLive.IndexTest do
       conn = log_in(conn, user)
 
       {:ok, view, _html} =
-        live(
+        live_expanded(
           conn,
           ~p"/inbox?filter=saved&search=needle&types=package_added&channel_revision_id=#{rev.id}"
         )
@@ -365,10 +413,11 @@ defmodule TrackerWeb.InboxLive.IndexTest do
       assert view |> element("#filter-saved .n") |> render() =~ ">4<"
       assert view |> element("#filter-all .n") |> render() =~ ">5<"
       assert view |> element("#filter-unread .n") |> render() =~ ">4<"
-      assert view |> element("#filter-type-package_added .n") |> render() =~ ">2<"
-      assert view |> element("#filter-type-package_removed .n") |> render() =~ ">1<"
+      assert has_element?(view, "#filter-type-package_added[checked]")
+      refute has_element?(view, "#filter-type-package_removed[checked]")
 
       view |> element("#filter-type-package_removed") |> render_click()
+      expand_groups(view)
 
       assert has_element?(view, "#notification-#{saved_removed.id}")
       assert has_element?(view, "#notification-#{saved_read.id}")
@@ -378,19 +427,19 @@ defmodule TrackerWeb.InboxLive.IndexTest do
 
       assert notification_row_ids(view) == ["notification-#{outside_search.id}"]
       assert has_element?(view, "#filter-saved.is-active")
-      assert has_element?(view, "#filter-type-package_added.is-active")
-      assert has_element?(view, "#filter-type-package_removed.is-active")
+      assert has_element?(view, "#filter-type-package_added[checked]")
+      assert has_element?(view, "#filter-type-package_removed[checked]")
       assert view |> element("#filter-saved .n") |> render() =~ ">4<"
-      assert view |> element("#filter-type-package_added .n") |> render() =~ ">1<"
-      assert view |> element("#filter-type-package_removed .n") |> render() =~ ">0<"
+      assert has_element?(view, "#revision-group-#{rev.id}[data-notification-count='1']")
 
       view |> element("#page-search") |> render_change(%{"search" => "needle"})
       view |> element("#filter-all") |> render_click()
+      expand_groups(view)
 
       assert has_element?(view, "#notification-#{unsaved.id}")
       refute has_element?(view, "#notification-#{outside_revision.id}")
       assert view |> element("#filter-saved .n") |> render() =~ ">4<"
-      assert view |> element("#filter-type-package_added .n") |> render() =~ ">3<"
+      assert has_element?(view, "#revision-group-#{rev.id}[data-notification-count='4']")
     end
 
     test "saved pages keep tied timestamps stable and removing the last page clamps the URL", %{
@@ -411,23 +460,24 @@ defmodule TrackerWeb.InboxLive.IndexTest do
       params = %{
         filter: "saved",
         search: newest.channel.name,
-        types: "channel_revision_published",
-        channel_revision_id: newest.channel_revision_id
+        types: "channel_revision_published"
       }
 
-      {:ok, view, _html} = live(conn, ~p"/inbox?#{params}")
+      {:ok, view, _html} = live_expanded(conn, ~p"/inbox?#{params}")
       first_page = saved |> Enum.take(25) |> Enum.map(&"notification-#{&1.id}")
       second_page = saved |> Enum.slice(25, 25) |> Enum.map(&"notification-#{&1.id}")
 
       assert notification_row_ids(view) == first_page
       assert view |> element("#filter-saved .n") |> render() =~ ">51<"
-      assert view |> element("#filter-type-channel_revision_published .n") |> render() =~ ">51<"
+      assert has_element?(view, ".ibx-results-toolbar", "51 matching notifications")
 
       view |> element("#pagination-inbox-groups a", "→") |> render_click()
+      expand_groups(view)
       assert_patch(view)
       assert notification_row_ids(view) == second_page
 
       view |> element("#pagination-inbox-groups a", "→") |> render_click()
+      expand_groups(view)
       assert_patch(view)
       assert notification_row_ids(view) == ["notification-#{last.id}"]
 
@@ -435,24 +485,26 @@ defmodule TrackerWeb.InboxLive.IndexTest do
       |> element("#notification-#{last.id} [aria-label='Remove from saved']")
       |> render_click()
 
-      assert_push_event(view, "update-url", %{path: path})
+      expand_groups(view)
+
+      path = assert_patch(view)
       query = path |> URI.parse() |> Map.fetch!(:query) |> URI.decode_query()
 
       assert query["page"] == "2"
       assert query["filter"] == "saved"
       assert query["search"] == newest.channel.name
       assert query["types"] == "channel_revision_published"
-      assert query["channel_revision_id"] == to_string(newest.channel_revision_id)
       assert notification_row_ids(view) == second_page
       assert view |> element("#filter-saved .n") |> render() =~ ">50<"
 
       assert %Notification{saved: false, read_at: nil} =
                Ash.get!(Notification, last.id, actor: user)
 
-      {:ok, reloaded, _html} = live(conn, path)
+      {:ok, reloaded, _html} = live_expanded(conn, path)
       assert notification_row_ids(reloaded) == second_page
 
       reloaded |> element("#pagination-inbox-groups a", "←") |> render_click()
+      expand_groups(reloaded)
       assert notification_row_ids(reloaded) == first_page
     end
 
@@ -465,11 +517,13 @@ defmodule TrackerWeb.InboxLive.IndexTest do
       unsaved = published_notification!(user)
       conn = log_in(conn, user)
 
-      {:ok, view, _html} = live(conn, ~p"/inbox?filter=saved")
+      {:ok, view, _html} = live_expanded(conn, ~p"/inbox?filter=saved")
 
       view
       |> element("#notification-#{saved.id} [aria-label='Remove from saved']")
       |> render_click()
+
+      expand_groups(view)
 
       assert has_element?(view, "#filter-saved.is-active")
       assert has_element?(view, ".ibx-empty")
@@ -480,6 +534,7 @@ defmodule TrackerWeb.InboxLive.IndexTest do
       assert view |> element("#filter-unread .n") |> render() =~ ">2<"
 
       view |> element("#filter-all") |> render_click()
+      expand_groups(view)
 
       assert has_element?(view, "#notification-#{saved.id}.is-unread")
       assert has_element?(view, "#notification-#{unsaved.id}.is-unread")
@@ -492,14 +547,16 @@ defmodule TrackerWeb.InboxLive.IndexTest do
       n = published_notification!(user)
       conn = log_in(conn, user)
 
-      {:ok, phone, _html} = live(conn, ~p"/inbox?filter=all")
-      {:ok, laptop, _html} = live(conn, ~p"/inbox?filter=saved")
-      {:ok, packages, _html} = live(conn, ~p"/packages")
+      {:ok, phone, _html} = live_expanded(conn, ~p"/inbox?filter=all")
+      {:ok, laptop, _html} = live_expanded(conn, ~p"/inbox?filter=saved")
+      {:ok, packages, _html} = live_expanded(conn, ~p"/packages")
 
       assert has_element?(laptop, ".ibx-empty")
       assert packages |> element("#inbox-icon .app-inbox__badge") |> render() =~ ">1<"
 
       phone |> element("#notification-#{n.id} [aria-label='Save for later']") |> render_click()
+      expand_groups(phone)
+      expand_groups(laptop)
 
       assert has_element?(laptop, "#notification-#{n.id}.is-unread")
 
@@ -513,6 +570,7 @@ defmodule TrackerWeb.InboxLive.IndexTest do
       assert packages |> element("#inbox-icon .app-inbox__badge") |> render() =~ ">1<"
 
       phone |> element("#notification-#{n.id} [aria-label='Mark as read']") |> render_click()
+      expand_groups(phone)
 
       assert has_element?(laptop, "#notification-#{n.id}:not(.is-unread)")
       assert laptop |> element("#filter-saved .n") |> render() =~ ">1<"
@@ -520,6 +578,7 @@ defmodule TrackerWeb.InboxLive.IndexTest do
       refute has_element?(packages, "#inbox-icon .app-inbox__badge")
 
       phone |> element("#notification-#{n.id} [aria-label='Remove from saved']") |> render_click()
+      expand_groups(phone)
 
       refute has_element?(laptop, "#notification-#{n.id}")
       assert has_element?(laptop, ".ibx-empty")
@@ -527,12 +586,16 @@ defmodule TrackerWeb.InboxLive.IndexTest do
       refute has_element?(packages, "#inbox-icon .app-inbox__badge")
 
       phone |> element("#notification-#{n.id} [aria-label='Save for later']") |> render_click()
+      expand_groups(phone)
+      expand_groups(laptop)
       assert has_element?(laptop, "#notification-#{n.id}:not(.is-unread)")
       refute has_element?(packages, "#inbox-icon .app-inbox__badge")
 
       laptop
       |> element("#notification-#{n.id} [aria-label='Remove from saved']")
       |> render_click()
+
+      expand_groups(laptop)
 
       assert has_element?(
                phone,
@@ -542,7 +605,7 @@ defmodule TrackerWeb.InboxLive.IndexTest do
       assert phone |> element("#filter-saved .n") |> render() =~ ">0<"
     end
 
-    test "Mark all read honors Saved, search, types and revision across every matching page", %{
+    test "Mark all read honors Saved, search, types and revision for hidden matching members", %{
       conn: conn
     } do
       user = register_user!()
@@ -590,14 +653,15 @@ defmodule TrackerWeb.InboxLive.IndexTest do
       conn = log_in(conn, user)
 
       {:ok, view, _html} =
-        live(
+        live_expanded(
           conn,
-          ~p"/inbox?filter=saved&search=needle&types=package_added,package_removed&channel_revision_id=#{rev.id}&page=2"
+          ~p"/inbox?filter=saved&search=needle&types=package_added,package_removed&channel_revision_id=#{rev.id}"
         )
 
       refute has_element?(view, "#mark-all-read[disabled]")
 
       view |> element("#mark-all-read") |> render_click()
+      expand_groups(view)
 
       assert has_element?(view, "#mark-all-read[disabled]")
       refute has_element?(view, "#inbox-groups .is-unread")
@@ -638,18 +702,26 @@ defmodule TrackerWeb.InboxLive.IndexTest do
         |> Notification.mark_read!(actor: user)
 
       conn = log_in(conn, user)
-      {:ok, view, _html} = live(conn, ~p"/inbox?filter=all&search=no-match")
+
+      {:ok, view, _html} =
+        live_expanded(
+          conn,
+          ~p"/inbox?filter=all&search=no-match&types=channel_revision_published"
+        )
 
       assert has_element?(view, "#mark-all-read[disabled]")
 
       view |> element("#page-search") |> render_change(%{"search" => ""})
       refute has_element?(view, "#mark-all-read[disabled]")
 
-      view |> element("#filter-type-package_added") |> render_click()
+      view |> element("#filter-type-channel_revision_published") |> render_click()
+      expand_groups(view)
       assert has_element?(view, "#mark-all-read[disabled]")
 
-      view |> element("#filter-type-package_added") |> render_click()
+      view |> element("#filter-type-channel_revision_published") |> render_click()
+      expand_groups(view)
       view |> element("#filter-saved") |> render_click()
+      expand_groups(view)
 
       assert has_element?(view, "#notification-#{saved_read.id}")
       assert has_element?(view, "#mark-all-read[disabled]")
@@ -657,13 +729,14 @@ defmodule TrackerWeb.InboxLive.IndexTest do
       assert %Notification{read_at: nil} = Ash.get!(Notification, unread.id, actor: user)
 
       view |> element("#filter-unread") |> render_click()
+      expand_groups(view)
 
       refute has_element?(view, "#mark-all-read[disabled]")
       assert has_element?(view, "#notification-#{unread.id}")
     end
   end
 
-  test "filters by type with multi-select chips", %{conn: conn} do
+  test "filters by native type checkboxes with an explicit empty selection", %{conn: conn} do
     user = register_user!()
     revision = published_notification!(user)
     pkg = package!()
@@ -671,21 +744,26 @@ defmodule TrackerWeb.InboxLive.IndexTest do
     added = notification!(user, %{type: :package_added, package_id: pkg.id, channel_id: chan.id})
     conn = log_in(conn, user)
 
-    {:ok, view, _html} = live(conn, ~p"/inbox")
+    {:ok, view, _html} = live_expanded(conn, ~p"/inbox?types=none")
 
     view |> element("#filter-type-package_added") |> render_click()
+    expand_groups(view)
 
     assert has_element?(view, "#notification-#{added.id}")
     refute has_element?(view, "#notification-#{revision.id}")
 
     view |> element("#filter-type-channel_revision_published") |> render_click()
+    expand_groups(view)
     assert has_element?(view, "#notification-#{revision.id}")
 
-    # deselecting both shows everything again
+    # Deselecting every type keeps an explicit empty selection.
     view |> element("#filter-type-package_added") |> render_click()
+    expand_groups(view)
     view |> element("#filter-type-channel_revision_published") |> render_click()
-    assert has_element?(view, "#notification-#{added.id}")
-    assert has_element?(view, "#notification-#{revision.id}")
+    expand_groups(view)
+    refute has_element?(view, "#notification-#{added.id}")
+    refute has_element?(view, "#notification-#{revision.id}")
+    assert has_element?(view, "#inbox-empty")
   end
 
   test "a PR notification leads with the change title, state, and package tag", %{conn: conn} do
@@ -704,7 +782,7 @@ defmodule TrackerWeb.InboxLive.IndexTest do
 
     conn = log_in(conn, user)
 
-    {:ok, _view, html} = live(conn, ~p"/inbox")
+    {:ok, _view, html} = live_expanded(conn, ~p"/inbox")
 
     [row] = html |> Floki.parse_document!() |> Floki.find("#notification-#{n.id}")
 
@@ -738,7 +816,7 @@ defmodule TrackerWeb.InboxLive.IndexTest do
 
     conn = log_in(conn, user)
 
-    {:ok, view, _html} = live(conn, ~p"/inbox")
+    {:ok, view, _html} = live_expanded(conn, ~p"/inbox")
 
     assert view |> element("#notification-#{n.id}") |> render() =~
              "#{pkg.attribute} 9.0 → 9.1"
@@ -770,32 +848,35 @@ defmodule TrackerWeb.InboxLive.IndexTest do
     {:ok, _} = Notification.mark_read(n, actor: user)
     conn = log_in(conn, user)
 
-    {:ok, view, _html} = live(conn, ~p"/inbox")
+    {:ok, view, _html} = live_expanded(conn, ~p"/inbox")
     refute has_element?(view, "#notification-#{n.id}")
 
     view |> element("#filter-all") |> render_click()
+    expand_groups(view)
 
     assert view |> element("#notification-#{n.id}") |> render() =~ "#{pkg.attribute} 3.2 → 3.3"
   end
 
-  test "type chip counts reflect the unread/all selection", %{conn: conn} do
+  test "matching notification counts reflect the unread/all selection", %{conn: conn} do
     user = register_user!()
     read = published_notification!(user)
     _unread = published_notification!(user)
     {:ok, _} = Notification.mark_read(read, actor: user)
     conn = log_in(conn, user)
 
-    {:ok, view, _html} = live(conn, ~p"/inbox")
+    {:ok, view, _html} = live_expanded(conn, ~p"/inbox")
 
-    assert view |> element("#filter-type-channel_revision_published .n") |> render() =~ ">1<"
+    assert has_element?(view, ".ibx-results-toolbar", "1 matching notifications")
 
     view |> element("#filter-all") |> render_click()
+    expand_groups(view)
 
-    assert view |> element("#filter-type-channel_revision_published .n") |> render() =~ ">2<"
+    assert has_element?(view, ".ibx-results-toolbar", "2 matching notifications")
 
     view |> element("#filter-unread") |> render_click()
+    expand_groups(view)
 
-    assert view |> element("#filter-type-channel_revision_published .n") |> render() =~ ">1<"
+    assert has_element?(view, ".ibx-results-toolbar", "1 matching notifications")
   end
 
   test "shows an empty-filter state when nothing matches", %{conn: conn} do
@@ -804,8 +885,9 @@ defmodule TrackerWeb.InboxLive.IndexTest do
     {:ok, _} = Notification.mark_read(n, actor: user)
     conn = log_in(conn, user)
 
-    {:ok, view, _html} = live(conn, ~p"/inbox")
+    {:ok, view, _html} = live_expanded(conn, ~p"/inbox")
     view |> element("#filter-unread") |> render_click()
+    expand_groups(view)
 
     assert has_element?(view, ".ibx-empty")
     refute has_element?(view, "#inbox-groups ul.row-list > li")
@@ -834,7 +916,7 @@ defmodule TrackerWeb.InboxLive.IndexTest do
 
     conn = log_in(conn, user)
 
-    {:ok, view, _html} = live(conn, ~p"/inbox?channel_revision_id=#{other_rev.id}")
+    {:ok, view, _html} = live_expanded(conn, ~p"/inbox?channel_revision_id=#{other_rev.id}")
 
     assert has_element?(view, "#notification-#{kept.id}")
     assert view |> render() |> String.contains?("Show all")
@@ -844,7 +926,7 @@ defmodule TrackerWeb.InboxLive.IndexTest do
     user = register_user!()
     conn = log_in(conn, user)
 
-    {:ok, view, _html} = live(conn, ~p"/inbox")
+    {:ok, view, _html} = live_expanded(conn, ~p"/inbox")
 
     feed = view |> element("#feed-link") |> render()
     # Relative path (starts with "/", not an absolute http URL) so it resolves
@@ -858,7 +940,7 @@ defmodule TrackerWeb.InboxLive.IndexTest do
     user = register_user!()
     conn = log_in(conn, user)
 
-    {:ok, view, _html} = live(conn, ~p"/inbox")
+    {:ok, view, _html} = live_expanded(conn, ~p"/inbox")
 
     refute has_element?(view, "#regenerate-feed-token")
     refute has_element?(view, "#inbox-menu")
@@ -868,13 +950,13 @@ defmodule TrackerWeb.InboxLive.IndexTest do
     user = register_user!()
     conn = log_in(conn, user)
 
-    {:ok, view, _html} = live(conn, ~p"/inbox")
+    {:ok, view, _html} = live_expanded(conn, ~p"/inbox")
     assert has_element?(view, "#inbox-empty")
 
-    published_notification!(user)
+    notification = published_notification!(user)
 
     refute has_element?(view, "#inbox-empty")
-    assert render(view) =~ "New revision"
+    assert has_element?(view, "#revision-group-#{notification.channel_revision_id}")
   end
 
   describe "nav inbox icon" do
@@ -883,7 +965,7 @@ defmodule TrackerWeb.InboxLive.IndexTest do
       published_notification!(user)
       conn = log_in(conn, user)
 
-      {:ok, view, _html} = live(conn, ~p"/packages")
+      {:ok, view, _html} = live_expanded(conn, ~p"/packages")
 
       refute view |> element(".app-tabs") |> render() =~ "Inbox"
       assert has_element?(view, "#inbox-icon")
@@ -894,7 +976,7 @@ defmodule TrackerWeb.InboxLive.IndexTest do
       user = register_user!()
       conn = log_in(conn, user)
 
-      {:ok, view, _html} = live(conn, ~p"/packages")
+      {:ok, view, _html} = live_expanded(conn, ~p"/packages")
       refute has_element?(view, "#inbox-icon .app-inbox__badge")
 
       published_notification!(user)
@@ -907,7 +989,7 @@ defmodule TrackerWeb.InboxLive.IndexTest do
       n = published_notification!(user)
       conn = log_in(conn, user)
 
-      {:ok, view, _html} = live(conn, ~p"/packages")
+      {:ok, view, _html} = live_expanded(conn, ~p"/packages")
       assert view |> element("#inbox-icon .app-inbox__badge") |> render() =~ "1"
 
       {:ok, _} = Notification.mark_read(n, actor: user)
@@ -921,14 +1003,14 @@ defmodule TrackerWeb.InboxLive.IndexTest do
       user = register_user!()
       conn = log_in(conn, user)
 
-      {:ok, view, _html} = live(conn, ~p"/inbox")
+      {:ok, view, _html} = live_expanded(conn, ~p"/inbox")
 
       refute has_element?(view, "#inbox-icon .app-inbox__badge")
       assert has_element?(view, "#inbox-icon[aria-current='page']")
     end
 
     test "no inbox icon for logged-out visitors", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/packages")
+      {:ok, view, _html} = live_expanded(conn, ~p"/packages")
 
       refute has_element?(view, "#inbox-icon")
     end
@@ -939,7 +1021,7 @@ defmodule TrackerWeb.InboxLive.IndexTest do
       user = register_user!()
       conn = log_in(conn, user)
 
-      {:ok, packages, _html} = live(conn, ~p"/packages")
+      {:ok, packages, _html} = live_expanded(conn, ~p"/packages")
       assert {:ok, inbox, _html} = live_redirect(packages, to: ~p"/inbox")
       assert {:ok, _packages, _html} = live_redirect(inbox, to: ~p"/packages")
     end
@@ -951,7 +1033,7 @@ defmodule TrackerWeb.InboxLive.IndexTest do
       channel!()
       conn = log_in(conn, user)
 
-      {:ok, view, _html} = live(conn, ~p"/inbox")
+      {:ok, view, _html} = live_expanded(conn, ~p"/inbox")
 
       assert has_element?(view, "#lens select.lens__select[disabled]")
     end
@@ -960,7 +1042,7 @@ defmodule TrackerWeb.InboxLive.IndexTest do
       user = register_user!()
       conn = log_in(conn, user)
 
-      {:ok, view, _html} = live(conn, ~p"/inbox")
+      {:ok, view, _html} = live_expanded(conn, ~p"/inbox")
 
       assert has_element?(view, "#page-search-input")
       refute has_element?(view, "#page-search-input[disabled]")
@@ -986,13 +1068,13 @@ defmodule TrackerWeb.InboxLive.IndexTest do
 
       conn = log_in(conn, user)
 
-      {:ok, view, _html} = live(conn, ~p"/inbox")
+      {:ok, view, _html} = live_expanded(conn, ~p"/inbox")
 
       view |> element("#page-search") |> render_change(%{"search" => "FIRE"})
 
       assert has_element?(view, "#notification-#{firefox.id}")
       refute has_element?(view, "#notification-#{vim.id}")
-      assert view |> element("#filter-type-package_added .n") |> render() =~ ">1<"
+      assert has_element?(view, ".ibx-results-toolbar", "1 matching notifications")
     end
 
     test "search matches the channel name", %{conn: conn} do
@@ -1008,7 +1090,7 @@ defmodule TrackerWeb.InboxLive.IndexTest do
 
       conn = log_in(conn, user)
 
-      {:ok, view, _html} = live(conn, ~p"/inbox")
+      {:ok, view, _html} = live_expanded(conn, ~p"/inbox")
 
       view |> element("#page-search") |> render_change(%{"search" => chan.name})
       assert has_element?(view, "#notification-#{n.id}")
@@ -1031,7 +1113,7 @@ defmodule TrackerWeb.InboxLive.IndexTest do
 
       conn = log_in(conn, user)
 
-      {:ok, view, _html} = live(conn, ~p"/inbox")
+      {:ok, view, _html} = live_expanded(conn, ~p"/inbox")
 
       view |> element("#page-search") |> render_change(%{"search" => "FIRE"})
       assert has_element?(view, "#notification-#{n.id}")
@@ -1060,7 +1142,7 @@ defmodule TrackerWeb.InboxLive.IndexTest do
 
       conn = log_in(conn, user)
 
-      {:ok, view, _html} = live(conn, ~p"/inbox?search=firefox")
+      {:ok, view, _html} = live_expanded(conn, ~p"/inbox?search=firefox")
 
       assert has_element?(view, "#notification-#{firefox.id}")
       refute has_element?(view, "#notification-#{vim.id}")
@@ -1075,30 +1157,30 @@ defmodule TrackerWeb.InboxLive.IndexTest do
       twenty_sixth = Enum.at(all, 25)
       conn = log_in(conn, user)
 
-      {:ok, view, _html} = live(conn, ~p"/inbox")
+      {:ok, view, _html} = live_expanded(conn, ~p"/inbox")
 
       assert has_element?(view, "#notification-#{newest.id}")
       refute has_element?(view, "#notification-#{twenty_sixth.id}")
       assert view |> render() =~ "Page 1 of 2"
 
-      {:ok, view, _html} = live(conn, ~p"/inbox?page=2")
+      {:ok, view, _html} = live_expanded(conn, ~p"/inbox?page=2")
 
       refute has_element?(view, "#notification-#{newest.id}")
       assert has_element?(view, "#notification-#{twenty_sixth.id}")
       assert view |> render() =~ "Page 2 of 2"
     end
 
-    test "the segment and chip counts cover every page", %{conn: conn} do
+    test "segment and matching notification counts cover every entry page", %{conn: conn} do
       user = register_user!()
       notifications!(user, 30)
       conn = log_in(conn, user)
 
-      {:ok, view, _html} = live(conn, ~p"/inbox")
+      {:ok, view, _html} = live_expanded(conn, ~p"/inbox")
 
       assert view |> element("#filter-unread .n") |> render() =~ ">30<"
       assert view |> element("#filter-all .n") |> render() =~ ">30<"
 
-      assert view |> element("#filter-type-channel_revision_published .n") |> render() =~ ">30<"
+      assert has_element?(view, ".ibx-results-toolbar", "30 matching notifications")
     end
 
     test "search reaches notifications on later pages", %{conn: conn} do
@@ -1117,7 +1199,7 @@ defmodule TrackerWeb.InboxLive.IndexTest do
 
       conn = log_in(conn, user)
 
-      {:ok, view, _html} = live(conn, ~p"/inbox")
+      {:ok, view, _html} = live_expanded(conn, ~p"/inbox")
       refute has_element?(view, "#notification-#{firefox.id}")
 
       view |> element("#page-search") |> render_change(%{"search" => "FIRE"})
@@ -1140,10 +1222,11 @@ defmodule TrackerWeb.InboxLive.IndexTest do
 
       conn = log_in(conn, user)
 
-      {:ok, view, _html} = live(conn, ~p"/inbox")
+      {:ok, view, _html} = live_expanded(conn, ~p"/inbox")
       refute has_element?(view, "#notification-#{added.id}")
 
-      view |> element("#filter-type-package_added") |> render_click()
+      view |> element("#filter-type-channel_revision_published") |> render_click()
+      expand_groups(view)
 
       assert has_element?(view, "#notification-#{added.id}")
     end
@@ -1153,10 +1236,11 @@ defmodule TrackerWeb.InboxLive.IndexTest do
       [newest | _] = notifications!(user, 30)
       conn = log_in(conn, user)
 
-      {:ok, view, _html} = live(conn, ~p"/inbox?page=2")
+      {:ok, view, _html} = live_expanded(conn, ~p"/inbox?page=2")
       refute has_element?(view, "#notification-#{newest.id}")
 
       view |> element("#filter-all") |> render_click()
+      expand_groups(view)
 
       assert has_element?(view, "#notification-#{newest.id}")
       assert render(view) =~ "Page 1 of 2"
@@ -1167,9 +1251,10 @@ defmodule TrackerWeb.InboxLive.IndexTest do
       notifications!(user, 30)
       conn = log_in(conn, user)
 
-      {:ok, view, _html} = live(conn, ~p"/inbox")
+      {:ok, view, _html} = live_expanded(conn, ~p"/inbox")
 
       view |> element("#mark-all-read") |> render_click()
+      expand_groups(view)
 
       assert has_element?(view, "#mark-all-read[disabled]")
       assert view |> element("#filter-unread .n") |> render() =~ ">0<"
@@ -1181,7 +1266,7 @@ defmodule TrackerWeb.InboxLive.IndexTest do
       notifications!(user, 30)
       conn = log_in(conn, user)
 
-      {:ok, view, _html} = live(conn, ~p"/inbox?filter=all&page=2")
+      {:ok, view, _html} = live_expanded(conn, ~p"/inbox?filter=all&page=2")
 
       assert has_element?(
                view,

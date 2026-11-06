@@ -26,6 +26,28 @@ import {expandHashTarget} from "./ui.js"
 
 let Hooks = {}
 
+Hooks.InboxFilters = {
+  mounted() {
+    this.mobile = window.matchMedia("(max-width: 719px)")
+    this.open = !this.mobile.matches
+    this.el.open = this.open
+    this.onToggle = () => { this.open = this.el.open }
+    this.onResize = () => {
+      this.open = !this.mobile.matches
+      this.el.open = this.open
+    }
+    this.el.addEventListener("toggle", this.onToggle)
+    this.mobile.addEventListener("change", this.onResize)
+  },
+  updated() {
+    this.el.open = this.mobile.matches ? this.open : true
+  },
+  destroyed() {
+    this.el.removeEventListener("toggle", this.onToggle)
+    this.mobile.removeEventListener("change", this.onResize)
+  }
+}
+
 Hooks.UpdateURL = {
   mounted() {
     this.handleEvent("update-url", ({path}) => {

@@ -156,7 +156,7 @@ document.addEventListener("keydown", (event) => {
 // Every list on the page is one cursor. Selecting rows in a single pass gives
 // document order for free, so a page's several lists chain together and a list
 // nested in an expanded row falls in at the row it belongs to.
-const ROW_SELECTOR = "ul.row-list > li > .row-line, ul.row-list > li > details > summary, .comparison-packages tbody tr td:first-child a, .comparison-option-header > a"
+const ROW_SELECTOR = "ul.row-list > li > .row-line, ul.row-list > li > details > summary, .ibx-disclosure, .comparison-packages tbody tr td:first-child a, .comparison-option-header > a"
 let pointerRow = null
 
 function pointAtRow(event) {
@@ -329,9 +329,16 @@ function cursorTarget(row, activeFilterSelector) {
 
   let rows = keynavRows()
   let index = rows.findIndex((line) => line.closest("ul.row-list > li") === row)
-  let neighbour = rows[index + 1] || rows[index - 1]
+  let group = row.closest(".ibx-revision-group")
+  let disappearingGroup = group && Number(
+    activeFilterSelector === "#filter-unread.is-active"
+      ? group.dataset.unreadCount
+      : group.dataset.notificationCount
+  ) === 1
+  let neighbour = [...rows.slice(index + 1), ...rows.slice(0, index).reverse()]
+    .find((line) => !disappearingGroup || !group.contains(line))
 
-  return neighbour?.closest("ul.row-list > li")?.id
+  return neighbour?.closest("ul.row-list > li")?.id || neighbour?.id
 }
 
 // Closing the gap left by the toggled row moves the surviving keyed <li> into
@@ -349,7 +356,7 @@ function keepCursorOn(id) {
   let observer = new MutationObserver(() => {
     if (document.activeElement !== document.body) return
 
-    let line = document.querySelector(`#${CSS.escape(id)} > .row-line`)
+    let line = document.querySelector(`#${CSS.escape(id)} > .row-line, #${CSS.escape(id)}.ibx-disclosure`)
     if (!line) return
 
     line.focus()
