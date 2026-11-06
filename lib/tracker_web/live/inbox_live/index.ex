@@ -228,7 +228,7 @@ defmodule TrackerWeb.InboxLive.Index do
 
       notifications =
         Enum.flat_map(entries, fn entry ->
-          if entry.kind != :notification,
+          if entry.kind == :revision,
             do: entry.members ++ entry.revision_notifications ++ entry.propagation_notifications,
             else: [entry.notification]
         end)
@@ -288,7 +288,7 @@ defmodule TrackerWeb.InboxLive.Index do
   defp expanded?(%Inbox.Entry{} = entry, assigns) do
     key = entry.key
 
-    entry.kind != :notification and
+    entry.kind == :revision and
       if assigns.table_params.search == "",
         do: MapSet.member?(assigns.expanded, key),
         else: not MapSet.member?(assigns.search_collapsed, key)
@@ -449,13 +449,10 @@ defmodule TrackerWeb.InboxLive.Index do
               <SectionHeader.section_header title={day} count={length(entries)} />
               <div class="ibx-day-entries" id={"inbox-day-#{index}"}>
                 <%= for entry <- entries do %>
-                  <%= if entry.kind != :notification do %>
+                  <%= if entry.kind == :revision do %>
                     <article
                       id={group_id(entry)}
-                      class={[
-                        "ibx-revision-group",
-                        entry.kind == :propagation && "ibx-propagation-group"
-                      ]}
+                      class="ibx-revision-group"
                       data-propagation-count={entry.propagation_count}
                       data-notification-count={entry.notification_count}
                       data-package-count={entry.package_count}
@@ -491,7 +488,6 @@ defmodule TrackerWeb.InboxLive.Index do
                           disabled={entry.unread_count == 0}
                         >{if @narrowed?, do: "Mark matching read", else: "Mark group read"} ({entry.unread_count})</button>
                         <.link
-                          :if={entry.kind == :revision}
                           navigate={
                             ~p"/channels/#{entry.notification.channel_revision.channel.name}/revisions/#{entry.notification.channel_revision.revision}"
                           }
@@ -585,16 +581,10 @@ defmodule TrackerWeb.InboxLive.Index do
   defp group_id(%Inbox.Entry{kind: :revision} = entry),
     do: "revision-group-#{entry.revision_id}"
 
-  defp group_id(%Inbox.Entry{kind: :propagation} = entry),
-    do: "propagation-group-#{Base.url_encode64(entry.key, padding: false)}"
-
   defp group_title(%Inbox.Entry{kind: :revision} = entry) do
     revision = entry.notification.channel_revision
     "#{revision.channel.name} · #{String.slice(revision.revision, 0, 7)}"
   end
-
-  defp group_title(%Inbox.Entry{kind: :propagation} = entry),
-    do: "Reached #{entry.branch_name} · #{Date.to_iso8601(entry.propagation_day)}"
 
   defp visible_member_count(%Inbox.Entry{} = entry),
     do:

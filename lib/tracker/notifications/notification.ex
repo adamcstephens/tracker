@@ -146,11 +146,7 @@ defmodule Tracker.Notifications.Notification do
         matching =
           Ash.Query.for_read(__MODULE__, :matching, query.arguments, actor: context.actor)
 
-        # Ash's count query drops loads and sorts before compiling DISTINCT.
-        # Retain the grouping expression as a filter dependency so its target
-        # relationships are joined in both the representative and count queries.
         query
-        |> Ash.Query.filter(not is_nil(entry_key))
         |> Ash.Query.aggregate(:inbox_notification_count, :count, :inbox_members, query: matching)
         |> Ash.Query.aggregate(:inbox_package_count, :count, :inbox_members,
           query: matching,
@@ -178,8 +174,6 @@ defmodule Tracker.Notifications.Notification do
         |> Ash.Query.sort(occurred_at: :desc, id: :desc)
         |> Ash.Query.load([
           :entry_key,
-          :propagation_day,
-          :propagation_target,
           :package,
           :channel,
           :change,
@@ -283,10 +277,6 @@ defmodule Tracker.Notifications.Notification do
   end
 
   calculations do
-    calculate :propagation_day, :date, expr(type(start_of_day(occurred_at, "Etc/UTC"), :date))
-
-    calculate :propagation_target, :string, expr(change_branch.branch_name || channel.name)
-
     calculate :entry_key,
               :string,
               expr(
@@ -300,14 +290,6 @@ defmodule Tracker.Notifications.Notification do
                         :change_propagated
                       ] ->
                     string_join([type("revision:", :string), type(channel_revision_id, :string)])
-
-                  type == :change_propagated ->
-                    string_join([
-                      type("propagation:", :string),
-                      type(propagation_day, :string),
-                      type(":", :string),
-                      propagation_target
-                    ])
 
                   true ->
                     string_join([type("notification:", :string), type(id, :string)])

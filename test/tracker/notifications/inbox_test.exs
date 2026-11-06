@@ -84,11 +84,14 @@ defmodule Tracker.Notifications.InboxTest do
   end
 
   @tag :inbox_projection_race
-  test "saved state changes after projection never leave an uncounted propagation digest" do
+  test "saved state changes after projection never leave an uncounted linked propagation entry" do
     user = register_user!()
+    revision = channel_revision!()
 
     notification =
-      propagation!(user, "master", ~U[2026-10-02 12:00:00Z])
+      propagation!(user, "master", ~U[2026-10-02 12:00:00Z], %{
+        channel_revision_id: revision.id
+      })
       |> Notification.save!(actor: user)
 
     mutate_after_projection!(user, notification, :unsave)
@@ -96,6 +99,8 @@ defmodule Tracker.Notifications.InboxTest do
     assert {:ok, page} = Inbox.page(%{saved_only: true}, user)
     assert_receive {:changed_after_projection, :unsave}
     assert [entry] = page.entries
+    assert entry.kind == :revision
+    assert entry.revision_id == revision.id
     assert entry.notification_count == 1
     assert entry.propagation_count == 1
     assert entry.unread_count == 1
@@ -167,40 +172,73 @@ defmodule Tracker.Notifications.InboxTest do
     assert length(preview.propagation_notifications) == 3
   end
 
-  @tag :propagation_grouping
-  test "revision-less propagation groups use branch target and UTC calendar day across unique changes" do
+  @tag :standalone_propagation
+  test "revision-less propagations on the same branch and day stay separate and reject digest reads" do
     user = register_user!()
-    for _ <- 1..8, do: propagation!(user, "master", ~U[2026-10-02 12:00:00Z])
-    propagation!(user, "master", ~U[2026-10-02 00:00:00Z])
-    propagation!(user, "master", ~U[2026-10-02 23:59:59Z])
-    propagation!(user, "staging", ~U[2026-10-02 12:00:00Z])
-    propagation!(user, "master", ~U[2026-10-03 00:00:00Z])
+    first = propagation!(user, "master", ~U[2026-10-02 12:00:00Z])
+    second = propagation!(user, "master", ~U[2026-10-02 13:00:00Z])
 
     assert {:ok, page} = Inbox.page(%{}, user)
-    assert page.count == 3
+    assert page.count == 2
+    assert page.notification_count == 2
+
+    assert MapSet.new(page.entries, & &1.key) ==
+             MapSet.new([first, second], &"notification:#{&1.id}")
+
+    assert Enum.all?(page.entries, &(&1.kind == :notification and &1.notification_count == 1))
+
+    assert {:ok, 0} =
+             Inbox.mark_matching_read(%{}, user, entry_key: "propagation:2026-10-02:master")
+
+    assert {:ok, 1} =
+             Inbox.mark_matching_read(%{}, user, entry_key: "notification:#{first.id}")
+
+    assert [unread] = Notification.for_user!(%{unread_only: true}, actor: user)
+    assert unread.id == second.id
+  end
+
+  @tag :standalone_propagation
+  test "revision-less propagations stay standalone across unique changes branches and UTC days" do
+    user = register_user!()
+
+    notifications =
+      for _ <- 1..8, do: propagation!(user, "master", ~U[2026-10-02 12:00:00Z])
+
+    notifications =
+      notifications ++
+        [
+          propagation!(user, "master", ~U[2026-10-02 00:00:00Z]),
+          propagation!(user, "master", ~U[2026-10-02 23:59:59Z]),
+          propagation!(user, "staging", ~U[2026-10-02 12:00:00Z]),
+          propagation!(user, "master", ~U[2026-10-03 00:00:00Z])
+        ]
+
+    assert {:ok, page} = Inbox.page(%{}, user)
+    assert page.count == 12
     assert page.notification_count == 12
     assert page.unread_count == 12
-    entry = Enum.find(page.entries, &(&1.key == "propagation:2026-10-02:master"))
-    assert entry.kind == :propagation
-    assert entry.revision_id == nil
-    assert entry.branch_name == "master"
-    assert entry.propagation_day == ~D[2026-10-02]
-    assert entry.notification_count == 10
-    assert entry.propagation_count == 10
-    assert entry.revision_notification_count == 0
-    assert entry.propagation_notifications == []
-    assert {:ok, [preview]} = Inbox.members(%{}, user, [entry], limit: 3)
-    assert length(preview.propagation_notifications) == 3
-    assert preview.members == []
-    assert preview.revision_notifications == []
-    assert {:ok, 10} = Inbox.mark_matching_read(%{}, user, entry_key: entry.key)
+
+    assert MapSet.new(page.entries, & &1.key) ==
+             MapSet.new(notifications, &"notification:#{&1.id}")
+
+    assert Enum.all?(page.entries, fn entry ->
+             entry.kind == :notification and is_nil(entry.revision_id) and
+               entry.notification_count == 1 and entry.propagation_count == 1 and
+               entry.revision_notification_count == 0
+           end)
+
+    assert {:ok, previews} = Inbox.members(%{}, user, page.entries, limit: 3)
+    assert previews == page.entries
+    assert Enum.all?(previews, &(&1.propagation_notifications == [] and &1.members == []))
+    [entry | _] = page.entries
+    assert {:ok, 1} = Inbox.mark_matching_read(%{}, user, entry_key: entry.key)
     assert {:ok, unread} = Inbox.page(%{unread_only: true}, user)
-    assert unread.notification_count == 2
+    assert unread.notification_count == 11
     refute Enum.any?(unread.entries, &(&1.key == entry.key))
   end
 
-  @tag :propagation_grouping
-  test "digest children counts and group reads retain actor search saved type branch and day scope" do
+  @tag :standalone_propagation
+  test "standalone propagation reads retain actor search saved type and unread scope" do
     user = register_user!()
     other = register_user!()
 
@@ -215,28 +253,47 @@ defmodule Tracker.Notifications.InboxTest do
 
     propagation!(other, "master", ~U[2026-10-02 12:00:00Z]) |> Notification.save!(actor: other)
     propagation!(user, "staging", ~U[2026-10-02 12:00:00Z]) |> Notification.save!(actor: user)
-    propagation!(user, "master", ~U[2026-10-03 12:00:00Z]) |> Notification.save!(actor: user)
+
+    next_day =
+      propagation!(user, "master", ~U[2026-10-03 12:00:00Z]) |> Notification.save!(actor: user)
+
+    same_day =
+      propagation!(user, "master", ~U[2026-10-02 15:00:00Z]) |> Notification.save!(actor: user)
+
     scope = %{types: [:change_propagated], search: "master", unread_only: true, saved_only: true}
 
     assert {:ok, page} = Inbox.page(scope, user)
-    assert page.count == 2
-    entry = Enum.find(page.entries, &(&1.key == "propagation:2026-10-02:master"))
+    assert page.count == 3
+    assert page.notification_count == 3
+
+    assert MapSet.new(page.entries, & &1.key) ==
+             MapSet.new([matching, same_day, next_day], &"notification:#{&1.id}")
+
+    entry = Enum.find(page.entries, &(&1.key == "notification:#{matching.id}"))
+    assert entry.kind == :notification
     assert entry.notification_count == 1
     assert entry.propagation_count == 1
     assert entry.unread_count == 1
     assert {:ok, [preview]} = Inbox.members(scope, user, [entry], limit: 3)
-    assert Enum.map(preview.propagation_notifications, & &1.id) == [matching.id]
+    assert preview.notification.id == matching.id
+    assert preview.propagation_notifications == []
     assert {:ok, 1} = Inbox.mark_matching_read(scope, user, entry_key: entry.key)
-    assert length(Notification.for_user!(%{unread_only: true}, actor: user)) == 3
+    assert length(Notification.for_user!(%{unread_only: true}, actor: user)) == 4
     assert Enum.all?(Notification.for_user!(actor: other), &is_nil(&1.read_at))
   end
 
   @tag :propagation_grouping
-  test "digest grouping precedes page boundaries and batches exact bounded members" do
+  test "linked propagation grouping precedes page boundaries and batches exact bounded members" do
     user = register_user!()
 
-    for number <- 1..27, _ <- 1..4 do
-      propagation!(user, "master", DateTime.add(~U[2026-10-01 12:00:00Z], number, :day))
+    for number <- 1..27 do
+      revision = channel_revision!()
+
+      for _ <- 1..4 do
+        propagation!(user, "master", DateTime.add(~U[2026-10-01 12:00:00Z], number, :day), %{
+          channel_revision_id: revision.id
+        })
+      end
     end
 
     assert {:ok, first} = Inbox.page(%{}, user, limit: 25)
@@ -258,7 +315,7 @@ defmodule Tracker.Notifications.InboxTest do
     assert Enum.all?(previews, fn entry ->
              Enum.all?(
                entry.propagation_notifications,
-               &(&1.change_branch.branch_name == entry.branch_name)
+               &(&1.channel_revision_id == entry.revision_id)
              )
            end)
   end
@@ -287,25 +344,30 @@ defmodule Tracker.Notifications.InboxTest do
     assert Enum.map(channels, & &1.id) == [channel.id]
   end
 
-  test "channel-only propagation references retain their actual target in a digest" do
+  test "channel-only propagation references stay standalone with their actual target" do
     user = register_user!()
     channel = channel!()
 
-    for _ <- 1..2 do
-      notification!(user, %{
-        type: :change_propagated,
-        channel_id: channel.id,
-        change_id: change!().id,
-        occurred_at: ~U[2026-10-02 12:00:00Z]
-      })
-    end
+    notifications =
+      for _ <- 1..2 do
+        notification!(user, %{
+          type: :change_propagated,
+          channel_id: channel.id,
+          change_id: change!().id,
+          occurred_at: ~U[2026-10-02 12:00:00Z]
+        })
+      end
 
     assert {:ok, page} = Inbox.page(%{}, user)
-    assert [entry] = page.entries
-    assert entry.kind == :propagation
-    assert entry.branch_name == channel.name
-    assert entry.key == "propagation:2026-10-02:#{channel.name}"
-    assert entry.propagation_count == 2
+    assert page.count == 2
+
+    assert MapSet.new(page.entries, & &1.key) ==
+             MapSet.new(notifications, &"notification:#{&1.id}")
+
+    assert Enum.all?(page.entries, fn entry ->
+             entry.kind == :notification and entry.propagation_count == 1 and
+               entry.notification.channel.name == channel.name
+           end)
   end
 
   test "page counts ledger notifications and distinct packages without loading hidden members" do

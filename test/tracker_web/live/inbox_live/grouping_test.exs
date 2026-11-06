@@ -123,7 +123,7 @@ defmodule TrackerWeb.InboxLive.GroupingTest do
   end
 
   @tag :selected_a
-  test "unlinked propagation has an honest branch-day digest and matching children", %{conn: conn} do
+  test "unlinked propagation stays standalone rather than becoming a digest", %{conn: conn} do
     user = register_user!()
 
     notifications =
@@ -141,64 +141,65 @@ defmodule TrackerWeb.InboxLive.GroupingTest do
 
     {:ok, view, _html} = live(log_in(conn, user), ~p"/inbox?filter=all")
 
-    assert has_element?(
-             view,
-             ".ibx-propagation-group [phx-click=toggle-group]",
-             "Reached nixos-unstable · 2026-11-06"
-           )
-
-    assert has_element?(view, ".ibx-propagation-group[data-notification-count='2']")
-    refute has_element?(view, ".ibx-propagation-group [aria-label='Open full revision']")
-    refute has_element?(view, "#notification-#{hd(notifications).id}")
-    view |> element(".ibx-propagation-group [phx-click=toggle-group]") |> render_click()
+    refute has_element?(view, "[id^=propagation-group-]")
+    refute has_element?(view, ".ibx-disclosure")
 
     for notification <- notifications do
-      assert has_element?(view, ".ibx-propagation-group #notification-#{notification.id}")
+      assert has_element?(
+               view,
+               ".ibx-day-entries > .row-list > #notification-#{notification.id}"
+             )
+
+      assert has_element?(view, "#notification-#{notification.id} [aria-label='Save for later']")
     end
   end
 
   @tag :selected_a
-  test "propagation digest previews are lazy and matching read preserves hidden siblings", %{
-    conn: conn
-  } do
+  test "revision-linked propagation previews are lazy and matching read preserves hidden siblings",
+       %{
+         conn: conn
+       } do
     user = register_user!()
+    revision = channel_revision!(channel!())
 
     notifications =
       for number <- 1..8 do
-        change = change!(nil, %{title: "digest-matching-#{number}"})
-        branch = change_branch!(change, "nixos-unstable")
+        change = change!(nil, %{title: "revision-matching-#{number}"})
+        branch = change_branch!(change, "nixos-unstable", revision)
 
         notification!(user, %{
           type: :change_propagated,
           change_id: change.id,
           change_branch_id: branch.id,
-          occurred_at: ~U[2026-11-06 12:00:00Z]
+          channel_id: revision.channel_id,
+          channel_revision_id: revision.id
         })
       end
 
     hidden_change = change!(nil, %{title: "other-change"})
-    hidden_branch = change_branch!(hidden_change, "nixos-unstable")
+    hidden_branch = change_branch!(hidden_change, "nixos-unstable", revision)
 
     hidden =
       notification!(user, %{
         type: :change_propagated,
         change_id: hidden_change.id,
         change_branch_id: hidden_branch.id,
-        occurred_at: ~U[2026-11-06 12:00:00Z]
+        channel_id: revision.channel_id,
+        channel_revision_id: revision.id
       })
 
-    {:ok, view, _html} = live(log_in(conn, user), ~p"/inbox?search=digest-matching")
-    assert has_element?(view, ".ibx-propagation-group[data-notification-count='8']")
+    {:ok, view, _html} = live(log_in(conn, user), ~p"/inbox?search=revision-matching")
+    assert has_element?(view, "#revision-group-#{revision.id}[data-notification-count='8']")
 
     assert length(
              view
              |> render()
              |> Floki.parse_document!()
-             |> Floki.find(".ibx-propagation-group .notification-row")
+             |> Floki.find("#revision-group-#{revision.id} .notification-row")
            ) == 3
 
     refute has_element?(view, "#notification-#{hidden.id}")
-    view |> element(".ibx-propagation-group [phx-click=show-more]") |> render_click()
+    view |> element("#revision-group-#{revision.id} [phx-click=show-more]") |> render_click()
 
     for notification <- notifications do
       assert has_element?(view, "#notification-#{notification.id}")
@@ -207,7 +208,11 @@ defmodule TrackerWeb.InboxLive.GroupingTest do
     saved = hd(notifications)
     view |> element("#notification-#{saved.id} [aria-label='Save for later']") |> render_click()
     assert has_element?(view, "#notification-#{saved.id} [aria-label='Remove from saved']")
-    view |> element(".ibx-propagation-group [phx-click=mark-group-read]") |> render_click()
+
+    view
+    |> element("#revision-group-#{revision.id} [phx-click=mark-group-read]")
+    |> render_click()
+
     assert has_element?(view, "#inbox-empty")
 
     assert Enum.map(Notification.for_user!(%{unread_only: true}, actor: user), & &1.id) == [

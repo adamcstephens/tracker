@@ -11,10 +11,8 @@ defmodule Tracker.Notifications.Inbox do
 
     typedstruct do
       field :key, String.t(), enforce: true
-      field :kind, :revision | :propagation | :notification, enforce: true
+      field :kind, :revision | :notification, enforce: true
       field :revision_id, integer()
-      field :branch_name, String.t()
-      field :propagation_day, Date.t()
       field :occurred_at, DateTime.t(), enforce: true
       field :notification, Notification.t(), enforce: true
       field :notification_count, non_neg_integer(), default: 0
@@ -199,7 +197,6 @@ defmodule Tracker.Notifications.Inbox do
     kind =
       case notification.entry_key do
         "revision:" <> _ -> :revision
-        "propagation:" <> _ -> :propagation
         "notification:" <> _ -> :notification
       end
 
@@ -207,8 +204,6 @@ defmodule Tracker.Notifications.Inbox do
       key: notification.entry_key,
       kind: kind,
       revision_id: if(kind == :revision, do: notification.channel_revision_id),
-      branch_name: if(kind == :propagation, do: notification.propagation_target),
-      propagation_day: if(kind == :propagation, do: notification.propagation_day),
       occurred_at: notification.occurred_at,
       notification: notification,
       notification_count: notification.aggregates.inbox_notification_count,

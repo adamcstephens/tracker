@@ -155,6 +155,109 @@ defmodule TrackerWeb.Browser.InboxGroupingTest do
     assert %Notification{read_at: nil} = Ash.get!(Notification, notification.id, actor: user)
   end
 
+  for {viewport, width, height} <- [{:desktop, 1440, 1060}, {:mobile, 390, 844}] do
+    @tag :selected_a
+    @tag browser_context_opts: [viewport: %{width: width, height: height}]
+    test "#{viewport} keeps navigation order, unstriped selections and left-aligned disclosures",
+         %{
+           conn: conn,
+           user: user,
+           revision: revision
+         } do
+      conn = inbox(conn, user)
+      disclosure = "#revision-group-#{revision.id} .ibx-disclosure"
+      assert_has(conn, disclosure)
+
+      assert read(
+               conn,
+               """
+               (() => {
+                 const button = document.querySelector('#{disclosure}');
+                 const caret = button.querySelector('[aria-hidden]');
+                 const title = button.querySelector('strong');
+                 const heading = button.closest('.ibx-group-heading');
+                 const buttonBox = button.getBoundingClientRect();
+                 const caretBox = caret.getBoundingClientRect();
+                 const titleBox = title.getBoundingClientRect();
+                 const headingBox = heading.getBoundingClientRect();
+                 const padding = parseFloat(getComputedStyle(heading).paddingLeft);
+                 return Math.abs(buttonBox.left - headingBox.left - padding) <= 1 &&
+                   Math.abs(caretBox.left - buttonBox.left) <= 1 &&
+                   titleBox.left - caretBox.right >= 0 &&
+                   titleBox.left - caretBox.right <= 16;
+               })()
+               """
+             )
+
+      if read(conn, "window.innerWidth < 768") do
+        press(conn, "#inbox-filters > summary", "Enter")
+        assert_has(conn, "#inbox-filters[open]")
+      end
+
+      for filter <- ["unread", "all", "saved"] do
+        click(conn, "#filter-#{filter}")
+        assert_has(conn, "#filter-#{filter}.is-active[aria-pressed=true]")
+
+        assert read(
+                 conn,
+                 """
+                 (() => {
+                   const button = document.querySelector('#filter-#{filter}');
+                   const style = getComputedStyle(button);
+                   return style.boxShadow === 'none' &&
+                     style.borderLeftWidth === '0px' &&
+                     style.backgroundImage === 'none' &&
+                     ['none', 'normal'].includes(getComputedStyle(button, '::before').content) &&
+                     ['none', 'normal'].includes(getComputedStyle(button, '::after').content);
+                 })()
+                 """
+               )
+      end
+
+      for active <- ["inbox", "subscriptions"] do
+        if active == "subscriptions", do: click(conn, "#view-nav-subscriptions")
+        assert_has(conn, "#view-nav-#{active}[aria-current=page]")
+
+        assert read(
+                 conn,
+                 """
+                 (() => {
+                   const inbox = document.querySelector('#view-nav-inbox').getBoundingClientRect();
+                   const subscriptions = document.querySelector('#view-nav-subscriptions').getBoundingClientRect();
+                   return inbox.left < subscriptions.left && inbox.right <= subscriptions.left;
+                 })()
+                 """
+               )
+      end
+    end
+  end
+
+  @tag :selected_a
+  test "unlinked propagation remains a standalone row beside a real revision group", %{
+    conn: conn,
+    user: user,
+    revision: revision,
+    notification: notification
+  } do
+    change = change!()
+    branch = change_branch!(change, "nixos-unstable")
+
+    propagated =
+      notification!(user, %{
+        type: :change_propagated,
+        change_id: change.id,
+        change_branch_id: branch.id
+      })
+
+    conn = inbox(conn, user)
+    assert_has(conn, ".ibx-day-entries > .row-list > #notification-#{propagated.id}")
+    refute_has(conn, "[id^=propagation-group-]")
+    refute_has(conn, "#revision-group-#{revision.id} #notification-#{propagated.id}")
+    click(conn, "#revision-group-#{revision.id} [phx-click=toggle-group]")
+    assert_has(conn, "#revision-group-#{revision.id} #notification-#{notification.id}")
+    assert_has(conn, "#notification-#{propagated.id} [aria-label='Save for later']")
+  end
+
   @tag :selected_a
   @tag browser_context_opts: [viewport: %{width: 1440, height: 1060}]
   test "desktop Inbox and Subscriptions use the same wide shell and divider-led rows", %{
@@ -225,32 +328,36 @@ defmodule TrackerWeb.Browser.InboxGroupingTest do
 
   @tag :selected_a
   @tag browser_context_opts: [viewport: %{width: 390, height: 844}]
-  test "mobile propagation digests expand, search, save and read without overflow", %{
-    conn: conn,
-    user: user
-  } do
-    matching_change = change!(nil, %{title: "digest-browser-matching"})
-    hidden_change = change!(nil, %{title: "digest-browser-hidden"})
+  test "mobile revision-linked propagation expands, searches, saves and reads without overflow",
+       %{
+         conn: conn,
+         user: user
+       } do
+    revision = channel_revision!(channel!())
+    matching_change = change!(nil, %{title: "revision-browser-matching"})
+    hidden_change = change!(nil, %{title: "revision-browser-hidden"})
 
     [matching, hidden] =
       for change <- [matching_change, hidden_change] do
-        branch = change_branch!(change, "nixos-unstable")
+        branch = change_branch!(change, "nixos-unstable", revision)
 
         notification!(user, %{
           type: :change_propagated,
           change_id: change.id,
           change_branch_id: branch.id,
-          occurred_at: ~U[2026-11-06 12:00:00Z]
+          channel_id: revision.channel_id,
+          channel_revision_id: revision.id
         })
       end
 
     conn = inbox(conn, user, "/inbox?filter=all")
-    assert_has(conn, ".ibx-propagation-group[data-notification-count='2']")
-    press(conn, ".ibx-propagation-group [phx-click=toggle-group]", "Enter")
-    assert_has(conn, ".ibx-propagation-group #notification-#{matching.id}")
-    assert_has(conn, ".ibx-propagation-group #notification-#{hidden.id}")
-    conn = fill_in(conn, "Search notifications…", with: "digest-browser-matching")
-    assert_has(conn, ".ibx-propagation-group[data-notification-count='1']")
+    group = "#revision-group-#{revision.id}"
+    assert_has(conn, "#{group}[data-notification-count='2']")
+    press(conn, "#{group} [phx-click=toggle-group]", "Enter")
+    assert_has(conn, "#{group} #notification-#{matching.id}")
+    assert_has(conn, "#{group} #notification-#{hidden.id}")
+    conn = fill_in(conn, "Search notifications…", with: "revision-browser-matching")
+    assert_has(conn, "#{group}[data-notification-count='1']")
     assert_has(conn, "#notification-#{matching.id}")
     refute_has(conn, "#notification-#{hidden.id}")
     click(conn, "#notification-#{matching.id} [aria-label='Save for later']")
