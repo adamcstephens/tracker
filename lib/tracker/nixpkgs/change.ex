@@ -51,6 +51,8 @@ defmodule Tracker.Nixpkgs.Change do
     define :mark_not_found
     define :dashboard_recent
     define :backport_backlog
+    define :backport_retry_backlog
+    define :backport_historical_backlog
     define :by_numbers, args: [:numbers]
     define :mark_backport_checked
   end
@@ -208,13 +210,39 @@ defmodule Tracker.Nixpkgs.Change do
     end
 
     read :backport_backlog do
-      prepare build(sort: [backport_checked_at: :asc_nils_first, number: :asc], limit: 25)
+      argument :exclude_numbers, {:array, :integer}, default: []
+      argument :limit, :integer, default: 25
+
+      prepare build(sort: [gh_updated_at: :desc_nils_last, number: :desc])
+
+      prepare fn query, _context ->
+        Ash.Query.limit(query, Ash.Query.get_argument(query, :limit))
+      end
 
       filter expr(
-               is_nil(backport_checked_at) or
-                 is_nil(gh_updated_at) != is_nil(backport_gh_updated_at) or
-                 gh_updated_at != backport_gh_updated_at or backport_retry_at <= now()
+               number not in ^arg(:exclude_numbers) and
+                 (is_nil(backport_checked_at) or
+                    is_nil(gh_updated_at) != is_nil(backport_gh_updated_at) or
+                    gh_updated_at != backport_gh_updated_at or backport_retry_at <= now())
              )
+    end
+
+    read :backport_retry_backlog do
+      argument :exclude_numbers, {:array, :integer}, default: []
+      argument :limit, :integer, default: 25
+
+      prepare build(sort: [backport_retry_at: :asc, number: :asc])
+
+      prepare fn query, _context ->
+        Ash.Query.limit(query, Ash.Query.get_argument(query, :limit))
+      end
+
+      filter expr(backport_retry_at <= now() and number not in ^arg(:exclude_numbers))
+    end
+
+    read :backport_historical_backlog do
+      prepare build(sort: [gh_updated_at: :asc_nils_first, number: :asc], limit: 5)
+      filter expr(is_nil(backport_checked_at))
     end
 
     read :by_numbers do

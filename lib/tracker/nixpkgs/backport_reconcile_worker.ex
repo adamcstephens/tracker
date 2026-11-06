@@ -22,7 +22,7 @@ defmodule Tracker.Nixpkgs.BackportReconcileWorker do
   end
 
   def run(numbers \\ nil, opts \\ []) do
-    numbers = numbers || Enum.map(Change.backport_backlog!(), & &1.number)
+    numbers = numbers || next_numbers()
     fetcher = Keyword.get(opts, :fetcher, &GraphQL.fetch_numbers("NixOS/nixpkgs", &1, []))
 
     numbers
@@ -38,6 +38,27 @@ defmodule Tracker.Nixpkgs.BackportReconcileWorker do
       {count, nil} -> {:ok, count}
       {_count, error} -> {:error, error}
     end
+  end
+
+  defp next_numbers do
+    historical = Enum.map(Change.backport_historical_backlog!(), & &1.number)
+    priority_slots = 25 - length(historical)
+
+    retries =
+      Change.backport_retry_backlog!(%{exclude_numbers: historical, limit: priority_slots})
+      |> Enum.map(& &1.number)
+
+    remaining = priority_slots - length(retries)
+
+    latest =
+      if remaining > 0 do
+        Change.backport_backlog!(%{exclude_numbers: historical ++ retries, limit: remaining})
+        |> Enum.map(& &1.number)
+      else
+        []
+      end
+
+    retries ++ latest ++ historical
   end
 
   defp reconcile_batch(numbers, fetcher, opts) do

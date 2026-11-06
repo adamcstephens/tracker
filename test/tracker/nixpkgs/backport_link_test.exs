@@ -3,7 +3,7 @@ defmodule Tracker.Nixpkgs.BackportLinkTest do
 
   alias Tracker.Nixpkgs.{BackportLink, Change}
 
-  test "a newer GitHub timestamp preserves check order so historical Changes cannot starve" do
+  test "a newer GitHub timestamp becomes eligible without changing the last check time" do
     timestamp = ~U[2026-11-01 00:00:00Z]
 
     Change.bulk_upsert_all([
@@ -31,7 +31,7 @@ defmodule Tracker.Nixpkgs.BackportLinkTest do
 
     edited = Change.get_by_number!(10)
     assert edited.backport_checked_at == checked.backport_checked_at
-    assert Enum.map(Change.backport_backlog!(), & &1.number) == [11, 10]
+    assert Enum.map(Change.backport_backlog!(), & &1.number) == [10, 11]
   end
 
   test "retains source numbers before source discovery and loads both directions afterwards" do
