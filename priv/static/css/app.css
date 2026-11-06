@@ -1477,11 +1477,14 @@ a.revision-link {
 
 /* Keyboard cursor, all three row modes. Inset because the list clips its
    overflow — an outset outline is cut off on the first and last rows. */
-.row-line:focus-visible {
+.row-line:focus-visible,
+.ibx-grouped .ibx-disclosure:focus-visible {
 	outline: none;
 }
 
-:root:not([data-row-navigation="pointer"]) .row-line:focus-visible {
+:root:not([data-row-navigation="pointer"]) .row-line:focus-visible,
+:root:not([data-row-navigation="pointer"])
+	.ibx-group-heading:has(> .ibx-disclosure:focus-visible) {
 	outline: 2px solid var(--accent-edge);
 	outline-offset: -2px;
 	background: var(--surface);
@@ -3919,6 +3922,11 @@ a.revision-link {
 	color: var(--text);
 }
 
+.ibx-disclosure:hover {
+	color: var(--text);
+	filter: none;
+}
+
 .ibx-disclosure > span:last-child {
 	min-width: 0;
 }
@@ -3972,7 +3980,8 @@ a.revision-link {
 	padding: 0 1rem;
 }
 
-.ibx-grouped :is(button, input, select, summary):focus-visible {
+.ibx-grouped
+	:is(button:not(.ibx-disclosure), input, select, summary):focus-visible {
 	outline: 2px solid var(--accent);
 	outline-offset: 3px;
 }

@@ -155,6 +155,63 @@ defmodule TrackerWeb.Browser.InboxGroupingTest do
     assert %Notification{read_at: nil} = Ash.get!(Notification, notification.id, actor: user)
   end
 
+  @tag browser_context_opts: [color_scheme: :dark]
+  test "group hover remains readable and keyboard highlight matches row lists", %{
+    conn: conn,
+    user: user,
+    revision: revision,
+    notification: notification
+  } do
+    conn = inbox(conn, user)
+    disclosure = "#revision-group-#{revision.id} .ibx-disclosure"
+    color = read(conn, "getComputedStyle(document.querySelector('#{disclosure}')).color")
+    {:ok, _} = PlaywrightEx.Frame.hover(conn.frame_id, selector: disclosure, timeout: 2000)
+    assert read(conn, "getComputedStyle(document.querySelector('#{disclosure}')).color") == color
+
+    assert read(conn, "getComputedStyle(document.querySelector('#{disclosure}')).filter") ==
+             "none"
+
+    press(conn, disclosure, "Enter")
+    assert_has(conn, "#notification-#{notification.id}")
+    press(conn, "body", "j")
+
+    assert {:ok, _} =
+             PlaywrightEx.Frame.wait_for_function(conn.frame_id,
+               timeout: 2000,
+               expression:
+                 "document.activeElement.getAnimations().every(a => a.playState !== 'running')"
+             )
+
+    row_style =
+      read(conn, """
+      (() => {
+        const style = getComputedStyle(document.activeElement);
+        return [style.outlineColor, style.outlineWidth, style.outlineOffset, style.backgroundColor];
+      })()
+      """)
+
+    press(conn, "body", "k")
+    assert read(conn, "document.activeElement.matches('#{disclosure}')")
+
+    assert read(conn, """
+           (() => {
+             const style = getComputedStyle(document.activeElement.closest('.ibx-group-heading'));
+             return [style.outlineColor, style.outlineWidth, style.outlineOffset, style.backgroundColor];
+           })()
+           """) == row_style
+
+    {:ok, _} =
+      PlaywrightEx.Frame.hover(conn.frame_id,
+        selector: "#notification-#{notification.id} .row-line",
+        timeout: 2000
+      )
+
+    assert read(
+             conn,
+             "getComputedStyle(document.querySelector('#revision-group-#{revision.id} .ibx-group-heading')).outlineStyle"
+           ) == "none"
+  end
+
   for {viewport, width, height} <- [{:desktop, 1440, 1060}, {:mobile, 390, 844}] do
     @tag :selected_a
     @tag browser_context_opts: [viewport: %{width: width, height: height}]
