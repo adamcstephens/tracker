@@ -1313,6 +1313,174 @@ defmodule TrackerWeb.PackageLive.ShowTest do
       refute html =~ "out-of-lens change"
     end
 
+    test "can broaden and restore the channel filter, including when empty", %{
+      conn: conn,
+      package: package,
+      channel_stable: channel
+    } do
+      {:ok, view, html} =
+        live(conn, ~p"/packages/#{package.attribute}?channel=#{channel.name}&in_channel=false")
+
+      assert html =~ "cross-channel"
+      assert html =~ "in-lens change"
+      assert html =~ "out-of-lens change"
+
+      view |> form("#recent-changes-filter", %{in_channel: "true"}) |> render_change()
+      assert assert_patch(view) =~ "in_channel=true"
+      html = render(view)
+      refute html =~ "in-lens change"
+      assert html =~ "out-of-lens change"
+    end
+
+    test "all channels show cross-channel history without a channel filter", %{
+      conn: conn,
+      package: package
+    } do
+      {:ok, _view, html} = live(conn, ~p"/packages/#{package.attribute}?channel=all")
+
+      assert html =~ "cross-channel"
+      assert html =~ "in-lens change"
+      assert html =~ "out-of-lens change"
+      refute html =~ "recent-changes-filter"
+    end
+
+    test "empty pinned results retain the filter and revision filters preserve its state", %{
+      conn: conn,
+      package: package,
+      channel_unstable: channel,
+      cr1: pin
+    } do
+      {:ok, view, html} =
+        live(conn, ~p"/packages/#{package.attribute}?channel=#{channel.name}&rev=#{pin.revision}")
+
+      assert html =~ "No recent changes found."
+      assert has_element?(view, "#recent-changes-filter")
+
+      view |> form("#recent-changes-filter", %{in_channel: "false"}) |> render_change()
+      assert assert_patch(view) =~ "in_channel=false"
+      assert render(view) =~ "out-of-lens change"
+
+      view |> element("form.revision-filters") |> render_change(%{"version" => "2.12"})
+      path = assert_patch(view)
+      assert path =~ "in_channel=false"
+      assert path =~ "rev=#{pin.revision}"
+      assert path =~ "version=2.12"
+    end
+
+    test "pinned lens includes only known landings through the pinned revision", %{
+      conn: conn,
+      package: package,
+      channel_unstable: channel,
+      cr1: pin,
+      change_in: change
+    } do
+      Tracker.Nixpkgs.ChangeBranch.create!(%{
+        change_id: change.id,
+        branch_name: channel.name,
+        channel_revision_id: pin.id
+      })
+
+      later =
+        Ash.create!(Tracker.Nixpkgs.ChannelRevision, %{
+          channel_id: channel.id,
+          revision: "later123456789",
+          released_at: ~U[2026-03-02 10:00:00Z]
+        })
+
+      future =
+        Ash.create!(
+          Tracker.Nixpkgs.Change,
+          %{
+            number: 70003,
+            title: "later landing",
+            state: :merged,
+            author: "alice"
+          },
+          action: :bulk_upsert
+        )
+
+      Ash.create!(
+        Tracker.Nixpkgs.ChangePackage,
+        %{
+          change_id: future.id,
+          package_id: package.id,
+          type: :changed
+        },
+        action: :load
+      )
+
+      Tracker.Nixpkgs.ChangeBranch.create!(%{
+        change_id: future.id,
+        branch_name: channel.name,
+        channel_revision_id: later.id
+      })
+
+      unknown =
+        Ash.create!(
+          Tracker.Nixpkgs.Change,
+          %{
+            number: 70004,
+            title: "unknown landing",
+            state: :merged,
+            author: "alice"
+          },
+          action: :bulk_upsert
+        )
+
+      Ash.create!(
+        Tracker.Nixpkgs.ChangePackage,
+        %{
+          change_id: unknown.id,
+          package_id: package.id,
+          type: :changed
+        },
+        action: :load
+      )
+
+      Tracker.Nixpkgs.ChangeBranch.create!(%{
+        change_id: unknown.id,
+        branch_name: channel.name
+      })
+
+      for number <- 70005..70015 do
+        later_change =
+          Ash.create!(
+            Tracker.Nixpkgs.Change,
+            %{
+              number: number,
+              title: "later #{number}",
+              state: :merged,
+              author: "alice"
+            },
+            action: :bulk_upsert
+          )
+
+        Ash.create!(
+          Tracker.Nixpkgs.ChangePackage,
+          %{
+            change_id: later_change.id,
+            package_id: package.id,
+            type: :changed
+          },
+          action: :load
+        )
+
+        Tracker.Nixpkgs.ChangeBranch.create!(%{
+          change_id: later_change.id,
+          branch_name: channel.name,
+          channel_revision_id: later.id
+        })
+      end
+
+      {:ok, _view, html} =
+        live(conn, ~p"/packages/#{package.attribute}?channel=#{channel.name}&rev=#{pin.revision}")
+
+      assert html =~ "in-lens change"
+      refute html =~ "later landing"
+      refute html =~ "unknown landing"
+      refute html =~ "out-of-lens change"
+    end
+
     test "lens swap reloads recent changes for the new channel", %{
       conn: conn,
       package: package,

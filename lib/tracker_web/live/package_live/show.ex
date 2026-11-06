@@ -255,8 +255,38 @@ defmodule TrackerWeb.PackageLive.Show do
             </p>
           </section>
 
-          <section :if={@recent_changes != []}>
-            <SectionHeader.section_header title="Recent Changes" count={length(@recent_changes)} />
+          <section :if={@lens_channel_name || @recent_changes != []}>
+            <SectionHeader.section_header title="Recent Changes" count={length(@recent_changes)}>
+              <:controls>
+                <form
+                  :if={@lens_channel_name}
+                  id="recent-changes-filter"
+                  method="get"
+                  action={~p"/packages/#{@package.attribute}"}
+                  phx-change="filter-changes"
+                  phx-submit="filter-changes"
+                >
+                  <input
+                    :if={@table_params.channel}
+                    type="hidden"
+                    name="channel"
+                    value={@table_params.channel}
+                  />
+                  <input :if={@table_params.rev} type="hidden" name="rev" value={@table_params.rev} />
+                  <input type="hidden" name="version" value={@version_filter} />
+                  <input type="hidden" name="all_revisions" value={to_string(@all_revisions?)} />
+                  <input type="hidden" name="page" value={@table_params.page} />
+                  <label>
+                    <input type="hidden" name="in_channel" value="false" />
+                    <input type="checkbox" name="in_channel" value="true" checked={@in_channel?} />
+                    Only in {@lens_channel_name}
+                  </label>
+                  <button type="submit">Apply</button>
+                </form>
+              </:controls>
+            </SectionHeader.section_header>
+            <p :if={!@lens_channel_name || !@in_channel?}>Showing cross-channel history.</p>
+            <p :if={@recent_changes == []}>No recent changes found.</p>
             <ChangeRow.change_row_list id="recent-changes">
               <ChangeRow.change_row
                 :for={change <- @recent_changes}
@@ -277,6 +307,14 @@ defmodule TrackerWeb.PackageLive.Show do
                   phx-submit="filter"
                   class="revision-filters"
                 >
+                  <input
+                    :if={@table_params.channel}
+                    type="hidden"
+                    name="channel"
+                    value={@table_params.channel}
+                  />
+                  <input :if={@table_params.rev} type="hidden" name="rev" value={@table_params.rev} />
+                  <input type="hidden" name="in_channel" value={to_string(@in_channel?)} />
                   <input
                     type="text"
                     name="version"
@@ -320,14 +358,22 @@ defmodule TrackerWeb.PackageLive.Show do
                 revisions_path(
                   @package.attribute,
                   %{@table_params | page: @current_page - 1},
-                  %{version: @version_filter, all_revisions: @all_revisions?}
+                  %{
+                    version: @version_filter,
+                    all_revisions: @all_revisions?,
+                    in_channel: @in_channel?
+                  }
                 )
               }
               next_path={
                 revisions_path(
                   @package.attribute,
                   %{@table_params | page: @current_page + 1},
-                  %{version: @version_filter, all_revisions: @all_revisions?}
+                  %{
+                    version: @version_filter,
+                    all_revisions: @all_revisions?,
+                    in_channel: @in_channel?
+                  }
                 )
               }
               anchor="revisions"
@@ -551,6 +597,7 @@ defmodule TrackerWeb.PackageLive.Show do
     tp = TableParams.from_params(params)
     version_filter = params["version"] || ""
     all_revisions? = params["all_revisions"] == "true"
+    in_channel? = Map.get(params, "in_channel", "true") != "false"
 
     {:noreply,
      socket
@@ -565,6 +612,7 @@ defmodule TrackerWeb.PackageLive.Show do
      |> assign(:table_params, tp)
      |> assign(:version_filter, version_filter)
      |> assign(:all_revisions?, all_revisions?)
+     |> assign(:in_channel?, in_channel?)
      |> assign(:page_search, %PageSearch{
        mode: :passthrough,
        action: "/packages",
@@ -621,7 +669,8 @@ defmodule TrackerWeb.PackageLive.Show do
     extras =
       %{
         version: Map.get(extra_overrides, :version, ""),
-        all_revisions: Map.get(extra_overrides, :all_revisions, false)
+        all_revisions: Map.get(extra_overrides, :all_revisions, false),
+        in_channel: if(Map.get(extra_overrides, :in_channel, true), do: "true", else: "false")
       }
 
     TableParams.to_path(tp, "/packages/#{package_name}", extras)
@@ -635,7 +684,9 @@ defmodule TrackerWeb.PackageLive.Show do
     channel_id = TrackerWeb.Lens.channel_id(socket.assigns.lens)
     channel_name = TrackerWeb.Lens.channel_name(socket.assigns.lens)
 
-    recent_changes = load_recent_changes(package_id, channel_name)
+    in_channel? = socket.assigns.in_channel? and not is_nil(channel_name)
+    at = if in_channel?, do: TrackerWeb.Lens.pinned_at(socket.assigns.lens)
+    recent_changes = load_recent_changes(package_id, if(in_channel?, do: channel_name), at)
 
     {revisions, total_count, has_more?} =
       if all_revisions? do
@@ -671,6 +722,7 @@ defmodule TrackerWeb.PackageLive.Show do
     |> assign(:historical_revision?, historical_revision?(socket.assigns.lens))
     |> assign_removal_status(package_id, channel_id)
     |> assign_current_meta(package_id, channel_id, TrackerWeb.Lens.pinned_at(socket.assigns.lens))
+    |> assign(:lens_channel_name, channel_name)
     |> assign(:recent_changes, recent_changes)
     |> assign(:revisions, revisions)
     |> assign(:revision_count, total_count)
@@ -726,6 +778,22 @@ defmodule TrackerWeb.PackageLive.Show do
   end
 
   @impl true
+  def handle_event("filter-changes", params, socket) do
+    in_channel? = Map.get(params, "in_channel", "false") == "true"
+
+    {:noreply,
+     push_patch(socket,
+       to:
+         revisions_path(socket.assigns.package.attribute, socket.assigns.table_params, %{
+           version: socket.assigns.version_filter,
+           all_revisions: socket.assigns.all_revisions?,
+           in_channel: in_channel?
+         }),
+       replace: true
+     )}
+  end
+
+  @impl true
   def handle_event("filter", params, socket) do
     version = Map.get(params, "version", "")
     all_revisions? = Map.get(params, "all_revisions", "false") == "true"
@@ -736,7 +804,8 @@ defmodule TrackerWeb.PackageLive.Show do
        to:
          revisions_path(socket.assigns.package.attribute, tp, %{
            version: version,
-           all_revisions: all_revisions?
+           all_revisions: all_revisions?,
+           in_channel: socket.assigns.in_channel?
          }),
        replace: true
      )}
@@ -752,8 +821,8 @@ defmodule TrackerWeb.PackageLive.Show do
     )
   end
 
-  defp load_recent_changes(package_id, channel_name) do
-    Tracker.Nixpkgs.Change.by_package!(package_id, channel_name, page: [limit: 10]).results
+  defp load_recent_changes(package_id, channel_name, at) do
+    Tracker.Nixpkgs.Change.by_package!(package_id, channel_name, at, page: [limit: 10]).results
   end
 
   defp load_family_siblings(%{package_family_id: nil}), do: []
