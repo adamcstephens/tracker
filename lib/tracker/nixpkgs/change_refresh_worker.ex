@@ -180,6 +180,7 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorker do
       head_ref: pr.head_ref,
       head_sha: pr.head_sha,
       title: pr.title,
+      body: pr.body,
       labels: pr.labels,
       gh_updated_at: pr.updated_at,
       closed_at: pr.closed_at,

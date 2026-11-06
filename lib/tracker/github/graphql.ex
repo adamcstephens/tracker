@@ -29,6 +29,7 @@ defmodule Tracker.GitHub.GraphQL do
   headRefName
   headRefOid
   title
+  body
   url
   author { login ... on User { databaseId } }
   mergedBy { login ... on User { databaseId } }
@@ -320,6 +321,275 @@ defmodule Tracker.GitHub.GraphQL do
     end
   end
 
+  @doc """
+  Fetches every full commit message for a pull request in `NixOS/nixpkgs`.
+
+  Paginates the commit connection to completion. Supports `:repo`, the usual
+  `:token`, `:plug`, and `:rate_limit_table` options, and `:request_fun` for
+  injecting a function accepting Req request options.
+  """
+  def fetch_pr_commit_messages(number, opts \\ []) when is_integer(number) and number > 0 do
+    opts = Keyword.put_new_lazy(opts, :token, &Tracker.GitHub.installation_token!/0)
+    fetch_pr_commit_message_pages(number, nil, [], opts)
+  end
+
+  @doc """
+  Resolves all same-repository pull requests associated with each commit.
+
+  Defaults to `NixOS/nixpkgs`; accepts the same options as
+  `fetch_pr_commit_messages/2`. Inputs are deduplicated and batched in groups
+  of #{@max_numbers}; every association connection is fully paginated.
+  Multiple associations are retained rather than choosing an original.
+
+  Partial GraphQL results, unavailable commits, and incomplete connections
+  return errors so callers can retry instead of drawing conclusions from
+  incomplete evidence.
+  """
+  def fetch_commit_pr_numbers(shas, opts \\ [])
+  def fetch_commit_pr_numbers([], _opts), do: {:ok, %{}}
+
+  def fetch_commit_pr_numbers(shas, opts) when is_list(shas) do
+    opts = Keyword.put_new_lazy(opts, :token, &Tracker.GitHub.installation_token!/0)
+
+    shas
+    |> Enum.uniq()
+    |> Enum.chunk_every(@max_numbers)
+    |> Enum.reduce_while({:ok, %{}}, fn batch, {:ok, result} ->
+      pending = Enum.map(batch, &{&1, nil})
+
+      case fetch_commit_pr_pages(pending, %{}, opts) do
+        {:ok, associations} -> {:cont, {:ok, Map.merge(result, associations)}}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+  end
+
+  defp fetch_pr_commit_message_pages(number, cursor, pages, opts) do
+    query = """
+    query($owner: String!, $name: String!, $number: Int!, $after: String) {
+      rateLimit { cost limit remaining resetAt }
+      repository(owner: $owner, name: $name) {
+        pullRequest(number: $number) {
+          commits(first: 100, after: $after) {
+            nodes { commit { message } }
+            pageInfo { endCursor hasNextPage }
+          }
+        }
+      }
+    }
+    """
+
+    variables =
+      Map.merge(provenance_repo_variables(opts), %{"number" => number, "after" => cursor})
+
+    step = :fetch_pr_commit_messages
+
+    with {:ok, repository} <- provenance_request(query, variables, opts, step),
+         {:ok, nodes, next_cursor} <-
+           decode_provenance_connection(
+             get_in(repository, ["pullRequest", "commits"]),
+             cursor,
+             step
+           ),
+         true <-
+           Enum.all?(nodes, fn
+             %{"commit" => %{"message" => message}} when is_binary(message) -> true
+             _ -> false
+           end) do
+      messages = Enum.map(nodes, &get_in(&1, ["commit", "message"]))
+      pages = [messages | pages]
+
+      case next_cursor do
+        nil -> {:ok, pages |> Enum.reverse() |> List.flatten()}
+        next -> fetch_pr_commit_message_pages(number, next, pages, opts)
+      end
+    else
+      {:error, reason} -> {:error, reason}
+      false -> malformed_provenance_response(:invalid_commit_message, step)
+    end
+  end
+
+  defp fetch_commit_pr_pages([], result, _opts) do
+    {:ok, Map.new(result, fn {sha, numbers} -> {sha, numbers |> Enum.uniq() |> Enum.sort()} end)}
+  end
+
+  defp fetch_commit_pr_pages(pending, result, opts) do
+    indexed = Enum.with_index(pending)
+
+    declarations =
+      Enum.map_join(indexed, ", ", fn {_, index} ->
+        "$sha#{index}: String!, $after#{index}: String"
+      end)
+
+    aliases =
+      Enum.map_join(indexed, "\n", fn {_, index} ->
+        """
+        c#{index}: object(expression: $sha#{index}) {
+          ... on Commit {
+            associatedPullRequests(first: 100, after: $after#{index}) {
+              nodes { number repository { nameWithOwner } }
+              pageInfo { endCursor hasNextPage }
+            }
+          }
+        }
+        """
+      end)
+
+    query = """
+    query($owner: String!, $name: String!, #{declarations}) {
+      rateLimit { cost limit remaining resetAt }
+      repository(owner: $owner, name: $name) {
+        #{aliases}
+      }
+    }
+    """
+
+    variables =
+      Enum.reduce(indexed, provenance_repo_variables(opts), fn {{sha, cursor}, index}, vars ->
+        vars |> Map.put("sha#{index}", sha) |> Map.put("after#{index}", cursor)
+      end)
+
+    with {:ok, repository} <-
+           provenance_request(query, variables, opts, :fetch_commit_pr_numbers),
+         {:ok, next_pending, result} <-
+           decode_commit_pr_pages(repository, indexed, result, opts) do
+      fetch_commit_pr_pages(Enum.reverse(next_pending), result, opts)
+    else
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp decode_commit_pr_pages(repository, indexed, result, opts) do
+    repo = opts |> Keyword.get(:repo, "NixOS/nixpkgs") |> String.downcase()
+
+    Enum.reduce_while(indexed, {:ok, [], result}, fn {{sha, cursor}, index},
+                                                     {:ok, pending, acc} ->
+      connection = get_in(repository, ["c#{index}", "associatedPullRequests"])
+
+      with {:ok, nodes, next_cursor} <-
+             decode_provenance_connection(connection, cursor, :fetch_commit_pr_numbers),
+           true <-
+             Enum.all?(nodes, fn
+               %{"number" => number, "repository" => %{"nameWithOwner" => name}}
+               when is_integer(number) and number > 0 and is_binary(name) ->
+                 true
+
+               _ ->
+                 false
+             end) do
+        numbers =
+          for node <- nodes,
+              String.downcase(node["repository"]["nameWithOwner"]) == repo,
+              do: node["number"]
+
+        acc = Map.update(acc, sha, numbers, &(numbers ++ &1))
+        pending = if next_cursor, do: [{sha, next_cursor} | pending], else: pending
+        {:cont, {:ok, pending, acc}}
+      else
+        {:error, reason} ->
+          {:halt, {:error, reason}}
+
+        false ->
+          {:halt, malformed_provenance_response(:invalid_association, :fetch_commit_pr_numbers)}
+      end
+    end)
+  end
+
+  defp decode_provenance_connection(
+         %{"nodes" => nodes, "pageInfo" => %{"hasNextPage" => false}},
+         _cursor,
+         _step
+       )
+       when is_list(nodes),
+       do: {:ok, nodes, nil}
+
+  defp decode_provenance_connection(
+         %{
+           "nodes" => nodes,
+           "pageInfo" => %{"hasNextPage" => true, "endCursor" => next_cursor}
+         },
+         cursor,
+         _step
+       )
+       when is_list(nodes) and is_binary(next_cursor) and next_cursor != "" and
+              next_cursor != cursor,
+       do: {:ok, nodes, next_cursor}
+
+  defp decode_provenance_connection(connection, _cursor, step),
+    do: malformed_provenance_response(connection, step)
+
+  defp provenance_repo_variables(opts) do
+    [owner, name] = opts |> Keyword.get(:repo, "NixOS/nixpkgs") |> String.split("/", parts: 2)
+    %{"owner" => owner, "name" => name}
+  end
+
+  defp provenance_request(query, variables, opts, step) do
+    table = Keyword.get(opts, :rate_limit_table, RateLimitCache)
+    request_fun = Keyword.get(opts, :request_fun, &request/1)
+
+    req_opts =
+      [
+        method: :post,
+        url: @endpoint,
+        headers: [
+          {"authorization", "bearer #{Keyword.fetch!(opts, :token)}"},
+          {"accept", "application/vnd.github+json"},
+          {"user-agent", "Tracker"}
+        ],
+        json: %{query: query, variables: variables},
+        decode_body: true,
+        retry: false
+      ]
+      |> maybe_add_plug(Keyword.get(opts, :plug))
+
+    case request_fun.(req_opts) do
+      {:ok, %Req.Response{status: 200, body: body}} when is_map(body) ->
+        rate_limit = get_in(body, ["data", "rateLimit"])
+        maybe_log_cost(rate_limit)
+        maybe_track_rate_limit(rate_limit, table)
+
+        case body do
+          %{"errors" => [_ | _] = errors} ->
+            handle_errors_only(errors)
+
+          %{"data" => %{"repository" => repository}} when is_map(repository) ->
+            {:ok, repository}
+
+          _ ->
+            malformed_provenance_response(body, step)
+        end
+
+      {:ok, %Req.Response{status: status}} when status in [403, 429] ->
+        {:error, rate_limit_error(status)}
+
+      {:ok, %Req.Response{status: status, body: body}} ->
+        {:error,
+         Error.new(
+           code: status,
+           message: "Unexpected GitHub GraphQL status (#{status})",
+           source: body,
+           step: {__MODULE__, step}
+         )}
+
+      {:error, reason} ->
+        {:error,
+         Error.new(
+           message: "Error during GraphQL request",
+           source: reason,
+           step: {__MODULE__, step}
+         )}
+    end
+  end
+
+  defp malformed_provenance_response(body, step) do
+    {:error,
+     Error.new(
+       message: "Malformed or incomplete GitHub GraphQL provenance response",
+       source: body,
+       step: {__MODULE__, step}
+     )}
+  end
+
   defp build_numbers_query(numbers) do
     aliases =
       numbers
@@ -502,6 +772,7 @@ defmodule Tracker.GitHub.GraphQL do
       head_ref: node["headRefName"],
       head_sha: node["headRefOid"],
       title: node["title"],
+      body: node["body"],
       url: node["url"],
       author: get_in(node, ["author", "login"]),
       author_github_id: get_in(node, ["author", "databaseId"]),

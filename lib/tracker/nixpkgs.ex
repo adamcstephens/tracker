@@ -33,6 +33,7 @@ defmodule Tracker.Nixpkgs do
     resource Tracker.Nixpkgs.ChangePackage
     resource Tracker.Nixpkgs.ChangeBranch
     resource Tracker.Nixpkgs.ChangeFile
+    resource Tracker.Nixpkgs.BackportLink
     resource Tracker.Nixpkgs.ChangeReconcileSkip
     resource Tracker.Nixpkgs.ReconstructionJob
   end

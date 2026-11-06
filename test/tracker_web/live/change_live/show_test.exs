@@ -58,6 +58,159 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
     %{maintainer: maintainer, merger: merger}
   end
 
+  test "shows directed provenance independently of propagation", %{conn: conn} do
+    ids =
+      Tracker.Nixpkgs.Change.bulk_upsert_all([
+        %{
+          number: 6010,
+          title: "release fix",
+          state: :open,
+          base_ref: "release-26.05",
+          url: "https://github.com/NixOS/nixpkgs/pull/6010"
+        }
+      ])
+
+    Tracker.Nixpkgs.BackportLink
+    |> Ash.Changeset.for_create(:create, %{
+      source_number: 6001,
+      backport_id: ids[6010],
+      confidence: :confirmed,
+      evidence: ["explicit original PR trailer"]
+    })
+    |> Ash.create!()
+
+    {:ok, original_view, _html} = live(conn, ~p"/changes/6001")
+    assert has_element?(original_view, "#change-backports a[href='/changes/6010']", "#6010")
+    assert has_element?(original_view, "#change-backports", "release-26.05")
+    assert has_element?(original_view, "#change-backports", "open")
+    assert has_element?(original_view, "#change-backports", "explicit original PR trailer")
+
+    {:ok, backport_view, _html} = live(conn, ~p"/changes/6010")
+    assert has_element?(backport_view, "#change-originals a[href='/changes/6001']", "#6001")
+    assert has_element?(backport_view, "#change-originals", "master")
+    assert has_element?(backport_view, "#change-originals", "merged")
+    refute has_element?(backport_view, "#change-propagation")
+  end
+
+  test "shows candidate unresolved originals without implying confirmation", %{conn: conn} do
+    change = Tracker.Nixpkgs.Change.get_by_number!(6001)
+
+    Tracker.Nixpkgs.BackportLink
+    |> Ash.Changeset.for_create(:create, %{
+      source_number: 6999,
+      backport_id: change.id,
+      confidence: :candidate,
+      evidence: ["ambiguous commit association"]
+    })
+    |> Ash.create!()
+
+    {:ok, view, _html} = live(conn, ~p"/changes/6001")
+
+    assert has_element?(
+             view,
+             "#change-originals a[href='https://github.com/NixOS/nixpkgs/pull/6999']",
+             "#6999"
+           )
+
+    assert has_element?(view, "#change-originals", "Candidate")
+    assert has_element?(view, "#change-originals", "Not tracked")
+    assert has_element?(view, "#change-originals", "ambiguous commit association")
+  end
+
+  test "distinguishes issue and unavailable source references from imported PRs", %{conn: conn} do
+    change = Tracker.Nixpkgs.Change.get_by_number!(6001)
+
+    for {number, status} <- [{6996, :issue}, {6997, :not_found}] do
+      Tracker.Nixpkgs.BackportLink.create!(%{
+        source_number: number,
+        backport_id: change.id,
+        confidence: :candidate,
+        evidence: ["body reference"],
+        source_status: status
+      })
+    end
+
+    {:ok, view, _html} = live(conn, ~p"/changes/6001")
+
+    assert has_element?(
+             view,
+             "#change-originals a[href='https://github.com/NixOS/nixpkgs/issues/6996']"
+           )
+
+    assert has_element?(view, "#change-originals", "Reference is an issue, not a pull request")
+    assert has_element?(view, "#change-originals", "Pull request unavailable")
+  end
+
+  test "backport labels express intent rather than actual relationships", %{conn: conn} do
+    Tracker.Nixpkgs.Change.bulk_upsert_all([
+      %{
+        number: 6011,
+        title: "fix awaiting backport",
+        state: :merged,
+        base_ref: "master",
+        labels: ["backport release-26.05"]
+      }
+    ])
+
+    {:ok, view, _html} = live(conn, ~p"/changes/6011")
+    assert has_element?(view, "#backport-intent", "do not establish")
+    refute has_element?(view, "#change-backports")
+    refute has_element?(view, "#change-originals")
+  end
+
+  test "updates provenance when a relationship is added to an open page", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/changes/6001")
+    change = Tracker.Nixpkgs.Change.get_by_number!(6001)
+
+    link =
+      Tracker.Nixpkgs.BackportLink
+      |> Ash.Changeset.for_create(:create, %{
+        source_number: 6998,
+        backport_id: change.id,
+        confidence: :candidate,
+        evidence: ["branch reference"]
+      })
+      |> Ash.create!()
+
+    send(view.pid, %Ash.Notifier.Notification{
+      resource: Tracker.Nixpkgs.BackportLink,
+      data: link
+    })
+
+    assert has_element?(view, "#change-originals", "#6998")
+  end
+
+  test "refreshes related backport state on change notifications", %{conn: conn} do
+    ids =
+      Tracker.Nixpkgs.Change.bulk_upsert_all([
+        %{number: 6012, title: "backport", state: :open, base_ref: "release-26.05"}
+      ])
+
+    Tracker.Nixpkgs.BackportLink
+    |> Ash.Changeset.for_create(:create, %{
+      source_number: 6001,
+      backport_id: ids[6012],
+      confidence: :confirmed,
+      evidence: ["original trailer"]
+    })
+    |> Ash.create!()
+
+    {:ok, view, _html} = live(conn, ~p"/changes/6001")
+    assert has_element?(view, "#change-backports", "open")
+
+    Tracker.Nixpkgs.Change.bulk_upsert_all([
+      %{number: 6012, title: "backport", state: :closed, base_ref: "release-26.05"}
+    ])
+
+    send(view.pid, %Ash.Notifier.Notification{
+      resource: Tracker.Nixpkgs.Change,
+      data: Tracker.Nixpkgs.Change.get_by_number!(6012)
+    })
+
+    assert has_element?(view, "#change-backports", "closed")
+    refute has_element?(view, "#change-backports .pill-open")
+  end
+
   test "renders change details", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/changes/6001")
 

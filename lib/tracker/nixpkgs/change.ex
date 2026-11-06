@@ -13,6 +13,11 @@ defmodule Tracker.Nixpkgs.Change do
   postgres do
     table "changes"
     repo Tracker.Repo
+
+    custom_indexes do
+      index [:backport_pending, :backport_checked_at, :number]
+      index [:backport_retry_at]
+    end
   end
 
   code_interface do
@@ -45,6 +50,9 @@ defmodule Tracker.Nixpkgs.Change do
     define :mark_dormant
     define :mark_not_found
     define :dashboard_recent
+    define :backport_backlog
+    define :by_numbers, args: [:numbers]
+    define :mark_backport_checked
   end
 
   actions do
@@ -168,6 +176,7 @@ defmodule Tracker.Nixpkgs.Change do
         :head_ref,
         :head_sha,
         :title,
+        :body,
         :labels,
         :gh_updated_at,
         :closed_at,
@@ -176,6 +185,8 @@ defmodule Tracker.Nixpkgs.Change do
         :merged_by_github_id
       ]
 
+      change set_attribute(:backport_pending, true)
+      change set_attribute(:backport_version, &Ash.UUID.generate/0)
       change set_attribute(:last_checked_at, &DateTime.utc_now/0)
     end
 
@@ -191,6 +202,32 @@ defmodule Tracker.Nixpkgs.Change do
     update :mark_not_found do
       accept []
       change set_attribute(:polling_status, :not_found)
+    end
+
+    update :mark_backport_checked do
+      accept [:backport_retry_at]
+      argument :expected_version, :string
+      change set_attribute(:backport_checked_at, &DateTime.utc_now/0)
+
+      change atomic_update(
+               :backport_pending,
+               expr(
+                 if backport_version == ^arg(:expected_version) or
+                      (is_nil(backport_version) and is_nil(^arg(:expected_version))),
+                    do: false,
+                    else: backport_pending
+               )
+             )
+    end
+
+    read :backport_backlog do
+      prepare build(sort: [backport_checked_at: :asc_nils_first, number: :asc], limit: 25)
+      filter expr(backport_pending or backport_retry_at <= now())
+    end
+
+    read :by_numbers do
+      argument :numbers, {:array, :integer}, allow_nil?: false
+      filter expr(number in ^arg(:numbers))
     end
 
     read :stalest_unfinished do
@@ -320,6 +357,7 @@ defmodule Tracker.Nixpkgs.Change do
         :number,
         :node_id,
         :title,
+        :body,
         :state,
         :author,
         :author_github_id,
@@ -344,6 +382,7 @@ defmodule Tracker.Nixpkgs.Change do
       upsert_fields [
         :node_id,
         :title,
+        :body,
         :state,
         :author,
         :author_github_id,
@@ -360,8 +399,13 @@ defmodule Tracker.Nixpkgs.Change do
         :merged_at,
         :merge_commit_sha,
         :processing_status,
-        :updated_at
+        :updated_at,
+        :backport_pending,
+        :backport_version
       ]
+
+      change set_attribute(:backport_pending, true)
+      change set_attribute(:backport_version, &Ash.UUID.generate/0)
     end
   end
 
@@ -388,6 +432,12 @@ defmodule Tracker.Nixpkgs.Change do
       allow_nil? false
       public? true
     end
+
+    attribute :body, :string, public?: true
+    attribute :backport_checked_at, :utc_datetime_usec, public?: true
+    attribute :backport_retry_at, :utc_datetime_usec, public?: true
+    attribute :backport_pending, :boolean, allow_nil?: false, public?: true, default: true
+    attribute :backport_version, :string, public?: true, default: &Ash.UUID.generate/0
 
     attribute :state, :atom do
       allow_nil? false
@@ -483,11 +533,7 @@ defmodule Tracker.Nixpkgs.Change do
     identity :unique_node_id, [:node_id], nils_distinct?: true
   end
 
-  # 22 columns: number, node_id, title, state, author, author_github_id, merged_by_github_id,
-  # url, base_ref, head_ref, head_sha, labels, gh_created_at, gh_updated_at, last_checked_at,
-  # closed_at, merged_at, merge_commit_sha, processing_status, polling_status,
-  # inserted_at, updated_at
-  @insert_cols 22
+  @insert_cols 28
   @max_rows div(65_535, @insert_cols)
 
   @doc """
@@ -548,6 +594,8 @@ defmodule Tracker.Nixpkgs.Change do
     |> Stream.map(fn record ->
       record
       |> Map.put(:inserted_at, now)
+      |> Map.put(:backport_pending, true)
+      |> Map.put(:backport_version, Ash.UUID.generate())
       |> Map.put(:updated_at, now)
       |> Map.update(:state, :open, &to_string/1)
       |> Map.put_new(:processing_status, "pending")
@@ -565,6 +613,9 @@ defmodule Tracker.Nixpkgs.Change do
              [
                :node_id,
                :title,
+               :body,
+               :backport_pending,
+               :backport_version,
                :state,
                :author,
                :author_github_id,

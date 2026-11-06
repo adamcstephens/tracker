@@ -13,6 +13,7 @@ defmodule Tracker.GitHub.GraphQL.PullRequest do
     field :head_ref, String.t() | nil, enforce: false, default: nil
     field :head_sha, String.t()
     field :title, String.t()
+    field :body, String.t() | nil, enforce: false, default: nil
     field :url, String.t() | nil, enforce: false, default: nil
     field :author, String.t() | nil, enforce: false, default: nil
     field :author_github_id, integer() | nil, enforce: false, default: nil

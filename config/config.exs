@@ -21,6 +21,7 @@ config :tracker, Oban,
      crontab: [
        {"* * * * *", Tracker.Nixpkgs.ChangeDiscoveryWorker},
        {"*/3 * * * *", Tracker.Nixpkgs.ChangeRefreshWorker},
+       {"* * * * *", Tracker.Nixpkgs.BackportReconcileWorker},
        {"*/15 * * * *", Tracker.Nixpkgs.ChangeArtifactReconcileWorker},
        {"15 * * * *", Tracker.Nixpkgs.ChangeReconcileWorker},
        {"*/5 * * * *", Tracker.Nixpkgs.HydraStatusFetcher},

@@ -72,6 +72,32 @@ defmodule TrackerWeb.ChangeLive.Show do
         </div>
       </section>
 
+      <section
+        :if={@original_count > 0}
+        id="change-originals"
+        class="change-show__panel"
+      >
+        <SectionHeader.section_header title="Original pull requests" count={@original_count} />
+        <div id="original-links" phx-update="stream">
+          <div :for={{dom_id, link} <- @streams.originals} id={dom_id}>
+            <.provenance_link link={link} direction={:original} />
+          </div>
+        </div>
+      </section>
+
+      <section
+        :if={@backport_count > 0}
+        id="change-backports"
+        class="change-show__panel"
+      >
+        <SectionHeader.section_header title="Backport pull requests" count={@backport_count} />
+        <div id="backport-links" phx-update="stream">
+          <div :for={{dom_id, link} <- @streams.backports} id={dom_id}>
+            <.provenance_link link={link} direction={:backport} />
+          </div>
+        </div>
+      </section>
+
       <div class="change-show__grid">
         <div class="change-show__content">
           <section :if={@packages_enabled?} class="change-show__panel change-show__packages">
@@ -307,9 +333,64 @@ defmodule TrackerWeb.ChangeLive.Show do
             <div class="change-show__chips">
               <span :for={label <- @change.labels} class="label-chip">{label}</span>
             </div>
+            <p
+              :if={Enum.any?(@change.labels, &String.contains?(String.downcase(&1), "backport"))}
+              id="backport-intent"
+              class="change-show__notice"
+            >
+              Backport labels express intent; they do not establish original/backport relationships.
+            </p>
           </section>
         </aside>
       </div>
+    </div>
+    """
+  end
+
+  defp provenance_link(assigns) do
+    change =
+      case assigns.direction do
+        :original -> assigns.link.original
+        :backport -> assigns.link.backport
+      end
+
+    number =
+      if assigns.direction == :original, do: assigns.link.source_number, else: change.number
+
+    assigns = assign(assigns, change: change, number: number)
+
+    ~H"""
+    <div class="change-show__provenance">
+      <.link :if={@change} navigate={~p"/changes/#{@number}"}>#{@number}</.link>
+      <a
+        :if={is_nil(@change)}
+        href={"https://github.com/NixOS/nixpkgs/#{if @link.source_status == :issue, do: "issues", else: "pull"}/#{@number}"}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        #{@number}<.external_icon />
+      </a>
+      <span class={"pill pill-#{@link.confidence}"}>
+        {status_label(@link.confidence)}
+      </span>
+      <span :if={@change}>{@change.title}</span>
+      <span :if={@change}>
+        · Target <code>{@change.base_ref}</code>
+        · <span class={"pill pill-#{@change.state}"}>{@change.state}</span>
+      </span>
+      <span :if={is_nil(@change)}>
+        <%= case @link.source_status do %>
+          <% :issue -> %>
+            Reference is an issue, not a pull request
+          <% :not_found -> %>
+            Pull request unavailable · target and current state unknown
+          <% _status -> %>
+            Not tracked · target and current state unknown
+        <% end %>
+      </span>
+      <ul aria-label="Provenance evidence">
+        <li :for={evidence <- @link.evidence}>{evidence}</li>
+      </ul>
     </div>
     """
   end
@@ -358,6 +439,7 @@ defmodule TrackerWeb.ChangeLive.Show do
     if connected?(socket) do
       Phoenix.PubSub.subscribe(Tracker.PubSub, "changes:updated")
       Phoenix.PubSub.subscribe(Tracker.PubSub, "change_branches:updated")
+      Phoenix.PubSub.subscribe(Tracker.PubSub, "backport_links:updated")
     end
 
     {:ok,
@@ -411,6 +493,7 @@ defmodule TrackerWeb.ChangeLive.Show do
     socket
     |> assign(:page_title, "##{change.number} #{change.title}")
     |> assign(:change, change)
+    |> load_backport_links(change)
     |> assign(:admin?, admin?)
     |> assign(:subscribed?, change_subscribed?(socket.assigns[:current_user], change.id))
     |> assign(:author_maintainer, author_maintainer)
@@ -423,6 +506,22 @@ defmodule TrackerWeb.ChangeLive.Show do
     |> load_packages(change.id)
     |> load_options(change.id)
     |> load_package_linking_job(change.number)
+  end
+
+  defp load_backport_links(socket, %Tracker.Nixpkgs.Change{} = change) do
+    links = Tracker.Nixpkgs.BackportLink.for_change!(change.number)
+    originals = Enum.filter(links, &(&1.backport_id == change.id))
+    backports = Enum.filter(links, &(&1.source_number == change.number))
+
+    related_numbers =
+      Enum.flat_map(links, fn link -> [link.source_number, link.backport.number] end)
+
+    socket
+    |> assign(:original_count, length(originals))
+    |> assign(:backport_count, length(backports))
+    |> assign(:related_change_numbers, related_numbers)
+    |> stream(:originals, originals, reset: true)
+    |> stream(:backports, backports, reset: true)
   end
 
   defp change_subscribed?(nil, _change_id), do: false
@@ -652,8 +751,23 @@ defmodule TrackerWeb.ChangeLive.Show do
         },
         socket
       ) do
-    if number == socket.assigns.change.number do
-      {:noreply, load_change(socket, number)}
+    if number == socket.assigns.change.number or number in socket.assigns.related_change_numbers do
+      {:noreply, load_change(socket, socket.assigns.change.number)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_info(
+        %Ash.Notifier.Notification{
+          resource: Tracker.Nixpkgs.BackportLink,
+          data: link
+        },
+        socket
+      ) do
+    if link.source_number == socket.assigns.change.number or
+         link.backport_id == socket.assigns.change.id do
+      {:noreply, load_change(socket, socket.assigns.change.number)}
     else
       {:noreply, socket}
     end

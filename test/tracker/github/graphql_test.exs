@@ -64,6 +64,7 @@ defmodule Tracker.GitHub.GraphQLTest do
       "headRefName" => opts[:headRefName] || "feature",
       "headRefOid" => opts[:headRefOid] || "abc123",
       "title" => opts[:title] || "test PR",
+      "body" => opts[:body],
       "url" => opts[:url] || "https://github.com/NixOS/nixpkgs/pull/#{opts[:number]}",
       "author" => Keyword.get(opts, :author, %{"login" => "alice", "databaseId" => 11}),
       "mergedBy" => Keyword.get(opts, :mergedBy, nil),
@@ -92,6 +93,7 @@ defmodule Tracker.GitHub.GraphQLTest do
                 id: "pr_1",
                 number: 101,
                 state: "OPEN",
+                body: "Backport of #42",
                 headRefOid: "deadbeef",
                 title: "first",
                 updatedAt: "2026-04-01T12:00:00Z"
@@ -116,6 +118,7 @@ defmodule Tracker.GitHub.GraphQLTest do
                state: :open,
                head_sha: "deadbeef",
                title: "first",
+               body: "Backport of #42",
                updated_at: ~U[2026-04-01 12:00:00Z]
              } = result["pr_1"]
 
@@ -445,6 +448,7 @@ defmodule Tracker.GitHub.GraphQLTest do
                   pr_node(
                     id: "PR_a",
                     number: 1001,
+                    body: "Backport of #123",
                     mergedBy: %{"login" => "merger", "databaseId" => 42}
                   ),
                   pr_node(id: "PR_b", number: 1002)
@@ -466,7 +470,12 @@ defmodule Tracker.GitHub.GraphQLTest do
                GraphQL.search_repository_prs("NixOS/nixpkgs", ~U[2026-04-15 00:00:00Z], call())
 
       assert [
-               %PullRequest{node_id: "PR_a", number: 1001, merged_by_github_id: 42},
+               %PullRequest{
+                 node_id: "PR_a",
+                 number: 1001,
+                 merged_by_github_id: 42,
+                 body: "Backport of #123"
+               },
                %PullRequest{node_id: "PR_b", number: 1002}
              ] = pulls
     end
@@ -637,6 +646,7 @@ defmodule Tracker.GitHub.GraphQLTest do
 
         assert vars == %{"owner" => "NixOS", "name" => "nixpkgs"}
         assert query =~ "issueOrPullRequest"
+        assert query =~ ~r/\bbody\b/
 
         body = %{"data" => %{"rateLimit" => rate_limit(), "repository" => repository}}
 
@@ -650,7 +660,7 @@ defmodule Tracker.GitHub.GraphQLTest do
       Req.Test.stub(
         __MODULE__,
         numbers_response(%{
-          "n101" => pr_node(id: "pr_101", number: 101),
+          "n101" => pr_node(id: "pr_101", number: 101, body: "Original PR: #42"),
           "n102" => %{"__typename" => "Issue"},
           "n103" => nil
         })
@@ -659,7 +669,9 @@ defmodule Tracker.GitHub.GraphQLTest do
       assert {:ok, result} =
                GraphQL.fetch_numbers("NixOS/nixpkgs", [101, 102, 103], call())
 
-      assert {:pull_request, %PullRequest{number: 101, state: :open}} = result[101]
+      assert {:pull_request, %PullRequest{number: 101, state: :open, body: "Original PR: #42"}} =
+               result[101]
+
       assert result[102] == :issue
       assert result[103] == :not_found
     end

@@ -321,6 +321,7 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorker do
       number: pr.number,
       node_id: pr.node_id,
       title: pr.title,
+      body: pr.body,
       state: pr.state,
       author: pr.author,
       author_github_id: pr.author_github_id,
