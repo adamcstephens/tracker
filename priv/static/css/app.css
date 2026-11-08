@@ -3795,6 +3795,20 @@ a.revision-link {
 	margin-bottom: 0.75rem;
 }
 
+.ibx-type-actions {
+	display: flex;
+	gap: 1rem;
+}
+
+.ibx-type-actions button {
+	border: 0;
+	background: transparent;
+	color: var(--accent);
+	padding: 0;
+	font-size: 0.75rem;
+	cursor: pointer;
+}
+
 .ibx-type-selection label {
 	display: flex;
 	align-items: center;

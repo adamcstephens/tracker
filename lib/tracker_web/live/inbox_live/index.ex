@@ -104,6 +104,16 @@ defmodule TrackerWeb.InboxLive.Index do
     socket |> assign(:active_types, active) |> reset_to_first_page()
   end
 
+  def handle_event("select-all-types", _params, socket) do
+    socket
+    |> assign(:active_types, MapSet.new(NotificationPresenter.type_order()))
+    |> reset_to_first_page()
+  end
+
+  def handle_event("clear-types", _params, socket) do
+    socket |> assign(:active_types, MapSet.new()) |> reset_to_first_page()
+  end
+
   def handle_event("filter-scope", params, socket) do
     socket
     |> assign(:channel_id, integer_param(params["channel_id"]))
@@ -391,6 +401,10 @@ defmodule TrackerWeb.InboxLive.Index do
             </nav>
             <fieldset class="ibx-type-selection">
               <legend>Notification types</legend>
+              <div class="ibx-type-actions">
+                <button id="filter-types-all" type="button" phx-click="select-all-types">Select all</button>
+                <button id="filter-types-clear" type="button" phx-click="clear-types">Clear all</button>
+              </div>
               <label :for={type <- NotificationPresenter.type_order()}>
                 <input
                   id={"filter-type-#{type}"}

@@ -766,6 +766,34 @@ defmodule TrackerWeb.InboxLive.IndexTest do
     assert has_element?(view, "#inbox-empty")
   end
 
+  test "clears and selects all notification types without changing other filters", %{conn: conn} do
+    user = register_user!()
+    revision = published_notification!(user)
+    pkg = package!()
+    chan = channel!()
+    added = notification!(user, %{type: :package_added, package_id: pkg.id, channel_id: chan.id})
+    conn = log_in(conn, user)
+
+    {:ok, view, _html} = live_expanded(conn, ~p"/inbox?filter=all")
+    view |> element("#filter-types-clear") |> render_click()
+    assert assert_patch(view) =~ "types=none"
+    assert has_element?(view, "#filter-all.is-active")
+    refute has_element?(view, "#filter-type-package_added[checked]")
+    refute has_element?(view, "#notification-#{added.id}")
+
+    view |> element("#filter-type-package_added") |> render_click()
+    expand_groups(view)
+    assert has_element?(view, "#notification-#{added.id}")
+    refute has_element?(view, "#notification-#{revision.id}")
+
+    view |> element("#filter-types-all") |> render_click()
+    expand_groups(view)
+    assert has_element?(view, "#filter-all.is-active")
+    assert has_element?(view, "#filter-type-channel_revision_published[checked]")
+    assert has_element?(view, "#notification-#{added.id}")
+    assert has_element?(view, "#notification-#{revision.id}")
+  end
+
   test "a PR notification leads with the change title, state, and package tag", %{conn: conn} do
     user = register_user!()
     pkg = package!("ripgrep")
