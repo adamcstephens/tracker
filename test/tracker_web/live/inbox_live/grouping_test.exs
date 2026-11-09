@@ -85,7 +85,6 @@ defmodule TrackerWeb.InboxLive.GroupingTest do
     refute has_element?(view, "#inbox-package")
     refute has_element?(view, "[name=package_id]")
     group_counts(view, revision, 2, 2, 2)
-    view |> element("#revision-group-#{revision.id} [phx-click=toggle-group]") |> render_click()
     assert has_element?(view, "#notification-#{second.id}")
     view |> element("#filter-saved") |> render_click()
     refute Map.has_key?(assert_query(assert_patch(view), filter: "saved"), "package_id")
@@ -109,8 +108,7 @@ defmodule TrackerWeb.InboxLive.GroupingTest do
 
     {:ok, view, _html} = live(log_in(conn, user), ~p"/inbox?filter=all")
     group_counts(view, revision, 2, 1, 2)
-    refute has_element?(view, "#notification-#{propagated.id}")
-    view |> element("#revision-group-#{revision.id} [phx-click=toggle-group]") |> render_click()
+    assert has_element?(view, ".ibx-group-meta", "1 packages | 1 propagations")
     assert has_element?(view, "#revision-group-#{revision.id} #notification-#{added.id}")
     assert has_element?(view, "#revision-group-#{revision.id} #notification-#{propagated.id}")
     assert has_element?(view, "#notification-#{propagated.id} [aria-label='Save for later']")
@@ -123,6 +121,27 @@ defmodule TrackerWeb.InboxLive.GroupingTest do
   end
 
   @tag :selected_a
+  test "mixed channel groups show only three items by default", %{conn: conn} do
+    user = register_user!()
+    {revision, _notifications} = revision_notifications!(user, 3)
+    change = change!()
+    branch = change_branch!(change, "nixos-unstable", revision)
+
+    notification!(user, %{
+      type: :change_propagated,
+      change_id: change.id,
+      change_branch_id: branch.id,
+      channel_id: revision.channel_id,
+      channel_revision_id: revision.id
+    })
+
+    {:ok, view, _html} = live(log_in(conn, user), ~p"/inbox")
+    assert length(group_rows(view, revision)) == 3
+    assert has_element?(view, "[phx-click=show-more]", "Show 1 more")
+    view |> element("[phx-click=show-more]") |> render_click()
+    assert length(group_rows(view, revision)) == 4
+  end
+
   test "unlinked propagation stays standalone rather than becoming a digest", %{conn: conn} do
     user = register_user!()
 
@@ -220,17 +239,14 @@ defmodule TrackerWeb.InboxLive.GroupingTest do
            ]
   end
 
-  test "a revision larger than a flat page occupies one collapsed entry", %{conn: conn} do
+  test "a revision larger than a flat page defaults to three expanded items", %{conn: conn} do
     user = register_user!()
-    {revision, notifications} = revision_notifications!(user, 30)
+    {revision, _notifications} = revision_notifications!(user, 30)
     {:ok, view, _html} = live(log_in(conn, user), ~p"/inbox")
 
     assert has_element?(view, "#revision-group-#{revision.id}")
-    assert has_element?(view, "#revision-group-#{revision.id} [aria-expanded=false]")
-    refute has_element?(view, "#notification-#{hd(notifications).id}")
+    assert has_element?(view, "#revision-group-#{revision.id} [aria-expanded=true]")
     refute has_element?(view, "a[rel=next]")
-
-    view |> element("#revision-group-#{revision.id} [aria-expanded]") |> render_click()
 
     assert length(
              view
@@ -239,7 +255,12 @@ defmodule TrackerWeb.InboxLive.GroupingTest do
              |> Floki.find("#revision-group-#{revision.id} .notification-row")
            ) == 3
 
-    assert has_element?(view, "#revision-group-#{revision.id} button", "Show more")
+    assert has_element?(view, "#revision-group-#{revision.id} button", "Show 27 more")
+    view |> element("#revision-group-#{revision.id} [aria-expanded]") |> render_click()
+    assert has_element?(view, "#revision-group-#{revision.id} [aria-expanded=false]")
+    assert group_rows(view, revision) == []
+    view |> element("#revision-group-#{revision.id} [aria-expanded]") |> render_click()
+    assert length(group_rows(view, revision)) == 3
     assert Enum.all?(Notification.for_user!(actor: user), &is_nil(&1.read_at))
   end
 
@@ -326,8 +347,6 @@ defmodule TrackerWeb.InboxLive.GroupingTest do
       |> Floki.attribute("id")
 
     assert length(first_ids) == 25
-    refute has_element?(first, "#notification-#{propagation.id}")
-    first |> element("#revision-group-#{revision.id} [phx-click=toggle-group]") |> render_click()
     assert has_element?(first, "#revision-group-#{revision.id} #notification-#{propagation.id}")
 
     {:ok, second, _html} = live(log_in(conn, user), ~p"/inbox?filter=all&page=2")
@@ -407,8 +426,6 @@ defmodule TrackerWeb.InboxLive.GroupingTest do
              "#revision-group-#{revision.id} a[href^='/channels/#{channel.name}/revisions/#{revision.revision}'][aria-label='Open full revision']"
            )
 
-    view |> element("#revision-group-#{revision.id} [phx-click=toggle-group]") |> render_click()
-
     assert Enum.sort(group_rows(view, revision)) ==
              Enum.sort(Enum.map([added, removed, published], &"notification-#{&1.id}"))
 
@@ -430,7 +447,6 @@ defmodule TrackerWeb.InboxLive.GroupingTest do
 
     {:ok, view, _html} = live(log_in(conn, user), ~p"/inbox?filter=all")
     group_counts(view, revision, 1, 0, 1)
-    view |> element("#revision-group-#{revision.id} [phx-click=toggle-group]") |> render_click()
     assert group_rows(view, revision) == ["notification-#{published.id}"]
 
     view
@@ -467,7 +483,6 @@ defmodule TrackerWeb.InboxLive.GroupingTest do
     {:ok, saved, _html} = live(conn, ~p"/inbox?filter=saved")
     group_counts(saved, revision, 2, 2, 1)
 
-    saved |> element("#revision-group-#{revision.id} [phx-click=toggle-group]") |> render_click()
     assert has_element?(saved, "#notification-#{saved_read.id}:not(.is-unread)")
     assert has_element?(saved, "#notification-#{saved_unread.id}.is-unread")
     refute has_element?(saved, "#notification-#{unsaved.id}")
@@ -489,7 +504,15 @@ defmodule TrackerWeb.InboxLive.GroupingTest do
     {revision, _notifications} = revision_notifications!(user, 8)
     {:ok, view, _html} = live(log_in(conn, user), ~p"/inbox")
 
-    view |> element("#revision-group-#{revision.id} [phx-click=toggle-group]") |> render_click()
+    assert has_element?(
+             view,
+             "#revision-group-#{revision.id} [phx-click=show-more]",
+             "Show 5 more"
+           )
+
+    assert has_element?(view, "#revision-group-#{revision.id} .ibx-group-meta", "8 packages")
+    refute has_element?(view, ".ibx-group-meta", "unread")
+    refute has_element?(view, ".ibx-group-meta", "matching notifications")
     assert length(group_rows(view, revision)) == 3
     view |> element("#revision-group-#{revision.id} [phx-click=show-more]") |> render_click()
     assert length(group_rows(view, revision)) > 3
@@ -508,7 +531,7 @@ defmodule TrackerWeb.InboxLive.GroupingTest do
     channel = Ash.get!(Tracker.Nixpkgs.Channel, collapsed.channel_id)
     {:ok, view, _html} = live(log_in(conn, user), ~p"/inbox?filter=all")
 
-    view |> element("#revision-group-#{expanded.id} [phx-click=toggle-group]") |> render_click()
+    view |> element("#revision-group-#{collapsed.id} [phx-click=toggle-group]") |> render_click()
     view |> element("#page-search") |> render_change(%{"search" => channel.name})
     search_path = assert_patch(view)
     assert_query(search_path, filter: "all", search: channel.name)
@@ -691,7 +714,6 @@ defmodule TrackerWeb.InboxLive.GroupingTest do
     user = register_user!()
     {revision, [existing]} = revision_notifications!(user, 1)
     {:ok, view, _html} = live(log_in(conn, user), ~p"/inbox")
-    view |> element("#revision-group-#{revision.id} [phx-click=toggle-group]") |> render_click()
 
     added =
       notification!(user, %{
@@ -712,10 +734,6 @@ defmodule TrackerWeb.InboxLive.GroupingTest do
     {revision, [first, _second]} = revision_notifications!(user, 2)
     {unaffected, [survivor]} = revision_notifications!(user, 1)
     {:ok, view, _html} = live(log_in(conn, user), ~p"/inbox")
-
-    for group <- [revision, unaffected] do
-      view |> element("#revision-group-#{group.id} [phx-click=toggle-group]") |> render_click()
-    end
 
     view |> element("#notification-#{first.id} [aria-label='Mark as read']") |> render_click()
     refute has_element?(view, "#notification-#{first.id}")
@@ -787,7 +805,6 @@ defmodule TrackerWeb.InboxLive.GroupingTest do
     {:ok, view, _html} = live(log_in(conn, user), ~p"/inbox")
 
     for revision <- [expanded, preview] do
-      view |> element("#revision-group-#{revision.id} [phx-click=toggle-group]") |> render_click()
       assert length(group_rows(view, revision)) == 3
     end
 
@@ -836,7 +853,7 @@ defmodule TrackerWeb.InboxLive.GroupingTest do
     {expanded, [expanded_notification]} = revision_notifications!(user, 1)
     {collapsed, [collapsed_notification]} = revision_notifications!(user, 1)
     {:ok, view, _html} = live(log_in(conn, user), ~p"/inbox")
-    view |> element("#revision-group-#{expanded.id} [phx-click=toggle-group]") |> render_click()
+    view |> element("#revision-group-#{collapsed.id} [phx-click=toggle-group]") |> render_click()
 
     view |> element("#page-search") |> render_change(%{"search" => "pkg-"})
     assert_patch(view)

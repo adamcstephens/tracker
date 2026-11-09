@@ -24,7 +24,7 @@ defmodule TrackerWeb.InboxLive.Index do
      |> assign(:current_user, user)
      |> assign(:page_title, "Inbox")
      |> assign(:feed_path, FeedLink.path(user))
-     |> assign(:expanded, MapSet.new())
+     |> assign(:collapsed, MapSet.new())
      |> assign(:search_collapsed, MapSet.new())
      |> assign(:member_limits, %{})}
   end
@@ -129,7 +129,7 @@ defmodule TrackerWeb.InboxLive.Index do
 
   def handle_event("toggle-group", %{"id" => id}, socket) do
     key = id
-    state = if socket.assigns.table_params.search == "", do: :expanded, else: :search_collapsed
+    state = if socket.assigns.table_params.search == "", do: :collapsed, else: :search_collapsed
     keys = Map.fetch!(socket.assigns, state)
     keys = if MapSet.member?(keys, key), do: MapSet.delete(keys, key), else: MapSet.put(keys, key)
     {:noreply, socket |> assign(state, keys) |> load_notifications()}
@@ -215,19 +215,18 @@ defmodule TrackerWeb.InboxLive.Index do
         Enum.map(page.entries, fn entry ->
           case Map.fetch(expanded, entry.key) do
             {:ok, loaded} ->
+              limit = Map.get(socket.assigns.member_limits, entry.key, 3)
+              revisions = Enum.take(loaded.revision_notifications, limit)
+              members = Enum.take(loaded.members, limit - length(revisions))
+
               %{
                 loaded
-                | members:
-                    Enum.take(loaded.members, Map.get(socket.assigns.member_limits, entry.key, 3)),
+                | revision_notifications: revisions,
+                  members: members,
                   propagation_notifications:
                     Enum.take(
                       loaded.propagation_notifications,
-                      Map.get(socket.assigns.member_limits, entry.key, 3)
-                    ),
-                  revision_notifications:
-                    Enum.take(
-                      loaded.revision_notifications,
-                      Map.get(socket.assigns.member_limits, entry.key, 3)
+                      limit - length(revisions) - length(members)
                     )
               }
 
@@ -300,7 +299,7 @@ defmodule TrackerWeb.InboxLive.Index do
 
     entry.kind == :revision and
       if assigns.table_params.search == "",
-        do: MapSet.member?(assigns.expanded, key),
+        do: not MapSet.member?(assigns.collapsed, key),
         else: not MapSet.member?(assigns.search_collapsed, key)
   end
 
@@ -488,9 +487,7 @@ defmodule TrackerWeb.InboxLive.Index do
                           <span>
                             <strong>{group_title(entry)}</strong>
                             <span class="ibx-group-meta">
-                              {entry.notification_count} matching notifications · {entry.package_count} affected packages
-                              <span :if={entry.propagation_count > 0}> · {entry.propagation_count} propagation notifications</span>
-                              · {entry.unread_count} unread
+                              {entry.package_count} packages<span :if={entry.propagation_count > 0}> | {entry.propagation_count} propagations</span>
                             </span>
                           </span>
                         </button>
@@ -548,7 +545,7 @@ defmodule TrackerWeb.InboxLive.Index do
                             type="button"
                             phx-click="show-more"
                             phx-value-id={entry.key}
-                          >Show more · {entry.notification_count - visible_member_count(entry)} matching notifications remaining</button>
+                          >Show {entry.notification_count - visible_member_count(entry)} more</button>
                           <button
                             :if={Map.get(@member_limits, entry.key, 3) > 3}
                             class="ibx-reset"

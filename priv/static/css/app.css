@@ -3844,6 +3844,12 @@ a.revision-link {
 	text-align: left;
 }
 
+.ibx-reset:hover {
+	color: var(--accent);
+	filter: none;
+	text-decoration: underline;
+}
+
 .ibx-sidebar .ibx-reset {
 	margin-top: 1rem;
 }
