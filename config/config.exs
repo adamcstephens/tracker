@@ -9,6 +9,8 @@ import Config
 
 config :elixir, :time_zone_database, Zoneinfo.TimeZoneDatabase
 
+config :tracker, :notification_max_event_age_days, 30
+
 config :tracker, Oban,
   engine: Oban.Engines.Basic,
   notifier: Oban.Notifiers.Postgres,

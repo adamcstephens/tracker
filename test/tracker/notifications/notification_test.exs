@@ -17,6 +17,16 @@ defmodule Tracker.Notifications.NotificationTest do
     )
   end
 
+  test "event age includes the cutoff and newer events, but excludes older or unknown events" do
+    now = ~U[2026-11-09 12:00:00Z]
+    cutoff = DateTime.add(now, -30, :day)
+
+    assert Notification.recent_event?(DateTime.add(cutoff, 1, :second), now)
+    assert Notification.recent_event?(cutoff, now)
+    refute Notification.recent_event?(DateTime.add(cutoff, -1, :second), now)
+    refute Notification.recent_event?(nil, now)
+  end
+
   describe "fanout/1" do
     test "records a batch of notifications" do
       user = register_user!()

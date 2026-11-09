@@ -6,10 +6,41 @@ defmodule Tracker.Notifications.NotificationFanoutPropagationWorkerTest do
   alias Tracker.Notifications.{ChangeSubscription, Notification}
   alias Tracker.Notifications.NotificationFanoutPropagationWorker, as: Worker
 
+  test "suppresses old branch propagation but allows a recent channel arrival" do
+    user = register_user!()
+    old = DateTime.add(DateTime.utc_now(:second), -31, :day)
+    change = change!(nil, %{merged_at: old})
+    {:ok, _} = ChangeSubscription.subscribe(change.id, nil, actor: user)
+    branch = change_branch!(change, "master")
+
+    assert :ok = Worker.run(change_branch_id: branch.id)
+    assert [] = Notification.for_user!(actor: user)
+
+    revision = channel_revision!()
+    channel_branch = change_branch!(change, "nixos-unstable", revision)
+    assert :ok = Worker.run(change_branch_id: channel_branch.id)
+    assert [%{change_branch_id: id}] = Notification.for_user!(actor: user)
+    assert id == channel_branch.id
+  end
+
+  test "suppresses a historical channel arrival for a channel subscriber" do
+    user = register_user!()
+    change = change!(nil, %{merged_at: DateTime.utc_now(:second)})
+    channel = channel!()
+    old = DateTime.add(DateTime.utc_now(:second), -31, :day)
+    revision = channel_revision!(channel, %{released_at: old})
+    {:ok, _} = ChangeSubscription.subscribe(change.id, channel.id, actor: user)
+    branch = change_branch!(change, "nixos-unstable", revision)
+
+    assert :ok = Worker.run(change_branch_id: branch.id)
+    assert :ok = Worker.run(change_branch_id: branch.id)
+    assert [] = Notification.for_user!(actor: user)
+  end
+
   describe "any-branch subscriptions" do
     test "notifies a nil-channel change subscriber on propagation" do
       user = register_user!()
-      change = change!()
+      change = change!(nil, %{merged_at: DateTime.utc_now(:second)})
       {:ok, _} = ChangeSubscription.subscribe(change.id, nil, actor: user)
       branch = change_branch!(change, "staging-next")
 
@@ -66,7 +97,7 @@ defmodule Tracker.Notifications.NotificationFanoutPropagationWorkerTest do
   describe "idempotency" do
     test "re-running produces no duplicate notifications" do
       user = register_user!()
-      change = change!()
+      change = change!(nil, %{merged_at: DateTime.utc_now(:second)})
       {:ok, _} = ChangeSubscription.subscribe(change.id, nil, actor: user)
       branch = change_branch!(change, "staging-next")
 

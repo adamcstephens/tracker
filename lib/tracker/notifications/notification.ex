@@ -305,6 +305,13 @@ defmodule Tracker.Notifications.Notification do
   @spec package_event_types() :: [atom()]
   def package_event_types, do: @package_event_types
 
+  def recent_event?(nil, _now), do: false
+
+  def recent_event?(%DateTime{} = timestamp, %DateTime{} = now) do
+    max_age_days = Application.fetch_env!(:tracker, :notification_max_event_age_days)
+    DateTime.compare(timestamp, DateTime.add(now, -max_age_days, :day)) != :lt
+  end
+
   @doc """
   Idempotently records a batch of notification maps, broadcasting an insert
   for each newly created row. Conflicts on `dedup_key` are no-ops, so worker

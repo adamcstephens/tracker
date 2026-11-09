@@ -36,14 +36,19 @@ defmodule Tracker.Notifications.NotificationFanoutChangeWorker do
     id = Keyword.fetch!(opts, :change_id)
     change = Ash.get!(Change, id, authorize?: false)
 
-    Notification.fanout(rows(change, event_for(change.state)))
+    event = event_for(change.state)
+    now = Keyword.get_lazy(opts, :now, fn -> DateTime.utc_now(:second) end)
+
+    if event && Notification.recent_event?(occurred_at(change, event), now) do
+      Notification.fanout(rows(change, event))
+    else
+      :ok
+    end
   end
 
   defp event_for(state) when state in [:draft, :open], do: :package_change_opened
   defp event_for(:merged), do: :package_change_merged
   defp event_for(_state), do: nil
-
-  defp rows(_change, nil), do: []
 
   defp rows(change, event) do
     case ChangePackage.for_change!(change.id, authorize?: false) do

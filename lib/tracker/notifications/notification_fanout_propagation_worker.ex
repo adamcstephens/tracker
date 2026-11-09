@@ -27,13 +27,26 @@ defmodule Tracker.Notifications.NotificationFanoutPropagationWorker do
   @doc "Runs the fan-out for `:change_branch_id`."
   def run(opts) do
     id = Keyword.fetch!(opts, :change_branch_id)
-    branch = Ash.get!(ChangeBranch, id, load: [:channel_revision], authorize?: false)
+    branch = Ash.get!(ChangeBranch, id, load: [:change, :channel_revision], authorize?: false)
+    now = Keyword.get_lazy(opts, :now, fn -> DateTime.utc_now(:second) end)
 
+    event_at =
+      if branch.channel_revision do
+        branch.channel_revision.released_at
+      else
+        branch.change.merged_at
+      end
+
+    if Notification.recent_event?(event_at, now) do
+      fanout(branch, now)
+    else
+      :ok
+    end
+  end
+
+  defp fanout(branch, now) do
     mapped_channel_id = branch.channel_revision && branch.channel_revision.channel_id
-
-    occurred_at =
-      (branch.channel_revision && branch.channel_revision.released_at) ||
-        DateTime.utc_now(:second)
+    occurred_at = (branch.channel_revision && branch.channel_revision.released_at) || now
 
     rows =
       branch.change_id

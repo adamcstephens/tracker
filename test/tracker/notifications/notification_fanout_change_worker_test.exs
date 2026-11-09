@@ -15,7 +15,7 @@ defmodule Tracker.Notifications.NotificationFanoutChangeWorkerTest do
           %{
             state: :open,
             base_ref: "master",
-            gh_created_at: ~U[2026-03-01 00:00:00Z]
+            gh_created_at: DateTime.utc_now(:second)
           },
           attrs
         )
@@ -31,6 +31,24 @@ defmodule Tracker.Notifications.NotificationFanoutChangeWorkerTest do
     sub
   end
 
+  test "suppresses an old opening but not a recent merge" do
+    user = register_user!()
+    pkg = package!()
+    old = DateTime.add(DateTime.utc_now(:second), -31, :day)
+    recent = DateTime.utc_now(:second)
+    change = linked_change!(pkg, %{state: :open, gh_created_at: old})
+    subscribe!(user, pkg, [:package_change_opened, :package_change_merged])
+
+    assert :ok = Worker.run(change_id: change.id)
+    assert [] = Notification.for_user!(actor: user)
+
+    merged = change!(change.number, %{state: :merged, merged_at: recent})
+    assert :ok = Worker.run(change_id: merged.id)
+
+    assert [%{type: :package_change_merged, occurred_at: ^recent}] =
+             Notification.for_user!(actor: user)
+  end
+
   describe "event derivation" do
     test "an open change notifies subscribers who selected change_opened" do
       user = register_user!()
@@ -44,7 +62,7 @@ defmodule Tracker.Notifications.NotificationFanoutChangeWorkerTest do
       assert n.type == :package_change_opened
       assert n.package_id == pkg.id
       assert n.change_id == change.id
-      assert n.occurred_at == ~U[2026-03-01 00:00:00Z]
+      assert n.occurred_at == change.gh_created_at
     end
 
     test "a draft change counts as opened" do
@@ -62,7 +80,7 @@ defmodule Tracker.Notifications.NotificationFanoutChangeWorkerTest do
       pkg = package!()
 
       change =
-        linked_change!(pkg, %{state: :merged, merged_at: ~U[2026-03-02 00:00:00Z]})
+        linked_change!(pkg, %{state: :merged, merged_at: DateTime.utc_now(:second)})
 
       subscribe!(user, pkg, [:package_change_merged])
 
@@ -70,7 +88,7 @@ defmodule Tracker.Notifications.NotificationFanoutChangeWorkerTest do
 
       assert [n] = Notification.for_user!(actor: user)
       assert n.type == :package_change_merged
-      assert n.occurred_at == ~U[2026-03-02 00:00:00Z]
+      assert n.occurred_at == change.merged_at
     end
 
     test "a closed change notifies nobody" do
@@ -204,7 +222,7 @@ defmodule Tracker.Notifications.NotificationFanoutChangeWorkerTest do
       assert :ok = Worker.run(change_id: change.id)
 
       merged =
-        change!(change.number, %{state: :merged, merged_at: ~U[2026-03-02 00:00:00Z]})
+        change!(change.number, %{state: :merged, merged_at: DateTime.utc_now(:second)})
 
       assert :ok = Worker.run(change_id: merged.id)
 
