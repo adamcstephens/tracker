@@ -178,7 +178,12 @@ defmodule Tracker.Notifications.Notification do
           :channel,
           :change,
           channel_revision: [:channel],
-          change_branch: [:change]
+          change_branch: [:change],
+          inbox_members:
+            matching
+            |> Ash.Query.filter(type in [:package_change_opened, :package_change_merged])
+            |> Ash.Query.sort(package_id: :asc, id: :asc)
+            |> Ash.Query.load(:package)
         ])
       end
     end
@@ -290,6 +295,15 @@ defmodule Tracker.Notifications.Notification do
                         :change_propagated
                       ] ->
                     string_join([type("revision:", :string), type(channel_revision_id, :string)])
+
+                  not is_nil(change_id) and
+                      type in [:package_change_opened, :package_change_merged] ->
+                    string_join([
+                      type("change:", :string),
+                      type(change_id, :string),
+                      type(":", :string),
+                      type(type, :string)
+                    ])
 
                   true ->
                     string_join([type("notification:", :string), type(id, :string)])

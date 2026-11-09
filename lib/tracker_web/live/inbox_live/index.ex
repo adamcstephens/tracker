@@ -52,30 +52,24 @@ defmodule TrackerWeb.InboxLive.Index do
 
   @impl Phoenix.LiveView
   def handle_event("toggle-read", %{"id" => id}, socket) do
-    case Enum.find(socket.assigns.notifications, &(&1.id == String.to_integer(id))) do
-      %Notification{read_at: nil} = notification ->
-        Notification.mark_read!(notification, actor: socket.assigns.current_user)
+    notifications = row_notifications(socket, id)
 
-      %Notification{} = notification ->
-        Notification.mark_unread!(notification, actor: socket.assigns.current_user)
-
-      nil ->
-        :ok
+    if Enum.any?(notifications, &is_nil(&1.read_at)) do
+      Enum.each(notifications, &Notification.mark_read!(&1, actor: socket.assigns.current_user))
+    else
+      Enum.each(notifications, &Notification.mark_unread!(&1, actor: socket.assigns.current_user))
     end
 
     {:noreply, load_notifications(socket)}
   end
 
   def handle_event("toggle-saved", %{"id" => id}, socket) do
-    case Enum.find(socket.assigns.notifications, &(&1.id == String.to_integer(id))) do
-      %Notification{saved: true} = notification ->
-        Notification.unsave!(notification, actor: socket.assigns.current_user)
+    notifications = row_notifications(socket, id)
 
-      %Notification{} = notification ->
-        Notification.save!(notification, actor: socket.assigns.current_user)
-
-      nil ->
-        :ok
+    if Enum.all?(notifications, & &1.saved) do
+      Enum.each(notifications, &Notification.unsave!(&1, actor: socket.assigns.current_user))
+    else
+      Enum.each(notifications, &Notification.save!(&1, actor: socket.assigns.current_user))
     end
 
     {:noreply, load_notifications(socket)}
@@ -167,6 +161,15 @@ defmodule TrackerWeb.InboxLive.Index do
 
   def handle_info(_message, socket), do: {:noreply, socket}
 
+  defp row_notifications(socket, id) do
+    id = String.to_integer(id)
+
+    case Enum.find(socket.assigns.entries, &(&1.kind == :change and &1.notification.id == id)) do
+      %Inbox.Entry{} = entry -> entry.members
+      nil -> Enum.filter(socket.assigns.notifications, &(&1.id == id))
+    end
+  end
+
   defp reset_to_first_page(socket) do
     socket = update(socket, :table_params, &%{&1 | page: 1, offset: 0})
     {:noreply, push_patch(socket, to: inbox_path(socket))}
@@ -237,9 +240,16 @@ defmodule TrackerWeb.InboxLive.Index do
 
       notifications =
         Enum.flat_map(entries, fn entry ->
-          if entry.kind == :revision,
-            do: entry.members ++ entry.revision_notifications ++ entry.propagation_notifications,
-            else: [entry.notification]
+          case entry.kind do
+            :revision ->
+              entry.members ++ entry.revision_notifications ++ entry.propagation_notifications
+
+            :change ->
+              entry.members
+
+            :notification ->
+              [entry.notification]
+          end
         end)
 
       now = DateTime.utc_now()
@@ -560,6 +570,7 @@ defmodule TrackerWeb.InboxLive.Index do
                     <RowList.row_list id={"standalone-#{entry.notification.id}"}>
                       <.row
                         n={entry.notification}
+                        members={entry.members}
                         now={@now}
                         time_zone={@time_zone}
                         version_changes={@version_changes}
@@ -629,19 +640,32 @@ defmodule TrackerWeb.InboxLive.Index do
   attr :now, :any, required: true
   attr :version_changes, :map, required: true
   attr :time_zone, :string, required: true
+  attr :members, :list, default: []
 
   defp row(assigns) do
+    notifications = if assigns.members == [], do: [assigns.n], else: assigns.members
+
     assigns =
       assigns
       |> assign(:type_class, NotificationPresenter.type_class(assigns.n.type))
       |> assign(:path, NotificationPresenter.path(assigns.n))
       |> assign(:hero, NotificationPresenter.hero(assigns.n, assigns.version_changes))
+      |> assign(:unread?, Enum.any?(notifications, &is_nil(&1.read_at)))
+      |> assign(:saved?, Enum.all?(notifications, & &1.saved))
+      |> assign(
+        :packages,
+        notifications
+        |> Enum.map(& &1.package)
+        |> Enum.reject(&is_nil/1)
+        |> Enum.uniq_by(& &1.id)
+        |> Enum.sort_by(& &1.attribute)
+      )
 
     ~H"""
     <RowList.row
       id={"notification-#{@n.id}"}
       mode={:plain}
-      class={["notification-row", if(is_nil(@n.read_at), do: "is-unread", else: "is-read")]}
+      class={["notification-row", if(@unread?, do: "is-unread", else: "is-read")]}
       style={"--type-color: var(--t-#{@type_class})"}
     >
       <:leading><span class="ibx-glyph"><.icon name={@type_class} /></span></:leading>
@@ -677,11 +701,12 @@ defmodule TrackerWeb.InboxLive.Index do
             {@n.change.state}
           </span>
           <.link
-            :if={@n.change && @n.package}
-            navigate={~p"/packages/#{@n.package.attribute}"}
+            :for={package <- @packages}
+            :if={@n.change}
+            navigate={~p"/packages/#{package.attribute}"}
             class="ibx-tag ibx-tag--package"
           >
-            {@n.package.attribute}
+            {package.attribute}
           </.link>
           <span :if={@n.channel} class="ibx-tag">
             <span class="dot"></span>{@n.channel.name}
@@ -693,15 +718,15 @@ defmodule TrackerWeb.InboxLive.Index do
         </time>
       </:sublabel>
       <:actions>
-        <span :if={is_nil(@n.read_at)} class="ibx-unread-dot" title="Unread"></span>
+        <span :if={@unread?} class="ibx-unread-dot" title="Unread"></span>
         <button
           type="button"
-          class={["ibx-act", "ibx-save", @n.saved && "is-saved"]}
+          class={["ibx-act", "ibx-save", @saved? && "is-saved"]}
           phx-click="toggle-saved"
           phx-value-id={@n.id}
-          title={if @n.saved, do: "Remove from saved", else: "Save for later"}
-          aria-label={if @n.saved, do: "Remove from saved", else: "Save for later"}
-          aria-pressed={to_string(@n.saved)}
+          title={if @saved?, do: "Remove from saved", else: "Save for later"}
+          aria-label={if @saved?, do: "Remove from saved", else: "Save for later"}
+          aria-pressed={to_string(@saved?)}
         >
           <.icon name="saved" />
         </button>
@@ -711,10 +736,10 @@ defmodule TrackerWeb.InboxLive.Index do
             class="ibx-act"
             phx-click="toggle-read"
             phx-value-id={@n.id}
-            title={if is_nil(@n.read_at), do: "Mark as read", else: "Mark as unread"}
-            aria-label={if is_nil(@n.read_at), do: "Mark as read", else: "Mark as unread"}
+            title={if @unread?, do: "Mark as read", else: "Mark as unread"}
+            aria-label={if @unread?, do: "Mark as read", else: "Mark as unread"}
           >
-            <.icon name={if is_nil(@n.read_at), do: "check", else: "unread"} />
+            <.icon name={if @unread?, do: "check", else: "unread"} />
           </button>
           <.link :if={@path} navigate={@path} class="ibx-act" title="Open" aria-label="Open">
             <.icon name="external" />

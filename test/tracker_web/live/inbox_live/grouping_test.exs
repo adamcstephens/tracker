@@ -58,6 +58,114 @@ defmodule TrackerWeb.InboxLive.GroupingTest do
     query
   end
 
+  @tag :pr_grouping
+  test "one PR row shows every package and toggles read and saved state for the displayed group",
+       %{conn: conn} do
+    user = register_user!()
+    other = register_user!()
+    change = change!()
+    packages = for _ <- 1..3, do: package!()
+
+    notifications =
+      for package <- packages do
+        notification!(user, %{
+          type: :package_change_opened,
+          change_id: change.id,
+          package_id: package.id
+        })
+      end
+
+    [first | _] = notifications
+    Notification.mark_read!(first, actor: user)
+    Notification.save!(first, actor: user)
+
+    merged =
+      notification!(user, %{
+        type: :package_change_merged,
+        change_id: change.id,
+        package_id: hd(packages).id
+      })
+
+    outsider =
+      notification!(other, %{
+        type: :package_change_opened,
+        change_id: change.id,
+        package_id: hd(packages).id
+      })
+
+    {:ok, view, _html} = live(log_in(conn, user), ~p"/inbox?filter=all")
+    row = "#notification-#{List.last(notifications).id}"
+
+    assert view
+           |> render()
+           |> Floki.parse_document!()
+           |> Floki.find(".notification-row")
+           |> length() == 2
+
+    assert has_element?(view, "#{row}.is-unread")
+
+    for package <- packages do
+      assert has_element?(
+               view,
+               "#{row} a[href='/packages/#{package.attribute}']",
+               package.attribute
+             )
+    end
+
+    view |> element("#{row} [aria-label='Mark as read']") |> render_click()
+    assert has_element?(view, "#{row}.is-read")
+    ids = Enum.map(notifications, & &1.id)
+
+    assert Enum.all?(
+             Notification.for_user!(actor: user),
+             &(&1.id not in ids or &1.read_at != nil)
+           )
+
+    view |> element("#{row} [aria-label='Mark as unread']") |> render_click()
+    assert Enum.all?(Notification.for_user!(actor: user), &is_nil(&1.read_at))
+
+    view |> element("#{row} [aria-label='Save for later']") |> render_click()
+    assert has_element?(view, "#{row} [aria-label='Remove from saved'][aria-pressed=true]")
+    assert Enum.all?(Notification.for_user!(actor: user), &(&1.id not in ids or &1.saved))
+
+    view |> element("#{row} [aria-label='Remove from saved']") |> render_click()
+    assert Enum.all?(Notification.for_user!(actor: user), &(not &1.saved))
+    assert Enum.find(Notification.for_user!(actor: user), &(&1.id == merged.id)).read_at == nil
+    assert [%{id: outsider_id, read_at: nil, saved: false}] = Notification.for_user!(actor: other)
+    assert outsider_id == outsider.id
+  end
+
+  @tag :pr_grouping
+  test "PR group actions leave search-hidden packages unchanged", %{conn: conn} do
+    user = register_user!()
+    change = change!()
+    package = package!()
+
+    visible =
+      notification!(user, %{
+        type: :package_change_opened,
+        change_id: change.id,
+        package_id: package.id
+      })
+
+    hidden =
+      notification!(user, %{
+        type: :package_change_opened,
+        change_id: change.id,
+        package_id: package!().id
+      })
+
+    {:ok, view, _html} =
+      live(log_in(conn, user), ~p"/inbox?filter=all&search=#{package.attribute}")
+
+    row = "#notification-#{visible.id}"
+    view |> element("#{row} [aria-label='Save for later']") |> render_click()
+    view |> element("#{row} [aria-label='Mark as read']") |> render_click()
+    notifications = Notification.for_user!(actor: user)
+    assert %{read_at: nil, saved: false} = Enum.find(notifications, &(&1.id == hidden.id))
+    assert %{read_at: %DateTime{}, saved: true} = Enum.find(notifications, &(&1.id == visible.id))
+  end
+
   @tag :selected_a
   test "Inbox and Subscriptions share the wide heading and navigation shell", %{conn: conn} do
     user = register_user!()

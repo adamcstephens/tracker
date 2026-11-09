@@ -65,6 +65,69 @@ defmodule Tracker.Notifications.InboxTest do
     on_exit(fn -> :telemetry.detach(handler) end)
   end
 
+  @tag :pr_grouping
+  test "PR events group by identity and type before pagination with all matching packages" do
+    user = register_user!()
+    other = register_user!()
+    change = change!()
+    packages = for _ <- 1..3, do: package!()
+
+    opened =
+      for package <- packages do
+        notification!(user, %{
+          type: :package_change_opened,
+          change_id: change.id,
+          package_id: package.id
+        })
+      end
+
+    notification!(other, %{
+      type: :package_change_opened,
+      change_id: change.id,
+      package_id: package!().id
+    })
+
+    merged =
+      notification!(user, %{
+        type: :package_change_merged,
+        change_id: change.id,
+        package_id: hd(packages).id
+      })
+
+    same_title = change!(nil, %{title: change.title})
+
+    distinct =
+      notification!(user, %{
+        type: :package_change_opened,
+        change_id: same_title.id,
+        package_id: hd(packages).id
+      })
+
+    assert {:ok, page} = Inbox.page(%{}, user, limit: 1, offset: 2)
+    assert page.count == 3
+    assert page.notification_count == 5
+    assert [entry] = page.entries
+    assert entry.kind == :change
+    assert entry.key == "change:#{change.id}:package_change_opened"
+    assert entry.notification_count == 3
+    assert entry.unread_count == 3
+    assert entry.package_count == 3
+    assert MapSet.new(entry.members, & &1.id) == MapSet.new(opened, & &1.id)
+
+    assert MapSet.new(entry.members, & &1.package.attribute) ==
+             MapSet.new(packages, & &1.attribute)
+
+    assert {:ok, first} = Inbox.page(%{}, user, limit: 2)
+    assert MapSet.new(first.entries, & &1.notification.id) == MapSet.new([merged.id, distinct.id])
+
+    package = hd(packages)
+    assert {:ok, filtered} = Inbox.page(%{search: package.attribute}, user)
+    entry = Enum.find(filtered.entries, &(&1.key == entry.key))
+    assert entry.notification_count == 1
+    assert [member] = entry.members
+    assert member.package_id == package.id
+  end
+
   @tag :inbox_projection_race
   test "read state changes after projection never leave an uncounted revision entry" do
     user = register_user!()
@@ -489,7 +552,7 @@ defmodule Tracker.Notifications.InboxTest do
     assert %Notification{read_at: nil} = Ash.get!(Notification, notification.id, actor: user)
   end
 
-  test "PR and package notifications without a revision remain standalone" do
+  test "PR events stay outside revision groups and unlinked packages remain standalone" do
     user = register_user!()
     channel = channel!()
     revision = channel_revision!(channel)
@@ -497,7 +560,7 @@ defmodule Tracker.Notifications.InboxTest do
     change = change!()
     grouped = package_notification!(user, revision, package)
 
-    standalone =
+    pr_notifications =
       for type <- [:package_change_opened, :package_change_merged] do
         notification!(user, %{
           type: type,
@@ -515,13 +578,13 @@ defmodule Tracker.Notifications.InboxTest do
     assert Enum.count(page.entries, &(&1.revision_id == revision.id)) == 1
     assert Enum.find(page.entries, &(&1.revision_id == revision.id)).notification.id == grouped.id
 
-    standalone_ids =
+    non_revision_ids =
       page.entries
       |> Enum.filter(&is_nil(&1.revision_id))
       |> Enum.map(& &1.notification.id)
       |> Enum.sort()
 
-    assert standalone_ids == Enum.sort(Enum.map([unlinked | standalone], & &1.id))
+    assert non_revision_ids == Enum.sort(Enum.map([unlinked | pr_notifications], & &1.id))
   end
 
   test "grouped pages remain disjoint with tied timestamps and retain distinct revisions" do

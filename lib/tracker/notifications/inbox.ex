@@ -11,7 +11,7 @@ defmodule Tracker.Notifications.Inbox do
 
     typedstruct do
       field :key, String.t(), enforce: true
-      field :kind, :revision | :notification, enforce: true
+      field :kind, :revision | :change | :notification, enforce: true
       field :revision_id, integer()
       field :occurred_at, DateTime.t(), enforce: true
       field :notification, Notification.t(), enforce: true
@@ -78,7 +78,7 @@ defmodule Tracker.Notifications.Inbox do
 
   def members(scope, %User{} = actor, entries, opts \\ []) do
     limit = Keyword.get(opts, :limit, 3)
-    groups = Enum.reject(entries, &(&1.kind == :notification))
+    groups = Enum.filter(entries, &(&1.kind == :revision))
 
     package_query =
       matching_query(scope, actor)
@@ -197,6 +197,7 @@ defmodule Tracker.Notifications.Inbox do
     kind =
       case notification.entry_key do
         "revision:" <> _ -> :revision
+        "change:" <> _ -> :change
         "notification:" <> _ -> :notification
       end
 
@@ -211,7 +212,8 @@ defmodule Tracker.Notifications.Inbox do
       package_notification_count: notification.aggregates.inbox_package_notification_count,
       revision_notification_count: notification.aggregates.inbox_revision_notification_count,
       propagation_count: notification.aggregates.inbox_propagation_count,
-      unread_count: notification.aggregates.inbox_unread_count
+      unread_count: notification.aggregates.inbox_unread_count,
+      members: if(kind == :change, do: notification.inbox_members, else: [])
     }
   end
 end
