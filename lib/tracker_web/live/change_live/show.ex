@@ -7,6 +7,7 @@ defmodule TrackerWeb.ChangeLive.Show do
 
   alias Tracker.Accounts.User
   alias Tracker.Nixpkgs.ChangeArtifactRefresh
+  alias TrackerWeb.ChangeRow
   alias TrackerWeb.PageSearch
   alias TrackerWeb.Pagination
   alias TrackerWeb.PropagationDag
@@ -72,34 +73,41 @@ defmodule TrackerWeb.ChangeLive.Show do
         </div>
       </section>
 
-      <section
-        :if={@original_count > 0}
-        id="change-originals"
-        class="change-show__panel"
-      >
-        <SectionHeader.section_header title="Original pull requests" count={@original_count} />
-        <div id="original-links" phx-update="stream">
-          <div :for={{dom_id, link} <- @streams.originals} id={dom_id}>
-            <.provenance_link link={link} direction={:original} />
-          </div>
-        </div>
-      </section>
-
-      <section
-        :if={@backport_count > 0}
-        id="change-backports"
-        class="change-show__panel"
-      >
-        <SectionHeader.section_header title="Backport pull requests" count={@backport_count} />
-        <div id="backport-links" phx-update="stream">
-          <div :for={{dom_id, link} <- @streams.backports} id={dom_id}>
-            <.provenance_link link={link} direction={:backport} />
-          </div>
-        </div>
-      </section>
-
       <div class="change-show__grid">
         <div class="change-show__content">
+          <section
+            :if={@original_count > 0}
+            id="change-originals"
+            class="change-show__panel"
+          >
+            <SectionHeader.section_header title="Original pull requests" count={@original_count} />
+            <ChangeRow.change_row_list id="original-links" phx-update="stream">
+              <.provenance_link
+                :for={{dom_id, link} <- @streams.originals}
+                id={dom_id}
+                link={link}
+                direction={:original}
+                time_zone={@time_zone}
+              />
+            </ChangeRow.change_row_list>
+          </section>
+
+          <section
+            :if={@backport_count > 0}
+            id="change-backports"
+            class="change-show__panel"
+          >
+            <SectionHeader.section_header title="Backport pull requests" count={@backport_count} />
+            <ChangeRow.change_row_list id="backport-links" phx-update="stream">
+              <.provenance_link
+                :for={{dom_id, link} <- @streams.backports}
+                id={dom_id}
+                link={link}
+                direction={:backport}
+                time_zone={@time_zone}
+              />
+            </ChangeRow.change_row_list>
+          </section>
           <section :if={@packages_enabled?} class="change-show__panel change-show__packages">
             <SectionHeader.section_header title="Affected packages" count={@package_count}>
               <:controls>
@@ -333,13 +341,6 @@ defmodule TrackerWeb.ChangeLive.Show do
             <div class="change-show__chips">
               <span :for={label <- @change.labels} class="label-chip">{label}</span>
             </div>
-            <p
-              :if={Enum.any?(@change.labels, &String.contains?(String.downcase(&1), "backport"))}
-              id="backport-intent"
-              class="change-show__notice"
-            >
-              Backport labels express intent; they do not establish original/backport relationships.
-            </p>
           </section>
         </aside>
       </div>
@@ -360,24 +361,16 @@ defmodule TrackerWeb.ChangeLive.Show do
     assigns = assign(assigns, change: change, number: number)
 
     ~H"""
-    <div class="change-show__provenance">
-      <.link :if={@change} navigate={~p"/changes/#{@number}"}>#{@number}</.link>
+    <ChangeRow.change_row :if={@change} id={@id} change={@change} time_zone={@time_zone} />
+    <li :if={is_nil(@change)} id={@id} class="row">
       <a
-        :if={is_nil(@change)}
         href={"https://github.com/NixOS/nixpkgs/#{if @link.source_status == :issue, do: "issues", else: "pull"}/#{@number}"}
         target="_blank"
         rel="noopener noreferrer"
       >
         #{@number}<.external_icon />
       </a>
-      <span class={"pill pill-#{@link.confidence}"}>
-        {status_label(@link.confidence)}
-      </span>
-      <span :if={@change}>{@change.title}</span>
-      <span :if={@change}>
-        · Target <code>{@change.base_ref}</code>
-        · <span class={"pill pill-#{@change.state}"}>{@change.state}</span>
-      </span>
+      <span :if={@link.confidence == :candidate} class="pill pill-candidate">Candidate</span>
       <span :if={is_nil(@change)}>
         <%= case @link.source_status do %>
           <% :issue -> %>
@@ -388,10 +381,13 @@ defmodule TrackerWeb.ChangeLive.Show do
             Not tracked · target and current state unknown
         <% end %>
       </span>
-      <ul aria-label="Provenance evidence">
-        <li :for={evidence <- @link.evidence}>{evidence}</li>
-      </ul>
-    </div>
+      <details>
+        <summary>Link details</summary>
+        <ul aria-label="Provenance evidence">
+          <li :for={evidence <- @link.evidence}>{evidence}</li>
+        </ul>
+      </details>
+    </li>
     """
   end
 

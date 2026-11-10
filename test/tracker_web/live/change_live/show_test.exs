@@ -83,12 +83,31 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
     assert has_element?(original_view, "#change-backports a[href='/changes/6010']", "#6010")
     assert has_element?(original_view, "#change-backports", "release-26.05")
     assert has_element?(original_view, "#change-backports", "open")
-    assert has_element?(original_view, "#change-backports", "explicit original PR trailer")
+    refute has_element?(original_view, "#change-backports", "explicit original PR trailer")
+
+    assert has_element?(
+             original_view,
+             ".change-show__content #change-backports .row-num",
+             "#6010"
+           )
+
+    assert has_element?(original_view, "#backport-links[phx-update='stream'] a.row-link")
+    refute has_element?(original_view, "#change-backports .pill-confirmed")
+    html = render(original_view)
+    assert html =~ ~r/id="change-backports".*class="change-show__panel change-show__packages"/s
 
     {:ok, backport_view, _html} = live(conn, ~p"/changes/6010")
     assert has_element?(backport_view, "#change-originals a[href='/changes/6001']", "#6001")
     assert has_element?(backport_view, "#change-originals", "master")
     assert has_element?(backport_view, "#change-originals", "merged")
+
+    assert has_element?(
+             backport_view,
+             ".change-show__content #change-originals .row-num",
+             "#6001"
+           )
+
+    assert has_element?(backport_view, "#original-links[phx-update='stream'] a.row-link")
     refute has_element?(backport_view, "#change-propagation")
   end
 
@@ -153,7 +172,8 @@ defmodule TrackerWeb.ChangeLive.ShowTest do
     ])
 
     {:ok, view, _html} = live(conn, ~p"/changes/6011")
-    assert has_element?(view, "#backport-intent", "do not establish")
+    refute has_element?(view, "#backport-intent")
+    assert has_element?(view, ".change-show__labels", "backport release-26.05")
     refute has_element?(view, "#change-backports")
     refute has_element?(view, "#change-originals")
   end
