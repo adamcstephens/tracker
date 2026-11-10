@@ -29,6 +29,7 @@ config :tracker, Oban,
        {"*/5 * * * *", Tracker.Nixpkgs.HydraStatusFetcher},
        {"0 */4 * * *", Tracker.Nixpkgs.UpdateLogPageWorker},
        {"0 */12 * * *", Tracker.Nixpkgs.CommitterSyncWorker},
+       {"0 0 * * *", Tracker.Notifications.InboxPrunerWorker},
        {"*/5 * * * *", Tracker.Ingestion.CronWorker, queue: :ingestion}
      ]}
   ]
