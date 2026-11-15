@@ -3278,6 +3278,20 @@ a.revision-link {
 		z-index: 1;
 	}
 
+	.change-show .m4-row:has(+ ul)::after {
+		content: "";
+		position: absolute;
+		left: 13px;
+		top: calc(50% + 14px);
+		bottom: 0;
+		width: 2px;
+		background: var(--line);
+	}
+
+	.change-show .m4-tree li.is-done > .m4-row:has(+ ul)::after {
+		background: var(--accent);
+	}
+
 	.change-show .m4-row-body {
 		min-width: 0;
 	}
