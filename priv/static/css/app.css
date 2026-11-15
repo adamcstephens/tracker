@@ -3235,7 +3235,7 @@ a.revision-link {
 		background: var(--line);
 	}
 
-	.change-show .m4-tree ul.is-live > li::after {
+	.change-show .m4-tree ul.is-live > li.is-done::after {
 		background: var(--accent);
 	}
 
@@ -3253,10 +3253,6 @@ a.revision-link {
 		border-left: 2px solid var(--line);
 		border-bottom: 2px solid var(--line);
 		border-bottom-left-radius: 10px;
-	}
-
-	.change-show .m4-tree ul.is-live > li::before {
-		border-left-color: var(--accent);
 	}
 
 	.change-show .m4-tree ul.is-live > li.is-done::before {
@@ -3288,7 +3284,7 @@ a.revision-link {
 		background: var(--line);
 	}
 
-	.change-show .m4-tree li.is-done > .m4-row:has(+ ul)::after {
+	.change-show .m4-tree li.is-done > .m4-row:has(+ ul > li.is-done)::after {
 		background: var(--accent);
 	}
 
