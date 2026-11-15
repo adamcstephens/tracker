@@ -3225,17 +3225,17 @@ a.revision-link {
 		padding-left: 1.625rem;
 	}
 
-	.change-show .m4-tree ul::before {
+	.change-show .m4-tree ul > li::after {
 		content: "";
 		position: absolute;
-		left: 13px;
+		left: -13px;
 		top: -4px;
 		bottom: 0;
 		width: 2px;
 		background: var(--line);
 	}
 
-	.change-show .m4-tree ul.is-live::before {
+	.change-show .m4-tree ul.is-live > li::after {
 		background: var(--accent);
 	}
 
@@ -3264,13 +3264,8 @@ a.revision-link {
 	}
 
 	.change-show .m4-tree ul > li:last-child::after {
-		content: "";
-		position: absolute;
-		left: -14px;
-		top: 24px;
-		bottom: -2px;
-		width: 4px;
-		background: var(--bg);
+		bottom: auto;
+		height: 18px;
 	}
 
 	.change-show .m4-row {
