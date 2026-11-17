@@ -1,4 +1,5 @@
 defmodule TrackerWeb.InboxLive.Index do
+  @moduledoc "Filter-first Inbox rendering with complete underlying membership for combined row controls."
   use TrackerWeb, :live_view
 
   on_mount {TrackerWeb.LiveUserAuth, :live_user_required}
@@ -164,10 +165,18 @@ defmodule TrackerWeb.InboxLive.Index do
   defp row_notifications(socket, id) do
     id = String.to_integer(id)
 
-    case Enum.find(socket.assigns.entries, &(&1.kind == :change and &1.notification.id == id)) do
-      %Inbox.Entry{} = entry -> entry.members
-      nil -> Enum.filter(socket.assigns.notifications, &(&1.id == id))
-    end
+    Enum.find_value(socket.assigns.entries, fn
+      %Inbox.Entry{kind: :revision} = entry ->
+        Enum.find_value(entry.rows, fn row ->
+          if row.notification.id == id, do: row.members
+        end)
+
+      %Inbox.Entry{kind: :change} = entry ->
+        if entry.notification.id == id, do: entry.members
+
+      %Inbox.Entry{} ->
+        nil
+    end) || Enum.filter(socket.assigns.notifications, &(&1.id == id))
   end
 
   defp reset_to_first_page(socket) do
@@ -215,28 +224,7 @@ defmodule TrackerWeb.InboxLive.Index do
         |> Map.new(&{&1.key, &1})
 
       entries =
-        Enum.map(page.entries, fn entry ->
-          case Map.fetch(expanded, entry.key) do
-            {:ok, loaded} ->
-              limit = Map.get(socket.assigns.member_limits, entry.key, 3)
-              revisions = Enum.take(loaded.revision_notifications, limit)
-              members = Enum.take(loaded.members, limit - length(revisions))
-
-              %{
-                loaded
-                | revision_notifications: revisions,
-                  members: members,
-                  propagation_notifications:
-                    Enum.take(
-                      loaded.propagation_notifications,
-                      limit - length(revisions) - length(members)
-                    )
-              }
-
-            :error ->
-              entry
-          end
-        end)
+        Enum.map(page.entries, &Map.get(expanded, &1.key, &1))
 
       notifications =
         Enum.flat_map(entries, fn entry ->
@@ -527,22 +515,9 @@ defmodule TrackerWeb.InboxLive.Index do
                           id={"notifications-#{group_id(entry)}"}
                         >
                           <.row
-                            :for={n <- entry.revision_notifications}
-                            n={n}
-                            now={@now}
-                            time_zone={@time_zone}
-                            version_changes={@version_changes}
-                          />
-                          <.row
-                            :for={n <- entry.members}
-                            n={n}
-                            now={@now}
-                            time_zone={@time_zone}
-                            version_changes={@version_changes}
-                          />
-                          <.row
-                            :for={n <- entry.propagation_notifications}
-                            n={n}
+                            :for={row <- entry.rows}
+                            n={row.notification}
+                            members={row.members}
                             now={@now}
                             time_zone={@time_zone}
                             version_changes={@version_changes}
@@ -550,12 +525,12 @@ defmodule TrackerWeb.InboxLive.Index do
                         </RowList.row_list>
                         <div :if={expanded?(entry, assigns)} class="ibx-more-controls">
                           <button
-                            :if={visible_member_count(entry) < entry.notification_count}
+                            :if={length(entry.rows) < entry.row_count}
                             class="ibx-reset"
                             type="button"
                             phx-click="show-more"
                             phx-value-id={entry.key}
-                          >Show {entry.notification_count - visible_member_count(entry)} more</button>
+                          >Show {entry.row_count - length(entry.rows)} more</button>
                           <button
                             :if={Map.get(@member_limits, entry.key, 3) > 3}
                             class="ibx-reset"
@@ -608,11 +583,6 @@ defmodule TrackerWeb.InboxLive.Index do
     "#{revision.channel.name} · #{String.slice(revision.revision, 0, 7)}"
   end
 
-  defp visible_member_count(%Inbox.Entry{} = entry),
-    do:
-      length(entry.members) + length(entry.revision_notifications) +
-        length(entry.propagation_notifications)
-
   attr :active, :atom, required: true, values: [:inbox, :subscriptions]
 
   def view_nav(assigns) do
@@ -653,6 +623,18 @@ defmodule TrackerWeb.InboxLive.Index do
       |> assign(:unread?, Enum.any?(notifications, &is_nil(&1.read_at)))
       |> assign(:saved?, Enum.all?(notifications, & &1.saved))
       |> assign(
+        :related_propagations,
+        Enum.filter(notifications, &(&1.type == :change_propagated and &1.id != assigns.n.id))
+      )
+      |> assign(
+        :related_packages,
+        Enum.filter(
+          notifications,
+          &(&1.type in [:package_version_changed, :package_added, :package_removed] and
+              &1.id != assigns.n.id)
+        )
+      )
+      |> assign(
         :packages,
         notifications
         |> Enum.map(& &1.package)
@@ -676,6 +658,12 @@ defmodule TrackerWeb.InboxLive.Index do
           <% else %>
             {@hero}
           <% end %>
+        </span>
+        <span :for={notification <- @related_packages} class={hero_class(notification.type)}>
+          <span class="pill ibx-typechip">{NotificationPresenter.type_label(notification.type)}</span>
+          <.link navigate={NotificationPresenter.path(notification)}>
+            {NotificationPresenter.hero(notification, @version_changes)}
+          </.link>
         </span>
       </:label>
       <:sublabel>
@@ -712,6 +700,18 @@ defmodule TrackerWeb.InboxLive.Index do
             <span class="dot"></span>{@n.channel.name}
           </span>
         <% end %>
+        <span :for={notification <- @related_propagations}>
+          <.link
+            navigate={NotificationPresenter.path(notification)}
+            class="ibx-tag ibx-tag--pr"
+            title={NotificationPresenter.hero(notification)}
+          >
+            PR <span class="hash">#{notification.change.number}</span>
+          </.link>
+          <span :if={notification.change_branch} class="ibx-tag ibx-tag--reached">
+            reached {notification.change_branch.branch_name}
+          </span>
+        </span>
         <span class="ibx-dot-sep">·</span>
         <time class="ibx-time" title={NotificationPresenter.clock(@n.occurred_at, @time_zone)}>
           {NotificationPresenter.relative_time(@n.occurred_at, @now)}

@@ -65,6 +65,77 @@ defmodule Tracker.Notifications.InboxTest do
     on_exit(fn -> :telemetry.detach(handler) end)
   end
 
+  @tag :related_updates
+  test "revision rows correlate explicit many-to-many links without hidden bridges" do
+    user = register_user!()
+    other = register_user!()
+    revision = channel_revision!()
+    first = package!()
+    second = package!()
+    unrelated = package!()
+    changes = for _ <- 1..2, do: change!()
+
+    for {change, package} <- [
+          {hd(changes), first},
+          {hd(changes), second},
+          {List.last(changes), second}
+        ] do
+      Tracker.Nixpkgs.ChangePackage.load!(%{
+        change_id: change.id,
+        package_id: package.id,
+        type: :changed
+      })
+    end
+
+    packages =
+      for package <- [first, second, unrelated],
+          do: package_notification!(user, revision, package)
+
+    propagations =
+      for change <- changes do
+        branch = change_branch!(change, "master", revision)
+
+        notification!(user, %{
+          type: :change_propagated,
+          change_id: change.id,
+          change_branch_id: branch.id,
+          channel_revision_id: revision.id
+        })
+      end
+
+    package_notification!(other, revision, first)
+    other_revision = channel_revision!()
+    package_notification!(user, other_revision, first)
+
+    scope = %{channel_revision_id: revision.id}
+    assert {:ok, page} = Inbox.page(scope, user)
+    assert {:ok, [entry]} = Inbox.members(scope, user, page.entries, limit: 1)
+    assert entry.row_count == 2
+    assert [row] = entry.rows
+    assert Enum.map(row.members, & &1.id) == [List.last(packages).id]
+    assert {:ok, [entry]} = Inbox.members(scope, user, page.entries, limit: 2)
+    assert [_, combined] = entry.rows
+
+    assert MapSet.new(combined.members, & &1.id) ==
+             MapSet.new(Enum.take(packages, 2) ++ propagations, & &1.id)
+
+    filtered = Map.put(scope, :types, [:change_propagated])
+    assert {:ok, page} = Inbox.page(filtered, user)
+    assert {:ok, [entry]} = Inbox.members(filtered, user, page.entries)
+    assert entry.row_count == 2
+    assert Enum.all?(entry.rows, &(length(&1.members) == 1))
+
+    [first_notification, bridge, _] = packages
+    Notification.save!(first_notification, actor: user)
+    Enum.each(propagations, &Notification.save!(&1, actor: user))
+    filtered = Map.put(scope, :saved_only, true)
+    assert {:ok, page} = Inbox.page(filtered, user)
+    assert {:ok, [entry]} = Inbox.members(filtered, user, page.entries)
+    assert entry.row_count == 2
+    refute Enum.any?(entry.rows, fn row -> Enum.any?(row.members, &(&1.id == bridge.id)) end)
+    assert Enum.sort(Enum.map(entry.rows, &length(&1.members))) == [1, 2]
+  end
+
   @tag :pr_grouping
   test "PR events group by identity and type before pagination with all matching packages" do
     user = register_user!()
@@ -199,7 +270,9 @@ defmodule Tracker.Notifications.InboxTest do
     assert {:ok, [preview]} = Inbox.members(%{}, user, [entry], limit: 3)
     assert length(preview.members) == 1
     assert Enum.map(preview.revision_notifications, & &1.id) == [published.id]
-    assert length(preview.propagation_notifications) == 3
+    assert length(preview.propagation_notifications) == 1
+    assert preview.row_count == 10
+    assert length(preview.rows) == 3
 
     assert Enum.all?(
              preview.propagation_notifications,
@@ -480,7 +553,9 @@ defmodule Tracker.Notifications.InboxTest do
 
     assert {:ok, page} = Inbox.page(%{}, user)
     assert {:ok, [entry]} = Inbox.members(%{}, user, page.entries, limit: 3)
-    assert length(entry.members) == 3
+    assert length(entry.members) == 2
+    assert entry.row_count == 9
+    assert length(entry.rows) == 3
     assert Enum.all?(entry.members, &(&1.type == :package_added))
     assert Enum.map(entry.revision_notifications, & &1.id) == [published.id]
     assert entry.package_count == 8

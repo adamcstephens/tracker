@@ -1,9 +1,25 @@
 defmodule Tracker.Notifications.Inbox do
-  @moduledoc "Actor-scoped, filter-first projection of the notification ledger."
+  @moduledoc """
+  Actor-scoped, filter-first projection of the notification ledger.
+
+  Expanded revisions combine explicitly linked package updates and propagations
+  before limiting visible rows. Every row retains its matching ledger members.
+  """
 
   alias Tracker.Accounts.User
+  alias Tracker.Nixpkgs.ChangePackage
   alias Tracker.Notifications.Notification
   require Ash.Query
+
+  defmodule Row do
+    @moduledoc "A visible inbox row and all matching notifications represented by its controls."
+    use TypedStruct
+
+    typedstruct do
+      field :notification, Notification.t(), enforce: true
+      field :members, [Notification.t()], enforce: true
+    end
+  end
 
   defmodule Entry do
     @moduledoc false
@@ -24,6 +40,8 @@ defmodule Tracker.Notifications.Inbox do
       field :members, [Notification.t()], default: []
       field :revision_notifications, [Notification.t()], default: []
       field :propagation_notifications, [Notification.t()], default: []
+      field :rows, [Row.t()], default: []
+      field :row_count, non_neg_integer(), default: 0
     end
   end
 
@@ -80,6 +98,54 @@ defmodule Tracker.Notifications.Inbox do
     limit = Keyword.get(opts, :limit, 3)
     groups = Enum.filter(entries, &(&1.kind == :revision))
 
+    {related, separate} = Enum.split_with(groups, &correlatable?/1)
+
+    with {:ok, separate_notifications} <- load_members(separate, scope, actor, limit),
+         {:ok, related_notifications} <- load_members(related, scope, actor, nil),
+         {:ok, links} <- package_links(related_notifications, actor) do
+      notifications = separate_notifications ++ related_notifications
+      by_id = Map.new(notifications, &{&1.id, &1})
+
+      {:ok,
+       Enum.map(entries, fn %Entry{} = entry ->
+         case Map.fetch(by_id, entry.notification.id) do
+           {:ok, notification} ->
+             rows = revision_rows(notification, links)
+             visible_rows = Enum.take(rows, limit)
+             visible_ids = MapSet.new(Enum.flat_map(visible_rows, & &1.members), & &1.id)
+
+             %{
+               entry
+               | rows: visible_rows,
+                 row_count:
+                   if(correlatable?(entry), do: length(rows), else: entry.notification_count),
+                 members:
+                   Enum.filter(notification.inbox_members, &MapSet.member?(visible_ids, &1.id)),
+                 revision_notifications:
+                   Enum.filter(
+                     notification.revision_notifications,
+                     &MapSet.member?(visible_ids, &1.id)
+                   ),
+                 propagation_notifications:
+                   Enum.filter(
+                     notification.propagation_notifications,
+                     &MapSet.member?(visible_ids, &1.id)
+                   )
+             }
+
+           :error ->
+             entry
+         end
+       end)}
+    else
+      {:error, error} -> {:error, error}
+    end
+  end
+
+  defp correlatable?(%Entry{} = entry),
+    do: entry.package_notification_count > 0 and entry.propagation_count > 0
+
+  defp load_members(groups, scope, actor, limit) do
     package_query =
       matching_query(scope, actor)
       |> Ash.Query.filter(type in [:package_version_changed, :package_added, :package_removed])
@@ -93,36 +159,73 @@ defmodule Tracker.Notifications.Inbox do
       |> Ash.Query.limit(limit)
       |> Ash.Query.load(@references)
 
-    with {:ok, notifications} <-
-           Ash.load(
-             Enum.map(groups, & &1.notification),
-             [
-               inbox_members: package_query,
-               revision_notifications: revision_query,
-               propagation_notifications: revision_query
-             ],
-             actor: actor,
-             reuse_values?: false
-           ) do
-      by_id = Map.new(notifications, &{&1.id, &1})
+    Ash.load(
+      Enum.map(groups, & &1.notification),
+      [
+        inbox_members: package_query,
+        revision_notifications: revision_query,
+        propagation_notifications: revision_query
+      ],
+      actor: actor,
+      reuse_values?: false
+    )
+  end
 
-      {:ok,
-       Enum.map(entries, fn %Entry{} = entry ->
-         case Map.fetch(by_id, entry.notification.id) do
-           {:ok, notification} ->
-             %{
-               entry
-               | members: notification.inbox_members,
-                 revision_notifications: notification.revision_notifications,
-                 propagation_notifications: notification.propagation_notifications
-             }
+  defp package_links(notifications, actor) do
+    package_ids =
+      notifications
+      |> Enum.flat_map(& &1.inbox_members)
+      |> Enum.map(& &1.package_id)
+      |> Enum.uniq()
 
-           :error ->
-             entry
-         end
-       end)}
-    else
-      {:error, error} -> {:error, error}
+    change_ids =
+      notifications
+      |> Enum.flat_map(& &1.propagation_notifications)
+      |> Enum.map(& &1.change_id)
+      |> Enum.uniq()
+
+    ChangePackage.read(
+      actor: actor,
+      query: [
+        filter: [package_id: [in: package_ids], change_id: [in: change_ids]],
+        select: [:package_id, :change_id]
+      ]
+    )
+  end
+
+  defp revision_rows(%Notification{} = notification, links) do
+    notifications =
+      notification.revision_notifications ++
+        notification.inbox_members ++
+        notification.propagation_notifications
+
+    indexed =
+      notifications |> Enum.with_index() |> Map.new(fn {n, index} -> {n.id, {index, n}} end)
+
+    packages = Enum.group_by(notification.inbox_members, & &1.package_id, & &1.id)
+    changes = Enum.group_by(notification.propagation_notifications, & &1.change_id, & &1.id)
+    graph = :digraph.new([:private])
+
+    try do
+      Enum.each(notifications, &:digraph.add_vertex(graph, &1.id))
+
+      for link <- links,
+          package_id <- Map.get(packages, link.package_id, []),
+          propagation_id <- Map.get(changes, link.change_id, []) do
+        :digraph.add_edge(graph, package_id, propagation_id)
+      end
+
+      graph
+      |> :digraph_utils.components()
+      |> Enum.map(fn ids ->
+        members = ids |> Enum.map(&Map.fetch!(indexed, &1)) |> Enum.sort_by(&elem(&1, 0))
+        {index, representative} = hd(members)
+        {index, %Row{notification: representative, members: Enum.map(members, &elem(&1, 1))}}
+      end)
+      |> Enum.sort_by(&elem(&1, 0))
+      |> Enum.map(&elem(&1, 1))
+    after
+      :digraph.delete(graph)
     end
   end
 

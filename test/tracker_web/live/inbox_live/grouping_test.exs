@@ -58,6 +58,106 @@ defmodule TrackerWeb.InboxLive.GroupingTest do
     query
   end
 
+  @tag :related_updates
+  test "related revision updates combine before preview limits and share independent controls",
+       %{conn: conn} do
+    user = register_user!()
+    {revision, packages} = revision_notifications!(user, 4)
+    change = change!()
+    branch = change_branch!(change, "master", revision)
+
+    for notification <- packages do
+      Tracker.Nixpkgs.ChangePackage.load!(%{
+        change_id: change.id,
+        package_id: notification.package_id,
+        type: :changed
+      })
+    end
+
+    propagated =
+      notification!(user, %{
+        type: :change_propagated,
+        change_id: change.id,
+        change_branch_id: branch.id,
+        channel_revision_id: revision.id
+      })
+
+    Notification.mark_read!(hd(packages), actor: user)
+    Notification.save!(propagated, actor: user)
+    {:ok, view, _} = live(log_in(conn, user), ~p"/inbox?filter=all")
+    assert group_rows(view, revision) == ["notification-#{List.last(packages).id}"]
+    row = "#notification-#{List.last(packages).id}"
+
+    assert "/changes/#{change.number}" in (view
+                                           |> render()
+                                           |> Floki.parse_document!()
+                                           |> Floki.find("#{row} a")
+                                           |> Floki.attribute("href")
+                                           |> Enum.map(&URI.parse(&1).path))
+
+    for package <- Tracker.Nixpkgs.Package.by_ids!(Enum.map(packages, & &1.package_id)) do
+      assert has_element?(view, row, package.attribute)
+    end
+
+    refute has_element?(view, "[phx-click='show-more']")
+    view |> element("#{row} [aria-label='Mark as read']") |> render_click()
+    assert Enum.all?(Notification.for_user!(actor: user), & &1.read_at)
+    assert Enum.count(Notification.for_user!(actor: user), & &1.saved) == 1
+    view |> element("#{row} [aria-label='Save for later']") |> render_click()
+    assert Enum.all?(Notification.for_user!(actor: user), & &1.saved)
+    view |> element("#{row} [aria-label='Mark as unread']") |> render_click()
+    assert Enum.all?(Notification.for_user!(actor: user), &is_nil(&1.read_at))
+    assert Enum.all?(Notification.for_user!(actor: user), & &1.saved)
+    view |> element("#{row} [aria-label='Remove from saved']") |> render_click()
+    assert Enum.all?(Notification.for_user!(actor: user), &(not &1.saved))
+    assert length(Notification.for_user!(actor: user)) == 5
+  end
+
+  @tag :related_updates
+  test "combined rows show all related PRs and filter-scoped actions exclude hidden members",
+       %{conn: conn} do
+    user = register_user!()
+    {revision, [package_notification]} = revision_notifications!(user, 1)
+
+    propagations =
+      for _ <- 1..2 do
+        change = change!()
+        branch = change_branch!(change, "master", revision)
+
+        Tracker.Nixpkgs.ChangePackage.load!(%{
+          change_id: change.id,
+          package_id: package_notification.package_id,
+          type: :changed
+        })
+
+        notification!(user, %{
+          type: :change_propagated,
+          change_id: change.id,
+          change_branch_id: branch.id,
+          channel_revision_id: revision.id
+        })
+      end
+
+    {:ok, view, _} = live(log_in(conn, user), ~p"/inbox?filter=all")
+    assert group_rows(view, revision) == ["notification-#{package_notification.id}"]
+
+    assert view |> render() |> Floki.parse_document!() |> Floki.find(".ibx-tag--pr") |> length() ==
+             2
+
+    {:ok, view, _} =
+      live(log_in(conn, user), ~p"/inbox?filter=all&types=package_added")
+
+    row = "#notification-#{package_notification.id}"
+    view |> element("#{row} [aria-label='Save for later']") |> render_click()
+    view |> element("#{row} [aria-label='Mark as read']") |> render_click()
+    ids = Enum.map(propagations, & &1.id)
+
+    assert Enum.all?(
+             Notification.for_user!(actor: user),
+             &(&1.id not in ids or (&1.read_at == nil and not &1.saved))
+           )
+  end
+
   @tag :pr_grouping
   test "one PR row shows every package and toggles read and saved state for the displayed group",
        %{conn: conn} do
