@@ -7,12 +7,14 @@
   jq,
   lib,
   nix,
+  pkg-config,
   postgresql,
   postgresqlTestHook,
   rustc,
   rustPlatform,
   stdenvNoCC,
   tzdata,
+  zstd,
 }:
 let
   # Lumis fetches tree-sitter grammars from npm the first time it highlights,
@@ -70,7 +72,9 @@ beamPackages.mixRelease rec {
     rustlerPrecompiledOverrides = {
       # overrideAttrs runs after buildRustPackage maps buildFeatures ->
       # cargoBuildFeatures, so the low-level names are what take effect here.
-      mdex_native = _old: {
+      mdex_native = old: {
+        nativeBuildInputs = old.nativeBuildInputs ++ [ pkg-config ];
+        buildInputs = old.buildInputs ++ [ zstd ];
         cargoBuildNoDefaultFeatures = true;
         cargoBuildFeatures = [
           "nif_version_2_15"
@@ -79,7 +83,9 @@ beamPackages.mixRelease rec {
       };
 
       # 0.8.0 lock is broken
-      lumis = _old: {
+      lumis = old: {
+        nativeBuildInputs = old.nativeBuildInputs ++ [ pkg-config ];
+        buildInputs = old.buildInputs ++ [ zstd ];
         cargoDeps = rustPlatform.importCargoLock { lockFile = ./nix/lumis_nif-Cargo.lock; };
         postPatch = "cp ${./nix/lumis_nif-Cargo.lock} Cargo.lock";
       };
