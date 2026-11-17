@@ -84,7 +84,7 @@
           ${pkgs.openssl}/bin/openssl rsa -in "$TRACKER_GITHUB_APP_PRIVATE_KEY_FILE" -check -noout
           ${pkgs.curl}/bin/curl --fail --silent --show-error --retry 10 --retry-connrefused --cacert /run/tracker-https/cert.pem https://localhost:8443/repo/probe
           rm --recursive --force /var/lib/tracker/network-probe
-          ${pkgs.git}/bin/git -c http.sslCAInfo=/run/tracker-https/cert.pem clone https://localhost:8443/repo /var/lib/tracker/network-probe
+          GIT_SMART_HTTP=0 ${pkgs.git}/bin/git -c http.sslCAInfo=/run/tracker-https/cert.pem clone https://localhost:8443/repo/.git /var/lib/tracker/network-probe
           test "$(cat /var/lib/tracker/network-probe/probe)" = sandbox-network-ok
           test "$(stat --format=%a /var/lib/tracker/network-probe/probe)" = 600
         '')
