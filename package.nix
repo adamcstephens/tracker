@@ -64,6 +64,9 @@ beamPackages.mixRelease rec {
 
   mixNixDeps = callPackages ./deps.nix {
     inherit beamPackages;
+    overrideFenixOverlay = _final: prev: {
+      fenix.stable = { inherit (prev) cargo rustc; };
+    };
     rustlerPrecompiledOverrides = {
       # overrideAttrs runs after buildRustPackage maps buildFeatures ->
       # cargoBuildFeatures, so the low-level names are what take effect here.
