@@ -27,6 +27,21 @@ defmodule Tracker.RuntimeConfigTest do
            ]
   end
 
+  test "configures no_proxy bypass for Req requests" do
+    defaults =
+      runtime_config("http://proxy.example:3128", "localhost")
+      |> Keyword.fetch!(:req)
+      |> Keyword.fetch!(:default_options)
+
+    request =
+      defaults
+      |> Req.new()
+      |> Req.merge(url: "http://localhost:4000")
+      |> Req.Request.prepare()
+
+    refute Keyword.has_key?(request.options.connect_options, :proxy)
+  end
+
   defp proxy_options(url) do
     runtime_config(url)
     |> Keyword.get(:req, [])
@@ -34,17 +49,19 @@ defmodule Tracker.RuntimeConfigTest do
     |> Keyword.fetch!(:connect_options)
   end
 
-  defp runtime_config(url) do
-    previous = System.get_env("https_proxy")
+  defp runtime_config(url, no_proxy \\ nil) do
+    previous =
+      Enum.map(["https_proxy", "no_proxy"], fn name -> {name, System.get_env(name)} end)
 
     try do
-      set_proxy(url)
+      set_env("https_proxy", url)
+      set_env("no_proxy", no_proxy)
       Config.Reader.read!("config/runtime.exs", env: :test, target: :host)
     after
-      set_proxy(previous)
+      Enum.each(previous, fn {name, value} -> set_env(name, value) end)
     end
   end
 
-  defp set_proxy(nil), do: System.delete_env("https_proxy")
-  defp set_proxy(url), do: System.put_env("https_proxy", url)
+  defp set_env(name, nil), do: System.delete_env(name)
+  defp set_env(name, value), do: System.put_env(name, value)
 end

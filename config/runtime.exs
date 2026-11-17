@@ -34,7 +34,19 @@ if proxy_url = System.get_env("https_proxy") do
         ]
     end
 
-  config :req, default_options: [connect_options: connect_options]
+  default_options = [connect_options: connect_options]
+
+  default_options =
+    case System.get_env("no_proxy") do
+      nil ->
+        default_options
+
+      no_proxy ->
+        default_options ++
+          [plugins: [Tracker.HTTPProxy], no_proxy: Tracker.HTTPProxy.parse_no_proxy(no_proxy)]
+    end
+
+  config :req, default_options: default_options
 end
 
 # ## Using releases
