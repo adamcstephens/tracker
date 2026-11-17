@@ -9,6 +9,34 @@ import Config
 
 config :zoneinfo, tzpath: System.get_env("TZDIR", "/usr/share/zoneinfo")
 
+if proxy_url = System.get_env("https_proxy") do
+  proxy_uri = URI.new!(proxy_url)
+
+  scheme =
+    case proxy_uri.scheme do
+      "http" -> :http
+      "https" -> :https
+    end
+
+  proxy = {scheme, proxy_uri.host, proxy_uri.port, []}
+
+  connect_options =
+    case proxy_uri.userinfo do
+      nil ->
+        [proxy: proxy]
+
+      userinfo ->
+        credentials = URI.decode(userinfo)
+
+        [
+          proxy: proxy,
+          proxy_headers: [{"proxy-authorization", "Basic " <> Base.encode64(credentials)}]
+        ]
+    end
+
+  config :req, default_options: [connect_options: connect_options]
+end
+
 # ## Using releases
 #
 # If you use `mix release`, you need to explicitly enable the server
