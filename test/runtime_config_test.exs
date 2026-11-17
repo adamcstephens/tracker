@@ -42,6 +42,51 @@ defmodule Tracker.RuntimeConfigTest do
     refute Keyword.has_key?(request.options.connect_options, :proxy)
   end
 
+  test "defaults the production HTTP bind address to all IPv6 interfaces" do
+    assert production_http_ip(nil) == {0, 0, 0, 0, 0, 0, 0, 0}
+  end
+
+  test "configures an IPv4 production HTTP bind address" do
+    assert production_http_ip("127.0.0.1") == {127, 0, 0, 1}
+  end
+
+  test "configures an IPv6 production HTTP bind address" do
+    assert production_http_ip("::1") == {0, 0, 0, 0, 0, 0, 0, 1}
+  end
+
+  test "rejects an invalid production HTTP bind address" do
+    assert_raise MatchError, fn -> production_http_ip("invalid-address") end
+  end
+
+  defp production_http_ip(ip) do
+    environment = [
+      {"PHX_IP", ip},
+      {"TRACKER_GITHUB_CLIENT_ID", "client"},
+      {"TRACKER_GITHUB_CLIENT_SECRET_FILE", __ENV__.file},
+      {"TRACKER_GITHUB_APP_ID", "1"},
+      {"TRACKER_GITHUB_APP_PRIVATE_KEY_FILE", __ENV__.file},
+      {"TRACKER_GITHUB_INSTALLATION_ID", "1"},
+      {"TRACKER_GITHUB_REDIRECT_URI", "https://example.com"},
+      {"DATABASE_URL", "ecto://localhost/tracker"},
+      {"SECRET_KEY_BASE", String.duplicate("a", 64)},
+      {"TOKEN_SIGNING_SECRET", "secret"}
+    ]
+
+    previous = Enum.map(environment, fn {name, _value} -> {name, System.get_env(name)} end)
+
+    try do
+      Enum.each(environment, fn {name, value} -> set_env(name, value) end)
+
+      Config.Reader.read!("config/runtime.exs", env: :prod, target: :host)
+      |> Keyword.fetch!(:tracker)
+      |> Keyword.fetch!(TrackerWeb.Endpoint)
+      |> Keyword.fetch!(:http)
+      |> Keyword.fetch!(:ip)
+    after
+      Enum.each(previous, fn {name, value} -> set_env(name, value) end)
+    end
+  end
+
   defp proxy_options(url) do
     runtime_config(url)
     |> Keyword.get(:req, [])

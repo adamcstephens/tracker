@@ -23,6 +23,12 @@ in
       description = "Public hostname used to generate URLs.";
     };
 
+    listenAddress = lib.mkOption {
+      type = lib.types.str;
+      default = "127.0.0.1";
+      description = "IP address the HTTP endpoint binds to; defaults to loopback.";
+    };
+
     port = lib.mkOption {
       type = lib.types.port;
       default = 6950;
@@ -45,9 +51,8 @@ in
         type = lib.types.bool;
         default = false;
         description = ''
-          Provision a local PostgreSQL server, database and role, and connect
-          over its unix socket. The role is a superuser because the schema
-          installs the `pg_trgm` and `btree_gist` extensions.
+          Provision a local PostgreSQL server, database and non-superuser owner
+          role, and connect over its unix socket.
         '';
       };
 
@@ -66,7 +71,11 @@ in
 
       clientSecretFile = lib.mkOption {
         type = lib.types.path;
-        description = "File containing the OAuth client secret.";
+        description = ''
+          Runtime path to the OAuth client secret, loaded by systemd as a
+          credential. The source file may be root-only. Do not put secret
+          contents in the Nix store.
+        '';
       };
 
       appId = lib.mkOption {
@@ -76,7 +85,11 @@ in
 
       privateKeyFile = lib.mkOption {
         type = lib.types.path;
-        description = "File containing the GitHub app's PEM private key.";
+        description = ''
+          Runtime path to the GitHub app's PEM private key, loaded by systemd
+          as a credential. The source file may be root-only. Do not put secret
+          contents in the Nix store.
+        '';
       };
 
       installationId = lib.mkOption {
@@ -118,7 +131,7 @@ in
         {
           name = cfg.database.name;
           ensureDBOwnership = true;
-          ensureClauses.superuser = true;
+          ensureClauses.superuser = false;
         }
       ];
     };
@@ -134,6 +147,7 @@ in
       environment = {
         PHX_SERVER = "true";
         PHX_HOST = cfg.host;
+        PHX_IP = cfg.listenAddress;
         PORT = toString cfg.port;
         HOME = stateDir;
         RELEASE_TMP = "/run/tracker";
@@ -142,9 +156,9 @@ in
         TZDIR = "${pkgs.tzdata}/share/zoneinfo";
         NIXPKGS_GIT_PATH = cfg.nixpkgsGitPath;
         TRACKER_GITHUB_CLIENT_ID = cfg.github.clientId;
-        TRACKER_GITHUB_CLIENT_SECRET_FILE = toString cfg.github.clientSecretFile;
+        TRACKER_GITHUB_CLIENT_SECRET_FILE = "%d/github-client-secret";
         TRACKER_GITHUB_APP_ID = toString cfg.github.appId;
-        TRACKER_GITHUB_APP_PRIVATE_KEY_FILE = toString cfg.github.privateKeyFile;
+        TRACKER_GITHUB_APP_PRIVATE_KEY_FILE = "%d/github-private-key";
         TRACKER_GITHUB_INSTALLATION_ID = toString cfg.github.installationId;
         TRACKER_GITHUB_REDIRECT_URI = cfg.github.redirectUri;
       }
@@ -158,13 +172,20 @@ in
         ExecStartPre = "${lib.getExe cfg.package} eval 'Tracker.Release.migrate()'";
         ExecStart = "${lib.getExe cfg.package} start";
         EnvironmentFile = cfg.environmentFile;
+        LoadCredential = [
+          "github-client-secret:${toString cfg.github.clientSecretFile}"
+          "github-private-key:${toString cfg.github.privateKeyFile}"
+        ];
         Restart = "on-failure";
 
         DynamicUser = true;
         User = "tracker";
         Group = "tracker";
         StateDirectory = "tracker";
+        StateDirectoryMode = "0700";
         RuntimeDirectory = "tracker";
+        RuntimeDirectoryMode = "0700";
+        UMask = "0077";
 
         CapabilityBoundingSet = [ "" ];
         LockPersonality = true;
@@ -178,6 +199,8 @@ in
         ProtectKernelLogs = true;
         ProtectKernelModules = true;
         ProtectKernelTunables = true;
+        ProtectProc = "invisible";
+        ProcSubset = "pid";
         ProtectSystem = "strict";
         RestrictAddressFamilies = [
           "AF_INET"
