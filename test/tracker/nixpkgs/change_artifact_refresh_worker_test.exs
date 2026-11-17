@@ -55,12 +55,17 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorkerTest do
       assert Enum.sort(links) == [{"new-pkg-a", :added}, {"new-pkg-b", :changed}]
     end
 
-    test "cap enforcement: over 1000 entries writes zero rows, status :too_large", %{
+    test "non-master over 1000 entries writes zero rows, status :too_large", %{
       rate_limit_table: table
     } do
-      change = insert_change!(number: 9002, state: :merged, merge_commit_sha: "bigsha")
+      change =
+        insert_change!(
+          number: 9002,
+          state: :merged,
+          merge_commit_sha: "bigsha",
+          base_ref: "nixos-unstable"
+        )
 
-      # 1001 added entries triggers the cap
       over_cap = for i <- 1..1001, do: "pkg-#{i}"
       attrdiff = %{"added" => over_cap, "changed" => [], "removed" => []}
 
@@ -83,8 +88,48 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorkerTest do
       assert link_count == 0
     end
 
+    test "master over 1000 entries writes all links, status :processed", %{
+      rate_limit_table: table
+    } do
+      change =
+        insert_change!(
+          number: 9050,
+          state: :merged,
+          merge_commit_sha: "masterbigsha",
+          base_ref: "master"
+        )
+
+      over_cap = for i <- 1..1001, do: "master-pkg-#{i}"
+      attrdiff = %{"added" => over_cap, "changed" => [], "removed" => []}
+
+      :ok =
+        ChangeArtifactRefreshWorker.run(
+          %{reason: "merged", number: change.number},
+          rate_limit_table: table,
+          attrdiff_fetcher: fn _change -> {:ok, attrdiff} end
+        )
+
+      refreshed = Change.get_by_number!(change.number)
+      assert refreshed.processing_status == :processed
+      assert refreshed.package_count == 1001
+
+      link_count =
+        Tracker.Repo.one(
+          from(cp in ChangePackage, where: cp.change_id == ^change.id, select: count(cp.id))
+        )
+
+      assert link_count == 1001
+    end
+
     test "exactly 1000 entries is under cap (inclusive)", %{rate_limit_table: table} do
-      change = insert_change!(number: 9003, state: :merged, merge_commit_sha: "exactsha")
+      change =
+        insert_change!(
+          number: 9003,
+          state: :merged,
+          merge_commit_sha: "exactsha",
+          base_ref: "nixos-unstable"
+        )
+
       at_cap = for i <- 1..1000, do: "pkg-#{i}"
       attrdiff = %{"added" => at_cap, "changed" => [], "removed" => []}
 
@@ -383,10 +428,17 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorkerTest do
       assert Enum.sort(links) == [{"open-pkg-a", :added}, {"open-pkg-b", :changed}]
     end
 
-    test "cap enforcement: over 1000 entries writes zero rows, status :too_large", %{
+    test "non-master cap enforcement: over 1000 entries writes zero rows, status :too_large", %{
       rate_limit_table: table
     } do
-      change = insert_change!(number: 9201, state: :draft, head_sha: "bigopen")
+      change =
+        insert_change!(
+          number: 9201,
+          state: :draft,
+          head_sha: "bigopen",
+          base_ref: "nixos-unstable"
+        )
+
       over_cap = for i <- 1..1001, do: "open-pkg-#{i}"
       attrdiff = %{"added" => over_cap, "changed" => [], "removed" => []}
 

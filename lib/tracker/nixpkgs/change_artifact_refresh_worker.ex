@@ -329,7 +329,7 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
           write_refresh!(change, [], :base_ref_skipped, total)
           :base_ref_skipped
 
-        total > @link_cap ->
+        change.base_ref != "master" and total > @link_cap ->
           Logger.warning(
             msg: "link cap exceeded, marking too_large",
             number: change.number,
