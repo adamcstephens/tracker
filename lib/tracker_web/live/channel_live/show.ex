@@ -1,4 +1,7 @@
 defmodule TrackerWeb.ChannelLive.Show do
+  @moduledoc """
+  Channel metadata and paginated revisions with native-form comparison selection.
+  """
   use TrackerWeb, :live_view
 
   alias Tracker.Notifications.ChannelSubscription
@@ -12,70 +15,149 @@ defmodule TrackerWeb.ChannelLive.Show do
   @impl true
   def render(assigns) do
     ~H"""
-    <.header>
-      {@channel}
-      <:subtitle>Channel revisions</:subtitle>
-      <:actions>
-        <.link
-          :if={@channel_resource.build_problem?}
-          href={"https://hydra.nixos.org/jobset/#{@channel_resource.hydra_project}/#{@channel_resource.hydra_jobset}"}
-          target="_blank"
-          rel="noopener"
-        >
-          <.badge variant={:danger}>Build problem</.badge>
-        </.link>
-        <a
-          id="feed-link"
-          href={"/feeds/channels/#{@channel}"}
-          phx-hook="CopyLink"
-          title="Copy the Atom feed URL"
-        >
-          <img src="/images/feed.svg" alt="Atom feed" width="20" height="20" />
-        </a>
-        <button
-          :if={@current_user}
-          id="subscribe-toggle"
-          type="button"
-          phx-click="toggle-subscription"
-        >
-          {if @subscribed?, do: "Unsubscribe", else: "Subscribe"}
-        </button>
-      </:actions>
-    </.header>
+    <section class="channel-show">
+      <header class="channel-show__header">
+        <div class="channel-show__title">
+          <h1>{@channel}</h1>
+          <div
+            :if={
+              @channel_resource.status in [:pre_release, :deprecated, :retired] ||
+                @channel_resource.build_problem?
+            }
+            class="channel-show__status"
+          >
+            <.badge :if={@channel_resource.status == :pre_release} variant={:warn}>Beta</.badge>
+            <.badge :if={@channel_resource.status == :deprecated} variant={:warn}>Deprecated</.badge>
+            <.badge :if={@channel_resource.status == :retired}>Retired</.badge>
+            <.badge :if={@channel_resource.build_problem?} variant={:danger}>
+              <svg
+                aria-hidden="true"
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              ><path d="m12 3 10 18H2L12 3Z" /><path d="M12 9v5m0 3v1" /></svg>
+              Build problem
+            </.badge>
+          </div>
+        </div>
+        <div class="channel-show__actions">
+          <.link
+            :if={@channel_resource.hydra_project && @channel_resource.hydra_jobset}
+            id="hydra-jobset"
+            href={"https://hydra.nixos.org/jobset/#{@channel_resource.hydra_project}/#{@channel_resource.hydra_jobset}"}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={"Hydra jobset for #{@channel} (opens in new tab)"}
+          >
+            Hydra jobset
+            <svg
+              aria-hidden="true"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            ><path d="M14 3h7v7m0-7L10 14" /><path d="M10 3H3v18h18v-7" /></svg>
+          </.link>
+          <a
+            id="feed-link"
+            href={"/feeds/channels/#{@channel}"}
+            phx-hook="CopyLink"
+            title="Copy the Atom feed URL"
+          >
+            <svg
+              aria-hidden="true"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.7"
+              stroke-linecap="round"
+            ><circle cx="5" cy="19" r="1" /><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16" /></svg>
+            Atom feed
+          </a>
+          <button
+            :if={@current_user}
+            id="subscribe-toggle"
+            type="button"
+            phx-click="toggle-subscription"
+          >
+            {if @subscribed?, do: "Unsubscribe", else: "Subscribe"}
+          </button>
+        </div>
+      </header>
 
-    <form
-      :if={@has_revisions?}
-      id="revisions-form"
-      method="get"
-      action={~p"/channels/#{@channel}/diff"}
-    >
-      <SectionHeader.section_header title="Revisions" count={@revision_count} />
-      <RowList.row_list id="revisions">
-        <RowList.row :for={rev <- @revisions} mode={:plain}>
-          <:label>
-            <input type="checkbox" name="compare[]" value={rev.revision} />
-            <.revision_link revision={rev.revision} channel={@channel} />
-          </:label>
-          <:meta>{format_date(rev.released_at, @time_zone)}</:meta>
-        </RowList.row>
-      </RowList.row_list>
+      <form
+        :if={@has_revisions?}
+        id="revisions-form"
+        method="get"
+        action={~p"/channels/#{@channel}/diff"}
+      >
+        <SectionHeader.section_header title="Revisions" count={@revision_count} />
+        <div class="channel-show__panel">
+          <div id="comparison-toolbar" class="channel-show__toolbar">
+            <div class="channel-show__selection-summary" aria-live="polite">
+              <span id="comparison-guidance">Select two revisions to compare.</span>
+              <div class="channel-show__endpoints" hidden>
+                <span>From <code id="comparison-from">—</code></span>
+                <span aria-hidden="true">→</span>
+                <span>To <code id="comparison-to">—</code></span>
+              </div>
+            </div>
+            <div class="channel-show__controls">
+              <button id="clear-selection" type="button" hidden>Clear selection</button>
+              <button id="compare-selected" type="submit" disabled>Compare selected</button>
+            </div>
+          </div>
+          <RowList.row_list id="revisions" stacked>
+            <RowList.row :for={rev <- @revisions} id={"revision-#{rev.id}"} mode={:plain}>
+              <:leading>
+                <input
+                  id={"select-#{rev.id}"}
+                  type="checkbox"
+                  name="compare[]"
+                  value={rev.revision}
+                  data-released-at={DateTime.to_iso8601(rev.released_at)}
+                  aria-label={"Select revision #{String.slice(rev.revision, 0, 7)}"}
+                />
+              </:leading>
+              <:label>
+                <.revision_link revision={rev.revision} channel={@channel} />
+                <span
+                  :if={rev.released_at == @channel_resource.latest_release}
+                  class="channel-show__latest"
+                >Latest</span>
+                <span class="channel-show__endpoint"></span>
+              </:label>
+              <:meta>{format_date(rev.released_at, @time_zone)}</:meta>
+            </RowList.row>
+          </RowList.row_list>
+        </div>
 
-      <Pagination.controls
-        total_pages={@total_pages}
-        current_page={@current_page}
-        has_prev_page?={@has_prev_page?}
-        has_next_page?={@has_next_page?}
-        prev_path={TableParams.page_path(@table_params, @current_page - 1, "/channels/#{@channel}")}
-        next_path={TableParams.page_path(@table_params, @current_page + 1, "/channels/#{@channel}")}
-        anchor="revisions"
-      />
+        <Pagination.controls
+          total_pages={@total_pages}
+          current_page={@current_page}
+          has_prev_page?={@has_prev_page?}
+          has_next_page?={@has_next_page?}
+          prev_path={TableParams.page_path(@table_params, @current_page - 1, "/channels/#{@channel}")}
+          next_path={TableParams.page_path(@table_params, @current_page + 1, "/channels/#{@channel}")}
+          anchor="revisions"
+        />
+        <footer class="channel-show__footer">
+          <span>Showing {@table_params.offset + 1}–{@table_params.offset + length(@revisions)} of {@revision_count} revisions</span>
+          <span>Release times in {if @time_zone == "Etc/UTC", do: "UTC", else: @time_zone}</span>
+        </footer>
+      </form>
 
-      <button type="submit" style="margin-top: 1rem;">Compare selected</button>
-    </form>
-
-    <p :if={not @has_revisions?}>
-      No revisions found.
-    </p>
+      <p :if={not @has_revisions?}>
+        No revisions found.
+      </p>
+    </section>
     """
   end
 
@@ -105,7 +187,8 @@ defmodule TrackerWeb.ChannelLive.Show do
 
   @impl true
   def handle_params(%{"path_channel" => channel_name} = params, _url, socket) do
-    channel = Tracker.Nixpkgs.Channel.by_name!(channel_name, load: [:build_problem?])
+    channel =
+      Tracker.Nixpkgs.Channel.by_name!(channel_name, load: [:build_problem?, :latest_release])
 
     if connected?(socket) && socket.assigns.subscribed_channel_id != channel.id do
       if socket.assigns.subscribed_channel_id do
@@ -149,7 +232,12 @@ defmodule TrackerWeb.ChannelLive.Show do
         %Ash.Notifier.Notification{resource: Tracker.Nixpkgs.ChannelRevision},
         socket
       ) do
-    {:noreply, assign_revisions(socket, socket.assigns.channel_resource.id)}
+    channel =
+      Tracker.Nixpkgs.Channel.by_name!(socket.assigns.channel,
+        load: [:build_problem?, :latest_release]
+      )
+
+    {:noreply, socket |> assign(:channel_resource, channel) |> assign_revisions(channel.id)}
   end
 
   defp channel_subscribed?(nil, _channel_id), do: false

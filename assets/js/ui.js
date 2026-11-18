@@ -15,6 +15,70 @@ function browserTimeZone() {
 }
 
 browserTimeZone()
+
+function revisionSelection(form) {
+  return [...form.querySelectorAll('input[type="checkbox"][name="compare[]"]')]
+}
+
+function selectedRevisions(form) {
+  return revisionSelection(form).filter(input => input.checked)
+    .sort((a, b) => a.dataset.releasedAt.localeCompare(b.dataset.releasedAt))
+}
+
+function updateRevisionSelection() {
+  const form = document.getElementById("revisions-form")
+  if (!form) return
+  const selected = selectedRevisions(form)
+  revisionSelection(form).forEach(input => {
+    input.disabled = selected.length === 2 && !input.checked
+    input.closest("li").classList.toggle("channel-show__row--selected", input.checked)
+    const endpoint = input.closest("li").querySelector(".channel-show__endpoint")
+    const label = input.checked ? (selected.indexOf(input) === 0 ? "From" : "To") : ""
+    if (endpoint.textContent !== label) endpoint.textContent = label
+  })
+  const from = selected[0]?.value.slice(0, 7) || "—"
+  const to = selected[1]?.value.slice(0, 7) || "—"
+  const fromLabel = form.querySelector("#comparison-from")
+  const toLabel = form.querySelector("#comparison-to")
+  if (fromLabel.textContent !== from) fromLabel.textContent = from
+  if (toLabel.textContent !== to) toLabel.textContent = to
+  const guidance = selected.length === 2 ? "2 revisions selected" :
+    selected.length === 1 ? "Select one more revision to compare." : "Select two revisions to compare."
+  const guidanceLabel = form.querySelector("#comparison-guidance")
+  if (guidanceLabel.textContent !== guidance) guidanceLabel.textContent = guidance
+  form.querySelector(".channel-show__endpoints").hidden = selected.length !== 2
+  form.querySelector("#compare-selected").disabled = selected.length !== 2
+  form.querySelector("#clear-selection").hidden = selected.length === 0
+}
+
+document.addEventListener("change", event => {
+  if (event.target.matches('#revisions-form input[type="checkbox"]')) updateRevisionSelection()
+})
+
+document.addEventListener("click", event => {
+  if (!event.target.closest("#clear-selection")) return
+  revisionSelection(document.getElementById("revisions-form")).forEach(input => { input.checked = false })
+  updateRevisionSelection()
+})
+
+function initializeRevisionSelection() {
+  const form = document.getElementById("revisions-form")
+  if (!form || form.dataset.selectionInitialized) return
+  form.dataset.selectionInitialized = "true"
+  form.addEventListener("formdata", event => {
+    event.formData.delete("compare[]")
+    selectedRevisions(form).forEach(input => event.formData.append("compare[]", input.value))
+  })
+  new MutationObserver(updateRevisionSelection).observe(form.querySelector("#revisions"), {childList: true, subtree: true})
+  updateRevisionSelection()
+}
+
+initializeRevisionSelection()
+window.addEventListener("pageshow", updateRevisionSelection)
+window.addEventListener("phx:page-loading-stop", () => {
+  initializeRevisionSelection()
+  updateRevisionSelection()
+})
 function isTextEntry(target) {
   return !!target && (target.isContentEditable ||
     target.tagName === "INPUT" ||

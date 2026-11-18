@@ -32,6 +32,47 @@ defmodule TrackerWeb.ChannelLive.ShowTest do
     %{cr1: cr1, cr2: cr2, channel: channel}
   end
 
+  test "header exposes metadata actions and real channel status", %{conn: conn, channel: channel} do
+    Channel.update_status!(channel, %{status: :pre_release})
+    Channel.update_hydra_status!(channel, %{hydra_project: "custom", hydra_jobset: "actual"})
+    {:ok, view, _} = live(conn, ~p"/channels/nixos-chanshow")
+
+    assert has_element?(view, ".channel-show__title h1", channel.name)
+    assert has_element?(view, ".channel-show__status", "Beta")
+
+    assert has_element?(
+             view,
+             "#hydra-jobset[href='https://hydra.nixos.org/jobset/custom/actual']"
+           )
+
+    assert has_element?(view, "#feed-link[phx-hook='CopyLink']", "Atom feed")
+    refute has_element?(view, ".channel-show", "Channel revisions")
+    refute has_element?(view, ".channel-show", "Rolling")
+  end
+
+  test "hydra action requires both metadata fields", %{conn: conn, channel: channel} do
+    Channel.update_hydra_status!(channel, %{hydra_project: "custom"})
+    {:ok, view, _} = live(conn, ~p"/channels/nixos-chanshow")
+    refute has_element?(view, "#hydra-jobset")
+  end
+
+  test "retired status suppresses build problem", %{conn: conn, channel: channel} do
+    Channel.update_status!(channel, %{status: :retired})
+    Channel.update_hydra_status!(channel, %{hydra_build_failed?: true})
+    {:ok, view, _} = live(conn, ~p"/channels/nixos-chanshow")
+    assert has_element?(view, ".channel-show__status", "Retired")
+    refute has_element?(view, ".channel-show__status", "Build problem")
+  end
+
+  test "selection controls expose native revision metadata", %{conn: conn, cr1: cr1, cr2: cr2} do
+    {:ok, view, _} = live(conn, ~p"/channels/nixos-chanshow")
+    assert has_element?(view, "#compare-selected[disabled]")
+    assert has_element?(view, "#clear-selection[type=button]")
+    assert has_element?(view, "#revision-#{cr2.id} .channel-show__latest", "Latest")
+    refute has_element?(view, "#revision-#{cr1.id} .channel-show__latest")
+    assert has_element?(view, "#select-#{cr1.id}[data-released-at='2026-03-01T10:00:00Z']")
+  end
+
   test "updates when a revision result is recorded", %{conn: conn, channel: channel} do
     {:ok, view, html} = live(conn, ~p"/channels/nixos-chanshow")
 
@@ -79,10 +120,10 @@ defmodule TrackerWeb.ChannelLive.ShowTest do
   end
 
   test "renders revisions as shared row-list rows", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/channels/nixos-chanshow")
+    {:ok, view, html} = live(conn, ~p"/channels/nixos-chanshow")
 
-    assert html =~ ~s(class="row-list)
-    assert html =~ ~s(class="row-line")
+    assert has_element?(view, "#revisions.row-list")
+    assert has_element?(view, "#revisions .row-line--leading")
 
     assert [_] =
              html
@@ -163,6 +204,14 @@ defmodule TrackerWeb.ChannelLive.ShowTest do
     html = view |> element(~s(a[href*="page=2"])) |> render_click()
 
     assert html =~ "shw111a"
+    refute has_element?(view, ".channel-show__latest")
+  end
+
+  test "empty channels retain their empty state", %{conn: conn} do
+    Channel.create!(%{name: "empty-show", display_name: "Empty", status: :active})
+    {:ok, view, _} = live(conn, ~p"/channels/empty-show")
+    assert has_element?(view, ".channel-show p", "No revisions found.")
+    refute has_element?(view, "#revisions-form")
   end
 
   test "renders a Build problem badge in the header when hydra reports failure",
