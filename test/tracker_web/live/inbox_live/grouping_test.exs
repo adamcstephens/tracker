@@ -58,6 +58,58 @@ defmodule TrackerWeb.InboxLive.GroupingTest do
     query
   end
 
+  test "revision headers link the SHA and show the release date independently of disclosure",
+       %{conn: conn} do
+    user = register_user!()
+    channel = channel!()
+    revision = channel_revision!(channel, %{released_at: ~U[2026-11-17 12:34:00Z]})
+
+    notification =
+      notification!(user, %{
+        type: :package_added,
+        package_id: package!().id,
+        channel_id: channel.id,
+        channel_revision_id: revision.id,
+        occurred_at: ~U[2026-11-19 09:00:00Z]
+      })
+
+    {:ok, view, _} = live(log_in(conn, user), ~p"/inbox?filter=all")
+    heading = "#revision-group-#{revision.id} .ibx-group-heading"
+    destination = ~p"/channels/#{channel.name}/revisions/#{revision.revision}"
+
+    assert has_element?(
+             view,
+             "#{heading} a[href^='#{destination}']",
+             String.slice(revision.revision, 0, 7)
+           )
+
+    [href] =
+      view
+      |> element("#{heading} a")
+      |> render()
+      |> Floki.parse_fragment!()
+      |> Floki.find("a")
+      |> Floki.attribute("href")
+
+    assert URI.parse(href).path == destination
+
+    assert has_element?(
+             view,
+             "#{heading} time[datetime='2026-11-17T12:34:00Z']",
+             "Released 2026-11-17 12:34 UTC"
+           )
+
+    refute has_element?(view, "#{heading} button a")
+    disclosure = "#disclosure-revision-group-#{revision.id}"
+    assert has_element?(view, "#{disclosure}[aria-expanded='true'][aria-label]")
+    view |> element(disclosure) |> render_click()
+    assert has_element?(view, "#{disclosure}[aria-expanded='false']")
+    refute has_element?(view, "#notification-#{notification.id}")
+    assert has_element?(view, "#{heading} a[href^='#{destination}']")
+    view |> element(disclosure) |> render_click()
+    assert has_element?(view, "#notification-#{notification.id}")
+  end
+
   @tag :related_updates
   test "related revision updates combine before preview limits and share independent controls",
        %{conn: conn} do

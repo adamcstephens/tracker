@@ -42,6 +42,48 @@ defmodule TrackerWeb.Browser.InboxGroupingTest do
     |> assert_has("[data-phx-main].phx-connected")
   end
 
+  @tag browser_context_opts: [viewport: %{width: 1440, height: 1000}]
+  test "revision header links navigate independently of the disclosure", %{
+    conn: conn,
+    user: user,
+    channel: channel,
+    revision: revision,
+    notification: notification
+  } do
+    conn = inbox(conn, user)
+    group = "#revision-group-#{revision.id}"
+    disclosure = "#{group} [phx-click=toggle-group]"
+    revision_path = ~p"/channels/#{channel.name}/revisions/#{revision.revision}"
+    link = "#{group} .ibx-group-heading a[href^='#{revision_path}']"
+
+    assert_has(conn, "#{group} time", text: "Released")
+    assert_has(conn, link, text: String.slice(revision.revision, 0, 7))
+    assert_has(conn, "#{disclosure}[aria-expanded=true]")
+    press(conn, disclosure, "Enter")
+    assert_has(conn, "#{disclosure}[aria-expanded=false]")
+    assert_has(conn, link)
+    assert_path(conn, "/inbox")
+    press(conn, disclosure, "Space")
+    assert_has(conn, "#notification-#{notification.id}")
+    click(conn, link)
+    assert_path(conn, revision_path)
+    assert %Notification{read_at: nil} = Ash.get!(Notification, notification.id, actor: user)
+  end
+
+  @tag browser_context_opts: [viewport: %{width: 390, height: 844}]
+  test "revision header dates and links fit on mobile", %{
+    conn: conn,
+    user: user,
+    revision: revision
+  } do
+    conn = inbox(conn, user)
+    heading = "#revision-group-#{revision.id} .ibx-group-heading"
+    assert_has(conn, "#{heading} time", text: "Released")
+    assert_has(conn, "#{heading} a", text: String.slice(revision.revision, 0, 7))
+    assert read(conn, "document.documentElement.scrollWidth <= window.innerWidth")
+    assert read(conn, "document.body.scrollWidth <= window.innerWidth")
+  end
+
   test "disclosure supports Enter and Space without navigating or marking read", %{
     conn: conn,
     user: user,
@@ -50,17 +92,17 @@ defmodule TrackerWeb.Browser.InboxGroupingTest do
   } do
     conn = inbox(conn, user)
     disclosure = "#revision-group-#{revision.id} [phx-click=toggle-group]"
-    assert_has(conn, "#{disclosure}[aria-expanded=false]")
-    press(conn, disclosure, "Enter")
     assert_has(conn, "#{disclosure}[aria-expanded=true]")
-    assert_has(conn, "#notification-#{notification.id}")
+    press(conn, disclosure, "Enter")
+    assert_has(conn, "#{disclosure}[aria-expanded=false]")
+    refute_has(conn, "#notification-#{notification.id}")
     assert read(conn, "document.activeElement.matches('[phx-click=toggle-group]')")
     assert_path(conn, "/inbox")
     assert %Notification{read_at: nil} = Ash.get!(Notification, notification.id, actor: user)
 
     press(conn, disclosure, "Space")
-    assert_has(conn, "#{disclosure}[aria-expanded=false]")
-    refute_has(conn, "#notification-#{notification.id}")
+    assert_has(conn, "#{disclosure}[aria-expanded=true]")
+    assert_has(conn, "#notification-#{notification.id}")
     assert read(conn, "document.activeElement.matches('[phx-click=toggle-group]')")
     assert %Notification{read_at: nil} = Ash.get!(Notification, notification.id, actor: user)
   end
@@ -148,7 +190,7 @@ defmodule TrackerWeb.Browser.InboxGroupingTest do
     assert_has(conn, "#inbox-filters input[type=checkbox]")
     assert_has(conn, "#inbox-filters select[name=channel_id]")
     refute_has(conn, "[name=package_id]")
-    click(conn, "#revision-group-#{revision.id} [phx-click=toggle-group]")
+    assert_has(conn, "#revision-group-#{revision.id} [aria-expanded=true]")
     assert_has(conn, "#notification-#{notification.id}")
     assert read(conn, "document.documentElement.scrollWidth <= window.innerWidth")
     assert read(conn, "document.body.scrollWidth <= window.innerWidth")
@@ -172,6 +214,8 @@ defmodule TrackerWeb.Browser.InboxGroupingTest do
              "none"
 
     press(conn, disclosure, "Enter")
+    assert_has(conn, "#{disclosure}[aria-expanded=false]")
+    press(conn, disclosure, "Space")
     assert_has(conn, "#notification-#{notification.id}")
     press(conn, "body", "j")
 
@@ -231,8 +275,8 @@ defmodule TrackerWeb.Browser.InboxGroupingTest do
                (() => {
                  const button = document.querySelector('#{disclosure}');
                  const caret = button.querySelector('[aria-hidden]');
-                 const title = button.querySelector('strong');
                  const heading = button.closest('.ibx-group-heading');
+                 const title = heading.querySelector('.ibx-group-title strong');
                  const buttonBox = button.getBoundingClientRect();
                  const caretBox = caret.getBoundingClientRect();
                  const titleBox = title.getBoundingClientRect();
@@ -310,7 +354,7 @@ defmodule TrackerWeb.Browser.InboxGroupingTest do
     assert_has(conn, ".ibx-day-entries > .row-list > #notification-#{propagated.id}")
     refute_has(conn, "[id^=propagation-group-]")
     refute_has(conn, "#revision-group-#{revision.id} #notification-#{propagated.id}")
-    click(conn, "#revision-group-#{revision.id} [phx-click=toggle-group]")
+    assert_has(conn, "#revision-group-#{revision.id} [aria-expanded=true]")
     assert_has(conn, "#revision-group-#{revision.id} #notification-#{notification.id}")
     assert_has(conn, "#notification-#{propagated.id} [aria-label='Save for later']")
   end
@@ -362,7 +406,7 @@ defmodule TrackerWeb.Browser.InboxGroupingTest do
            )
 
     assert read(conn, "document.querySelectorAll('.ibx-day-entries > .row-list').length") == 2
-    click(conn, "#revision-group-#{revision.id} [phx-click=toggle-group]")
+    assert_has(conn, "#revision-group-#{revision.id} [aria-expanded=true]")
     assert_has(conn, "#notification-#{notification.id}")
     assert_has(conn, "#revision-group-#{revision.id} #notification-#{propagated.id}")
     click(conn, "#notification-#{propagated.id} [aria-label='Save for later']")
@@ -410,7 +454,7 @@ defmodule TrackerWeb.Browser.InboxGroupingTest do
     conn = inbox(conn, user, "/inbox?filter=all")
     group = "#revision-group-#{revision.id}"
     assert_has(conn, "#{group}[data-notification-count='2']")
-    press(conn, "#{group} [phx-click=toggle-group]", "Enter")
+    assert_has(conn, "#{group} [aria-expanded=true]")
     assert_has(conn, "#{group} #notification-#{matching.id}")
     assert_has(conn, "#{group} #notification-#{hidden.id}")
     conn = fill_in(conn, "Search notifications…", with: "revision-browser-matching")
@@ -450,7 +494,7 @@ defmodule TrackerWeb.Browser.InboxGroupingTest do
     })
 
     conn = inbox(conn, user)
-    click(conn, "#revision-group-#{revision.id} [phx-click=toggle-group]")
+    assert_has(conn, "#revision-group-#{revision.id} [aria-expanded=true]")
     assert_has(conn, "#notification-#{notification.id}")
     conn = fill_in(conn, "Search notifications…", with: "inbox-browser")
     assert_has(conn, "a.app-search__clear")
@@ -460,7 +504,7 @@ defmodule TrackerWeb.Browser.InboxGroupingTest do
 
     assert_has(conn, "#revision-group-#{revision.id} [aria-expanded=true]")
     assert_has(conn, "#notification-#{notification.id}")
-    assert_has(conn, "#revision-group-#{other_revision.id} [aria-expanded=false]")
+    assert_has(conn, "#revision-group-#{other_revision.id} [aria-expanded=true]")
     assert read(conn, "new URL(location.href).searchParams.has('search')") == false
   end
 
@@ -484,7 +528,7 @@ defmodule TrackerWeb.Browser.InboxGroupingTest do
     end
 
     conn = inbox(context.conn, context.user, "/inbox?filter=#{filter}")
-    click(conn, "#revision-group-#{context.revision.id} [phx-click=toggle-group]")
+    assert_has(conn, "#revision-group-#{context.revision.id} [aria-expanded=true]")
     press(conn, "#notification-#{context.notification.id} > .row-line", key)
     refute_has(conn, "#revision-group-#{context.revision.id}")
     assert_has(conn, "#notification-#{preceding.id}")

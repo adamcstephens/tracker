@@ -4104,7 +4104,6 @@ a.revision-link {
 	align-items: center;
 	justify-content: flex-start;
 	gap: 0.75rem;
-	flex: 1;
 	min-width: 0;
 	background: transparent;
 	border: 0;
@@ -4119,11 +4118,12 @@ a.revision-link {
 	filter: none;
 }
 
-.ibx-disclosure > span:last-child {
+.ibx-group-title {
+	flex: 1;
 	min-width: 0;
 }
 
-.ibx-disclosure strong {
+.ibx-group-title strong {
 	font-family: var(--mono);
 	font-size: 0.9375rem;
 	overflow-wrap: anywhere;
@@ -4206,11 +4206,11 @@ a.revision-link {
 		padding: 0.75rem;
 	}
 
-	.ibx-disclosure {
-		flex-basis: 100%;
+	.ibx-group-title {
+		flex-basis: calc(100% - 2rem);
 	}
 
-	.ibx-group-heading > .ibx-act {
+	.ibx-group-heading > .ibx-btn {
 		margin-left: auto;
 	}
 

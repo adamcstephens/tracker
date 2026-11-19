@@ -477,18 +477,34 @@ defmodule TrackerWeb.InboxLive.Index do
                           phx-click="toggle-group"
                           phx-value-id={entry.key}
                           aria-expanded={to_string(expanded?(entry, assigns))}
+                          aria-label={"Toggle #{group_title(entry)}"}
                           aria-controls={"members-#{group_id(entry)}"}
                         >
                           <span aria-hidden="true">{if expanded?(entry, assigns),
                             do: "▾",
                             else: "▸"}</span>
-                          <span>
-                            <strong>{group_title(entry)}</strong>
-                            <span class="ibx-group-meta">
-                              {entry.package_count} packages<span :if={entry.propagation_count > 0}> | {entry.propagation_count} propagations</span>
-                            </span>
-                          </span>
                         </button>
+                        <div class="ibx-group-title">
+                          <strong>
+                            {entry.notification.channel_revision.channel.name} ·
+                            <.link
+                              navigate={
+                                ~p"/channels/#{entry.notification.channel_revision.channel.name}/revisions/#{entry.notification.channel_revision.revision}"
+                              }
+                              aria-label="Open full revision"
+                              title={entry.notification.channel_revision.revision}
+                            >{String.slice(entry.notification.channel_revision.revision, 0, 7)}</.link>
+                          </strong>
+                          <span class="ibx-group-meta">
+                            <time datetime={
+                              DateTime.to_iso8601(entry.notification.channel_revision.released_at)
+                            }>Released {TrackerWeb.Time.format_datetime(
+                              entry.notification.channel_revision.released_at,
+                              @time_zone
+                            )}</time>
+                            · {entry.package_count} packages<span :if={entry.propagation_count > 0}> | {entry.propagation_count} propagations</span>
+                          </span>
+                        </div>
                         <button
                           class="ibx-btn"
                           type="button"
@@ -496,14 +512,6 @@ defmodule TrackerWeb.InboxLive.Index do
                           phx-value-id={entry.key}
                           disabled={entry.unread_count == 0}
                         >{if @narrowed?, do: "Mark matching read", else: "Mark group read"} ({entry.unread_count})</button>
-                        <.link
-                          navigate={
-                            ~p"/channels/#{entry.notification.channel_revision.channel.name}/revisions/#{entry.notification.channel_revision.revision}"
-                          }
-                          class="ibx-act"
-                          aria-label="Open full revision"
-                          title="Open full revision"
-                        ><.icon name="external" /></.link>
                       </div>
                       <div
                         id={"members-#{group_id(entry)}"}
