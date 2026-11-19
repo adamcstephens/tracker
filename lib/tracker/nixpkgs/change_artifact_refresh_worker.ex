@@ -3,7 +3,7 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
   Refreshes the ChangePackage link set for a Change from its latest
   comparison artifact, atomically replacing the existing links.
 
-  Two reasons are supported:
+  Three reasons are supported:
 
     * `"merged"` — pulls the comparison from the Merge Group workflow
       run keyed by `merge_commit_sha`.
@@ -11,6 +11,8 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
       PR's "PR" workflow run (event `pull_request_target`) keyed by
       `head_sha`. Run each time the head_sha advances so the link set
       stays current while the PR is in flight.
+    * `"base_ref_changed"` — refreshes the same head comparison after
+      retargeting, applying the current target branch's linking policy.
 
   Missing workflow runs retry until the final job attempt, then set
   `processing_status` to `:no_workflow_run`. A later head SHA transition
@@ -58,7 +60,7 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
   def run(args, opts \\ [])
 
   def run(%{reason: reason, number: number}, opts)
-      when reason in ["merged", "head_sha_changed"] do
+      when reason in ["merged", "head_sha_changed", "base_ref_changed"] do
     Logger.info(msg: "artifact refresh started", number: number, reason: reason)
     started_at = System.monotonic_time()
     table = Keyword.get(opts, :rate_limit_table, RateLimitCache)
@@ -145,7 +147,7 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
             {{:snooze, snooze}, %{outcome: :rate_limited, snooze_seconds: snooze}}
 
           {:error, :no_workflow_run}
-          when reason == "head_sha_changed" and attempt < max_attempts ->
+          when reason in ["head_sha_changed", "base_ref_changed"] and attempt < max_attempts ->
             Logger.info(
               msg: "PR run not yet present, retrying artifact refresh",
               number: number
@@ -204,7 +206,9 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
   end
 
   defp default_fetcher_for("merged"), do: &default_merged_fetcher/1
-  defp default_fetcher_for("head_sha_changed"), do: &default_head_sha_fetcher/1
+
+  defp default_fetcher_for(reason) when reason in ["head_sha_changed", "base_ref_changed"],
+    do: &default_head_sha_fetcher/1
 
   defp refresh_changed_files(change, opts) do
     case Keyword.get_lazy(opts, :files_fetcher, &configured_files_fetcher/0) do

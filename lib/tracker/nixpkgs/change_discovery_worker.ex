@@ -287,6 +287,7 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorker do
       title: record.title,
       state: record.state,
       head_sha: record.head_sha,
+      base_ref: record.base_ref,
       updated_at: record.gh_updated_at,
       merged_at: record.merged_at,
       closed_at: record.closed_at,

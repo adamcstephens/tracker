@@ -22,6 +22,18 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshTest do
     %{change: Change.get_by_number!(46_800)}
   end
 
+  test "includes retarget reconciliation jobs in diagnostics", %{change: change} do
+    job =
+      %{"number" => change.number, "reason" => "base_ref_changed"}
+      |> ChangeArtifactRefreshWorker.new()
+      |> Repo.insert!()
+
+    assert %ChangeArtifactRefresh.Diagnostics{id: id, reason: "base_ref_changed"} =
+             ChangeArtifactRefresh.latest(change.number)
+
+    assert id == job.id
+  end
+
   test "loads the latest refresh job with diagnostic details", %{change: change} do
     now = DateTime.utc_now()
 

@@ -83,6 +83,7 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorker do
       merged: summary.merged,
       head_sha_changed: summary.head_sha_changed,
       closed_no_merge: summary.closed_no_merge,
+      base_ref_changed: summary.base_ref_changed,
       not_found: summary.not_found,
       duration_ms: duration_ms(started_at)
     )
@@ -196,7 +197,14 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorker do
   end
 
   defp empty_summary,
-    do: %{checked: 0, merged: 0, head_sha_changed: 0, closed_no_merge: 0, not_found: 0}
+    do: %{
+      checked: 0,
+      merged: 0,
+      head_sha_changed: 0,
+      base_ref_changed: 0,
+      closed_no_merge: 0,
+      not_found: 0
+    }
 
   defp increment(summary, keys) do
     Enum.reduce(keys, summary, fn key, acc -> Map.update!(acc, key, &(&1 + 1)) end)

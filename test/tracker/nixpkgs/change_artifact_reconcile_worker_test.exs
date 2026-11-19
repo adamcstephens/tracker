@@ -133,6 +133,17 @@ defmodule Tracker.Nixpkgs.ChangeArtifactReconcileWorkerTest do
       assert Tracker.Repo.aggregate(Oban.Job, :count) == 61
     end
 
+    test "an incomplete retarget refresh excludes duplicate head reconciliation" do
+      insert_change!(number: 103, state: :open, processing_status: :pending)
+
+      %{"number" => 103, "reason" => "base_ref_changed"}
+      |> ChangeArtifactRefreshWorker.new()
+      |> Tracker.Repo.insert!()
+
+      assert {:ok, 0} = ChangeArtifactReconcileWorker.run()
+      assert [_job] = all_enqueued(worker: ChangeArtifactRefreshWorker)
+    end
+
     test "terminal outcomes are not retried" do
       for {status, n} <-
             Enum.with_index(

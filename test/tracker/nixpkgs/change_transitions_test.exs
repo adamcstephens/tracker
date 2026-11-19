@@ -21,9 +21,51 @@ defmodule Tracker.Nixpkgs.ChangeTransitionsTest do
     struct!(PullRequest, Map.merge(defaults, Map.new(overrides)))
   end
 
+  test "a completed retarget refresh does not suppress another retarget" do
+    change = change!(nil, %{state: :open})
+    assert :ok = ChangeTransitions.emit(change, :base_ref_changed)
+    assert [job] = all_enqueued(worker: Tracker.Nixpkgs.ChangeArtifactRefreshWorker)
+
+    job
+    |> Ecto.Changeset.change(state: "completed")
+    |> Tracker.Repo.update!()
+
+    assert :ok = ChangeTransitions.emit(change, :base_ref_changed)
+    assert [_job] = all_enqueued(worker: Tracker.Nixpkgs.ChangeArtifactRefreshWorker)
+  end
+
   describe "detect/2" do
+    test "retargeting open and draft changes reconciles without a head change" do
+      for state <- [:open, :draft],
+          {old_base, new_base} <- [{"master", "staging"}, {"staging", "master"}] do
+        prior = pr(state: state, base_ref: old_base)
+
+        assert ChangeTransitions.detect(prior, pr(state: state, base_ref: new_base)) ==
+                 [:base_ref_changed]
+      end
+    end
+
+    test "simultaneous head and base changes enqueue only a head refresh" do
+      prior = pr(head_sha: "old", base_ref: "master")
+
+      assert ChangeTransitions.detect(
+               prior,
+               pr(head_sha: "new", base_ref: "staging")
+             ) == [:head_sha_changed]
+    end
+
+    test "terminal transitions take precedence over retargeting" do
+      prior = pr(base_ref: "master")
+
+      assert ChangeTransitions.detect(prior, pr(state: :merged, base_ref: "staging")) ==
+               [:merged]
+
+      assert ChangeTransitions.detect(prior, pr(state: :closed, base_ref: "staging")) ==
+               [:closed_no_merge]
+    end
+
     test "open → merged emits :merged" do
-      prior = %{state: :open, head_sha: "sha"}
+      prior = pr(state: :open)
 
       assert ChangeTransitions.detect(
                prior,
@@ -33,7 +75,7 @@ defmodule Tracker.Nixpkgs.ChangeTransitionsTest do
     end
 
     test "draft → merged emits :merged" do
-      prior = %{state: :draft, head_sha: "sha"}
+      prior = pr(state: :draft)
 
       assert ChangeTransitions.detect(
                prior,
@@ -43,35 +85,35 @@ defmodule Tracker.Nixpkgs.ChangeTransitionsTest do
     end
 
     test "open with head_sha change emits :head_sha_changed" do
-      prior = %{state: :open, head_sha: "old"}
+      prior = pr(state: :open, head_sha: "old")
 
       assert ChangeTransitions.detect(prior, pr(state: :open, head_sha: "new")) ==
                [:head_sha_changed]
     end
 
     test "draft with head_sha change emits :head_sha_changed" do
-      prior = %{state: :draft, head_sha: "old"}
+      prior = pr(state: :draft, head_sha: "old")
 
       assert ChangeTransitions.detect(prior, pr(state: :draft, head_sha: "new")) ==
                [:head_sha_changed]
     end
 
     test "open → closed without merge emits :closed_no_merge" do
-      prior = %{state: :open, head_sha: "sha"}
+      prior = pr(state: :open)
 
       assert ChangeTransitions.detect(prior, pr(state: :closed, merged_at: nil)) ==
                [:closed_no_merge]
     end
 
     test "draft → closed without merge emits :closed_no_merge" do
-      prior = %{state: :draft, head_sha: "sha"}
+      prior = pr(state: :draft)
 
       assert ChangeTransitions.detect(prior, pr(state: :closed, merged_at: nil)) ==
                [:closed_no_merge]
     end
 
     test "open → closed with merged_at set does not emit :closed_no_merge" do
-      prior = %{state: :open, head_sha: "sha"}
+      prior = pr(state: :open)
 
       assert ChangeTransitions.detect(
                prior,
@@ -80,17 +122,17 @@ defmodule Tracker.Nixpkgs.ChangeTransitionsTest do
     end
 
     test "no state or sha change returns []" do
-      prior = %{state: :open, head_sha: "sha"}
+      prior = pr(state: :open)
       assert ChangeTransitions.detect(prior, pr(state: :open)) == []
     end
 
     test "draft → open with same sha returns []" do
-      prior = %{state: :draft, head_sha: "sha"}
+      prior = pr(state: :draft)
       assert ChangeTransitions.detect(prior, pr(state: :open)) == []
     end
 
     test "merge already in DB stays put (idempotent)" do
-      prior = %{state: :merged, head_sha: "sha"}
+      prior = pr(state: :merged)
 
       assert ChangeTransitions.detect(
                prior,

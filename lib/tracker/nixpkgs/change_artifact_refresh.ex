@@ -37,7 +37,7 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefresh do
 
   def latest(number) when is_integer(number) do
     worker = Oban.Worker.to_string(ChangeArtifactRefreshWorker)
-    reasons = ["merged", "head_sha_changed"]
+    reasons = ["merged", "head_sha_changed", "base_ref_changed"]
 
     from(job in Oban.Job,
       where: job.worker == ^worker,

@@ -14,6 +14,25 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorkerTest do
   alias Tracker.Nixpkgs.ChangePackage
   alias Tracker.Nixpkgs.Package
 
+  test "bulk discovery reconciles a retargeted change with an unchanged head" do
+    assert {:ok, 1} =
+             ChangeDiscoveryWorker.upsert_pulls([
+               pr_struct(number: 5051, state: :open, base_ref: "master")
+             ])
+
+    assert {:ok, 1} =
+             ChangeDiscoveryWorker.upsert_pulls([
+               pr_struct(number: 5051, state: :open, base_ref: "staging")
+             ])
+
+    assert {:ok, %Change{base_ref: "staging"}} = Change.get_by_number(5051)
+
+    assert_enqueued(
+      worker: Tracker.Nixpkgs.ChangeArtifactRefreshWorker,
+      args: %{"number" => 5051, "reason" => "base_ref_changed"}
+    )
+  end
+
   describe "discover_pages/2" do
     test "upserts every PR on every fetched page and enqueues head_sha_changed for new open/draft" do
       fetcher = fn _since, nil ->

@@ -46,7 +46,7 @@ defmodule Tracker.Nixpkgs.ChangeArtifactReconcileWorker do
       Tracker.Repo.all(
         from job in Oban.Job,
           where: job.worker == ^worker and job.state in ^states,
-          where: job.args["reason"] in ^["merged", "head_sha_changed"],
+          where: job.args["reason"] in ^["merged", "head_sha_changed", "base_ref_changed"],
           select: job.args
       )
       |> Enum.split_with(&(&1["reason"] == "merged"))

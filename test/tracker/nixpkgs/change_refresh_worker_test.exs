@@ -550,6 +550,40 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorkerTest do
       assert change.change_branches == []
     end
 
+    test "retargeting with the same head enqueues artifact reconciliation" do
+      insert_change!(
+        number: 312,
+        state: :open,
+        node_id: "pr_retarget",
+        head_sha: "same_sha",
+        base_ref: "master",
+        processing_status: :processed
+      )
+
+      assert {:ok, 1} =
+               ChangeRefreshWorker.run(
+                 fetcher: fn _ ->
+                   {:ok,
+                    %{
+                      "pr_retarget" =>
+                        pr(
+                          node_id: "pr_retarget",
+                          number: 312,
+                          head_sha: "same_sha",
+                          base_ref: "staging"
+                        )
+                    }}
+                 end
+               )
+
+      assert {:ok, %Change{base_ref: "staging"}} = Change.get_by_number(312)
+
+      assert_enqueued(
+        worker: Tracker.Nixpkgs.ChangeArtifactRefreshWorker,
+        args: %{"number" => 312, "reason" => "base_ref_changed"}
+      )
+    end
+
     test "enqueues ChangeArtifactRefreshWorker for :head_sha_changed transitions" do
       insert_change!(number: 301, state: :open, node_id: "pr_def_hs", head_sha: "sha_a")
 

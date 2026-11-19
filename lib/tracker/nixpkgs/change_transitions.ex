@@ -18,21 +18,28 @@ defmodule Tracker.Nixpkgs.ChangeTransitions do
   alias Tracker.Nixpkgs.ChangeBranch
   alias Tracker.Nixpkgs.ChangePackage
 
-  @type transition :: :merged | :head_sha_changed | :closed_no_merge
+  @type transition :: :merged | :head_sha_changed | :base_ref_changed | :closed_no_merge
 
   @doc """
   Returns the list of transitions implied by going from `prior` to `pr`.
 
-  `prior` is any struct/map exposing `:state` and `:head_sha`. `pr` is a
+  `prior` exposes `:state`, `:head_sha`, and `:base_ref`. `pr` is a
   `Tracker.GitHub.GraphQL.PullRequest`.
   """
   @spec detect(map(), PullRequest.t()) :: [transition()]
-  def detect(%{state: prior_state, head_sha: prior_sha}, %PullRequest{} = pr) do
+  def detect(
+        %{state: prior_state, head_sha: prior_sha, base_ref: prior_base},
+        %PullRequest{} = pr
+      ) do
     []
     |> maybe_add(prior_state != :merged and pr.state == :merged, :merged)
     |> maybe_add(
       pr.state in [:open, :draft] and prior_sha != pr.head_sha,
       :head_sha_changed
+    )
+    |> maybe_add(
+      pr.state in [:open, :draft] and prior_sha == pr.head_sha and prior_base != pr.base_ref,
+      :base_ref_changed
     )
     |> maybe_add(
       prior_state in [:open, :draft] and pr.state == :closed and is_nil(pr.merged_at),
@@ -45,11 +52,11 @@ defmodule Tracker.Nixpkgs.ChangeTransitions do
 
   @doc """
   Default transition handler. Emits the side effects associated with a
-  transition: artifact-refresh enqueue for :merged / :head_sha_changed,
+  transition: artifact-refresh enqueue for merge, head SHA, or base ref changes,
   ChangeBranch seeding on :merged, ChangePackage clearing on :closed_no_merge.
   """
   @spec emit(Change.t(), transition()) :: :ok
-  def emit(change, reason) when reason in [:merged, :head_sha_changed] do
+  def emit(change, reason) when reason in [:merged, :head_sha_changed, :base_ref_changed] do
     Logger.info(
       msg: "artifact_refresh transition detected",
       number: change.number,
@@ -57,8 +64,15 @@ defmodule Tracker.Nixpkgs.ChangeTransitions do
       reason: reason
     )
 
+    opts =
+      if reason == :base_ref_changed do
+        [unique: [period: :infinity, states: :incomplete]]
+      else
+        []
+      end
+
     %{"number" => change.number, "reason" => Atom.to_string(reason)}
-    |> ChangeArtifactRefreshWorker.new()
+    |> ChangeArtifactRefreshWorker.new(opts)
     |> Oban.insert!()
 
     if reason == :merged do

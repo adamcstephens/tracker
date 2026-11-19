@@ -20,6 +20,52 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorkerTest do
     %{rate_limit_table: table}
   end
 
+  test "retarget reconciliation clears staging links and rebuilds master links", %{
+    rate_limit_table: table
+  } do
+    change =
+      insert_change!(
+        number: 9500,
+        state: :open,
+        head_sha: "unchanged",
+        base_ref: "staging",
+        processing_status: :processed
+      )
+
+    Change.update_processing_status!(change, %{processing_status: :processed})
+    stale_package = insert_package!("retarget-stale")
+    insert_change_package!(change.id, stale_package.id, :changed)
+    attrdiff = %{"changed" => ["retarget-current"]}
+
+    opts = [
+      rate_limit_table: table,
+      attrdiff_fetcher: fn %Change{head_sha: "unchanged"} -> {:ok, attrdiff} end,
+      files_fetcher: fn _ -> {:ok, []} end
+    ]
+
+    assert :ok =
+             ChangeArtifactRefreshWorker.run(
+               %{reason: "base_ref_changed", number: 9500},
+               opts
+             )
+
+    assert {:ok, skipped} = Change.get_by_number(9500)
+    assert skipped.processing_status == :base_ref_skipped
+    assert Package.by_change!(change.id).results == []
+
+    Change.refresh_from_graphql!(skipped, %{base_ref: "master"})
+
+    assert :ok =
+             ChangeArtifactRefreshWorker.run(
+               %{reason: "base_ref_changed", number: 9500},
+               opts
+             )
+
+    assert {:ok, refreshed} = Change.get_by_number(9500)
+    assert refreshed.processing_status == :processed
+    assert [%Package{attribute: "retarget-current"}] = Package.by_change!(change.id).results
+  end
+
   describe "run/2 with reason=merged" do
     test "replaces link set, updates status to :processed, bumps package_count", %{
       rate_limit_table: table
