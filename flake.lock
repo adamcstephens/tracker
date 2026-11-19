@@ -121,17 +121,17 @@
         "nixpkgs": "nixpkgs_2"
       },
       "locked": {
-        "lastModified": 1794886859,
-        "narHash": "sha256-Z3i+PsyppGADg93mmTm4Vvg60nAteKEvweu9Bu28Tto=",
+        "lastModified": 1795011790,
+        "narHash": "sha256-zZPwlAse68Res6uOKQw8faj/ZeAtLlYqUxF6BiTgtPw=",
         "ref": "refs/heads/main",
-        "rev": "6f1ccfbc376058d80c0c1391956b9025a479b2f7",
-        "revCount": 1333,
+        "rev": "d1df0c59bf4dab86b684500f466fb75512b9a4fa",
+        "revCount": 1335,
         "type": "git",
-        "url": "https://tangled.org/did:plc:nj2d7jcn7eadgln47fqn6xtn"
+        "url": "https://tangled.org/adam.robins.wtf/sower"
       },
       "original": {
         "type": "git",
-        "url": "https://tangled.org/did:plc:nj2d7jcn7eadgln47fqn6xtn"
+        "url": "https://tangled.org/adam.robins.wtf/sower"
       }
     }
   },

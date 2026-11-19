@@ -2,7 +2,7 @@
   inputs = {
     nixpkgs.url = "https://channels.nixos.org/nixos-unstable/nixexprs.tar.zst";
     flake-parts.url = "github:hercules-ci/flake-parts";
-    sower.url = "git+https://tangled.org/did:plc:nj2d7jcn7eadgln47fqn6xtn";
+    sower.url = "git+https://tangled.org/adam.robins.wtf/sower";
   };
 
   outputs =
