@@ -7,6 +7,17 @@ import Config
 # any compile-time configuration in here, as it won't be applied.
 # The block below contains prod specific runtime configuration.
 
+get_secret = fn name ->
+  case System.get_env(name <> "_FILE") do
+    nil -> System.get_env(name)
+    path -> path |> File.read!() |> String.trim_trailing("\n") |> String.trim_trailing("\r")
+  end
+end
+
+fetch_secret! = fn name ->
+  get_secret.(name) || System.fetch_env!(name)
+end
+
 config :zoneinfo, tzpath: System.get_env("TZDIR", "/usr/share/zoneinfo")
 
 if proxy_url = System.get_env("https_proxy") do
@@ -66,19 +77,19 @@ if path = System.get_env("NIXPKGS_GIT_PATH") do
   config :tracker, Tracker.GitServer, path: path
 end
 
-if token = System.get_env("TRACKER_DISCORD_TOKEN") do
+if token = get_secret.("TRACKER_DISCORD_TOKEN") do
   config :nostrum, token: token
 end
 
-if token = System.get_env("TRACKER_METRICS_TOKEN") do
+if token = get_secret.("TRACKER_METRICS_TOKEN") do
   config :tracker, :metrics_token, token
 end
 
 if System.get_env("TRACKER_S3_BUCKET") do
   s3_opts = [
     bucket: System.fetch_env!("TRACKER_S3_BUCKET"),
-    access_key_id: System.fetch_env!("TRACKER_S3_ACCESS_KEY"),
-    secret_access_key: System.fetch_env!("TRACKER_S3_SECRET_KEY"),
+    access_key_id: fetch_secret!.("TRACKER_S3_ACCESS_KEY"),
+    secret_access_key: fetch_secret!.("TRACKER_S3_SECRET_KEY"),
     endpoint: System.fetch_env!("TRACKER_S3_ENDPOINT"),
     region: System.fetch_env!("TRACKER_S3_REGION")
   ]
@@ -114,7 +125,7 @@ end
 
 if config_env() == :prod do
   database_url =
-    System.get_env("DATABASE_URL") ||
+    get_secret.("DATABASE_URL") ||
       raise """
       environment variable DATABASE_URL is missing.
       For example: ecto://USER:PASS@HOST/DATABASE
@@ -134,7 +145,7 @@ if config_env() == :prod do
   # to check this value into version control, so we use an environment
   # variable instead.
   secret_key_base =
-    System.get_env("SECRET_KEY_BASE") ||
+    get_secret.("SECRET_KEY_BASE") ||
       raise """
       environment variable SECRET_KEY_BASE is missing.
       You can generate one by calling: mix phx.gen.secret
@@ -153,7 +164,7 @@ if config_env() == :prod do
     secret_key_base: secret_key_base
 
   config :tracker,
-    token_signing_secret: System.fetch_env!("TOKEN_SIGNING_SECRET")
+    token_signing_secret: fetch_secret!.("TOKEN_SIGNING_SECRET")
 
   # ## SSL Support
   #

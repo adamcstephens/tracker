@@ -2,6 +2,49 @@
 
 A nixpkgs and ecosystem tracking tool.
 
+## NixOS deployment
+
+Import `nixosModules.tracker` from the Tracker flake. Put non-secret
+environment variables in `settings` and absolute runtime paths to secret
+files in `credentials`. Both use the names Tracker reads:
+
+```nix
+services.tracker = {
+  enable = true;
+  database.createLocally = true;
+  settings = {
+    PHX_HOST = "tracker.example.org";
+    TRACKER_GITHUB_CLIENT_ID = "your-oauth-client-id";
+    TRACKER_GITHUB_APP_ID = "123";
+    TRACKER_GITHUB_INSTALLATION_ID = "456";
+    TRACKER_GITHUB_REDIRECT_URI = "https://tracker.example.org/auth/user/github/callback";
+  };
+  credentials = {
+    SECRET_KEY_BASE_FILE = "/run/secrets/tracker/secret-key-base";
+    TOKEN_SIGNING_SECRET_FILE = "/run/secrets/tracker/token-signing-secret";
+    TRACKER_GITHUB_CLIENT_SECRET_FILE = "/run/secrets/tracker/github-client-secret";
+    TRACKER_GITHUB_APP_PRIVATE_KEY_FILE = "/run/secrets/tracker/github-private-key";
+  };
+};
+```
+
+systemd loads the secret files for both migrations and server startup, and
+Tracker reads them via the `_FILE` variables. The source files can be
+root-only and must be outside the Nix store. For an external database, omit
+`database.createLocally` and set `credentials.DATABASE_URL_FILE` to a file
+containing the connection URL.
+
+Tracker also supports `_FILE` variants for `TRACKER_DISCORD_TOKEN`,
+`TRACKER_METRICS_TOKEN`, `TRACKER_S3_ACCESS_KEY`, and `TRACKER_S3_SECRET_KEY`.
+When both forms are set, the file wins. An unreadable file fails startup.
+
+When upgrading, move `host`, `listenAddress`, `port`, and `nixpkgsGitPath`
+to `settings.PHX_HOST`, `settings.PHX_IP`, `settings.PORT`, and
+`settings.NIXPKGS_GIT_PATH`. Move `extraEnvironment` and the non-secret
+`github` fields into `settings`; split `environmentFile` secrets into
+one file per variable and move them, along with the GitHub secret paths,
+into `credentials` under their `_FILE` names.
+
 ## Revision comparisons
 
 Channel revision pages compare the viewed revision with its predecessor.

@@ -58,9 +58,64 @@ defmodule Tracker.RuntimeConfigTest do
     assert_raise MatchError, fn -> production_http_ip("invalid-address") end
   end
 
+  @tag :tmp_dir
+  test "reads production secrets from files before checking the environment", %{tmp_dir: dir} do
+    secrets = [
+      {"DATABASE_URL", "ecto://localhost/from_file"},
+      {"SECRET_KEY_BASE", String.duplicate("b", 64)},
+      {"TOKEN_SIGNING_SECRET", "signing"},
+      {"TRACKER_DISCORD_TOKEN", "discord"},
+      {"TRACKER_METRICS_TOKEN", "metrics"},
+      {"TRACKER_S3_ACCESS_KEY", "access"},
+      {"TRACKER_S3_SECRET_KEY", "secret"}
+    ]
+
+    files =
+      Enum.flat_map(secrets, fn {name, value} ->
+        path = Path.join(dir, name)
+        File.write!(path, value <> "\n")
+        [{name <> "_FILE", path}, {name, "ignored"}]
+      end)
+
+    config =
+      production_config(
+        files ++
+          [
+            {"TRACKER_S3_BUCKET", "bucket"},
+            {"TRACKER_S3_ENDPOINT", "https://s3.example.com"},
+            {"TRACKER_S3_REGION", "region"}
+          ]
+      )
+
+    tracker = Keyword.fetch!(config, :tracker)
+    assert tracker[Tracker.Repo][:url] == "ecto://localhost/from_file"
+    assert tracker[TrackerWeb.Endpoint][:secret_key_base] == String.duplicate("b", 64)
+    assert tracker[:token_signing_secret] == "signing"
+    assert tracker[:metrics_token] == "metrics"
+    assert config[:nostrum][:token] == "discord"
+    assert tracker[:s3_cache][:access_key_id] == "access"
+    assert tracker[:s3_cache][:secret_access_key] == "secret"
+  end
+
+  @tag :tmp_dir
+  test "fails when a configured secret file is missing despite an environment value", %{
+    tmp_dir: dir
+  } do
+    assert_raise File.Error, fn ->
+      production_config([{"TOKEN_SIGNING_SECRET_FILE", Path.join(dir, "missing")}])
+    end
+  end
+
   defp production_http_ip(ip) do
+    production_config([{"PHX_IP", ip}])
+    |> Keyword.fetch!(:tracker)
+    |> Keyword.fetch!(TrackerWeb.Endpoint)
+    |> Keyword.fetch!(:http)
+    |> Keyword.fetch!(:ip)
+  end
+
+  defp production_config(overrides) do
     environment = [
-      {"PHX_IP", ip},
       {"TRACKER_GITHUB_CLIENT_ID", "client"},
       {"TRACKER_GITHUB_CLIENT_SECRET_FILE", __ENV__.file},
       {"TRACKER_GITHUB_APP_ID", "1"},
@@ -72,16 +127,14 @@ defmodule Tracker.RuntimeConfigTest do
       {"TOKEN_SIGNING_SECRET", "secret"}
     ]
 
+    environment = Enum.uniq_by(overrides ++ environment, &elem(&1, 0))
+
     previous = Enum.map(environment, fn {name, _value} -> {name, System.get_env(name)} end)
 
     try do
       Enum.each(environment, fn {name, value} -> set_env(name, value) end)
 
       Config.Reader.read!("config/runtime.exs", env: :prod, target: :host)
-      |> Keyword.fetch!(:tracker)
-      |> Keyword.fetch!(TrackerWeb.Endpoint)
-      |> Keyword.fetch!(:http)
-      |> Keyword.fetch!(:ip)
     after
       Enum.each(previous, fn {name, value} -> set_env(name, value) end)
     end

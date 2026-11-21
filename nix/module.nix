@@ -17,32 +17,28 @@ in
       pkgsText = "tracker.packages.\${system}";
     };
 
-    host = lib.mkOption {
-      type = lib.types.str;
-      default = "localhost";
-      description = "Public hostname used to generate URLs.";
+    settings = lib.mkOption {
+      type = lib.types.attrsOf lib.types.str;
+      default = { };
+      example = {
+        PHX_HOST = "tracker.example.org";
+        PORT = "6950";
+        POOL_SIZE = "20";
+      };
+      description = "Non-secret environment variables, using the names Tracker reads.";
     };
 
-    listenAddress = lib.mkOption {
-      type = lib.types.str;
-      default = "127.0.0.1";
-      description = "IP address the HTTP endpoint binds to; defaults to loopback.";
-    };
-
-    port = lib.mkOption {
-      type = lib.types.port;
-      default = 6950;
-      description = "Port the HTTP endpoint listens on.";
-    };
-
-    environmentFile = lib.mkOption {
-      type = lib.types.path;
+    credentials = lib.mkOption {
+      type = lib.types.attrsOf lib.types.externalPath;
+      default = { };
+      example = {
+        SECRET_KEY_BASE_FILE = "/run/secrets/tracker-secret-key-base";
+        TRACKER_GITHUB_APP_PRIVATE_KEY_FILE = "/run/secrets/tracker-github-key";
+      };
       description = ''
-        Path to an environment file read by systemd. Must define
-        `SECRET_KEY_BASE` and `TOKEN_SIGNING_SECRET`, plus `DATABASE_URL`
-        unless {option}`services.tracker.database.createLocally` is set.
-        Optionally define `TRACKER_METRICS_TOKEN` to enable bearer-authenticated
-        Prometheus scraping at `/metrics`; without it the endpoint returns 404.
+        Runtime paths to secret files outside the Nix store, keyed by the
+        `_FILE` environment variable names Tracker reads. systemd loads the
+        files with `LoadCredential` and passes the loaded paths to Tracker.
       '';
     };
 
@@ -61,65 +57,6 @@ in
         default = "tracker";
         description = "Database and role name used when provisioning locally.";
       };
-    };
-
-    github = {
-      clientId = lib.mkOption {
-        type = lib.types.str;
-        description = "OAuth client ID of the GitHub app.";
-      };
-
-      clientSecretFile = lib.mkOption {
-        type = lib.types.path;
-        description = ''
-          Runtime path to the OAuth client secret, loaded by systemd as a
-          credential. The source file may be root-only. Do not put secret
-          contents in the Nix store.
-        '';
-      };
-
-      appId = lib.mkOption {
-        type = lib.types.int;
-        description = "Numeric ID of the GitHub app.";
-      };
-
-      privateKeyFile = lib.mkOption {
-        type = lib.types.path;
-        description = ''
-          Runtime path to the GitHub app's PEM private key, loaded by systemd
-          as a credential. The source file may be root-only. Do not put secret
-          contents in the Nix store.
-        '';
-      };
-
-      installationId = lib.mkOption {
-        type = lib.types.int;
-        description = "Installation ID of the GitHub app.";
-      };
-
-      redirectUri = lib.mkOption {
-        type = lib.types.str;
-        description = "OAuth redirect URI registered with the GitHub app.";
-      };
-    };
-
-    nixpkgsGitPath = lib.mkOption {
-      type = lib.types.path;
-      default = "${stateDir}/nixpkgs";
-      description = "Local clone of nixpkgs maintained by `Tracker.GitServer`.";
-    };
-
-    extraEnvironment = lib.mkOption {
-      type = lib.types.attrsOf lib.types.str;
-      default = { };
-      example = {
-        POOL_SIZE = "20";
-      };
-      description = ''
-        Extra environment variables for the service, such as `POOL_SIZE` or the
-        `TRACKER_S3_*` cache settings. Secrets belong in
-        {option}`services.tracker.environmentFile` instead.
-      '';
     };
   };
 
@@ -146,36 +83,27 @@ in
 
       environment = {
         PHX_SERVER = "true";
-        PHX_HOST = cfg.host;
-        PHX_IP = cfg.listenAddress;
-        PORT = toString cfg.port;
+        PHX_HOST = "localhost";
+        PHX_IP = "127.0.0.1";
+        PORT = "6950";
         HOME = stateDir;
         RELEASE_TMP = "/run/tracker";
         RELEASE_DISTRIBUTION = "none";
         RELEASE_COOKIE = "tracker";
         TZDIR = "${pkgs.tzdata}/share/zoneinfo";
-        NIXPKGS_GIT_PATH = cfg.nixpkgsGitPath;
-        TRACKER_GITHUB_CLIENT_ID = cfg.github.clientId;
-        TRACKER_GITHUB_CLIENT_SECRET_FILE = "%d/github-client-secret";
-        TRACKER_GITHUB_APP_ID = toString cfg.github.appId;
-        TRACKER_GITHUB_APP_PRIVATE_KEY_FILE = "%d/github-private-key";
-        TRACKER_GITHUB_INSTALLATION_ID = toString cfg.github.installationId;
-        TRACKER_GITHUB_REDIRECT_URI = cfg.github.redirectUri;
+        NIXPKGS_GIT_PATH = "${stateDir}/nixpkgs";
       }
       // lib.optionalAttrs cfg.database.createLocally {
         DATABASE_URL = "ecto://${cfg.database.name}@localhost/${cfg.database.name}?socket_dir=/run/postgresql";
       }
-      // cfg.extraEnvironment;
+      // cfg.settings
+      // lib.mapAttrs (name: _: "%d/${name}") cfg.credentials;
 
       serviceConfig = {
         Type = "exec";
         ExecStartPre = "${lib.getExe cfg.package} eval 'Tracker.Release.migrate()'";
         ExecStart = "${lib.getExe cfg.package} start";
-        EnvironmentFile = cfg.environmentFile;
-        LoadCredential = [
-          "github-client-secret:${toString cfg.github.clientSecretFile}"
-          "github-private-key:${toString cfg.github.privateKeyFile}"
-        ];
+        LoadCredential = lib.mapAttrsToList (name: path: "${name}:${toString path}") cfg.credentials;
         Restart = "on-failure";
 
         DynamicUser = true;
