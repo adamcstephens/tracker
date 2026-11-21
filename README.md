@@ -38,13 +38,6 @@ Tracker also supports `_FILE` variants for `TRACKER_DISCORD_TOKEN`,
 `TRACKER_METRICS_TOKEN`, `TRACKER_S3_ACCESS_KEY`, and `TRACKER_S3_SECRET_KEY`.
 When both forms are set, the file wins. An unreadable file fails startup.
 
-When upgrading, move `host`, `listenAddress`, `port`, and `nixpkgsGitPath`
-to `settings.PHX_HOST`, `settings.PHX_IP`, `settings.PORT`, and
-`settings.NIXPKGS_GIT_PATH`. Move `extraEnvironment` and the non-secret
-`github` fields into `settings`; split `environmentFile` secrets into
-one file per variable and move them, along with the GitHub secret paths,
-into `credentials` under their `_FILE` names.
-
 ## Revision comparisons
 
 Channel revision pages compare the viewed revision with its predecessor.
