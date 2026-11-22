@@ -44,8 +44,8 @@ defmodule Tracker.RuntimeConfigTest do
     end
   end
 
-  test "leaves Req defaults unchanged without https_proxy" do
-    refute Keyword.has_key?(runtime_config(nil), :req)
+  test "configures Req logging without https_proxy" do
+    assert runtime_config(nil)[:req][:default_options] == [plugins: [Tracker.HTTPRequestLogging]]
   end
 
   test "configures an HTTP proxy with its default port" do
@@ -75,6 +75,8 @@ defmodule Tracker.RuntimeConfigTest do
       runtime_config("http://proxy.example:3128", "localhost")
       |> Keyword.fetch!(:req)
       |> Keyword.fetch!(:default_options)
+
+    assert defaults[:plugins] == [Tracker.HTTPRequestLogging, Tracker.HTTPProxy]
 
     request =
       defaults

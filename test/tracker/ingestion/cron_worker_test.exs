@@ -308,6 +308,23 @@ defmodule Tracker.Ingestion.CronWorkerTest do
       assert {"if-modified-since", "Tue, 20 May 2026 00:00:00 GMT"} in headers
     end
 
+    test "counts pointer fetch errors in the poll summary" do
+      Logger.put_module_level(CronWorker, :info)
+      on_exit(fn -> Logger.delete_module_level(CronWorker) end)
+
+      Req.Test.stub(@stub, &Plug.Conn.send_resp(&1, 403, "denied"))
+
+      log =
+        capture_log(fn ->
+          assert {:error, {:failed_channels, 1}} =
+                   perform_job(CronWorker, %{}, queue: :ingestion)
+        end)
+
+      assert log =~ ~s(msg: "channel poll error")
+      assert log =~ "outcome: :error"
+      assert log =~ "failed: 1"
+    end
+
     test "logs summary counts", %{old_release: old_release} do
       Logger.put_module_level(CronWorker, :info)
       on_exit(fn -> Logger.delete_module_level(CronWorker) end)

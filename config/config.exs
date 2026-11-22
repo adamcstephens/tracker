@@ -135,9 +135,9 @@ config :ex_brotli, ExBrotli, skip_compilation?: true
 config :lumis, Lumis.Native, skip_compilation?: true
 
 # Configures Elixir's Logger
-config :logger, :console,
+config :logger, :default_formatter,
   format: "$time $metadata[$level] $message\n",
-  metadata: [:request_id]
+  metadata: [:request_id, :http_method, :http_destination]
 
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason

@@ -73,7 +73,7 @@ defmodule Tracker.Ingestion.CronWorker do
 
       {:error, reason} ->
         Logger.warning(msg: "channel poll error", channel: channel.name, reason: inspect(reason))
-        acc
+        %{acc | failed: acc.failed + 1}
     end
   rescue
     error ->

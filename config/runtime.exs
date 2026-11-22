@@ -20,45 +20,50 @@ end
 
 config :zoneinfo, tzpath: System.get_env("TZDIR", "/usr/share/zoneinfo")
 
-if proxy_url = System.get_env("https_proxy") do
-  proxy_uri = URI.new!(proxy_url)
+req_defaults = [plugins: [Tracker.HTTPRequestLogging]]
 
-  scheme =
-    case proxy_uri.scheme do
-      "http" -> :http
-      "https" -> :https
-    end
+req_defaults =
+  if proxy_url = System.get_env("https_proxy") do
+    proxy_uri = URI.new!(proxy_url)
 
-  proxy = {scheme, proxy_uri.host, proxy_uri.port, []}
+    scheme =
+      case proxy_uri.scheme do
+        "http" -> :http
+        "https" -> :https
+      end
 
-  connect_options =
-    case proxy_uri.userinfo do
-      nil ->
-        [proxy: proxy]
+    proxy = {scheme, proxy_uri.host, proxy_uri.port, []}
 
-      userinfo ->
-        credentials = URI.decode(userinfo)
+    connect_options =
+      case proxy_uri.userinfo do
+        nil ->
+          [proxy: proxy]
 
-        [
-          proxy: proxy,
-          proxy_headers: [{"proxy-authorization", "Basic " <> Base.encode64(credentials)}]
-        ]
-    end
+        userinfo ->
+          credentials = URI.decode(userinfo)
 
-  default_options = [connect_options: connect_options]
+          [
+            proxy: proxy,
+            proxy_headers: [{"proxy-authorization", "Basic " <> Base.encode64(credentials)}]
+          ]
+      end
 
-  default_options =
+    default_options = Keyword.put(req_defaults, :connect_options, connect_options)
+
     case System.get_env("no_proxy") do
       nil ->
         default_options
 
       no_proxy ->
-        default_options ++
-          [plugins: [Tracker.HTTPProxy], no_proxy: Tracker.HTTPProxy.parse_no_proxy(no_proxy)]
+        default_options
+        |> Keyword.update!(:plugins, &(&1 ++ [Tracker.HTTPProxy]))
+        |> Keyword.put(:no_proxy, Tracker.HTTPProxy.parse_no_proxy(no_proxy))
     end
+  else
+    req_defaults
+  end
 
-  config :req, default_options: default_options
-end
+config :req, default_options: req_defaults
 
 # ## Using releases
 #
