@@ -5,6 +5,7 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCache do
   Checks S3 first for a cached artifact zip, falls back to downloading
   from GitHub, and stores in S3 on cache miss. This provides durable
   storage past GitHub's 90-day artifact expiry.
+  Cached artifacts remain available when GitHub integration is disabled.
   """
 
   use TypedStruct
@@ -257,6 +258,14 @@ defmodule Tracker.Nixpkgs.ChangeArtifactCache do
   end
 
   defp download_artifact(archive_url, token, opts) do
+    if Tracker.GitHub.enabled?() do
+      fetch_archive(archive_url, token, opts)
+    else
+      {:error, GitHub.Error.new(reason: :disabled, message: "GitHub integration is disabled")}
+    end
+  end
+
+  defp fetch_archive(archive_url, token, opts) do
     req_options = Keyword.get(opts, :req_options, [])
 
     case Req.get(

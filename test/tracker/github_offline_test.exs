@@ -19,6 +19,21 @@ defmodule Tracker.GitHubOfflineTest do
              GitHub.Client.get("/user", plug: fn _conn -> flunk("HTTP attempted") end)
   end
 
+  test "uncached comparison artifacts reject downloads even with an explicit token" do
+    artifacts = [
+      %{name: "comparison", archive_download_url: "https://api.github.com/artifacts/1/zip"}
+    ]
+
+    assert {:error, %GitHub.Error{reason: :disabled}} =
+             Tracker.Nixpkgs.ChangeArtifactCache.cache_run_artifacts(
+               System.unique_integer([:positive]),
+               1,
+               artifacts,
+               "token",
+               req_options: [plug: fn _conn -> flunk("HTTP attempted") end]
+             )
+  end
+
   test "installation tokens reject before reading credentials" do
     assert_raise RuntimeError, "GitHub integration is disabled", fn ->
       Tracker.GitHub.installation_token!()
