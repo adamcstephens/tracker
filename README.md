@@ -34,9 +34,63 @@ root-only and must be outside the Nix store. For an external database, omit
 `database.createLocally` and set `credentials.DATABASE_URL_FILE` to a file
 containing the connection URL.
 
-Tracker also supports `_FILE` variants for `TRACKER_DISCORD_TOKEN`,
-`TRACKER_METRICS_TOKEN`, `TRACKER_S3_ACCESS_KEY`, and `TRACKER_S3_SECRET_KEY`.
-When both forms are set, the file wins. An unreadable file fails startup.
+See [Environment variables](#environment-variables) for the full reference.
+
+## Environment variables
+
+### Server and database
+
+| Variable | Purpose |
+| --- | --- |
+| `PHX_SERVER` | Starts the HTTP endpoint when set; the NixOS module sets it. |
+| `PHX_HOST` | Public hostname for generated HTTPS URLs. Defaults to `example.com` in a standalone release and `localhost` on NixOS. |
+| `PHX_IP` | HTTP bind address. Defaults to `::` in a standalone release and `127.0.0.1` on NixOS. |
+| `PORT` | HTTP listen port. Defaults to `6950`. |
+| `DATABASE_URL` / `DATABASE_URL_FILE` | PostgreSQL connection URL. Required in production; the NixOS module supplies a Unix-socket URL when provisioning PostgreSQL locally. |
+| `POOL_SIZE` | PostgreSQL connection pool size. Defaults to `10`. |
+| `ECTO_IPV6` | Enables IPv6 for PostgreSQL connections when set to `true` or `1`. |
+| `SECRET_KEY_BASE` / `SECRET_KEY_BASE_FILE` | Phoenix signing and encryption secret. Required in production. Generate with `openssl rand -hex 64`. |
+| `TOKEN_SIGNING_SECRET` / `TOKEN_SIGNING_SECRET_FILE` | Token signing secret. Required in production. Generate with `openssl rand -hex 64`. |
+| `NIXPKGS_GIT_PATH` | Path to the local nixpkgs clone. The NixOS module defaults to `/var/lib/tracker/nixpkgs`. |
+| `TZDIR` | Time-zone database directory. Defaults to `/usr/share/zoneinfo`; NixOS uses the packaged `tzdata` directory. |
+| `https_proxy` | Optional HTTP or HTTPS proxy URL for Req, with optional basic authentication. |
+| `no_proxy` | Comma-separated proxy bypass list for Req; used only when `https_proxy` is set. |
+
+### Integrations
+
+All GitHub settings are required outside the test environment. Set
+`TRACKER_S3_BUCKET` to enable S3 caching; when enabled, all five S3 settings
+are required.
+
+| Variable | Purpose |
+| --- | --- |
+| `TRACKER_GITHUB_CLIENT_ID` | GitHub OAuth client ID. |
+| `TRACKER_GITHUB_CLIENT_SECRET_FILE` | Path to the GitHub OAuth client secret. |
+| `TRACKER_GITHUB_APP_ID` | Numeric GitHub App ID. |
+| `TRACKER_GITHUB_APP_PRIVATE_KEY_FILE` | Path to the GitHub App's PEM private key. |
+| `TRACKER_GITHUB_INSTALLATION_ID` | Numeric GitHub App installation ID. |
+| `TRACKER_GITHUB_REDIRECT_URI` | Registered GitHub OAuth callback URL. |
+| `TRACKER_DISCORD_TOKEN` / `TRACKER_DISCORD_TOKEN_FILE` | Optional Discord bot token. |
+| `TRACKER_METRICS_TOKEN` / `TRACKER_METRICS_TOKEN_FILE` | Optional bearer token for `/metrics`. Without it, the endpoint returns 404. Generate with `openssl rand -hex 64`. |
+| `TRACKER_S3_BUCKET` | S3 cache bucket name. |
+| `TRACKER_S3_ENDPOINT` | S3 endpoint URL. |
+| `TRACKER_S3_REGION` | S3 region. |
+| `TRACKER_S3_ACCESS_KEY` / `TRACKER_S3_ACCESS_KEY_FILE` | S3 access key ID. |
+| `TRACKER_S3_SECRET_KEY` / `TRACKER_S3_SECRET_KEY_FILE` | S3 secret access key. |
+
+`_FILE` variables take a file path, not a secret value. Where both forms
+are supported, the file takes precedence; an unreadable file fails startup.
+
+### Build and test
+
+| Variable | Purpose |
+| --- | --- |
+| `ESBUILD_PATH` | Path to an esbuild executable; the Nix dev shell supplies it. |
+| `PGHOST` | PostgreSQL socket directory for Mix tests. Defaults to `.services/postgres`. |
+| `MIX_TEST_PARTITION` | Suffix appended to the `tracker_test` database name. |
+| `PLAYWRIGHT_ASSETS_DIR` | Directory containing the Playwright assets. Defaults to `./assets`; the Nix dev shell supplies it. |
+| `PLAYWRIGHT_BROWSERS_PATH` | Browser binary directory supplied by the Nix dev shell. |
+| `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD` | Set to `1` by the Nix dev shell to use packaged browsers rather than downloading them. |
 
 ## Revision comparisons
 
