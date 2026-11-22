@@ -8,10 +8,27 @@ self:
 let
   cfg = config.services.tracker;
   stateDir = "/var/lib/tracker";
+  runtimeDir = "/run/tracker";
+  cookieFile = "${runtimeDir}/.erlang.cookie";
+  release = lib.getExe cfg.package;
+  adminRelease = pkgs.writeShellScriptBin "tracker" ''
+    test -r ${cookieFile}
+    export RELEASE_DISTRIBUTION=name RELEASE_NODE=tracker@127.0.0.1
+    export RELEASE_TMP=${runtimeDir} ERL_EPMD_ADDRESS=127.0.0.1
+    # A second -setcookie makes OTP read .erlang.cookie instead of using Mix's argv cookie.
+    export RELEASE_COOKIE=tracker ERL_AFLAGS="-setcookie tracker -kernel inet_dist_use_interface {127,0,0,1} -env HOME $HOME"
+    export HOME=${runtimeDir}
+    exec ${release} "$@"
+  '';
+  generateCookie = pkgs.writeShellScript "tracker-generate-cookie" ''
+    exec ${lib.getExe pkgs.openssl} rand -hex 32 > ${cookieFile}
+  '';
 in
 {
   options.services.tracker = {
     enable = lib.mkEnableOption "the tracker server";
+
+    admin.enable = lib.mkEnableOption "loopback-only release administration via sudo tracker remote";
 
     package = lib.mkPackageOption self.packages.${pkgs.stdenv.hostPlatform.system} "server" {
       pkgsText = "tracker.packages.\${system}";
@@ -61,6 +78,8 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    environment.systemPackages = lib.optional cfg.admin.enable adminRelease;
+
     services.postgresql = lib.mkIf cfg.database.createLocally {
       enable = true;
       ensureDatabases = [ cfg.database.name ];
@@ -88,7 +107,7 @@ in
         PORT = "6950";
         TRACKER_GITHUB_ENABLED = "true";
         HOME = stateDir;
-        RELEASE_TMP = "/run/tracker";
+        RELEASE_TMP = runtimeDir;
         RELEASE_DISTRIBUTION = "none";
         RELEASE_COOKIE = "tracker";
         TZDIR = "${pkgs.tzdata}/share/zoneinfo";
@@ -102,8 +121,10 @@ in
 
       serviceConfig = {
         Type = "exec";
-        ExecStartPre = "${lib.getExe cfg.package} eval 'Tracker.Release.migrate()'";
-        ExecStart = "${lib.getExe cfg.package} start";
+        ExecStartPre = lib.optional cfg.admin.enable generateCookie ++ [
+          "${release} eval 'Tracker.Release.migrate()'"
+        ];
+        ExecStart = "${if cfg.admin.enable then lib.getExe adminRelease else release} start";
         LoadCredential = lib.mapAttrsToList (name: path: "${name}:${toString path}") cfg.credentials;
         Restart = "on-failure";
 

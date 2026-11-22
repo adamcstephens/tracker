@@ -60,6 +60,7 @@
 
       services.tracker = {
         enable = true;
+        admin.enable = true;
         database.createLocally = true;
         settings = {
           PORT = "6951";
@@ -103,6 +104,7 @@
 
       specialisation.legacy.configuration = {
         services.tracker.settings.PHX_IP = "0.0.0.0";
+        services.tracker.admin.enable = lib.mkForce false;
         services.postgresql.ensureUsers = lib.mkForce [
           {
             name = "tracker";
@@ -121,6 +123,17 @@
     assert any(line.startswith("tracker_prom_ex_prom_ex_status_info") and float(line.split()[-1]) == 1 for line in metrics.splitlines()), metrics
     machine.succeed("ss --listening --tcp --numeric | grep '127.0.0.1:6951'")
     machine.fail("ss --listening --tcp --numeric | grep '0.0.0.0:6951'")
+    machine.succeed("test $(stat --format=%a /run/tracker/.erlang.cookie) = 600")
+    first_cookie = machine.succeed("sha256sum /run/tracker/.erlang.cookie")
+    machine.succeed("grep --quiet --extended-regexp '^[0-9a-f]{64}$' /run/tracker/.erlang.cookie")
+    machine.succeed("sudo --user=nobody sh -c '! test -r /run/tracker/.erlang.cookie'")
+    machine.succeed("ss --listening --tcp --numeric | grep '127.0.0.1:4369'")
+    machine.fail("ss --listening --tcp --numeric | grep -E '(0.0.0.0|\\*|\\[::\\]):4369'")
+    machine.succeed("tracker rpc 'true = Node.self() == :\"tracker@127.0.0.1\"; true = Atom.to_string(Node.get_cookie()) == String.trim(File.read!(\"/run/tracker/.erlang.cookie\"))'")
+    port = int(machine.succeed("tracker rpc '{:ok, names} = :net_adm.names(~c\"127.0.0.1\"); IO.puts(List.keyfind(names, ~c\"tracker\", 0) |> elem(1))'").strip())
+    machine.succeed(f"ss --listening --tcp --numeric | grep '127.0.0.1:{port} '")
+    machine.fail("grep --quiet --fixed-strings --file=/run/tracker/.erlang.cookie /proc/$(systemctl show --property=MainPID --value tracker)/cmdline")
+    machine.succeed("printf 'IO.puts(\"remote node: #{Node.self()}\")\\n' | sudo tracker remote | grep 'remote node: tracker@127.0.0.1'")
     machine.succeed("test $(stat --format=%a /run/tracker-secrets/client-secret) = 600")
     machine.succeed("test $(stat --format=%a /run/tracker-secrets/github-key) = 600")
     roles = machine.succeed("sudo --user=postgres psql --command='\\du tracker'")
@@ -134,11 +147,15 @@
     machine.succeed(f"{original}/specialisation/legacy/bin/switch-to-configuration test")
     machine.wait_for_unit("tracker.service")
     machine.wait_until_succeeds("ss --listening --tcp --numeric | grep '0.0.0.0:6951'")
+    machine.succeed("test ! -e /run/tracker/.erlang.cookie")
+    machine.fail("command -v tracker")
     roles = machine.succeed("sudo --user=postgres psql --command='\\du tracker'")
     assert "Superuser" in roles, roles
     machine.succeed(f"{original}/bin/switch-to-configuration test")
     machine.wait_for_unit("tracker.service")
     machine.wait_until_succeeds("ss --listening --tcp --numeric | grep '127.0.0.1:6951'")
+    machine.succeed("tracker rpc 'true = Node.alive?()'")
+    assert first_cookie != machine.succeed("sha256sum /run/tracker/.erlang.cookie")
     roles = machine.succeed("sudo --user=postgres psql --command='\\du tracker'")
     assert "Superuser" not in roles, roles
     machine.succeed("curl --fail --silent --show-error --output /dev/null http://localhost:6951/")

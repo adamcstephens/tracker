@@ -34,6 +34,11 @@ root-only and must be outside the Nix store. For an external database, omit
 `database.createLocally` and set `credentials.DATABASE_URL_FILE` to a file
 containing the connection URL.
 
+Set `services.tracker.admin.enable = true` to enable loopback-only Erlang
+distribution and install the `tracker` command. Run `sudo tracker remote`
+to open an IEx shell on the running server. The service generates a new
+cookie in its private runtime directory each time it starts.
+
 See [Environment variables](#environment-variables) for the full reference.
 
 ## Environment variables
