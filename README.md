@@ -65,18 +65,18 @@ are required.
 | Variable | Purpose |
 | --- | --- |
 | `TRACKER_GITHUB_CLIENT_ID` | GitHub OAuth client ID. |
-| `TRACKER_GITHUB_CLIENT_SECRET_FILE` | Path to the GitHub OAuth client secret. |
+| `TRACKER_GITHUB_CLIENT_SECRET_FILE` | Path to the OAuth client secret generated in the GitHub App's settings. |
 | `TRACKER_GITHUB_APP_ID` | Numeric GitHub App ID. |
-| `TRACKER_GITHUB_APP_PRIVATE_KEY_FILE` | Path to the GitHub App's PEM private key. |
+| `TRACKER_GITHUB_APP_PRIVATE_KEY_FILE` | Path to the PEM private key generated and downloaded from the GitHub App's settings. |
 | `TRACKER_GITHUB_INSTALLATION_ID` | Numeric GitHub App installation ID. |
 | `TRACKER_GITHUB_REDIRECT_URI` | Registered GitHub OAuth callback URL. |
-| `TRACKER_DISCORD_TOKEN` / `TRACKER_DISCORD_TOKEN_FILE` | Optional Discord bot token. |
+| `TRACKER_DISCORD_TOKEN` / `TRACKER_DISCORD_TOKEN_FILE` | Optional bot token from the Discord Developer Portal's **Bot** tab. |
 | `TRACKER_METRICS_TOKEN` / `TRACKER_METRICS_TOKEN_FILE` | Optional bearer token for `/metrics`. Without it, the endpoint returns 404. Generate with `openssl rand -hex 64`. |
 | `TRACKER_S3_BUCKET` | S3 cache bucket name. |
 | `TRACKER_S3_ENDPOINT` | S3 endpoint URL. |
 | `TRACKER_S3_REGION` | S3 region. |
-| `TRACKER_S3_ACCESS_KEY` / `TRACKER_S3_ACCESS_KEY_FILE` | S3 access key ID. |
-| `TRACKER_S3_SECRET_KEY` / `TRACKER_S3_SECRET_KEY_FILE` | S3 secret access key. |
+| `TRACKER_S3_ACCESS_KEY` / `TRACKER_S3_ACCESS_KEY_FILE` | Access key ID issued by your S3 provider. |
+| `TRACKER_S3_SECRET_KEY` / `TRACKER_S3_SECRET_KEY_FILE` | Matching secret access key issued by your S3 provider. |
 
 `_FILE` variables take a file path, not a secret value. Where both forms
 are supported, the file takes precedence; an unreadable file fails startup.
