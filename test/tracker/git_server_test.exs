@@ -44,6 +44,36 @@ defmodule Tracker.GitServerTest do
     end
   end
 
+  describe "GitHub disabled" do
+    test "does not clone a missing repository", %{upstream: upstream, local: local} do
+      pid =
+        start_supervised!(
+          {GitServer, name: nil, repo_url: upstream, path: local, github_enabled: false}
+        )
+
+      refute GitServer.ready?(pid)
+      refute File.exists?(local)
+      assert GitServer.fetch(pid) == {:error, :github_disabled}
+    end
+
+    test "keeps an existing clone readable without fetching", ctx do
+      {_, 0} = System.cmd("git", ["clone", "--bare", "--quiet", ctx.upstream, ctx.local])
+      File.rm_rf!(ctx.upstream)
+
+      pid =
+        start_supervised!(
+          {GitServer, name: nil, repo_url: ctx.upstream, path: ctx.local, github_enabled: false}
+        )
+
+      assert GitServer.ready?(pid)
+
+      assert GitServer.ancestor?(ctx.sha_one, "refs/heads/main", GitServer.state(pid)) ==
+               {:ok, true}
+
+      assert GitServer.fetch(pid) == {:error, :github_disabled}
+    end
+  end
+
   describe "clone-on-boot" do
     test "clones a missing repo and becomes ready", %{upstream: upstream, local: local} do
       pid =

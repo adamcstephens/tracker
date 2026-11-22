@@ -3,7 +3,8 @@ defmodule Tracker.GitServer do
   Owns a local git clone of an upstream repository.
 
   Clones on boot (asynchronously, via `handle_continue/2`) and serializes
-  long-running mutations (`fetch/1`) through the GenServer.
+  long-running mutations (`fetch/1`) through the GenServer. When GitHub is
+  disabled, existing clones remain readable, but cloning and fetching are disabled.
 
   Generic over `repo_url` and `path`; one named instance is started under
   the application supervisor for nixpkgs.
@@ -33,6 +34,7 @@ defmodule Tracker.GitServer do
     field :repo_url, String.t(), enforce: true
     field :path, String.t(), enforce: true
     field :ready, boolean(), default: false
+    field :github_enabled, boolean(), default: true
   end
 
   # Client API
@@ -58,7 +60,8 @@ defmodule Tracker.GitServer do
   end
 
   @doc """
-  Runs `git fetch --prune` against the configured remote.
+  Runs `git fetch --prune` against the configured remote, or returns
+  `{:error, :github_disabled}` when GitHub integration is disabled.
   """
   @spec fetch(GenServer.server()) :: :ok | {:error, :not_ready | term()}
   def fetch(server \\ __MODULE__) do
@@ -154,7 +157,8 @@ defmodule Tracker.GitServer do
   def init(opts) do
     state = %State{
       repo_url: Keyword.fetch!(opts, :repo_url),
-      path: Keyword.fetch!(opts, :path)
+      path: Keyword.fetch!(opts, :path),
+      github_enabled: Keyword.get_lazy(opts, :github_enabled, &Tracker.GitHub.enabled?/0)
     }
 
     if Keyword.get(opts, :auto_start, true) do
@@ -176,6 +180,10 @@ defmodule Tracker.GitServer do
 
   def handle_call(:state, _from, %State{} = state) do
     {:reply, state, state}
+  end
+
+  def handle_call(:fetch, _from, %State{github_enabled: false} = state) do
+    {:reply, {:error, :github_disabled}, state}
   end
 
   def handle_call(_, _from, %State{ready: false} = state) do
@@ -200,6 +208,9 @@ defmodule Tracker.GitServer do
 
   defp ensure_repo(%State{path: path} = state) do
     cond do
+      not File.exists?(path) and not state.github_enabled ->
+        state
+
       not File.exists?(path) ->
         with %State{ready: true} = state <- clone(state) do
           state |> configure_remote() |> write_commit_graph()

@@ -20,7 +20,7 @@ defmodule Tracker.Application do
       {Oban,
        AshOban.config(
          Application.fetch_env!(:tracker, :ash_domains),
-         Application.fetch_env!(:tracker, Oban)
+         Application.fetch_env!(:tracker, Oban) |> oban_config()
        )},
       GitHub.Auth.Cache,
       TrackerWeb.Telemetry,
@@ -48,6 +48,36 @@ defmodule Tracker.Application do
   def config_change(changed, _new, removed) do
     TrackerWeb.Endpoint.config_change(changed, removed)
     :ok
+  end
+
+  @doc false
+  def oban_config(config) do
+    if Tracker.GitHub.enabled?() do
+      config
+    else
+      github_workers = [
+        Tracker.Nixpkgs.ChangeDiscoveryWorker,
+        Tracker.Nixpkgs.ChangeRefreshWorker,
+        Tracker.Nixpkgs.BackportReconcileWorker,
+        Tracker.Nixpkgs.ChangeArtifactReconcileWorker,
+        Tracker.Nixpkgs.ChangeReconcileWorker,
+        Tracker.Nixpkgs.CommitterSyncWorker,
+        Tracker.Ingestion.CronWorker
+      ]
+
+      Keyword.update(config, :plugins, [], fn plugins ->
+        Enum.map(plugins, fn
+          {Oban.Plugins.Cron, opts} ->
+            {Oban.Plugins.Cron,
+             Keyword.update(opts, :crontab, [], fn entries ->
+               Enum.reject(entries, &(elem(&1, 1) in github_workers))
+             end)}
+
+          plugin ->
+            plugin
+        end)
+      end)
+    end
   end
 
   @doc false

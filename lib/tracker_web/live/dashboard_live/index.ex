@@ -140,7 +140,7 @@ defmodule TrackerWeb.DashboardLive.Index do
             No channel release is available yet.
           </p>
         </div>
-        <p :if={is_nil(@current_user)} class="dashboard-scope">
+        <p :if={is_nil(@current_user) && Tracker.GitHub.enabled?()} class="dashboard-scope">
           <.link navigate={~p"/sign-in"}>Sign in</.link> to follow changes and receive updates.
         </p>
         <div class="dashboard-columns">

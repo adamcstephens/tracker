@@ -24,7 +24,9 @@
             <.user_menu_panel />
           </details>
         <% else %>
-          <.link navigate={~p"/sign-in"} class="app-user__chip">Sign in</.link>
+          <.link :if={Tracker.GitHub.enabled?()} navigate={~p"/sign-in"} class="app-user__chip">
+            Sign in
+          </.link>
         <% end %>
       </div>
     </div>
@@ -104,6 +106,7 @@
         </details>
       <% else %>
         <.link
+          :if={Tracker.GitHub.enabled?()}
           navigate={~p"/sign-in"}
           class="app-signin--mobile is-mobile-only"
           aria-label="Sign in"

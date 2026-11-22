@@ -20,6 +20,14 @@ defmodule Tracker.Nixpkgs.ChangeRefreshWorker do
 
   @impl Oban.Worker
   def perform(%Oban.Job{}) do
+    if Tracker.GitHub.enabled?() do
+      perform_enabled()
+    else
+      {:cancel, "GitHub integration is disabled"}
+    end
+  end
+
+  defp perform_enabled do
     case run() do
       :ok -> :ok
       {:ok, _count} -> :ok

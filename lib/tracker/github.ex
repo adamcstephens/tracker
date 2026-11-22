@@ -1,9 +1,14 @@
 defmodule Tracker.GitHub do
   @moduledoc """
-  GitHub API authentication helpers.
+  GitHub integration availability and API authentication helpers.
   """
 
   @type bucket :: :rest | :graphql
+  def enabled?, do: Application.get_env(:tracker, :github_enabled, true)
+
+  def ensure_enabled! do
+    unless enabled?(), do: raise("GitHub integration is disabled")
+  end
 
   @doc """
   Returns an installation access token for the configured GitHub App.
@@ -12,6 +17,7 @@ defmodule Tracker.GitHub do
   an installation token scoped to the configured installation.
   """
   def installation_token! do
+    ensure_enabled!()
     app = GitHub.app()
     installation_id = github_config!(:installation_id)
 

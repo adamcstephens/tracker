@@ -1,4 +1,6 @@
 defmodule Tracker.Nixpkgs.BackportReconcileWorker do
+  @moduledoc "Reconciles backport links against GitHub pull requests."
+
   use Oban.Worker,
     queue: :changes,
     max_attempts: 5,
@@ -9,6 +11,14 @@ defmodule Tracker.Nixpkgs.BackportReconcileWorker do
 
   @impl Oban.Worker
   def perform(%Oban.Job{}) do
+    if Tracker.GitHub.enabled?() do
+      perform_enabled()
+    else
+      {:cancel, "GitHub integration is disabled"}
+    end
+  end
+
+  defp perform_enabled do
     case RateLimitCache.check(:graphql) do
       {:limited, seconds} ->
         {:snooze, seconds}

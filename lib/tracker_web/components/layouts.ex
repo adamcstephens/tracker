@@ -306,7 +306,7 @@ defmodule TrackerWeb.Layouts do
   """
   def user_avatar(assigns) do
     ~H"""
-    <%= if @user.github_id do %>
+    <%= if Tracker.GitHub.enabled?() && @user.github_id do %>
       <img
         class="app-user__avatar"
         src={"https://avatars.githubusercontent.com/u/#{@user.github_id}?v=4&s=64"}

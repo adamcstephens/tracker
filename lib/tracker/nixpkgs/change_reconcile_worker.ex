@@ -34,6 +34,14 @@ defmodule Tracker.Nixpkgs.ChangeReconcileWorker do
 
   @impl Oban.Worker
   def perform(%Oban.Job{}) do
+    if Tracker.GitHub.enabled?() do
+      perform_enabled()
+    else
+      {:cancel, "GitHub integration is disabled"}
+    end
+  end
+
+  defp perform_enabled do
     case Tracker.GitHub.RateLimitCache.check(:graphql) do
       {:limited, seconds} ->
         Logger.info(msg: "rate limited, skipping reconcile", seconds: seconds)

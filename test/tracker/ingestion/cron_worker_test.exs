@@ -56,6 +56,21 @@ defmodule Tracker.Ingestion.CronWorkerTest do
   defp reload(channel), do: Ash.get!(Channel, channel.id)
 
   describe "perform/1" do
+    test "cancels without polling when GitHub is disabled", %{channel: channel} do
+      previous = Application.fetch_env(:tracker, :github_enabled)
+      Application.put_env(:tracker, :github_enabled, false)
+
+      on_exit(fn ->
+        case previous do
+          {:ok, value} -> Application.put_env(:tracker, :github_enabled, value)
+          :error -> Application.delete_env(:tracker, :github_enabled)
+        end
+      end)
+
+      assert {:cancel, :github_disabled} = CronWorker.perform(%Oban.Job{})
+      assert reload(channel).pointer_revision == nil
+    end
+
     test "304 from pointer is a noop", %{channel: channel} do
       Req.Test.stub(@stub, fn conn ->
         conn

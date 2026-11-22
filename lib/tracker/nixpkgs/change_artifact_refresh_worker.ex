@@ -45,11 +45,19 @@ defmodule Tracker.Nixpkgs.ChangeArtifactRefreshWorker do
   @files_hard_cap @file_link_cap + @files_per_page
 
   @impl Oban.Worker
-  def perform(%Oban.Job{
-        args: %{"number" => number, "reason" => reason},
-        attempt: attempt,
-        max_attempts: max_attempts
-      }) do
+  def perform(%Oban.Job{} = job) do
+    if Tracker.GitHub.enabled?() do
+      perform_enabled(job)
+    else
+      {:cancel, "GitHub integration is disabled"}
+    end
+  end
+
+  defp perform_enabled(%Oban.Job{
+         args: %{"number" => number, "reason" => reason},
+         attempt: attempt,
+         max_attempts: max_attempts
+       }) do
     run(%{number: number, reason: reason}, attempt: attempt, max_attempts: max_attempts)
   end
 

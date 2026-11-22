@@ -6,16 +6,19 @@ defmodule TrackerWeb.DevLoginTest do
   setup do
     path = Path.join(System.tmp_dir!(), "dev-login-#{System.unique_integer([:positive])}.json")
     Application.put_env(:tracker, :dev_login_file, path)
+    github_enabled = Application.fetch_env!(:tracker, :github_enabled)
+    Application.put_env(:tracker, :github_enabled, false)
 
     on_exit(fn ->
       File.rm(path)
       Application.delete_env(:tracker, :dev_login_file)
+      Application.put_env(:tracker, :github_enabled, github_enabled)
     end)
 
     :ok
   end
 
-  test "a minted token signs the browser in as the dev user", %{conn: conn} do
+  test "a minted token signs the browser in as the dev user with GitHub disabled", %{conn: conn} do
     user = dev_user!()
     token = Tracker.DevLogin.issue!(user.github_username)
 

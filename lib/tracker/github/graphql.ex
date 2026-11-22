@@ -140,6 +140,9 @@ defmodule Tracker.GitHub.GraphQL do
            step: {__MODULE__, :fetch_prs}
          )}
 
+      {:error, %Error{} = error} ->
+        {:error, error}
+
       {:error, reason} ->
         {:error,
          Error.new(
@@ -227,6 +230,9 @@ defmodule Tracker.GitHub.GraphQL do
            step: {__MODULE__, :search_repository_prs}
          )}
 
+      {:error, %Error{} = error} ->
+        {:error, error}
+
       {:error, reason} ->
         {:error,
          Error.new(
@@ -310,6 +316,9 @@ defmodule Tracker.GitHub.GraphQL do
            source: body,
            step: {__MODULE__, :fetch_numbers}
          )}
+
+      {:error, %Error{} = error} ->
+        {:error, error}
 
       {:error, reason} ->
         {:error,
@@ -570,6 +579,9 @@ defmodule Tracker.GitHub.GraphQL do
            source: body,
            step: {__MODULE__, step}
          )}
+
+      {:error, %Error{} = error} ->
+        {:error, error}
 
       {:error, reason} ->
         {:error,
@@ -836,6 +848,14 @@ defmodule Tracker.GitHub.GraphQL do
   end
 
   defp request(opts) do
+    if Tracker.GitHub.enabled?() do
+      do_request(opts)
+    else
+      {:error, Error.new(reason: :disabled, message: "GitHub integration is disabled")}
+    end
+  end
+
+  defp do_request(opts) do
     result = Req.request(Req.new(), opts)
 
     case result do

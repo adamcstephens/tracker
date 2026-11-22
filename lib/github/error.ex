@@ -7,6 +7,7 @@ defmodule GitHub.Error do
 
     * `:rate_limited` — a primary or secondary rate limit was hit
     * `:server_error` — GitHub returned a 5xx response
+    * `:disabled` — the GitHub integration is disabled
     * `:error` — any other transport or client failure (the default)
   """
 

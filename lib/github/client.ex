@@ -68,6 +68,14 @@ defmodule GitHub.Client do
   """
   @spec request(atom(), String.t(), [opt]) :: result()
   def request(method, url, opts) do
+    if Tracker.GitHub.enabled?() do
+      do_request(method, url, opts)
+    else
+      {:error, Error.new(reason: :disabled, message: "GitHub integration is disabled")}
+    end
+  end
+
+  defp do_request(method, url, opts) do
     server = opts[:server] || @default_server
     s3_config = opts[:s3_cache] || s3_config()
     auth = opts[:auth]

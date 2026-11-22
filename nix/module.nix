@@ -86,6 +86,7 @@ in
         PHX_HOST = "localhost";
         PHX_IP = "127.0.0.1";
         PORT = "6950";
+        TRACKER_GITHUB_ENABLED = "true";
         HOME = stateDir;
         RELEASE_TMP = "/run/tracker";
         RELEASE_DISTRIBUTION = "none";

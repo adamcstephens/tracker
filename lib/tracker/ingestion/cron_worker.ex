@@ -8,6 +8,9 @@ defmodule Tracker.Ingestion.CronWorker do
   channel and, if no non-failed ingestion pipeline exists for that revision
   yet, refreshes the channel's release ledger and runs
   `PipelineStarter.sync_channel/1`.
+
+  Cancels queued polls without contacting upstream services when GitHub
+  integration is disabled.
   """
 
   use Oban.Worker, queue: :ingestion, max_attempts: 3
@@ -24,6 +27,10 @@ defmodule Tracker.Ingestion.CronWorker do
 
   @impl Oban.Worker
   def perform(%Oban.Job{}) do
+    if Tracker.GitHub.enabled?(), do: poll_channels(), else: {:cancel, :github_disabled}
+  end
+
+  defp poll_channels do
     channels = Channel.active!()
     Logger.info(msg: "channel poll started", active_channels: length(channels))
     started_at = System.monotonic_time()

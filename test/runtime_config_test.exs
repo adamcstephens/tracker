@@ -1,6 +1,49 @@
 defmodule Tracker.RuntimeConfigTest do
   use ExUnit.Case, async: false
 
+  test "development disables GitHub without requiring credentials" do
+    previous = System.get_env("TRACKER_GITHUB_ENABLED")
+
+    try do
+      System.delete_env("TRACKER_GITHUB_ENABLED")
+      config = Config.Reader.read!("config/runtime.exs", env: :dev, target: :host)
+      assert config[:tracker][:github_enabled] == false
+      refute config[:tracker][:github]
+    after
+      set_env("TRACKER_GITHUB_ENABLED", previous)
+    end
+  end
+
+  test "development can opt into GitHub with credentials" do
+    config = production_config([{"TRACKER_GITHUB_ENABLED", "true"}], :dev)
+    assert config[:tracker][:github_enabled]
+    assert config[:tracker][:github][:client_id] == "client"
+  end
+
+  test "production keeps GitHub enabled by default" do
+    config = production_config([])
+    assert config[:tracker][:github_enabled]
+    assert config[:tracker][:github][:client_id] == "client"
+  end
+
+  test "production can disable GitHub without credentials" do
+    config =
+      production_config([
+        {"TRACKER_GITHUB_ENABLED", "false"},
+        {"TRACKER_GITHUB_CLIENT_ID", nil},
+        {"TRACKER_GITHUB_APP_PRIVATE_KEY_FILE", "/missing"}
+      ])
+
+    refute config[:tracker][:github_enabled]
+    refute config[:tracker][:github]
+  end
+
+  test "invalid GitHub enablement fails rather than silently disabling production" do
+    assert_raise RuntimeError, ~r/TRACKER_GITHUB_ENABLED must be true or false/, fn ->
+      production_config([{"TRACKER_GITHUB_ENABLED", "tru"}])
+    end
+  end
+
   test "leaves Req defaults unchanged without https_proxy" do
     refute Keyword.has_key?(runtime_config(nil), :req)
   end
@@ -114,8 +157,9 @@ defmodule Tracker.RuntimeConfigTest do
     |> Keyword.fetch!(:ip)
   end
 
-  defp production_config(overrides) do
+  defp production_config(overrides, env \\ :prod) do
     environment = [
+      {"TRACKER_GITHUB_ENABLED", nil},
       {"TRACKER_GITHUB_CLIENT_ID", "client"},
       {"TRACKER_GITHUB_CLIENT_SECRET_FILE", __ENV__.file},
       {"TRACKER_GITHUB_APP_ID", "1"},
@@ -134,7 +178,7 @@ defmodule Tracker.RuntimeConfigTest do
     try do
       Enum.each(environment, fn {name, value} -> set_env(name, value) end)
 
-      Config.Reader.read!("config/runtime.exs", env: :prod, target: :host)
+      Config.Reader.read!("config/runtime.exs", env: env, target: :host)
     after
       Enum.each(previous, fn {name, value} -> set_env(name, value) end)
     end

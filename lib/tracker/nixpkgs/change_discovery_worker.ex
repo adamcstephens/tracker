@@ -32,7 +32,13 @@ defmodule Tracker.Nixpkgs.ChangeDiscoveryWorker do
   @max_cycles 100
 
   @impl Oban.Worker
-  def perform(%Oban.Job{}), do: run([]) |> to_oban_result()
+  def perform(%Oban.Job{}) do
+    if Tracker.GitHub.enabled?() do
+      run([]) |> to_oban_result()
+    else
+      {:cancel, "GitHub integration is disabled"}
+    end
+  end
 
   @doc false
   def to_oban_result({:error, reason}), do: {:cancel, reason}

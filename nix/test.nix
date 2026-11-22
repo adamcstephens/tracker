@@ -89,6 +89,7 @@
           test ! -r /run/tracker-secrets/github-key
           test ! -r /run/tracker-secrets/metrics-token
           test -z "''${TRACKER_METRICS_TOKEN+x}"
+          test "$TRACKER_GITHUB_ENABLED" = true
           test "$(cat "$TRACKER_METRICS_TOKEN_FILE")" = test-metrics-token
           test "$(cat "$TRACKER_GITHUB_CLIENT_SECRET_FILE")" = test-client-secret
           ${pkgs.openssl}/bin/openssl rsa -in "$TRACKER_GITHUB_APP_PRIVATE_KEY_FILE" -check -noout

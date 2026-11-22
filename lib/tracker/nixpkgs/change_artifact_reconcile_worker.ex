@@ -18,6 +18,14 @@ defmodule Tracker.Nixpkgs.ChangeArtifactReconcileWorker do
 
   @impl Oban.Worker
   def perform(%Oban.Job{}) do
+    if Tracker.GitHub.enabled?() do
+      perform_enabled()
+    else
+      {:cancel, "GitHub integration is disabled"}
+    end
+  end
+
+  defp perform_enabled do
     Logger.info(msg: "artifact reconcile started")
     started_at = System.monotonic_time()
 

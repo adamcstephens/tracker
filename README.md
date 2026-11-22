@@ -58,12 +58,20 @@ See [Environment variables](#environment-variables) for the full reference.
 
 ### Integrations
 
-All GitHub settings are required outside the test environment. Set
-`TRACKER_S3_BUCKET` to enable S3 caching; when enabled, all five S3 settings
-are required.
+GitHub is off by default in development. Plain `mix phx.server` does not
+require GitHub credentials or make GitHub requests. To opt in, set
+`TRACKER_GITHUB_ENABLED=true` and supply the GitHub settings below.
+Offline mode also skips cloning or fetching nixpkgs. An existing local
+clone remains available for reads.
+The NixOS service enables GitHub by default; override it with
+`services.tracker.settings.TRACKER_GITHUB_ENABLED = "false"`.
+
+Set `TRACKER_S3_BUCKET` to enable S3 caching; when enabled, all five S3
+settings are required.
 
 | Variable | Purpose |
 | --- | --- |
+| `TRACKER_GITHUB_ENABLED` | Enables GitHub integration. Set to `true` or `false`. |
 | `TRACKER_GITHUB_CLIENT_ID` | GitHub OAuth client ID. |
 | `TRACKER_GITHUB_CLIENT_SECRET_FILE` | Path to the OAuth client secret generated in the GitHub App's settings. |
 | `TRACKER_GITHUB_APP_ID` | Numeric GitHub App ID. |
@@ -94,8 +102,8 @@ are supported, the file takes precedence; an unreadable file fails startup.
 
 ## Signing in during development
 
-GitHub OAuth is the only sign-in strategy, so logged-in pages (inbox,
-subscriptions, account settings) need a local user:
+GitHub OAuth is disabled by default in development. To access logged-in
+pages (inbox, subscriptions, account settings) offline, create a local user:
 
 ```sh
 mix tracker.dev_user.create [--username devuser] [--admin] [--notifications 12]

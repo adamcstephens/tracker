@@ -32,6 +32,18 @@ defmodule TrackerWeb.Router do
 
   defp assign_interactive(conn, _opts), do: Plug.Conn.assign(conn, :interactive?, true)
 
+  pipeline :github_auth do
+    plug :require_github
+  end
+
+  defp require_github(conn, _opts) do
+    if Tracker.GitHub.enabled?() do
+      conn
+    else
+      conn |> send_resp(:not_found, "Not Found") |> halt()
+    end
+  end
+
   pipeline :require_admin do
     plug TrackerWeb.Plug.RequireRole, role: :admin, format: :browser
   end
@@ -134,22 +146,28 @@ defmodule TrackerWeb.Router do
   scope "/", TrackerWeb do
     pipe_through :browser
 
-    auth_routes AuthController, Tracker.Accounts.User, path: "/auth"
     sign_out_route AuthController
 
-    # Remove these if you'd like to use your own authentication views
-    sign_in_route register_path: "/register",
-                  reset_path: "/reset",
-                  auth_routes_prefix: "/auth",
-                  on_mount: [{TrackerWeb.LiveUserAuth, :live_no_user}],
+    scope "/" do
+      pipe_through :github_auth
+
+      auth_routes AuthController, Tracker.Accounts.User, path: "/auth"
+
+      sign_in_route register_path: "/register",
+                    reset_path: "/reset",
+                    auth_routes_prefix: "/auth",
+                    on_mount: [{TrackerWeb.LiveUserAuth, :live_no_user}],
+                    overrides: [
+                      TrackerWeb.AuthOverrides,
+                      AshAuthentication.Phoenix.Overrides.Default
+                    ]
+
+      reset_route auth_routes_prefix: "/auth",
                   overrides: [
                     TrackerWeb.AuthOverrides,
                     AshAuthentication.Phoenix.Overrides.Default
                   ]
-
-    # Remove this if you do not want to use the reset password feature
-    reset_route auth_routes_prefix: "/auth",
-                overrides: [TrackerWeb.AuthOverrides, AshAuthentication.Phoenix.Overrides.Default]
+    end
   end
 
   if Application.compile_env(:tracker, :dev_routes) do

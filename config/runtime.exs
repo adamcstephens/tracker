@@ -98,7 +98,17 @@ if System.get_env("TRACKER_S3_BUCKET") do
   config :tracker, :github_s3_cache, s3_opts
 end
 
-if config_env() != :test do
+github_enabled =
+  case System.get_env("TRACKER_GITHUB_ENABLED") do
+    nil -> config_env() != :dev
+    "true" -> true
+    "false" -> false
+    value -> raise "TRACKER_GITHUB_ENABLED must be true or false, got: #{inspect(value)}"
+  end
+
+config :tracker, :github_enabled, github_enabled
+
+if config_env() != :test and github_enabled do
   github_client_id = System.fetch_env!("TRACKER_GITHUB_CLIENT_ID")
 
   github_client_secret =
