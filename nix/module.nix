@@ -112,6 +112,7 @@ in
         RELEASE_COOKIE = "tracker";
         TZDIR = "${pkgs.tzdata}/share/zoneinfo";
         NIXPKGS_GIT_PATH = "${stateDir}/nixpkgs";
+        NIXPKGS_GIT_MANAGED_PATH = "${stateDir}/nixpkgs";
       }
       // lib.optionalAttrs cfg.database.createLocally {
         DATABASE_URL = "ecto://${cfg.database.name}@localhost/${cfg.database.name}?socket_dir=/run/postgresql";

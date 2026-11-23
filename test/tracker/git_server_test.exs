@@ -109,13 +109,76 @@ defmodule Tracker.GitServerTest do
 
       pid =
         start_supervised!(
-          {GitServer, name: nil, repo_url: ctx.upstream, path: local, auto_start: true}
+          {GitServer,
+           name: nil,
+           repo_url: ctx.upstream,
+           path: local,
+           managed_path: Path.join(ctx.base, "managed.git")}
         )
 
       refute GitServer.ready?(pid)
+      assert File.read!(Path.join(local, "garbage.txt")) == "not a repo"
 
       assert GitServer.ancestor?("deadbeef", "refs/heads/main", GitServer.state(pid)) ==
                {:error, :not_ready}
+    end
+
+    test "does not quarantine an invalid managed directory with GitHub disabled", ctx do
+      File.mkdir_p!(ctx.local)
+
+      pid =
+        start_supervised!(
+          {GitServer,
+           name: nil,
+           repo_url: ctx.upstream,
+           path: ctx.local,
+           managed_path: ctx.local,
+           github_enabled: false}
+        )
+
+      refute GitServer.ready?(pid)
+      assert File.dir?(ctx.local)
+      assert Path.wildcard(ctx.local <> ".quarantine.*") == []
+    end
+
+    test "quarantines an invalid managed directory and reclones", ctx do
+      File.mkdir_p!(ctx.local)
+      File.write!(Path.join(ctx.local, "garbage.txt"), "not a repo")
+
+      pid =
+        start_supervised!(
+          {GitServer, name: nil, repo_url: ctx.upstream, path: ctx.local, managed_path: ctx.local}
+        )
+
+      assert GitServer.ready?(pid)
+
+      assert GitServer.ancestor?(ctx.sha_one, "refs/heads/main", GitServer.state(pid)) ==
+               {:ok, true}
+
+      assert [quarantined] = Path.wildcard(ctx.local <> ".quarantine.*")
+      assert File.read!(Path.join(quarantined, "garbage.txt")) == "not a repo"
+    end
+
+    test "retries a failed clone without restarting", ctx do
+      unavailable = Path.join(ctx.base, "unavailable.git")
+
+      pid =
+        start_supervised!(
+          {GitServer,
+           name: nil,
+           repo_url: unavailable,
+           path: ctx.local,
+           managed_path: ctx.local,
+           bootstrap_retry_ms: 20}
+        )
+
+      refute GitServer.ready?(pid)
+      File.rename!(ctx.upstream, unavailable)
+
+      assert Enum.any?(1..100, fn _ ->
+               Process.sleep(20)
+               GitServer.ready?(pid)
+             end)
     end
 
     test "configures a narrow fetch refspec scoped to refs/heads/*", %{

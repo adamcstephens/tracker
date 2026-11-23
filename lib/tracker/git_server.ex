@@ -5,6 +5,8 @@ defmodule Tracker.GitServer do
   Clones on boot (asynchronously, via `handle_continue/2`) and serializes
   long-running mutations (`fetch/1`) through the GenServer. When GitHub is
   disabled, existing clones remain readable, but cloning and fetching are disabled.
+  Failed clones retry. Invalid repositories at the managed NixOS path are
+  quarantined before recloning; other existing paths are left in place.
 
   Generic over `repo_url` and `path`; one named instance is started under
   the application supervisor for nixpkgs.
@@ -34,6 +36,8 @@ defmodule Tracker.GitServer do
     field :repo_url, String.t(), enforce: true
     field :path, String.t(), enforce: true
     field :ready, boolean(), default: false
+    field :managed, boolean(), default: false
+    field :bootstrap_retry_ms, pos_integer(), default: 30_000
     field :github_enabled, boolean(), default: true
   end
 
@@ -155,9 +159,13 @@ defmodule Tracker.GitServer do
 
   @impl GenServer
   def init(opts) do
+    path = Keyword.fetch!(opts, :path)
+
     state = %State{
       repo_url: Keyword.fetch!(opts, :repo_url),
-      path: Keyword.fetch!(opts, :path),
+      path: path,
+      managed: path == Keyword.get(opts, :managed_path),
+      bootstrap_retry_ms: Keyword.get(opts, :bootstrap_retry_ms, 30_000),
       github_enabled: Keyword.get_lazy(opts, :github_enabled, &Tracker.GitHub.enabled?/0)
     }
 
@@ -171,6 +179,11 @@ defmodule Tracker.GitServer do
   @impl GenServer
   def handle_continue(:ensure_repo, %State{} = state) do
     {:noreply, ensure_repo(state)}
+  end
+
+  @impl GenServer
+  def handle_info(:ensure_repo, %State{} = state) do
+    {:noreply, state, {:continue, :ensure_repo}}
   end
 
   @impl GenServer
@@ -212,9 +225,7 @@ defmodule Tracker.GitServer do
         state
 
       not File.exists?(path) ->
-        with %State{ready: true} = state <- clone(state) do
-          state |> configure_remote() |> write_commit_graph()
-        end
+        clone(state)
 
       healthy_repo?(path) ->
         Logger.info(msg: "GitServer: reusing existing repo", path: path)
@@ -222,6 +233,9 @@ defmodule Tracker.GitServer do
         %State{state | ready: true}
         |> configure_remote()
         |> write_commit_graph()
+
+      state.managed and state.github_enabled ->
+        quarantine_and_clone(state)
 
       true ->
         Logger.error(
@@ -233,6 +247,36 @@ defmodule Tracker.GitServer do
     end
   end
 
+  defp quarantine_and_clone(%State{path: path} = state) do
+    suffix = Base.encode16(:crypto.strong_rand_bytes(8), case: :lower)
+    destination = path <> ".quarantine." <> suffix
+
+    case File.rename(path, destination) do
+      :ok ->
+        Logger.warning(
+          msg: "GitServer: quarantined invalid repo",
+          path: path,
+          destination: destination
+        )
+
+        clone(state)
+
+      {:error, reason} ->
+        Logger.error(
+          msg: "GitServer: quarantine failed",
+          path: path,
+          error: Atom.to_string(reason)
+        )
+
+        retry_bootstrap(state)
+    end
+  end
+
+  defp retry_bootstrap(%State{} = state) do
+    Process.send_after(self(), :ensure_repo, state.bootstrap_retry_ms)
+    state
+  end
+
   defp clone(%State{repo_url: url, path: path} = state) do
     Logger.info(msg: "GitServer: cloning", url: url, path: path)
     File.mkdir_p!(Path.dirname(path))
@@ -242,7 +286,7 @@ defmodule Tracker.GitServer do
     case System.cmd("git", args, stderr_to_stdout: true) do
       {_, 0} ->
         Logger.info(msg: "GitServer: clone complete")
-        %State{state | ready: true}
+        %State{state | ready: true} |> configure_remote() |> write_commit_graph()
 
       {output, code} ->
         Logger.error(
@@ -251,7 +295,7 @@ defmodule Tracker.GitServer do
           output: String.trim(output)
         )
 
-        state
+        retry_bootstrap(state)
     end
   end
 

@@ -96,6 +96,10 @@ if path = System.get_env("NIXPKGS_GIT_PATH") do
   config :tracker, Tracker.GitServer, path: path
 end
 
+if managed_path = System.get_env("NIXPKGS_GIT_MANAGED_PATH") do
+  config :tracker, Tracker.GitServer, managed_path: managed_path
+end
+
 if token = get_secret.("TRACKER_DISCORD_TOKEN") do
   config :nostrum, token: token
 end
