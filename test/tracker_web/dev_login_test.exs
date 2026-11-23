@@ -1,6 +1,8 @@
 defmodule TrackerWeb.DevLoginTest do
   use TrackerWeb.ConnCase, async: false
 
+  import ExUnit.CaptureLog
+
   alias Tracker.Accounts.User
 
   setup do
@@ -32,10 +34,18 @@ defmodule TrackerWeb.DevLoginTest do
     user = dev_user!()
     Tracker.DevLogin.issue!(user.github_username)
 
-    conn = get(conn, ~p"/dev/login/not-the-minted-token")
+    log =
+      capture_log([level: :warning], fn ->
+        conn = get(conn, ~p"/dev/login/not-the-minted-token")
 
-    assert redirected_to(conn) == ~p"/sign-in"
-    assert redirected_to(conn |> recycle() |> get(~p"/account/settings")) == ~p"/sign-in"
+        assert redirected_to(conn) == ~p"/sign-in"
+        assert redirected_to(conn |> recycle() |> get(~p"/account/settings")) == ~p"/sign-in"
+      end)
+
+    assert log =~ "[warning]"
+    assert log =~ "Sign-in failed"
+    assert log =~ "invalid_dev_credentials"
+    refute log =~ "not-the-minted-token"
   end
 
   test "a missing credentials file signs nobody in", %{conn: conn} do

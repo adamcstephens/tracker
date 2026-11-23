@@ -1,6 +1,8 @@
 defmodule TrackerWeb.DevLoginController do
   use TrackerWeb, :controller
 
+  require Logger
+
   alias AshAuthentication.Plug.Helpers
 
   def create(conn, %{"token" => token}) do
@@ -12,6 +14,13 @@ defmodule TrackerWeb.DevLoginController do
         |> redirect(to: ~p"/")
 
       :error ->
+        Logger.warning(
+          msg: "Sign-in failed",
+          strategy: "dev_login",
+          phase: "create",
+          errors: "invalid_dev_credentials"
+        )
+
         conn
         |> put_flash(:error, "That dev login token is not valid.")
         |> redirect(to: ~p"/sign-in")
