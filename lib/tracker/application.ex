@@ -25,8 +25,7 @@ defmodule Tracker.Application do
       GitHub.Auth.Cache,
       TrackerWeb.Telemetry,
       {Phoenix.PubSub, name: Tracker.PubSub},
-      # Start the Finch HTTP client for sending emails
-      {Finch, name: Tracker.Finch},
+      {Finch, [name: Tracker.Finch] ++ Application.get_env(:tracker, Tracker.Finch, [])},
       # Start a worker by calling: Tracker.Worker.start_link(arg)
       # {Tracker.Worker, arg},
       # Start to serve requests, typically the last entry

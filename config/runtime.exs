@@ -65,6 +65,20 @@ req_defaults =
 
 config :req, default_options: req_defaults
 
+if connect_options = req_defaults[:connect_options] do
+  exclusions = req_defaults[:no_proxy] || []
+
+  pools =
+    Map.new(["https://github.com", "https://api.github.com"], fn origin ->
+      options = Tracker.HTTPProxy.connect_options(URI.new!(origin), connect_options, exclusions)
+      {origin, [conn_opts: options]}
+    end)
+
+  config :tracker, Tracker.Finch, pools: pools
+
+  config :ash_authentication, :http_adapter, {Assent.HTTPAdapter.Finch, supervisor: Tracker.Finch}
+end
+
 # ## Using releases
 #
 # If you use `mix release`, you need to explicitly enable the server

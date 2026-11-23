@@ -51,20 +51,23 @@ defmodule Tracker.HTTPProxy do
       Req.Request.get_private(request, :tracker_proxy_connect_options) ||
         Req.Request.get_option(request, :connect_options, [])
 
-    entries = Req.Request.get_option(request, :no_proxy, [])
-    host = host_key(request.url.host)
-    port = request.url.port
-
     options =
-      if Enum.any?(entries, &matches?(&1, host, port)) do
-        Keyword.drop(original, [:proxy, :proxy_headers])
-      else
-        original
-      end
+      connect_options(request.url, original, Req.Request.get_option(request, :no_proxy, []))
 
     request
     |> Req.Request.put_private(:tracker_proxy_connect_options, original)
     |> Req.Request.merge_options(connect_options: options)
+  end
+
+  @doc "Applies parsed no_proxy exclusions to a destination's connection options."
+  def connect_options(%URI{} = url, options, entries) do
+    host = host_key(url.host)
+
+    if Enum.any?(entries, &matches?(&1, host, url.port)) do
+      Keyword.drop(options, [:proxy, :proxy_headers])
+    else
+      options
+    end
   end
 
   defp matches?(:all, _host, _port), do: true

@@ -87,6 +87,62 @@ defmodule Tracker.RuntimeConfigTest do
     refute Keyword.has_key?(request.options.connect_options, :proxy)
   end
 
+  test "routes both GitHub OAuth origins through the authenticated proxy" do
+    config = runtime_config("http://user:pass@proxy.example:3128")
+    options = config[:req][:default_options][:connect_options]
+
+    assert config[:ash_authentication][:http_adapter] ==
+             {Assent.HTTPAdapter.Finch, supervisor: Tracker.Finch}
+
+    assert config[:tracker][Tracker.Finch][:pools] == %{
+             "https://github.com" => [conn_opts: options],
+             "https://api.github.com" => [conn_opts: options]
+           }
+  end
+
+  test "Assent opens a proxy tunnel for the token exchange and profile request" do
+    {:ok, listener} = :gen_tcp.listen(0, [:binary, active: false, ip: {127, 0, 0, 1}])
+    on_exit(fn -> :gen_tcp.close(listener) end)
+    {:ok, port} = :inet.port(listener)
+    config = runtime_config("http://127.0.0.1:#{port}")
+    {adapter, options} = config[:ash_authentication][:http_adapter]
+    start_supervised!({Finch, [name: __MODULE__] ++ config[:tracker][Tracker.Finch]})
+    options = Keyword.replace!(options, :supervisor, __MODULE__)
+
+    for {method, host, path} <- [
+          {:post, "github.com", "/login/oauth/access_token"},
+          {:get, "api.github.com", "/user"}
+        ] do
+      request =
+        Task.async(fn -> adapter.request(method, "https://#{host}#{path}", nil, [], options) end)
+
+      {:ok, socket} = :gen_tcp.accept(listener, 2_000)
+      :ok = :inet.setopts(socket, packet: :line)
+      assert {:ok, "CONNECT #{host}:443 HTTP/1.1\r\n"} == :gen_tcp.recv(socket, 0, 2_000)
+      :ok = :gen_tcp.send(socket, "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n")
+
+      assert {:error, %Finch.HTTPError{reason: {:proxy, {:unexpected_status, 403}}}} =
+               Task.await(request)
+
+      :ok = :gen_tcp.close(socket)
+    end
+  end
+
+  test "honors no_proxy independently for each OAuth origin" do
+    config = runtime_config("http://proxy.example:3128", "api.github.com:443")
+
+    assert config[:tracker][Tracker.Finch][:pools] == %{
+             "https://github.com" => [conn_opts: [proxy: {:http, "proxy.example", 3128, []}]],
+             "https://api.github.com" => [conn_opts: []]
+           }
+  end
+
+  test "keeps the default OAuth adapter without https_proxy" do
+    config = runtime_config(nil)
+    refute config[:ash_authentication][:http_adapter]
+    refute config[:tracker][Tracker.Finch]
+  end
+
   test "defaults the production HTTP bind address to all IPv6 interfaces" do
     assert production_http_ip(nil) == {0, 0, 0, 0, 0, 0, 0, 0}
   end
