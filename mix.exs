@@ -4,7 +4,7 @@ defmodule Tracker.MixProject do
   def project do
     [
       app: :tracker,
-      version: "0.1.0",
+    version: String.trim(File.read!(Path.expand("VERSION", __DIR__))),
       elixir: "~> 1.14",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,

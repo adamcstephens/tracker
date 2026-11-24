@@ -48,7 +48,7 @@ let
 in
 beamPackages.mixRelease rec {
   pname = "tracker-server";
-  version = "0.0.1";
+  version = builtins.readFile ./VERSION;
 
   src = lib.fileset.toSource {
     root = ./.;
@@ -61,6 +61,7 @@ beamPackages.mixRelease rec {
       ./native
       ./priv
       ./test
+      ./VERSION
     ];
   };
 
