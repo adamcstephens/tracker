@@ -20,13 +20,13 @@ let
   # Lumis fetches tree-sitter grammars from npm the first time it highlights,
   # which the sandbox has no network for. Lay the nix grammar out the way its
   # cache expects so `LUMIS_DATA_DIR` finds it already there.
-  lumisNixGrammar = stdenvNoCC.mkDerivation {
+  lumisNixGrammar = stdenvNoCC.mkDerivation (finalAttrs: {
     pname = "lumis-wasm-nix";
-    version = "0.26.1";
+    version = "0.26.4";
 
     src = fetchurl {
-      url = "https://registry.npmjs.org/@lumis-sh/wasm-nix/-/wasm-nix-0.26.1.tgz";
-      hash = "sha256-jDwbRtY+iApQacMqRPmEta5AJ32lok9udRAXQytdDbU=";
+      url = "https://registry.npmjs.org/@lumis-sh/wasm-nix/-/wasm-nix-${finalAttrs.version}.tgz";
+      hash = "sha256-WOXIjq6MIaU5DtSHEE0sCwJzv+TLGg05gsUYOiOfK30=";
     };
 
     nativeBuildInputs = [ jq ];
@@ -44,7 +44,7 @@ let
 
       runHook postInstall
     '';
-  };
+  });
 in
 beamPackages.mixRelease rec {
   pname = "tracker-server";
