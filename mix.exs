@@ -4,7 +4,7 @@ defmodule Tracker.MixProject do
   def project do
     [
       app: :tracker,
-    version: String.trim(File.read!(Path.expand("VERSION", __DIR__))),
+      version: String.trim(File.read!(Path.expand("VERSION", __DIR__))),
       elixir: "~> 1.14",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
@@ -84,9 +84,7 @@ defmodule Tracker.MixProject do
       {:telemetry_metrics, "~> 1.0"},
       {:telemetry_poller, "~> 1.0"},
       {:rustler, "~> 0.38.0", runtime: false},
-      {:typedstruct,
-       git: "https://github.com/saleyn/typedstruct.git",
-       ref: "a5939bb210619cd9c362b87094ee343c55494ec3"},
+      {:typedstruct, "0.6.3", runtime: false},
       {:zoneinfo, "~> 0.1.9"}
     ]
   end
