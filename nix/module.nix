@@ -98,7 +98,10 @@ in
       after = [ "network.target" ] ++ lib.optional cfg.database.createLocally "postgresql.target";
       requires = lib.optional cfg.database.createLocally "postgresql.target";
 
-      path = [ pkgs.git ];
+      path = [
+        pkgs.git
+        config.nix.package
+      ];
 
       environment = {
         PHX_SERVER = "true";
