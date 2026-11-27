@@ -154,7 +154,7 @@ in
         ProtectKernelModules = true;
         ProtectKernelTunables = true;
         ProtectProc = "invisible";
-        ProcSubset = "pid";
+        ProcSubset = "all";
         ProtectSystem = "strict";
         RestrictAddressFamilies = [
           "AF_INET"

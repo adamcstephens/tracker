@@ -17,7 +17,13 @@ defmodule Tracker.Ingestion.Steps.ExtractHydraPackagesTest do
     git!(work, ["config", "user.name", "Test"])
 
     first = commit!(work, "{ }: { nixpkgs = { hello = throw \"must not force\"; foo = null; }; }")
-    second = commit!(work, "{ }: { nixpkgs = { bar = throw \"must not force\"; }; }")
+
+    second =
+      commit!(
+        work,
+        ~S|{ }: builtins.trace "selection diagnostic" { nixpkgs.bar = throw "must not force"; }|
+      )
+
     git!(root, ["clone", "-q", "--bare", work, bare])
     on_exit(fn -> File.rm_rf!(root) end)
 

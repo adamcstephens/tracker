@@ -96,11 +96,10 @@ defmodule Tracker.Ingestion.Steps.ExtractHydraPackages do
 
           case System.cmd(
                  "nix-instantiate",
-                 ["--eval", "--strict", "--json", "--expr", expression],
-                 stderr_to_stdout: true
+                 ["--eval", "--strict", "--json", "--expr", expression]
                ) do
             {json, 0} -> decode_names(json)
-            {message, status} -> {:error, {:nix_eval_failed, status, String.trim(message)}}
+            {_stdout, status} -> {:error, {:nix_eval_failed, status}}
           end
         else
           {:error, reason} -> {:error, reason}
