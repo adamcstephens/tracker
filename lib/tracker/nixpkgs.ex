@@ -1,5 +1,5 @@
 defmodule Tracker.Nixpkgs do
-  use Ash.Domain, otp_app: :tracker, extensions: [AshAdmin.Domain, AshJsonApi.Domain]
+  use Ash.Domain, otp_app: :tracker, extensions: [AshAdmin.Domain, AshJsonApi.Domain, AshAi]
 
   admin do
     show? true
@@ -8,6 +8,19 @@ defmodule Tracker.Nixpkgs do
 
   json_api do
     authorize? true
+  end
+
+  tools do
+    tool :list_channel_heads, Tracker.Nixpkgs.Channel, :list_channel_heads do
+      action_parameters([:limit])
+      select [:name, :display_name, :status]
+      load [:latest_revision, :latest_release]
+    end
+
+    tool :list_channel_revisions, Tracker.Nixpkgs.ChannelRevision, :list_channel_revisions do
+      action_parameters([:limit])
+      select [:revision, :released_at]
+    end
   end
 
   resources do

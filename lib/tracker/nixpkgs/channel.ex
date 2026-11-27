@@ -1,8 +1,11 @@
 defmodule Tracker.Nixpkgs.Channel do
+  @moduledoc "Nixpkgs channels, metadata, and recorded channel heads."
+
   use Ash.Resource,
     otp_app: :tracker,
     domain: Tracker.Nixpkgs,
     data_layer: AshPostgres.DataLayer,
+    authorizers: [Ash.Policy.Authorizer],
     notifiers: [Ash.Notifier.PubSub],
     extensions: [AshAdmin.Resource]
 
@@ -18,6 +21,7 @@ defmodule Tracker.Nixpkgs.Channel do
   code_interface do
     define :create
     define :read
+    define :list_channel_heads
     define :by_name, args: [:name]
     define :by_id, args: [:id]
     define :active
@@ -31,6 +35,19 @@ defmodule Tracker.Nixpkgs.Channel do
 
   actions do
     defaults [:read]
+
+    read :list_channel_heads do
+      description "List each channel's latest known release and revision, even before extraction finishes."
+
+      pagination do
+        keyset? true
+        required? true
+        default_limit 25
+        max_page_size 100
+      end
+
+      prepare build(sort: [:name], load: [:latest_revision, :latest_release])
+    end
 
     create :create do
       primary? true
@@ -105,6 +122,14 @@ defmodule Tracker.Nixpkgs.Channel do
 
     update :put_pointer do
       accept [:pointer_etag, :pointer_last_modified, :pointer_revision]
+    end
+  end
+
+  policies do
+    policy always() do
+      access_type :strict
+      authorize_unless action(:list_channel_heads)
+      authorize_if actor_present()
     end
   end
 
@@ -197,6 +222,11 @@ defmodule Tracker.Nixpkgs.Channel do
   aggregates do
     count :revision_count, :channel_revisions
     max :latest_release, :channel_revisions, :released_at
+
+    first :latest_revision, :channel_revisions, :revision do
+      sort released_at: :desc, id: :desc
+      public? true
+    end
 
     count :pending_pipeline_count, :ingestion_pipelines do
       description "Pipelines blocked behind the channel's chain head."

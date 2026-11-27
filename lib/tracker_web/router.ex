@@ -54,6 +54,11 @@ defmodule TrackerWeb.Router do
     plug :set_actor, :user
   end
 
+  pipeline :mcp do
+    plug TrackerWeb.Plug.BearerAuth, purpose: "api"
+    plug :set_actor, :user
+  end
+
   pipeline :api_reconstruction_worker do
     plug :accepts, ["json"]
     plug TrackerWeb.Plug.BearerAuth, purpose: "api"
@@ -118,6 +123,14 @@ defmodule TrackerWeb.Router do
         live "/subscriptions", InboxLive.Subscriptions, :index
       end
     end
+  end
+
+  scope "/mcp" do
+    pipe_through :mcp
+
+    forward "/", AshAi.Mcp.Router,
+      otp_app: :tracker,
+      tools: [:list_channel_heads, :list_channel_revisions, :list_ingestion_runs]
   end
 
   scope "/api/json" do

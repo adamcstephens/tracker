@@ -1,8 +1,11 @@
 defmodule Tracker.Nixpkgs.ChannelRevision do
+  @moduledoc "Recorded channel revisions and their extraction results."
+
   use Ash.Resource,
     otp_app: :tracker,
     domain: Tracker.Nixpkgs,
     data_layer: AshPostgres.DataLayer,
+    authorizers: [Ash.Policy.Authorizer],
     notifiers: [Ash.Notifier.PubSub]
 
   postgres do
@@ -12,6 +15,7 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
 
   code_interface do
     define :read
+    define :list_channel_revisions
     define :find, args: [:channel_id, :revision]
     define :create
     define :list_by_channel, args: [:channel_id]
@@ -32,6 +36,28 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
 
   actions do
     defaults [:read]
+
+    read :list_channel_revisions do
+      description "List one channel's revisions in an inclusive release window, newest release first."
+
+      argument :channel, :string, allow_nil?: false
+      argument :from, :utc_datetime_usec, allow_nil?: false
+      argument :to, :utc_datetime_usec, allow_nil?: false
+
+      pagination do
+        keyset? true
+        required? true
+        default_limit 25
+        max_page_size 100
+      end
+
+      prepare build(sort: [released_at: :desc, id: :desc])
+
+      filter expr(
+               channel.name == ^arg(:channel) and released_at >= ^arg(:from) and
+                 released_at <= ^arg(:to)
+             )
+    end
 
     read :find do
       get? true
@@ -184,6 +210,14 @@ defmodule Tracker.Nixpkgs.ChannelRevision do
       end
 
       filter expr(fragment("? LIKE ? || '%'", revision, ^arg(:hash)))
+    end
+  end
+
+  policies do
+    policy always() do
+      access_type :strict
+      authorize_unless action(:list_channel_revisions)
+      authorize_if actor_present()
     end
   end
 

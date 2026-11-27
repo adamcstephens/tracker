@@ -42,6 +42,7 @@ defmodule Tracker.MixProject do
       {:ash, "~> 3.0"},
       {:atomex, "~> 0.5.1"},
       {:ash_admin, "~> 1.1"},
+      {:ash_ai, "~> 1.5.6"},
       {:ash_authentication, "~> 5.0.0-rc.16"},
       {:ash_authentication_phoenix, "~> 3.0.0-rc.10"},
       {:ash_json_api, "~> 1.0"},

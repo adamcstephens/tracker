@@ -1,8 +1,10 @@
 defmodule Tracker.Ingestion.Pipeline do
+  @moduledoc "Tracks chronological ingestion pipelines and exposes safe admin investigation steps."
   use Ash.Resource,
     otp_app: :tracker,
     domain: Tracker.Ingestion,
-    data_layer: AshPostgres.DataLayer
+    data_layer: AshPostgres.DataLayer,
+    authorizers: [Ash.Policy.Authorizer]
 
   postgres do
     table "ingestion_pipelines"
@@ -42,6 +44,11 @@ defmodule Tracker.Ingestion.Pipeline do
 
   actions do
     defaults [:read]
+
+    read :list_unfinished do
+      prepare build(sort: [sequence: :asc, id: :asc], limit: 100)
+      filter expr(status != :completed)
+    end
 
     create :create do
       primary? true
@@ -171,6 +178,35 @@ defmodule Tracker.Ingestion.Pipeline do
       change set_attribute(:status, :running)
       change set_attribute(:failed_step, nil)
       change set_attribute(:error, nil)
+    end
+  end
+
+  policies do
+    policy action(:list_unfinished) do
+      access_type :strict
+      authorize_if {Tracker.Accounts.Checks.ActorHasRole, role: :admin}
+    end
+
+    policy action([
+             :read,
+             :create,
+             :find,
+             :next_pending_for_channel,
+             :oldest_incomplete_for_channel,
+             :last_completed_for_channel,
+             :for_channel,
+             :unhealthy,
+             :for_run,
+             :start,
+             :complete_step,
+             :set_channel_revision_id,
+             :mark_completed,
+             :mark_failed,
+             :mark_stuck,
+             :clear_retries,
+             :retry_from_step
+           ]) do
+      authorize_if always()
     end
   end
 
