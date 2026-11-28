@@ -99,6 +99,7 @@ beamPackages.mixRelease rec {
       in
       {
         ash = withAppConfig prev.ash;
+        ash_ai = withAppConfig prev.ash_ai;
         ash_json_api = withAppConfig prev.ash_json_api;
         ash_phoenix = withAppConfig prev.ash_phoenix;
         cinder = withAppConfig prev.cinder;
